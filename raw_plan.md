@@ -22,6 +22,7 @@ Default drivers that are supported from the start are Postgres, Oracle, PGLite, 
 - Avoid third party libs unless specified or very necessary
 - Have a CLI interface maybe @portqueue/cli package, it should be used to get statistics (kinda same as we do with the dashboard but with a cli interface). 
 - Have a super open license
+- Have the readme with contributions guides and links and descriptions to the docs
 
 ## Features
 - Should support multiple databases, the starting ones should be Postgres, PGLite, Oracle, SQLite
@@ -66,6 +67,7 @@ Default drivers that are supported from the start are Postgres, Oracle, PGLite, 
 - Have events like before task publishing/after, before something and after something, we should allow the dev to maybe run custom code and such events should help him
 - Events names should not be just magic strings but enums, so that the dev can import and use and know what are all possible events.
 - Should support job priority options
+- We should not support worker threads for now, the job handlers can run on main process, but we should keep in mind that in future versions we will, and interface should be structured and created ina way that in future it will be easy to implement it over
 
 ## Testing
 - Tested with Jest
@@ -115,6 +117,7 @@ Default drivers that are supported from the start are Postgres, Oracle, PGLite, 
 - Have pages with optimizations and performance suggestions, tell the user how to optimize the connection and so on
 - When mentioning something in the docs, have the mentions as links that open in new tabs so the user can easily click and navigate
 - Have related suggestions at the end of page with links (maybe have a config with related pages and use)
+- Have contributions page
 
 ## Monitoring
 - As said in the /packages/dashboard we should have a react dashboard that users can use standalone and serve themselves in their express, koa, fastify, raw node servers.
