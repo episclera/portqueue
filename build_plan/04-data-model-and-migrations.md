@@ -2,7 +2,9 @@
 
 Design goals (from the raw plan): **minimum number of tables**, keep as much as possible on the `job` row to **avoid joins** (many target engines join poorly or not at all), **avoid JSON columns we control** (typed columns instead), and allow **per-engine deviation** in physical layout as long as the logical model and public API stay identical.
 
-> **Persistence rule (governs every table): store only what must be durable or shared across instances — never what can be read from the running `PortQueue` instance.** Configuration, defaults, and policy (the driver/connection, and `QueueOptions` like `defaultJobOptions`, `rateLimit`, `deadLetterQueue`, `retention`) live **in memory** on the instance — every process runs the same code or imports the same config module (file 13), and the app, dashboard, and CLI all read them from the live instance. A value earns a column only if it is one of: durable **work state** (the `job` row + its resolved options), a durable **definition the cluster must share** (`schedule`), **runtime control state an operator flips live** (`queue` pause flags), **engine bookkeeping** (`migration_state`, the rate-limit usage counter). If it's derivable from the instance, it does **not** get a column. Two consequences fall out of this: (a) config changes by editing code + redeploy (no DB update path), while runtime control state gets an explicit one (e.g. `pause()`/`resume()`); (b) split producer/worker deployments must construct their `PortQueue` from the same config (typically a shared config module).
+> **Persistence rule (governs every table): store only what must be durable or shared across instances — never what can be read from the running `PortQueue` instance.** Configuration, defaults, and policy (the driver/connection, and `QueueOptions` like `defaultJobOptions`, `rateLimit`, `retention`) live **in memory** on the instance — every process runs the same code or imports the same config module (file 13), and the app, dashboard, and CLI all read them from the live instance. A value earns a column only if it is one of: durable **work state** (the `job` row + its resolved options), a durable **definition the cluster must share** (`schedule`), **runtime control state an operator flips live** (`queue` pause flags), **engine bookkeeping** (`migration_state`, the rate-limit usage counter). If it's derivable from the instance, it does **not** get a column. Two consequences fall out of this: (a) config changes by editing code + redeploy (no DB update path), while runtime control state gets an explicit one (e.g. `pause()`/`resume()`); (b) split producer/worker deployments must construct their `PortQueue` from the same config (typically a shared config module).
+
+> **No-join rule (governs every read): never use a SQL `JOIN` — on any engine, hot path or cold.** Relationships are resolved by separate, key-based lookups, not relational joins, **even when the engine supports them** and **even for a trivial lookup** like resolving a job's queue from its `queue_id`. If code needs the `queue` row behind a job, it issues a second `SELECT ... WHERE id = :queue_id` (usually served straight from the per-instance queue cache anyway — 04.3), **never** `... JOIN queue ...`. So `job.queue` (the name) is populated from that separate lookup/cache, not a joined column. **Rationale:** PortQueue already targets engines that join poorly or not at all, and is being kept portable to **key-value / document / NoSQL** stores where cross-collection joins don't exist. If every access path is designed as independent single-table (single-collection) lookups now, a future driver needs only point/range reads — never a join planner. **One allowed optimization:** where an engine can return **multiple independent result sets in one round-trip** (a multi-statement query, batch, or pipeline), a driver *may* bundle the separate `SELECT`s into that single round-trip to cut latency — but each stays its own single-table query keyed by id; bundling is a *transport* optimization, never a relational join. (Foreign keys like `fk_job_queue` remain optional **integrity constraints** where the engine supports them — they never imply a join-based read, and simply don't exist on a NoSQL driver.)
 
 ## 04.1 Table set (logical)
 
@@ -78,21 +80,40 @@ The `RetentionService` reads these **per-job** columns, so retention honors per-
 - `schedule_id` — UUID/text, indexed; set on jobs produced by a `schedule` (the cron/repeat correlation id). Lets the dashboard group all runs of one recurring job.
 - `singleton_key` — optional text used for "only one active job with this key at a time" throttling (pg-boss-style), enforced by a partial unique index over active states.
 
-**Multi-step (file 06)**
-- `current_step` — text/enum column; the current step id for multi-step jobs (null for single-step).
-- `steps_history` — **JSON** column (JSONB where `JSON_NATIVE`, else serialized-JSON `TEXT`): an **append-only, ordered array**, one entry **per step run in the order it ran**. **Each entry mirrors the job's own column names** — a step run is described with the very same keys the `job` row uses, never ad-hoc ones: `{ step, data?, return_value?, started_at?, completed_at?, failed_at?, failure_message? }`. So a failed step records `failure_message` (the message, stack included — same as the job; there is **no** generic `error` key and no separate stack), a step's input is its `data` (matching `step.next({ data })`) and its output is `return_value`, exactly as at the job level. (`step` is the only extra key — the entry's discriminator.) A step that repeats appends **another** entry, so a step may appear multiple times — the array is the full run log in execution order. It is the single source for: the dashboard's per-step timeline, "which steps completed / are all done" (the set of `step`s among entries with `completed_at`, compared against the worker's declared steps), and crash-safe resume of `current_step` (its carried input is the `data` on the latest entry for `current_step`). Like `metadata`, it is a **sanctioned JSON column** — the step set is developer-defined and variable — and it is **never read on the claim/hot path** (only when a multi-step job is claimed for its next step, or for display/retry), so the no-JSON-for-querying rule still holds.
+**Workflows / multi-step (file 06)**
 
-> **JSON key casing:** every key **we** put inside a JSON column (e.g. the `steps_history` entry fields) is **snake_case**, consistent with our column names; the driver/serializer maps them to the camelCase public types (e.g. `StepRun` in file 05). We **never** rewrite or re-case keys inside developer-owned JSON — the `data` payload, the `return_value`, and the `metadata` object are opaque and stored exactly as given.
+PortQueue models multi-step, resumable work as a **workflow**: an ordered set of steps where **each step is its own `job` row**, and completing one step atomically **spawns the next step's job**. There is no single job that carries all steps and **no `steps_history` JSON column** — the run's history *is* the set of `job` rows sharing a `workflow_id`, each fully typed and queryable. Two columns carry the workflow identity:
 
-**Dead-letter**
-- `dead_letter` — boolean, not null default false. A terminally failed job (attempts exhausted) is marked here (or moved to the configured dead-letter queue name; see file 06).
+- `workflow_id` — UUID, nullable (null for single-function jobs). Generated **once**, when the first step of a run is enqueued, and **carried unchanged onto every subsequent step job** so all steps of one run share it. Indexed by `ix_job_workflow` on `(workflow_id, created_at)` so the dashboard/API reconstructs an entire run — every step, in execution order — with one join-free query.
+- `workflow_step_key` — text/enum (a developer-defined `StepKey`). The step **this** job runs. **Not null whenever `workflow_id` is set** — it is required because it is how the engine knows which step ran and therefore what comes next; null only for single-function jobs. Its value is **set by the engine, not passed by the producer**: on the first insert it is the queue's declared **entry step** (`steps[0].key`, so `add({ data })` on a workflow queue looks identical to a plain add — file 05.3), and on each spawn it is the **computed next key**. `ck_job_workflow` enforces that `workflow_id` and `workflow_step_key` are either **both null or both set**.
+
+For a workflow job, `data` is that **step's input** and `return_value` is that **step's output**: the first step's `data` is the payload passed to `add`; each subsequent step's `data` is the value the previous step carried over via `step.next({ data })` (or the previous `data` unchanged if omitted). So "the previous step's result" inside a handler is simply `job.data`.
+
+**Spawning the next step (carry-over rules).** When a step advances (`step.next`/`step.repeat`), the completing job is marked `COMPLETED` and a new `PENDING` job for the next step is inserted **in the same atomic transaction** (driver `advanceWorkflowStep`, files 03/06) — so a crash can never complete-without-spawn or spawn twice. The new job **carries over** from the previous one:
+- `workflow_id` (same run) and `queue_id` (same queue);
+- `workflow_step_key` — the **next** key, computed **programmatically** as the step after the current one in the worker's declared order (or the explicit `to` key when the handler jumps; the *same* current key for `repeat`);
+- `data` — the carried value (`step.next({ data })`, else the previous `data` unchanged);
+- `metadata` — developer correlation/tracing travels with the whole run;
+- `priority` — the run keeps a consistent priority;
+- `schedule_id` — if the run was produced by a schedule, the correlation is preserved;
+- resolved retention (`retention_mode` / `retention_ttl_ms`) so the whole run shares one retention policy;
+- instance attribution (`run_on_instance_id` / `run_on_instance_type`) as a soft affinity/attribution hint for "which instance has been carrying this run."
+
+It **resets** (does **not** carry): all `retry_*` columns — each step re-resolves its own retry policy from the step/queue defaults, so one flaky step's exhausted attempts never bleed into the next; the lock/visibility fields (`locked_until`, `locked_by_instance_id`) — a freshly spawned step is `PENDING` and must be freely claimable by *any* instance (this is exactly why splitting steps into separate jobs lets a workflow load-balance and resume anywhere); `idempotency_key` and `singleton_key` — they belong to the original `add`, and carrying them forward would trip the unique / partial-unique constraints; `expire_at`, all lifecycle timestamps, `failure_message`, and `return_value` — the new step starts clean. `start_after` is `now` (or `now + delayMs` for a delayed `next`/`repeat`).
+
+`step.done({ result })` marks the current step's job `COMPLETED` with `return_value = result` and spawns **nothing** — that ends the run. "Which steps ran / is the run done" is derived from the run's `job` rows (their `workflow_step_key` + status), never a JSON log or a `completed_steps` counter.
+
+> **JSON key casing:** every key **we** put inside a JSON column is **snake_case**, consistent with our column names; the driver/serializer maps them to the camelCase public types. We **never** rewrite or re-case keys inside developer-owned JSON — the `data` payload, the `return_value`, and the `metadata` object are opaque and stored exactly as given. (With `steps_history` gone, `metadata` is the only bookkeeping JSON we author.)
 
 **Indexes (guided by the claim query):**
 - `ix_job_claim` on `(queue_id, status, priority DESC, start_after)` — the ordering the claim uses. This one index makes the hot path fast without joins.
 - `ix_job_locked_until` on `(status, locked_until)` — stalled-job reclaim scan.
 - `ix_job_schedule` on `(schedule_id)`.
+- `ix_job_workflow` on `(workflow_id, created_at)` — reconstruct a whole workflow run (all its steps, in execution order) in one query; also groups steps in the dashboard.
 - `uq_job_queue_idempotency` unique on `(queue_id, idempotency_key)` where `idempotency_key is not null`.
 - Partial unique for `singleton_key`, scoped `(queue_id, singleton_key)`, over active states where supported.
+
+`ck_job_workflow` — CHECK that `workflow_id` and `workflow_step_key` are either both null or both set (a workflow job always names its step).
 
 All constraint/index names are explicit (`pk_`, `fk_`, `uq_`, `ix_`, `ck_`, `<table>_<col>_enum`), per the naming convention in `project-structure` §4.
 
@@ -106,11 +127,11 @@ All constraint/index names are explicit (`pk_`, `fk_`, `uq_`, `ix_`, `ck_`, `<ta
 - `accepting_paused` — boolean, not null default false. When true, the queue **refuses new jobs** (drain/incident control). Combined with `processing_paused` this is `PauseMode.ALL`. Renamed from `accepting` (polarity flipped so both pause flags read the same way and default false).
 - `created_at`, `updated_at` — timestamptz, not null (`updated_at` bumped on every change to the row).
 
-**Nothing else about a queue is persisted.** Its per-job defaults (priority, retry, retention) *and* its policy (`deadLetterQueue`, `rateLimit`) live **in-memory** on the `QueueOptions` passed to `pq.queue(name, options)`. Every instance runs the same code (or imports the same config module, file 13), so these values are identical everywhere without a DB copy: the `option-resolver` merges the defaults at `add()` time (client → queue → per-job) and freezes the **resolved** values onto each `job` row; the `CompletionService` reads `deadLetterQueue` on the instance handling the failure; the cluster rate limit reads its `max`/`duration` from the instance and shares only a **usage counter** in the DB (file 07.4). The dashboard and CLI read all of this off the live `PortQueue` instance.
+**Nothing else about a queue is persisted.** Its per-job defaults (priority, retry, retention) *and* its policy (`rateLimit`) live **in-memory** on the `QueueOptions` passed to `pq.createQueue(name, options)`. Every instance runs the same code (or imports the same config module, file 13), so these values are identical everywhere without a DB copy: the `option-resolver` merges the defaults at `add()` time (client → queue → per-job) and freezes the **resolved** values onto each `job` row; the cluster rate limit reads its `max`/`duration` from the instance and shares only a **usage counter** in the DB (file 07.4). The dashboard and CLI read all of this off the live `PortQueue` instance.
 
 Only the **pause flags** persist, because they're runtime *control state*: an operator flips them on a live system (dashboard/CLI/`pause()`), and instances that never called `pause()` must observe the change (file 07.2). Everything else is *config* — changed by editing code and redeploying, so it needs no DB update path; pause has an explicit one (`pause()`/`resume()`, an `UPDATE`).
 
-**Concurrency note:** `pq.queue(name)` lazily registers the queue via `ensureQueue`, which many instances may call at once on first use. It **must** be an idempotent `INSERT ... ON CONFLICT DO NOTHING`/`MERGE` (capability `UPSERT`) on the unique `name` (`uq_queue_name`) so concurrent first-uses don't error or thundering-herd — the first writer wins, the rest no-op. `ensureQueue` **returns the row including its `id`**, which the instance caches as the `queue_id` used for all subsequent claims/inserts (so the name→id lookup happens once, not per operation).
+**Concurrency note:** `pq.createQueue(name)` lazily registers the queue via `ensureQueue`, which many instances may call at once on first use. It **must** be an idempotent `INSERT ... ON CONFLICT DO NOTHING`/`MERGE` (capability `UPSERT`) on the unique `name` (`uq_queue_name`) so concurrent first-uses don't error or thundering-herd — the first writer wins, the rest no-op. `ensureQueue` **returns the row including its `id`**, which the instance caches as the `queue_id` used for all subsequent claims/inserts (so the name→id lookup happens once, not per operation).
 
 ## 04.4 `schedule` table
 
@@ -150,7 +171,7 @@ Deviation in the number of physical tables is permitted **if an engine genuinely
 `MigrationRunner` (in `schema/migration/`) owns schema evolution:
 
 - Migrations are **ordered, numbered steps**, each expressed against the engine-neutral `SchemaDefinition` where possible, with per-engine SQL selected by capability where necessary.
-- On `start()`, behavior is controlled by the client `migration` option:
+- On `init()`, behavior is controlled by the client `migration` option:
   - `AUTO` (default) — apply all pending migrations up to the version this library ships.
   - `MANUAL` — do nothing; expose `portqueue migrate` (CLI) / a programmatic `pq.migrate()` for the operator to run.
   - `VALIDATE_ONLY` — verify the DB is at the expected version; throw a clear error (with the exact command to fix) if not. Good for prod where migrations run in a separate deploy step.
@@ -162,18 +183,20 @@ This satisfies the raw plan's "automatic mechanism that can migrate from a versi
 
 ## 04.8 Why so few tables (rationale to put in docs)
 
-- Joins are avoided because several target engines join poorly and horizontal scale punishes cross-table contention.
-- Keeping claim/lock/retry/step/error data on the `job` row means the hot claim query touches exactly one table and one index.
+- **Joins are never used** (the no-join rule, 04.1): relationships resolve via separate key-based lookups, so the schema is deliberately shaped for single-table access. Several target engines join poorly, horizontal scale punishes cross-table contention, and — decisively — a future NoSQL/document driver has no join at all.
+- Keeping claim/lock/retry/step/error data on the `job` row means the hot claim query touches exactly one table and one index; cold reads (e.g. a job's queue) are a second point lookup, not a join.
 - Typed columns keep everything queryable by the dashboard/CLI and by operators writing ad-hoc SQL, and dodge the write-amplification and un-indexable nature of JSON blobs. The only JSON is the developer's own opaque payload.
 
 ## 04.9 Local final-check checklist
 
 - [ ] Exactly four logical tables — `queue`, `job`, `schedule`, `migration_state`; no archive table. Justified if an engine deviates.
 - [ ] **Persistence rule holds:** no column stores anything derivable from the running `PortQueue` instance (config/defaults/policy). Every column is durable work state, a shared definition, runtime control state, or engine bookkeeping.
+- [ ] **No-join rule holds:** no read uses a SQL `JOIN` anywhere (not even `job`→`queue`); relationships resolve via separate key-based lookups (or a per-instance cache), so every access path is portable to a NoSQL driver. Multi-result batching in one round-trip is allowed; a relational join is not.
 - [ ] The hot claim path touches only the `job` table via `ix_job_claim` — no joins.
-- [ ] No JSON column except the developer-owned `data`/`return_value`, the sanctioned `metadata`, and `steps_history`; all other bookkeeping is typed.
+- [ ] No JSON column except the developer-owned `data`/`return_value` and the sanctioned `metadata`; all other bookkeeping is typed. (No `steps_history` — workflow history is real `job` rows.)
 - [ ] Idempotency enforced by a real unique constraint, not app-side checking.
 - [ ] Recurring jobs share `schedule_id`; each run is a distinct `job` row.
+- [ ] Workflow steps share `workflow_id`; each step is a distinct `job` row carrying a non-null `workflow_step_key` (`ck_job_workflow`); completing a step spawns the next in one atomic transaction; no `current_step`/`steps_history` columns.
 - [ ] All constraints/indexes have explicit names per convention.
 - [ ] Migrations are ordered, checksum-guarded, race-safe across instances, and have AUTO/MANUAL/VALIDATE_ONLY modes.
 - [ ] Instance attribution columns (`run_on_instance_id`, `run_on_instance_type`) exist for dashboard stats.

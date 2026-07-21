@@ -24,7 +24,7 @@ It is **free and open source, usable commercially with no license obligations** 
 4. **Fault tolerant.** A throwing handler never crashes the worker loop. The system logs everything at the appropriate level and shuts down gracefully.
 5. **Minimal footprint.** As few tables as possible, typed columns instead of JSON wherever we control the shape, and no third-party runtime dependencies beyond the raw DB clients — which are **optional peer dependencies**, never auto-installed.
 6. **Event-driven and observable.** Every meaningful lifecycle transition emits a typed event and offers participation hooks.
-7. **Feature-complete for real workloads.** Concurrency, rate limiting, priorities, delayed jobs, cron/recurring jobs with timezones, idempotency, multi-step jobs, retention/cleanup, dead-letter handling, system-pressure backpressure, and graceful shutdown.
+7. **Feature-complete for real workloads.** Concurrency, rate limiting, priorities, delayed jobs, cron/recurring jobs with timezones, idempotency, multi-step jobs, retention/cleanup, system-pressure backpressure, and graceful shutdown.
 
 ## 00.4 Non-goals (for v1)
 
@@ -32,6 +32,7 @@ It is **free and open source, usable commercially with no license obligations** 
 - **BullMQ-style incremental progress.** Explicitly rejected: BullMQ's numeric progress cannot resume from where it left off. PortQueue models resumable work through **multi-step jobs** instead (see [`06`](./06-jobs-scheduling-lifecycle.md)).
 - **A hosted service or broker.** PortQueue is a library plus a self-hosted dashboard/CLI. There is no PortQueue server to run (except the optional CLI-launched dashboard host, which is just a thin static+API server).
 - **ORM coupling.** We use the raw DB clients only. No ORM, no query builder dependency.
+- **Per-job "names" (BullMQ-style).** Explicitly rejected. BullMQ's `queue.add(name, data)` gives each job a *name* used to route to a named processor — in practice this **confuses people, who conflate the job name with the queue name**, and it isn't actually needed: the **queue** is the unit of routing (one worker per queue), a job's *kind* is expressed by which queue it's on, and multi-step routing is handled by the workflow **`StepKey`** (file 06), not a job name. So our `addJob({ data })` takes **no** name. (Correlation/labels that developers genuinely want go in `metadata` or `idempotencyKey`, file 05.) See the rationale in [`05`](./05-public-api.md) §05.8.
 
 ## 00.5 Guiding principles (applied everywhere)
 
@@ -40,7 +41,7 @@ It is **free and open source, usable commercially with no license obligations** 
 - **Separate concerns in options.** Producer options, queue-definition options, and worker options are distinct types. They never mix in a single bag. (Final-suggestion rule from the raw plan.)
 - **Job-level overrides queue-level.** When the same option exists at both the queue and the job, the job value wins.
 - **Results are objects.** Producing a job returns a structured result (ids, state, whether it was deduplicated, schedule id for recurring). Never a bare id.
-- **Keep it in one table.** Favor keeping data on the `job` row so we avoid joins — many target engines join poorly or not at all.
+- **Keep it in one table, and never `JOIN`.** Favor keeping data on the `job` row; when a relationship must be followed (even `job`→`queue`), resolve it with a **separate key-based lookup**, never a relational join — on *any* engine, hot or cold. Many target engines join poorly, and we intend to support **NoSQL/document** stores that have no join at all. See the **no-join rule** in [`04`](./04-data-model-and-migrations.md) §04.1.
 - **Typed columns, not JSON** — except the developer's own payload, which is inherently opaque and stored as the engine's native JSON type (JSONB/JSON) or TEXT where none exists.
 - **Small, focused classes.** Class-first with typedi DI. Each concern (pub/sub, scheduling, claiming, monitoring, migration, retention…) is its own service in its own folder. No long files.
 - **Instance-agnostic always.** Assume N copies are running. Never rely on in-process state for correctness of claiming, scheduling, or dedup.
@@ -62,7 +63,7 @@ The raw plan asks us to weigh pg-boss, BullMQ, and Celery and take the best. Con
 - *Improvements:* we drop numeric progress in favor of resumable multi-step; we are DB-backed (durable, transactional, queryable with SQL) rather than Redis-backed; every option is named.
 
 **From Celery (Python task queue):**
-- Operational maturity: retries with backoff, rate limits, scheduled/periodic tasks (beat), visibility timeouts, dead-letter handling, and the notion of *acks late* (a job isn't considered done until the handler confirms) — which maps to our claim/lock + visibility-timeout model.
+- Operational maturity: retries with backoff, rate limits, scheduled/periodic tasks (beat), visibility timeouts, and the notion of *acks late* (a job isn't considered done until the handler confirms) — which maps to our claim/lock + visibility-timeout model.
 - The importance of good introspection tooling (Celery's `flower`) — our dashboard + CLI.
 - *Improvements:* strict typing end-to-end, no separate result backend to configure (results live in the same DB), and a single API across engines.
 
@@ -74,7 +75,8 @@ The raw plan asks us to weigh pg-boss, BullMQ, and Celery and take the best. Con
 - **Queue** — a named channel and the **producer** handle for it (add/schedule/inspect jobs). A queue name also identifies the job type.
 - **Worker** — the **consumer** side: claims jobs for one queue and runs the handler(s). Distinct object so producing and consuming can live on different servers.
 - **Job** — one unit of work: a row in the `job` table, and the context object passed to a handler.
-- **Handler** — the developer's function that processes a job (single-function or a per-step map for multi-step jobs).
+- **Handler** — the developer's function that processes a job (a single function, or one handler per step in a **workflow**).
+- **Workflow (multi-step job)** — an ordered set of steps where each step is its own `job` row sharing a `workflow_id`; completing a step spawns the next. Resumable and crash-safe (file 06).
 - **Schedule (recurring/cron)** — a definition that repeatedly produces *new* jobs. Each produced job is distinct but shares a `schedule_id`.
 - **Idempotency key** — a caller-supplied key that prevents inserting duplicate jobs.
 - **Instance** — one running process/container of the consuming application. Identified for attribution (container id vs bare-metal product uuid).

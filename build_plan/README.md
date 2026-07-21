@@ -4,6 +4,15 @@ This folder is a **complete, implementation-ready specification** for PortQueue.
 
 It intentionally does **not** contain the finished source code. It describes *what* to build and *why*, down to method signatures, option shapes, table columns, event names, folder layouts, and design rationale. Deep code samples are avoided on purpose; where a method or type is described, the implementer chooses the exact code, but the **public shape is fixed here** so the whole system stays coherent.
 
+## Execution rules for an AI agent (read first)
+
+If you are an AI agent (Claude or otherwise) implementing this plan, follow these operating rules:
+
+- **Never auto-run dependency installs.** Do **not** run `npm install` / `npm ci` / `pnpm install` / `yarn` / `bun install` (or any package-manager add/install command) yourself. When a step needs dependencies installed, **stop, print the exact command(s) for the user to run, and wait for the user to confirm** they've completed it before continuing. The agent's environment can't be relied on to install packages (no/partial network, auth, peer-dep choices), so the user runs these manually.
+- **Same for any other command you can't reliably perform** — interactive logins (`npm login`, `gcloud auth login`), anything needing network/credentials, or long-running/interactive processes. Surface the command, ask the user to run it, and wait for confirmation rather than assuming success.
+- **Prefer generating files and edits** (source, config, docs) — that is the agent's job. Shell side effects that touch the network or the user's credentials are the user's to run.
+- When you do hand off a command, give the **precise** invocation (including the package names and the target workspace/directory) so the user can paste and run it without guessing.
+
 ## How to read this plan
 
 Read in order. Each file assumes the ones before it. The first five files are the load-bearing design decisions; everything after applies them.
@@ -17,7 +26,7 @@ Read in order. Each file assumes the ones before it. The first five files are th
 | 03 | [`03-driver-model.md`](./03-driver-model.md) | The `Driver` interface, capability flags, LISTEN/NOTIFY vs polling, `SKIP LOCKED`, custom drivers |
 | 04 | [`04-data-model-and-migrations.md`](./04-data-model-and-migrations.md) | Tables, columns, indexes, per-DB deviations, the auto-migration/versioning mechanism |
 | 05 | [`05-public-api.md`](./05-public-api.md) | **The developer-facing interface** — `PortQueue`, `Queue`, `Worker`, `Job`, every method and option object |
-| 06 | [`06-jobs-scheduling-lifecycle.md`](./06-jobs-scheduling-lifecycle.md) | Job states, delays, cron/every scheduling, priority, idempotency, retention, multi-step, retries/backoff |
+| 06 | [`06-jobs-scheduling-lifecycle.md`](./06-jobs-scheduling-lifecycle.md) | Job states, delays, cron/every scheduling, priority, idempotency, retention, workflows (multi-step), retries/backoff |
 | 07 | [`07-concurrency-scaling-rate-limiting.md`](./07-concurrency-scaling-rate-limiting.md) | Concurrency, rate limiting, horizontal scaling, system-pressure monitor, graceful shutdown |
 | 08 | [`08-events-and-hooks.md`](./08-events-and-hooks.md) | Event enums, the event bus, participation hooks vs observation events |
 | 09 | [`09-transactions.md`](./09-transactions.md) | Transactional enqueue, passing an external transaction/connection |
@@ -39,6 +48,7 @@ Read in order. Each file assumes the ones before it. The first five files are th
 - This project follows the `ai-utils` `shared-lib-structure` skill (which inherits `project-structure`). Where this plan and that skill agree, the skill is the source of truth for tooling; where this plan adds product-specific rules, this plan governs the product.
 - **No positional parameters** for anything with more than one argument — every such method takes a single options object with named properties. This is a hard rule, restated in file 05 and enforceable in review.
 - **No magic strings** in the public surface — job states, events, step identifiers, driver capabilities, and error codes are all TypeScript enums that consumers can import.
+- **Methods are named after the entity they act on.** Every public method contains the noun of the thing it operates on: **job** methods → `addJob`, `addJobs`, `getJob`, `getJobs`, `retryJob`, `cancelJob`, `cancelRunningJob`, `removeJob`, `removeJobs`, `purgeJobs`; **queue** methods → `createQueue`, `pauseQueue`, `resumeQueue`, `getQueues`, `getQueueStats`; **worker** methods → `createWorker`; **schedule** methods → `removeSchedule`, `getSchedules`. The only allowed omission: controls on a *scoped handle* whose receiver already **is** that entity may drop the word (e.g. `queue.pause()`/`queue.resume()` on a `Queue` handle). New methods must follow this rule — never a bare `add`/`retry`/`remove`.
 - **Strict typing, no `any`** in the public surface. Generics carry the job payload type end-to-end.
 
 ## Global final-check checklist

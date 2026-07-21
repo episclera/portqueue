@@ -66,14 +66,14 @@ Design shares the `@portqueue/ui` theme with the docs (file 14) so dashboard and
 **Queue detail page** (`/queues/:name`):
 - State counts + graphs scoped to the queue.
 - A filterable, paginated **jobs table** (filter by state, schedule id, date; cursor paging via `getJobs`).
-- Controls: **pause/resume** (with `PauseMode` choice — stop handling vs stop accepting), **add a job** (a form building `AddJobOptions`), **purge** by state.
-- Schedules panel: list recurring definitions, their next run, enable/disable, unschedule.
+- Controls: **pause/resume** (with `PauseMode` choice — stop handling vs stop accepting), **add a job** (a form building `AddJobOptions` — the same form creates a recurring definition when its schedule fields are filled, mirroring `add({ schedule })`), **purge** by state.
+- Schedules panel: list recurring definitions (`getSchedules`), their next run, enable/disable, and **remove** (unschedule — maps to `remove({ scheduleId })`).
 - **Bulk actions** on selected jobs: retry, remove, cancel.
 
 **Job detail page** (`/jobs/:id`):
 - Full record: status, attempts, priority, instance attribution, the **`failure_message`** (message with stack, when failed), timings, and the schedule id link.
 - **Job lifecycle timeline** — a compact vertical timeline built from the job's lifecycle timestamps (`created_at → started_at → completed_at` / `failed_at` / `cancelled_at` / `expired_at`, with `retried_at` and `stalled_at` markers and the attempt count). It reads as "what happened to this job, and when," showing the **duration between transitions** and the current status at the head. This renders for **every** job (single-function or multi-step).
-- **Per-step history** (multi-step jobs) — a step-by-step view from `steps_history` in **execution order**: one row/segment **per run**, each showing the step id, an outcome badge (running / completed / failed), `started_at` → `completed_at`/`failed_at` with **duration**, **expandable** `data` (input) and `return_value` JSON, and the `failure_message` on failure. Because `steps_history` is append-only, a step that **repeated or was retried shows as repeated rows**, so the real execution path is visible — not just the latest. Steps declared on the worker but not yet run render as **pending**, and a header shows progress (e.g. "3 / 5 steps completed") against the worker's declared `steps`. Presented as a readable timeline/stepper (mobile: a stacked list), not a raw JSON dump.
+- **Workflow run view** (workflow / multi-step jobs) — a step-by-step view built from the run's **`job` rows** (`getWorkflow({ workflowId })` — every step sharing the `workflow_id`, in `created_at` order): one row/segment **per step job**, each showing its `workflow_step_key`, an outcome badge (running / completed / failed), `started_at` → `completed_at`/`failed_at` with **duration**, **expandable** `data` (input) and `return_value` (output) JSON, and the `failure_message` on failure. Because each run/repeat/retry is its own job row, a step that **repeated or was retried shows as repeated rows**, so the real execution path is visible — not just the latest. Steps declared on the worker but not yet spawned render as **pending**, and a header shows progress (e.g. "3 / 5 steps completed") against the worker's declared `steps`. Presented as a readable timeline/stepper (mobile: a stacked list), not a raw JSON dump. (No `steps_history` JSON — the history is real, queryable rows.)
 - Actions: **retry** — with a `RetryMode` choice: **from the failed step** (default, resume where it stopped) or **from the start** (re-run the whole job); for single-function jobs the choice collapses to one. Plus **clone** (open the add-job form pre-filled from this job's data/options), **remove**, and for recurring, link to the schedule and its sibling runs. (No arbitrary-step picker — file 06.8.1.)
 
 _(PortQueue does not store handler logs — there is no log column and no `job.log()`; use your own logger/console, files 04/05.)_
@@ -107,7 +107,7 @@ All destructive/mutating actions are hidden entirely in `readOnly` mode and gate
 - [ ] Mounts as middleware on raw Node / Express / Koa / Fastify from one `createDashboard(options)` factory (named options only).
 - [ ] Uses the provided `PortQueue` instance; never opens its own DB connection or asks for DB creds.
 - [ ] Overview, queue-detail, job-detail, schedules pages exist with the specified stats, graphs, and instance attribution.
-- [ ] Job detail shows a **lifecycle timeline** (every job) and a **per-step run history** from `steps_history` (multi-step) — execution order, repeats/retries visible, durations, expandable input/return, pending steps + progress.
+- [ ] Job detail shows a **lifecycle timeline** (every job) and, for workflow jobs, a **run view** assembled from the run's `job` rows via `getWorkflow` (execution order, repeats/retries visible, durations, expandable input/output, pending steps + progress) — no `steps_history`.
 - [ ] Add / clone / retry / remove / cancel / purge and **bulk actions**; pause supports "stop handling" vs "stop accepting".
 - [ ] Pluggable auth (basic/custom/none) + `readOnly`; destructive actions gated + confirmed; endpoints CSRF-safe and input-validated.
 - [ ] Live updates via event stream with DB reconciliation.

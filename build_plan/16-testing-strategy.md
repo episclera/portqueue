@@ -24,7 +24,7 @@ Jest across the monorepo, aiming for **very high coverage** (target 100% where s
 ## 16.4 Test categories
 
 - **Unit** — pure helpers (`util/`: backoff math, cron next-run, duration parsing, option resolution/precedence, identifier validation). Fully covered.
-- **Behavioral / integration** (the bulk) — against PGLite & SQLite: add→claim→complete, retries/backoff, priority ordering, delayed availability, idempotency & singleton uniqueness, multi-step transitions + resume-after-simulated-crash, scheduling/cron production sharing `scheduleId`, retention deletion in batches, pause/resume semantics, graceful shutdown & lock release.
+- **Behavioral / integration** (the bulk) — against PGLite & SQLite: add→claim→complete, retries/backoff, priority ordering, delayed availability, idempotency & singleton uniqueness, workflow step advance (complete-this + spawn-next is atomic; next `workflow_step_key` computed from declared order; carry-over/reset rules per 04.2) + resume-after-simulated-crash, scheduling/cron production sharing `scheduleId`, retention deletion in batches, pause/resume semantics, graceful shutdown & lock release.
 - **Concurrency** — simulate N workers/instances against one DB and assert **no double-processing** (each job runs exactly-once-claimed), no double-production of recurring jobs, correct stalled-reclaim after a simulated crash (drop a lock, advance clock past `locked_until`).
 - **Transactions** — enqueue inside a transaction that commits (job exists) vs rolls back (job absent); notify-after-commit; adopt-external.
 - **Fault tolerance** — throwing handlers, throwing hooks/listeners, non-Error throws, handler that ignores `AbortSignal` on shutdown: assert the loop never crashes and outcomes are correct.

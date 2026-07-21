@@ -2,12 +2,20 @@
 
 How PortQueue behaves correctly and politely when many jobs, many workers, and many server instances run at once — and how it protects the host from overload and shuts down cleanly.
 
-## 07.1 Concurrency (within one worker)
+## 07.1 Concurrency & parallelism (within one worker)
 
-- A `Worker` runs up to `concurrency` handler promises in flight at once (v1: on the main event loop; no worker threads — file 20).
-- The claim loop keeps in-flight ≈ `concurrency`: it claims `min(concurrency - activeCount, batchSize)` jobs whenever there is capacity and a wakeup fires.
+- A `Worker` runs up to `concurrency` handler promises in flight at once (v1: on the main event loop; no worker threads — file 20). This is real parallelism for the I/O-bound work queues almost always do: while one handler awaits the network/DB, the others run, so N jobs make progress concurrently on one process.
+- The claim loop keeps in-flight ≈ `concurrency`: it claims `min(concurrency - activeCount, batchSize)` jobs whenever there is capacity and a wakeup fires, then dispatches each claimed job to its own handler promise. Claiming is a **batch** (one `claimJobs` round-trip returns many rows), so filling capacity is one query, not one-query-per-job.
 - Each in-flight job has an **automatic heartbeat** that calls `extendLock` at ~⅓ of `lockDurationMs`, so a long-running (but alive) handler keeps its visibility lock and isn't reclaimed as stalled. `job.extendLock()` lets a handler push further manually.
 - `activeCount` and capacity are per-worker, in-process (this is fine — it's not correctness state shared across instances).
+
+## 07.1b No head-of-line blocking within a queue
+
+A slow, stuck, or failing job **never** holds up the others in its own queue:
+- **Claiming skips busy rows.** `claimJobs` uses `SKIP LOCKED` (or the atomic-update fallback, 03.5): a row another handler/instance is running is invisible to the next claim, so the loop always picks up the next *available* job instead of waiting behind an in-flight one.
+- **A retrying/failed job removes itself from contention.** On throw-with-attempts-left the job goes to `RETRY` with a future `start_after`, so it isn't claimable until its backoff elapses — it can't sit at the head blocking others. A terminally failed job is `FAILED` and equally out of the claim set.
+- **Ordering is a preference, not a gate.** `priority DESC, start_after ASC` picks *which* available job runs next; it never forces the loop to wait for a specific job. (Strict priority starvation is the one caveat — 07.7.)
+- **Parallel workflow runs.** Because each workflow step is its own `job` row (file 06), independent runs of the same workflow are independent jobs and run **in parallel** up to `concurrency`; one run pausing (a `repeat` with `delayMs`, or a step awaiting I/O) does not stall other runs.
 
 ## 07.2 Horizontal scaling (across instances)
 
@@ -20,6 +28,17 @@ The design is **instance-agnostic**: correctness never depends on being the only
 - **Notifications** are best-effort accelerators; the safety poll guarantees progress even if an instance misses a NOTIFY (file 03.4).
 
 Result: scale out by running more instances of the consuming app — no configuration change, no leader election required for correctness (advisory locks are an optimization, not a dependency).
+
+## 07.2b Queue independence — a job never waits on another queue
+
+**Queues are fully independent processing lanes.** Work in one queue never blocks work in another; nothing about starting a job in queue B depends on the state of queue A. This is a design guarantee, and here is *how* it holds:
+
+- **One claim loop per queue.** A `Worker` is bound to exactly one queue and owns its own claim loop, heartbeat, and wakeup subscription. Two queues consumed on the same instance are two independent workers running concurrently on the event loop; a busy or blocked loop for queue A does not run queue B's loop less often — they are separate promise chains.
+- **Claiming is scoped to one `queue_id`.** `claimJobs` filters on `queue_id` via `ix_job_claim (queue_id, status, priority DESC, start_after)`, and `SKIP LOCKED` only ever touches rows for that queue. One queue's claim query neither scans nor row-locks another queue's jobs, so there is **no shared row lock** across queues to wait on.
+- **No global gate.** There is no global "next job" cursor, no single dispatcher, and no cross-queue mutex. Pause (07/04.3), rate limits (07.4), and dedup constraints are all **per-queue** (`singletonKey`/`idempotencyKey` are unique *per `(queue_id, key)`*), so pausing or throttling one queue leaves every other queue untouched.
+- **Per-queue backpressure.** A slow queue's jobs simply sit `PENDING`; they consume no worker slots in other queues (slots are per-worker, 07.1). A backlog in queue A cannot starve queue B of its own worker's concurrency.
+
+**The one genuinely shared resource is the DB connection pool.** All of an instance's workers draw from one pool, so if a single queue's handlers hold every connection (e.g. long transactions), other queues' claims can *wait for a connection* — the only place cross-queue contention can appear, and it's resource contention, not a design-level dependency. Guidance (documented in files 12/15): size the pool for the sum of worker concurrencies plus headroom for claim/heartbeat traffic, and keep handler transactions short. For hard isolation between critical and bulk workloads, run them as **separate `PortQueue` instances** (separate pools) or separate deployments — the produce-here/consume-there split (file 05) makes this trivial.
 
 ## 07.3 Instance identity & attribution
 
@@ -58,14 +77,14 @@ This protects a box from being driven into swap/GC-death by an aggressive queue,
 
 ## 07.6 Graceful shutdown
 
-`pq.stop({ graceful: true, timeoutMs })` (default graceful) runs the reverse-ordered shutdown (file 02.4). Specifically for workers:
+`pq.shutdown({ graceful: true, timeoutMs })` (default graceful) runs the reverse-ordered shutdown (file 02.4). Specifically for workers:
 
 1. Stop claiming (set a stopping flag; ignore further wakeups).
 2. Let in-flight handlers finish, up to `timeoutMs`.
 3. When `timeoutMs` elapses, fire each in-flight `job.signal` (`AbortSignal`) so cooperative handlers can bail; then release still-active jobs (clear their lock) so another instance reclaims them promptly instead of waiting for the visibility timeout.
 4. Emit `WORKER_STOPPED` / `CLIENT_STOPPED`.
 
-Wire `stop()` to `SIGTERM`/`SIGINT` in the docs' deployment guide (but the library does **not** install signal handlers itself — that's the app's choice; document the recommended snippet). Non-graceful `stop({ graceful: false })` aborts immediately and relies on visibility-timeout reclaim.
+Wire `shutdown()` to `SIGTERM`/`SIGINT` in the docs' deployment guide (but the library does **not** install signal handlers itself — that's the app's choice; document the recommended snippet). Non-graceful `shutdown({ graceful: false })` aborts immediately and relies on visibility-timeout reclaim.
 
 ## 07.7 Fairness & starvation
 
@@ -79,6 +98,8 @@ A `Worker` is bound to one queue, so a consumer of many queues creates many work
 ## 07.8 Local final-check checklist
 
 - [ ] Concurrency is bounded per worker; heartbeat keeps live long jobs from being reclaimed.
+- [ ] `concurrency` handlers run in parallel; a slow/stuck/retrying job causes no head-of-line blocking within its queue (SKIP LOCKED skips busy rows; retries move to a future `start_after`).
+- [ ] Queues are independent lanes: per-queue claim loop, `queue_id`-scoped claiming with no shared cross-queue row lock or global gate; a job never waits on another queue. Only the shared connection pool can contend — documented, with per-instance isolation as the escape hatch.
 - [ ] N instances never double-process (claim atomicity) and never double-produce recurring jobs.
 - [ ] No correctness-critical state is cached in-process across instances.
 - [ ] Worker limiter (local, exact) and queue rate limit (cluster, DB-backed) are separate and documented.

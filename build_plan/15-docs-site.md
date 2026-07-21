@@ -18,7 +18,7 @@ A beautiful, developer-friendly documentation site built with **Docusaurus**, de
 
 - Uses light background colors (raw-plan requirement) — a soft, low-contrast palette from the shared tokens.
 - Deduced link columns:
-  - **Docs:** Getting Started, Core Concepts, API Reference, Dashboard, CLI.
+  - **Docs:** Getting Started, Core Concepts, Production Best Practices, API Reference, Dashboard, CLI.
   - **Resources:** Blog, Events reference, Performance & Optimization, Scalability, Troubleshooting.
   - **Project:** GitHub (new tab), **Changelog** (links to the `CHANGELOG.md` in the repo root — file 17), Contributing, License.
   - A line restating: *free & open source, commercial use, no license needed.*
@@ -45,29 +45,49 @@ Split meaningfully; each section flows logically without jumping topics.
 1. **Introduction** — what PortQueue is, the free/OSS/no-license statement, when to use it, comparison with pg-boss/BullMQ/Celery (the "why choose this").
 2. **Getting Started** — install (tabbed, per driver + manager), connect, first queue, first worker, first job — a smooth onboarding path (raw-plan "dev-friendly introduction process").
 3. **Core Concepts** — client/queue/worker model, job lifecycle & states, at-least-once & idempotency, producer/consumer split.
-4. **Producing Jobs** — add, bulk, options, priority, delay, idempotency/singleton, transactional enqueue.
-5. **Consuming Jobs** — workers, concurrency, handlers, rate limiting, error handling & retries/backoff.
-6. **Scheduling** — delayed jobs, cron & every, timezones, schedule ids.
-7. **Multi-step Jobs** — the step machine, resumability, why not numeric progress (with the rationale).
-8. **Events & Hooks** — full reference of every event and hook phase with use cases (dedicated pages — raw-plan requirement).
+4. **Producing Jobs** — add, bulk, options, priority, delay, idempotency/singleton, transactional enqueue. Includes a **"jobs have no name" callout** — unlike BullMQ's `add(name, data)`, PortQueue jobs carry no per-job name (routing is the queue's role; it's a common source of queue-name confusion and isn't needed — use `metadata`/`idempotencyKey` for labels/correlation).
+5. **Consuming Jobs** — workers, **concurrency & parallelism** (how N handlers run in parallel, why there's no head-of-line blocking within a queue, tuning `concurrency`/`batchSize`), handlers, rate limiting, error handling & retries/backoff.
+6. **Scheduling** — delayed jobs, cron & every, timezones, schedule ids. Makes clear that **scheduling is the `schedule` option on `add`** (one method for one-off and recurring — no separate `schedule()`), and **unscheduling is `remove({ scheduleId })`** (no separate `unschedule()`).
+7. **Workflows (multi-step jobs)** — a **dedicated top-level section** (not a single page), because workflows are a headline feature and the model is non-obvious. Its pages, in order (each with per-driver `<CodeTabs>` and a "why we chose this" callout):
+   1. *What a workflow is* — the mental model: an ordered set of steps where **each step is its own job row** sharing a `workflowId`, completing a step **spawns** the next step's job. Contrast with BullMQ numeric progress (why not) and why this resumes.
+   2. *Designing a workflow* — how to **design** one well: define a `StepKey` enum, order the `steps` array (entry step first), write one handler per step, keep handlers **idempotent** (at-least-once), decide what each step passes forward via `step.next({ data })`, and where to `repeat`/`done`. Guidance on step granularity (each step = one crash-safe unit of external side effect), naming, and avoiding hidden cross-step state.
+   3. *Defining & sharing the definition* — `defineWorkflow({ queue, steps })` as the single source of truth imported by **both** the producer tier (`pq.createQueue(definition)`) and the worker tier (`pq.createWorker(definition)`); the produce-here/consume-there split for workflows. Emphasize that **starting a run is just `add({ data })`** — a workflow queue differs from a simple queue only in that its worker has many steps instead of one handler.
+   4. *The step controller* — `step.next({ to?, data? })` (advance; next key computed from declared order or an explicit jump), `step.repeat({ data?, delayMs? })`, `step.done({ result? })` — with a full worked pipeline example (validate → charge → ship → notify, file 19.7).
+   5. *Resumability, retries & data flow* — how a crash mid-step is reclaimed and re-run; per-step retry/backoff; what carries over vs resets when the next step is spawned (the 04.2 carry-over rules, in plain language); each step's input is `job.data`.
+   6. *Inspecting & retrying runs* — `getWorkflow({ workflowId })`, the dashboard run view, and `RetryMode` (`FROM_FAILED_STEP` vs `FROM_START`), with the rationale for no arbitrary-step selector (06.8.1).
+8. **Events & Hooks** — full reference of every event and hook phase with use cases (dedicated pages — raw-plan requirement). Leads with an **"Events vs Hooks — when to use which"** page: the decision rule (react-after-can't-change → event; run-before/around-and-maybe-change/block → hook), the comparison table, and the three things only hooks can do (mutate the outgoing job, veto/skip by throwing, be awaited/transactional) — so readers don't assume `on`/`off` makes `useHook` redundant (file 08 §08.0).
 9. **Transactions** — managed + adopt-external, per driver, notify-after-commit.
 10. **Drivers** — the driver model, per-driver pages (capabilities, peer install, gotchas), writing a **custom driver** + the conformance kit.
-11. **Scalability** — a focused section on horizontal scaling: SKIP LOCKED, visibility timeout, cluster-coordinated scheduling/retention, instance-agnostic design, and **how scalable it is / the techniques used** (raw-plan emphasis).
+11. **Scalability** — a focused section on horizontal scaling and parallelism: **how jobs run in parallel** (per-worker concurrency) and **how queues stay independent** (per-queue claim loops, `queue_id`-scoped claiming, no cross-queue blocking — a job never waits on another queue), SKIP LOCKED, visibility timeout, cluster-coordinated scheduling/retention, instance-agnostic design, and **how scalable it is / the techniques used** (raw-plan emphasis). Includes the connection-pool caveat and the "separate instances for hard isolation" pattern (file 07.2b).
 12. **Performance & Optimization** — connection pooling tips, index/retention tuning, batch/concurrency tuning, poll-interval vs LISTEN latency, "how to optimize the connection," per-driver perf notes (raw-plan: "always tell how to optimize").
-13. **Dashboard** — mounting (CLI-served **first**, then Express/Koa/Fastify/raw Node), securing with basic auth + custom auth, docker usage, screenshots (placeholders per file 14.7).
-14. **CLI** — commands, flags, `listen`, serving the dashboard, docker.
-15. **Migrations & Versioning** — auto/manual/validate modes, upgrading versions.
-16. **Security** — security-by-default, injection safety, dashboard/CLI auth, what we test (file 18).
-17. **API Reference** — generated/curated reference of every public method, option, result, enum (kept in sync with file 05).
-18. **Troubleshooting** — keyed by `PortQueueErrorCode` (file 10.4).
-19. **Contributing** — how to contribute, dev setup, conventions link to `ai-utils`, code of conduct (raw-plan: contributions page).
+13. **Production Best Practices** — a **capstone, cross-linked "production readiness" guide**: the one page an operator reads before shipping. It doesn't re-teach features; it collects the *right defaults and habits* and links to the deep pages. Sections:
+    - *Deployment topology* — split producers (API tier, no `createWorker`) from consumers (worker tier); run critical vs bulk workloads as **separate `PortQueue` instances / pools** for hard isolation (file 07.2b); wire the same config module across tiers (file 04.5 persistence rule).
+    - *Migrations on deploy* — do **not** auto-migrate in prod: prefer `MigrationMode.MANUAL`/`VALIDATE_ONLY` and run `portqueue migrate` as a **separate, single deploy step** before rolling app instances; how upgrades/version bumps roll out (file 04.7).
+    - *Graceful shutdown* — install `SIGTERM`/`SIGINT` handlers that call `pq.shutdown({ graceful: true, timeoutMs })`, honor `job.signal` in long handlers, and set drain timeouts to your platform's grace period (file 07.6); the recommended snippet.
+    - *Connection pool sizing* — size for the **sum of worker concurrencies** + headroom for claim/heartbeat/notify traffic; keep handler transactions short so one queue can't starve the shared pool (files 07.2b / Performance).
+    - *Reliability & idempotency* — assume **at-least-once**: make handlers idempotent, use `idempotencyKey`/`singletonKey`, and design workflow steps as idempotent units (files 06.2 / 06.6 / Workflows).
+    - *Retries & backoff* — set sane `retryMaxAttempts`, exponential backoff **with jitter** and a cap, and `dontAutoretryFor` for non-retryable errors; failed jobs stay in `job` (status `FAILED`) for triage and manual `retry` — there is no dead-letter queue (file 06.4).
+    - *Retention* — the default is keep-forever; **turn on `DELETE_AFTER` retention** (or your own pruning) so `job` doesn't grow unbounded; keep failed jobs longer than completed (file 06.9).
+    - *Backpressure & rate limits* — enable the `SystemMonitor` (event-loop/CPU/memory thresholds) and set queue/worker rate limits for third-party APIs; how these compose (files 07.4 / 07.5).
+    - *Observability* — structured logging with correlation via `metadata`, **subscribe to `PortQueueEvent.ERROR`** so nothing is silent, export metrics/tracing through hooks, and use instance attribution for per-server stats (files 08 / 10 / 07.3).
+    - *Security* — protect the dashboard/CLI with auth, set `maxPayloadBytes`, and rely on parameterized queries (never string-built SQL); link to the Security section (file 18).
+    - *Health checks & readiness* — expose readiness via `pq.isRunning` + a lightweight driver ping; don't accept traffic until `init()` resolved.
+    - *Scaling & fairness* — scale consumers horizontally (no leader election needed), pin `instance.id` where a stable identity matters, and use per-tier queues if strict priority/fairness is required (files 07.2 / 07.3 / 07.7).
+    - A copy-pasteable **production checklist** at the end (each item linking to its section).
+14. **Dashboard** — mounting (CLI-served **first**, then Express/Koa/Fastify/raw Node), securing with basic auth + custom auth, docker usage, screenshots (placeholders per file 14.7).
+15. **CLI** — commands, flags, `listen`, serving the dashboard, docker.
+16. **Migrations & Versioning** — auto/manual/validate modes, upgrading versions.
+17. **Security** — security-by-default, injection safety, dashboard/CLI auth, what we test (file 18).
+18. **API Reference** — generated/curated reference of every public method, option, result, enum (kept in sync with file 05).
+19. **Troubleshooting** — keyed by `PortQueueErrorCode` (file 10.4).
+20. **Contributing** — how to contribute, dev setup, conventions link to `ai-utils`, code of conduct (raw-plan: contributions page).
 
-"Why we chose X over Y" call-outs are sprinkled where a non-obvious decision was made (multi-step vs progress, few tables, no broker, notify-after-commit).
+"Why we chose X over Y" call-outs are sprinkled where a non-obvious decision was made (workflows-as-separate-jobs vs numeric progress, no per-job names, few tables, no broker, notify-after-commit).
 
 ## 15.7 Landing page (beautiful, marketing-quality)
 
 - Hero: logo + tagline, the **free & open-source, commercial-use, no-license** message front and center, primary CTA (Get Started) + GitHub (new tab).
-- Feature grid with icons: multi-driver, no broker needed, horizontally scalable, transactional, cron/scheduling, multi-step, rate limiting & backpressure, dashboard + CLI, strictly typed.
+- Feature grid with icons: multi-driver, no broker needed, horizontally scalable, transactional, cron/scheduling, resumable workflows, rate limiting & backpressure, dashboard + CLI, strictly typed.
 - A short "at a glance" code sample (tabbed) showing add + worker.
 - A scalability highlight strip (ties to §11).
 - Social-proof / comparison teaser linking to the comparison page and blog.
@@ -80,7 +100,7 @@ Docusaurus blog. At least **5 initial posts** (raw-plan), e.g.:
 2. *"PortQueue vs pg-boss vs BullMQ vs Celery"* — honest comparison, where each shines, why PortQueue's multi-driver + typing + transactional enqueue matter.
 3. *"Transactional job enqueue: killing the dual-write bug"* — the transactions feature as a story.
 4. *"Scaling to N instances with SKIP LOCKED and visibility timeouts"* — the scalability techniques.
-5. *"Resumable multi-step jobs (and why we skipped numeric progress)"* — the step machine, a real use case (an order-processing pipeline).
+5. *"Resumable workflows (and why we skipped numeric progress)"* — each step as its own job, spawning the next; a real use case (an order-processing pipeline).
 
 Posts use the tabbed code component and link out (new tab) to references.
 

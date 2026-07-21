@@ -2,6 +2,8 @@
 
 The driver is the seam that makes PortQueue database-agnostic. **All SQL and all engine-specific behavior live behind the `Driver` interface.** Core services never branch on driver identity — they branch on **capabilities**. This is what lets a developer swap Postgres for SQLite without touching app code, and lets a third party add a new engine by implementing one interface.
 
+> **Driver conformance — the no-join rule (file 04 §04.1).** No driver method may emit a relational `JOIN`, on any engine, hot path or cold. Relationships are followed with **separate, id-keyed single-table lookups** (e.g. resolving a job's queue is a second `SELECT ... WHERE id = :queue_id`, usually served from the per-instance cache), never a join — so every access path is portable to a future **NoSQL/document** driver that has no join. A driver whose engine can return several independent result sets in one round-trip *may* bundle those keyed `SELECT`s together (see `BATCHED_READ`) purely to save latency; that is a transport optimization, not a join. The conformance kit (file 11) asserts drivers never depend on cross-table joins.
+
 ## 03.1 Capabilities, not identity
 
 A driver advertises what its engine supports via a capability set. Core code reads capabilities to choose a strategy; it never does `if (driver instanceof PostgresDriver)`.
@@ -16,6 +18,7 @@ A driver advertises what its engine supports via a capability set. Core code rea
 - `ADVISORY_LOCK` — engine offers app-level locks (Postgres advisory locks) usable for leader-only tasks (e.g. single-runner scheduler election). Optional optimization.
 - `JSON_NATIVE` — has a native JSON/JSONB column type for the payload; otherwise payload is stored as TEXT and (de)serialized by the driver.
 - `UPSERT` — supports `INSERT ... ON CONFLICT` / `MERGE`, used for idempotency and schedule definitions.
+- `BATCHED_READ` — engine can return **multiple independent result sets in one round-trip** (multi-statement query, batch, or pipeline). Optional optimization: when present, a driver may satisfy "fetch this job **and** its queue row" as two keyed `SELECT`s in a single round-trip instead of two; when absent, core just issues two calls (or reads the queue from cache). Never used to perform a join (no-join rule, §04.1).
 
 The capability set is a typed, frozen object the driver returns. Core caches it after `connect()`.
 
@@ -46,11 +49,11 @@ A driver is an injected class implementing this contract. Grouped by concern; ev
 - `extendLock({ jobId, lockDurationMs, now }): Promise<boolean>` — heartbeat; returns false if the job was lost (reclaimed).
 - `completeJob({ jobId, returnValue?, tx? }): Promise<void>`.
 - `retryJob({ jobId, nextRunAt, retryAttempt, lastError }): Promise<void>` — reschedule for retry.
-- `failJob({ jobId, lastError, deadLetter }): Promise<void>` — terminal failure (optionally into dead-letter state).
-- `advanceStep({ jobId, fromStep, toStep, returnValue, resetLock }): Promise<void>` — multi-step transition (file 06): atomically finalize `fromStep`'s current `steps_history` entry (`returnValue` + `completedAt`) and **append** a new entry for `toStep` (`startedAt`, `input = returnValue`), then set `current_step = toStep`.
+- `failJob({ jobId, lastError }): Promise<void>` — terminal failure (status → `FAILED`, `failure_message` captured).
+- `advanceWorkflowStep({ jobId, returnValue, next?, tx? }): Promise<InsertedJobRow | null>` — the atomic workflow transition (file 06). In **one transaction**: mark `jobId` `COMPLETED` (`return_value`, `completed_at`), and — unless `next` is omitted (`step.done`) — **insert a new `PENDING` job** for the next step. `next = { workflowStepKey, data, startAfter }`; the inserted row carries over `workflow_id`, `queue_id`, `metadata`, `priority`, `schedule_id`, resolved retention, and instance attribution, and **resets** retry/lock/idempotency/timestamps (04.2). Returns the spawned row (or null for `done`). Atomicity guarantees no complete-without-spawn or double-spawn.
 - `reclaimStalledJobs({ queueId?, now }): Promise<number>` — return jobs whose lock deadline passed to a claimable state.
 - `expireDueJobs({ queueId?, now }): Promise<number>` — mark `PENDING`/`RETRY` jobs whose `expire_at <= now` as `EXPIRED` before they run (owned by the scheduler tick; file 06.3).
-- `requeueJob({ jobId, from }): Promise<void>` — **manual** retry of a finished/failed job (file 06.8.1). `from = FROM_FAILED_STEP` re-arms `current_step` (status → `PENDING`, `steps_history` kept); `from = FROM_START` resets `current_step` to the initial step and begins a fresh `steps_history`. (Distinct from `retryJob`, which is the automatic backoff retry.)
+- `requeueJob({ jobId, from }): Promise<InsertedJobRow>` — **manual** retry of a finished/failed job (file 06.8.1). `from = FROM_FAILED_STEP` re-arms the failed step's own job (status → `PENDING`, retry counters reset) and returns it; `from = FROM_START` inserts a **fresh entry-step job under a new `workflow_id`**, seeded from the run's entry-step `data`, and returns it. (Distinct from `retryJob`, which is the automatic backoff retry.)
 
 **Reading (dashboard/CLI/stats)**
 - `getJob({ jobId }): Promise<JobRow | null>`.
@@ -71,8 +74,8 @@ A driver is an injected class implementing this contract. Grouped by concern; ev
 - `subscribe({ channel, onNotification }): Promise<Subscription>` — resolves to something with an `unsubscribe()`.
 
 **Transactions (file 09)**
-- `runInTransaction<T>({ fn }): Promise<T>` — open a tx, pass a `TransactionHandle` to `fn`, commit/rollback.
-- `adoptTransaction({ external }): TransactionHandle` — wrap a developer-supplied native transaction/connection so `insertJob({ tx })` can run on it.
+- `runInTransaction<T>({ fn }): Promise<T>` — open a tx, pass a `TransactionHandle` to `fn`, commit/rollback. **Internal only** — used by core for PortQueue's *own* atomic sequences (claim, `advanceWorkflowStep`). It is **not** exposed as a public `pq.transaction` (dropped, file 09).
+- The developer's transactional enqueue does **not** go through a driver `adoptTransaction`. Instead, an **adapter** (`fromKnex`, `fromPg`, … — file 09) wraps the caller's native transaction into a `TransactionHandle` that exposes "run this parameterized statement here"; the driver builds its engine-specific SQL and runs it via that handle when `insertJob({ tx })` is called. So there is **no `adoptTransaction` driver method** — the adapter is the seam.
 
 Every method that an engine genuinely cannot implement must still exist and throw `UnsupportedCapabilityError` with the capability name and a documented workaround — but the design goal is that this is **rare**; capability-based fallbacks should keep the public behavior uniform.
 

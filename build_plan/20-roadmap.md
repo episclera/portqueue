@@ -15,7 +15,7 @@ Deferred features and — more importantly — **how today's interfaces are shap
 
 ## 20.3 Flows / job dependencies (parent-child)
 
-- BullMQ-style flows (a parent job that waits for children). Multi-step (file 06) covers many sequential cases already; true fan-out/fan-in dependency graphs are a future addition. Design note: model as a `parent_job_id` + a dependency-count column on the `job` table so it stays join-free and instance-agnostic.
+- BullMQ-style flows (a parent job that waits for children). **Workflows** (file 06) cover many sequential cases already — and because each step is already its own `job` row sharing a `workflow_id`, fan-out/fan-in is a natural extension. Design note: add a `parent_job_id` + a dependency-count column on the `job` table (reusing the existing `workflow_id` grouping) so it stays join-free and instance-agnostic.
 
 ## 20.4 Priority fairness / anti-starvation
 

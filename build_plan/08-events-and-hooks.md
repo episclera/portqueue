@@ -7,6 +7,24 @@ PortQueue is event-driven. Two distinct mechanisms, deliberately separated:
 
 All event names and phases are **enums**, never magic strings.
 
+## 08.0 Events vs Hooks — when to use which
+
+They are **not** interchangeable, and one does not replace the other (a common first question: *"do we need hooks if we have `on`/`off`?"* — yes). Pick by a single rule:
+
+- *"I want to **react after** something happened and I **can't/shouldn't change** it"* → **Event** (`pq.on(...)`).
+- *"I want to run **before/around** an operation and possibly **change or block** it"* → **Hook** (`pq.useHook(...)`).
+
+| | **Events** (`on`/`off`/`once`) | **Hooks** (`useHook`) |
+|---|---|---|
+| Purpose | Observation | Participation |
+| Awaited? | **No** — fan-out is non-blocking; the bus never waits for listeners | **Yes** — awaited, in registration order |
+| Can change the outcome? | **No** — receives a read-only payload | **Yes** — mutate `JobOptions`/`data`, or **veto by throwing** |
+| Runs inside the caller's transaction? | No | `BEFORE_ADD` does when `tx` is used |
+| On the hot path? | Must never block it | Deliberately part of the operation (adds latency by design) |
+| Typical use | metrics, logging, dashboard live view, alerts | inject `metadata`, enforce a tenant `idempotencyKey`, authorize/veto an add, enrich/skip a job before processing |
+
+Only hooks can do three things an event fundamentally cannot: (1) **mutate the outgoing job** (`BEFORE_ADD`), (2) **abort/skip** an operation by throwing (`BEFORE_ADD`/`BEFORE_PROCESS`), and (3) **be awaited** so the operation waits for them (and runs inside the same transaction as the insert). Trying to fold these into events would force some listeners to be blocking-and-mutating and others not — reintroducing exactly the ambiguity this two-mechanism split removes. Rule of thumb restated: **events are past-tense and passive; hooks are present-tense and active.**
+
 ## 08.1 `PortQueueEvent` (client/global events)
 
 Emitted on the `PortQueue` instance (`pq.on(PortQueueEvent.X, listener)`). Every listener receives one typed payload object (named fields, no positional args).
@@ -20,11 +38,13 @@ Job lifecycle (generic — fire for every queue):
 - `JOB_ADDED` (`{ jobId, queue, deduplicated }`)
 - `JOB_ACTIVE` (`{ jobId, queue, retryAttempt, instanceId }`)
 - `JOB_COMPLETED` (`{ jobId, queue, returnValue, durationMs }`)
-- `JOB_FAILED` (`{ jobId, queue, error, retryAttempt, deadLetter }`)
+- `JOB_FAILED` (`{ jobId, queue, error, retryAttempt }`)
 - `JOB_RETRYING` (`{ jobId, queue, retryAttempt, nextRunAt }`)
 - `JOB_STALLED` (`{ jobId, queue, previousInstanceId }`)
 - `JOB_EXPIRED`, `JOB_CANCELLED`, `JOB_REMOVED`
-- `JOB_STEP_COMPLETED` (`{ jobId, queue, step, nextStep }`)
+- `JOB_STEP_COMPLETED` (`{ jobId, queue, workflowId, stepKey, nextStepKey?, nextJobId? }`) — a workflow step finished; `nextStepKey`/`nextJobId` are absent when the run ended (`step.done`).
+- `WORKFLOW_COMPLETED` (`{ workflowId, queue, result, lastStepKey, jobId }`) — the terminal step called `step.done`.
+- `WORKFLOW_FAILED` (`{ workflowId, queue, stepKey, jobId, error }`) — a step exhausted its attempts, so the run stopped there.
 
 Scheduling:
 - `SCHEDULE_CREATED`, `SCHEDULE_UPDATED`, `SCHEDULE_REMOVED`, `SCHEDULE_FIRED` (`{ scheduleId, jobId }`)
@@ -36,11 +56,12 @@ Queue control & system:
 
 ## 08.2 Specific vs generic events
 
-The raw plan wants "both generic and specific" events. Support both without duplicating enums:
+The raw plan wants "both generic and specific" events. Support both **without a second event surface** — everything is on the `PortQueue` instance (`pq.on`); there is deliberately **no `Worker`-level `on`/`off`** (the `Worker` exposes nothing — file 05.4):
 
 - **Generic:** `pq.on(PortQueueEvent.JOB_COMPLETED, cb)` — fires for all queues; payload includes `queue`.
 - **Queue-specific:** `pq.on(PortQueueEvent.JOB_COMPLETED, cb, { queue: 'emails' })` — the emitter filters by the optional `{ queue }` selector so a listener can scope to one queue without a separate enum per queue. (Filtering happens in the bus; the enum stays small and importable.)
-- **Worker-scoped:** a `Worker` re-emits the subset relevant to its own queue via `WorkerEvent` (`STARTED | STOPPED | ACTIVE | COMPLETED | FAILED | RETRYING | STALLED | ERROR`) so `worker.on(WorkerEvent.COMPLETED, cb)` reads naturally for consumer code. (`WorkerEvent.STARTED/STOPPED` are the worker-local mirror of the global `WORKER_STARTED/WORKER_STOPPED`; there is no `DRAINED` member — "drained" is not a modeled concept in v1.)
+
+So consumer code that wants "my worker's completions" writes `pq.on(PortQueueEvent.JOB_COMPLETED, cb, { queue })` — the `{ queue }` filter *is* the worker scope. `PortQueueEvent` carries names for every case (job lifecycle, `WORKER_STARTED`/`WORKER_STOPPED`, workflow, schedule, queue-control, system), so there is no capability lost by dropping a worker-local enum. There is no `DRAINED` member — "drained" is not a modeled concept in v1.
 
 ## 08.3 The event bus
 
@@ -72,7 +93,8 @@ Rules:
 ## 08.6 Local final-check checklist
 
 - [ ] Every event and hook phase is an exported enum; payloads are typed (no `any`).
-- [ ] Generic, queue-filtered, and worker-scoped subscription all work off the same enums.
+- [ ] Generic and queue-filtered subscription both work off the same `PortQueueEvent` enum, **all on `pq`** — no `Worker`-level events, no `WorkerEvent` enum.
 - [ ] Listener errors are isolated and re-surfaced as `ERROR`; they never break the loop.
 - [ ] Hooks are awaited, ordered, can modify `BEFORE_ADD`/`BEFORE_PROCESS` and veto by throwing.
 - [ ] Observation (events, non-blocking) and participation (hooks, awaited) are clearly separated in code and docs.
+- [ ] Docs lead with **"Events vs Hooks — when to use which"** (§08.0): the decision rule + table, so readers don't mistake `on`/`off` for a replacement of `useHook`.

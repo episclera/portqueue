@@ -4,6 +4,8 @@ This project is a **shared library monorepo** and follows the `ai-utils` `shared
 
 ## 01.0 First step — scaffold from the `ai-utils` shared-lib skill
 
+> **AI agents:** do not run `npm install`/`ci`/`pnpm`/`yarn`/`bun` yourself at any point in this file. Generate the files, then **print the exact install/build command and wait for the user to run it and confirm** before continuing (README → "Execution rules for an AI agent").
+
 Before anything below, the implementer **applies the `../ai-utils` `shared-lib-structure` skill** to scaffold the repo (raw plan line 8: *"Use ../ai-utils shared-lib ai skill to setup that lib"*). Concretely: read `../ai-utils/skills/shared-lib-structure/SKILL.md` and its dependency `../ai-utils/skills/project-structure/SKILL.md`, then create the root tooling (npm workspaces, `.nvmrc`, Prettier, ESLint base, Husky, commitlint, `.vscode/settings.json`), the `packages/*` + `docs/` layout, and copy the "Working with Claude Code" guardrails into this repo's `CLAUDE.md`. The rest of this file layers PortQueue's product-specific choices on top of that scaffold. **Check `npm view` for the latest stable of every dependency before pinning** (skill version policy).
 
 ## 01.1 Repository layout
@@ -109,7 +111,7 @@ A **maximally permissive** license so commercial use needs no obligations. Recom
 
 ## 01.9 Scripts & README
 
-- `scripts/dev/setup` — idempotent one-shot: nvm use, `npm ci`, copy any example env, build packages in dependency order (`ui` → `core` → `dashboard`/`cli` → `docs`), and run any local bootstrap. Print the command; never auto-install on the AI's behalf when acting as an assistant (skill guardrail).
+- `scripts/dev/setup` — idempotent one-shot: nvm use, `npm ci`, copy any example env, build packages in dependency order (`ui` → `core` → `dashboard`/`cli` → `docs`), and run any local bootstrap. When an AI agent runs the plan it **prints this command and waits for the user to run it and confirm** — it never auto-installs on the AI's behalf (skill guardrail; README execution rules).
 - `scripts/dev/start_all` — runs the docs dev server and/or a dashboard example concurrently.
 - Root `README.md` follows the standard shape (skill §10) **plus** what the raw plan requires: a contributions guide (or link to `CONTRIBUTING.md`), and prominent links/description pointing to the docs site. Keep conventions in `ai-utils`, not duplicated here.
 

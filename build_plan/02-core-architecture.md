@@ -6,9 +6,9 @@ The core is **class-first with dependency injection via `typedi`**, split into s
 
 - **One class, one job.** The scheduler doesn't claim jobs; the claimer doesn't parse cron; the monitor doesn't touch SQL. Services collaborate through injected interfaces.
 - **DI containers are per-`PortQueue`-instance, not global.** A process may hold two `PortQueue` instances (e.g. two databases). Use a **scoped container per client** so their services never share state. Never rely on the default global container for instance state.
-  - *typedi caveat (raw-plan mandates typedi):* typedi is global-container-oriented; per-instance scoping is done via `Container.of(scopeId)` with a unique scope id per `PortQueue` (and `Container.reset(scopeId)` on `stop()` to dispose). This works but is a known sharp edge — services must be resolved from the scoped container, never the default one, and must not use container-global singletons for per-instance state. If typedi's scoping proves too awkward in practice, a thin hand-rolled constructor-injection container is an acceptable fallback (record the deviation in file 20); the public API is unaffected either way.
+  - *typedi caveat (raw-plan mandates typedi):* typedi is global-container-oriented; per-instance scoping is done via `Container.of(scopeId)` with a unique scope id per `PortQueue` (and `Container.reset(scopeId)` on `shutdown()` to dispose). This works but is a known sharp edge — services must be resolved from the scoped container, never the default one, and must not use container-global singletons for per-instance state. If typedi's scoping proves too awkward in practice, a thin hand-rolled constructor-injection container is an acceptable fallback (record the deviation in file 20); the public API is unaffected either way.
 - **Depend on interfaces, not concretions.** Core services depend on the `Driver` interface (file 03) and a `Logger` interface (file 10), both injected. This is what makes the engine driver-agnostic and testable.
-- **No I/O in constructors.** Construction wires dependencies only. All connecting/migrating/listening happens in an explicit `start()` lifecycle.
+- **No I/O in constructors.** Construction wires dependencies only. All connecting/migrating/listening happens in an explicit `init()` lifecycle.
 - **Instance-agnostic.** No service caches anything whose correctness depends on being the only process. In-process caches are allowed only for pure/derived data (e.g. a parsed cron expression), never for claim/dedup/schedule state.
 
 ## 02.2 `packages/core/src` folder tree
@@ -52,8 +52,8 @@ packages/core/src/
     worker.ts                    The Worker consumer handle (public; file 05)
     claim.service.ts             Claims due jobs (SKIP LOCKED or fallback), respects concurrency
     execution.service.ts         Runs handlers, catches errors, handles retries/steps
-    step-machine.service.ts      Multi-step state machine (file 06)
-    completion.service.ts        Marks complete/failed/retry/dead-letter atomically
+    workflow.service.ts         Workflow (multi-step) dispatch + atomic step advance/spawn (file 06)
+    completion.service.ts        Marks complete/failed/retry atomically
 
   scheduling/
     scheduler.service.ts         Turns due schedules into concrete jobs (recurring/cron)
@@ -112,16 +112,16 @@ Every folder above corresponds to a concern the raw plan explicitly asked to iso
 
 `ClientLifecycleService` owns a strict ordered startup and the reverse-ordered shutdown.
 
-**`start()` order:**
+**`init()` order:**
 1. Resolve **instance identity** (container id / product uuid / type). Cheap, no DB.
 2. **Connect** the driver (open pool/handle).
 3. **Migrate**: `MigrationRunner` reads `migration_state`, applies any pending migrations for this driver (respects configured schema/prefix). Controlled by `migration` option (`auto` | `manual` | `validate-only`).
 4. Start **pub/sub**: `SubscriberService` opens LISTEN (or arms the poller if unsupported).
 5. Start the **scheduler** (recurring→concrete jobs) and **retention** service (if configured).
 6. Start the **system monitor** (if enabled).
-7. Mark client running. Workers created before `start()` begin claiming now; workers created after start immediately.
+7. Mark client running. Workers created before `init()` begin claiming now; workers created afterwards begin claiming immediately.
 
-**`stop({ graceful, timeout })` order (reverse):**
+**`shutdown({ graceful, timeout })` order (reverse):**
 1. Stop accepting new work: scheduler + subscriber stop producing wakeups; producers may still be allowed (configurable — you might drain while still enqueuing).
 2. Signal all workers to **stop claiming**; wait for in-flight handlers up to `timeout` (graceful) or cancel/abort (non-graceful).
 3. Release claimed-but-unstarted jobs back to the queue.
@@ -133,11 +133,11 @@ Details of graceful shutdown semantics are in [`07`](./07-concurrency-scaling-ra
 
 ## 02.5 How a job flows through the services (happy path)
 
-1. `queue.add({...})` → `ProducerService` → `AddJobService` builds a row (defaults merged, job-level overrides applied) → `Driver.insertJob` (parameterized) → `NotifierService` fires a notification → returns an `AddJobResult`.
+1. `queue.addJob({...})` → `ProducerService` → `AddJobService` builds a row (defaults merged, job-level overrides applied) → `Driver.insertJob` (parameterized) → `NotifierService` fires a notification → returns an `AddJobResult`.
 2. On another instance, `SubscriberService` receives the notification (or the poller ticks) → `wakeup` signals `ClaimService`.
 3. `ClaimService` claims up to `min(concurrency - active, batchSize)` due jobs for the queue via `Driver.claimJobs` (`SKIP LOCKED` or fallback), respecting the **rate limiter** and **backpressure** from the monitor.
-4. For each claimed job, `ExecutionService` builds the `Job` context and runs the handler (or the current step via `StepMachineService`), inside a heartbeat that extends the lock.
-5. `CompletionService` marks the outcome atomically: complete, schedule a retry (with backoff), advance/repeat a step, or move to dead-letter. Emits the matching event.
+4. For each claimed job, `ExecutionService` builds the `Job` context and runs the handler (or, for a workflow job, dispatches to the step whose key matches `workflow_step_key` via `WorkflowService`), inside a heartbeat that extends the lock.
+5. `CompletionService` marks the outcome atomically: complete, schedule a retry (with backoff), or fail terminally (`FAILED`). For a workflow step, `WorkflowService.advanceWorkflowStep` completes this step's job and spawns the next step's job in one transaction (or spawns nothing on `done`). Emits the matching event.
 6. `RetentionService` later hard-deletes finished rows from `job` per policy.
 
 ## 02.6 Concurrency model (v1)

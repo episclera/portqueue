@@ -15,7 +15,7 @@ The CLI resolves your instance from a **config module**, the same way tools like
 - `--config <path>` — path to a module that **default-exports** a `PortQueue` **or** an (optionally async) factory `() => PortQueue | Promise<PortQueue>`. If omitted, the CLI auto-discovers `portqueue.config.{ts,js,mjs,cjs}` in the working directory (walking up to the nearest one).
 - `--export <name>` — use a named export instead of the default.
 - **TypeScript configs** are loaded via the project's own runtime/loader (e.g. run the CLI under `tsx`/`ts-node`, or point `--config` at a prebuilt `.js`). The CLI ships **no** TS compiler (keeps `@portqueue/cli` dep-light, file 01); if a `.ts` config can't be loaded it prints the exact loader command to use.
-- Lifecycle: the CLI imports the module, resolves the instance, `start()`s it if needed, runs the command, then `stop()`s it cleanly. A one-off command never leaves the process connected.
+- Lifecycle: the CLI imports the module, resolves the instance, `init()`s it if needed, runs the command, then `shutdown()`s it cleanly. A one-off command never leaves the process connected.
 - Output/behavior flags remain: `--json` (machine-readable), `--no-color`, `--log-level`.
 
 Everything else — driver, connection details, schema, table prefix, namespace — comes from *inside* your config module (from `PortQueueOptions`), never from CLI flags. Secrets therefore stay in your app's own config/env, not in shell history.
@@ -46,11 +46,12 @@ Monitoring / read:
 - `portqueue schedules [--queue <name>]` — list recurring definitions + next run.
 
 Actions (mutating; require `--yes` or an interactive confirm):
-- `portqueue add --queue <name> --data <json|@file> [--priority --delay --retry-max-attempts --idempotency-key ...]` — enqueue a job (flags map to `JobOptions`).
-- `portqueue retry --id <jobId> [--from failed|start]` — requeue a failed/completed job; `--from failed` (default) resumes at the failed step, `--from start` re-runs the whole job (maps to `RetryMode`; file 06.8.1). `portqueue cancel --id <jobId>` / `portqueue remove --id <jobId>`.
+- `portqueue add --queue <name> --data <json|@file> [--priority --delay --retry-max-attempts --idempotency-key ...]` — enqueue a job (flags map to `JobOptions`). Passing scheduling flags instead creates/updates a **recurring** definition (same `add`, mirroring the API's `schedule` option): `--schedule-key <key> (--cron "<expr>" | --every <duration>) [--timezone <IANA>] [--start-at --end-at]` — idempotent on `--queue`+`--schedule-key`; exactly one of `--cron`/`--every`.
+- `portqueue retry --id <jobId> [--from failed|start]` — requeue a failed/completed job; `--from failed` (default) resumes at the failed step, `--from start` re-runs the whole job (maps to `RetryMode`; file 06.8.1). `portqueue cancel --id <jobId>`.
+- `portqueue remove (--id <jobId> | --schedule-id <id>)` — remove **exactly one**: a job (`--id`) or a schedule / "unschedule" (`--schedule-id`). Mutually exclusive; supplying both or neither is a usage error.
 - `portqueue purge --queue <name> --status <status> [--older-than <duration>]`.
 - `portqueue pause --queue <name> [--mode processing|all]` / `portqueue resume --queue <name>`.
-- `portqueue schedule create --queue <name> --key <key> (--cron "<expr>" | --every <duration>) [--timezone <IANA>] [--data <json|@file>] [--priority --retry-max-attempts ...] [--start-at --end-at]` — upsert a recurring definition (idempotent on `--queue`+`--key`); exactly one of `--cron`/`--every` required. `portqueue schedule list [--queue]` and `portqueue unschedule --queue <name> --key <key>` for the rest.
+- `portqueue schedule list [--queue]` — list recurring definitions (read-only; maps to `getSchedules`). There is no separate `schedule create`/`unschedule` — create via `add` with schedule flags, remove via `remove --schedule-id`.
 
 Operational:
 - `portqueue migrate [--mode auto|validate-only]` — run/verify schema migrations (the `MANUAL` path from file 04).

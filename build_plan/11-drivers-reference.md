@@ -16,8 +16,8 @@ General rules for every driver:
 - **Capabilities:** `LISTEN_NOTIFY`, `SKIP_LOCKED`, `RETURNING`, `DB_GENERATED_UUID` (`gen_random_uuid()` / `pgcrypto`), `TRANSACTIONS`, `ADVISORY_LOCK`, `JSON_NATIVE` (`JSONB`), `UPSERT` (`ON CONFLICT`). Full-feature reference driver.
 - **Notify:** dedicated `LISTEN` connection (its own client checked out of the pool, not shared with query traffic). Channel names namespaced by `namespace`/prefix. Payload is a small signal (`{queue}`), size-bounded (Postgres NOTIFY payload limit ~8000 bytes — we send tiny signals only).
 - **Claim:** `SELECT ... FOR UPDATE SKIP LOCKED LIMIT n` + update in one statement/CTE (`UPDATE ... FROM (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`).
-- **Types:** `TIMESTAMPTZ`, native enums (`job_status_enum`, `instance_type_enum`), `JSONB` for `data`/`return_value`/`steps_history`.
-- **Transactions:** managed via a checked-out client; `adoptTransaction` accepts a `pg.PoolClient`/`pg.Client` mid-transaction, or a TypeORM/Knex query-runner exposing the underlying client (documented adapters).
+- **Types:** `TIMESTAMPTZ`, native enums (`job_status_enum`, `instance_type_enum`), `JSONB` for `data`/`return_value`/`metadata`.
+- **Transactions:** the developer's own transaction is wrapped by an adapter (`fromPg` accepts a `pg.PoolClient`/`pg.Client` mid-transaction; `fromKnex`/`fromTypeorm`/`fromPrisma`/etc. wrap those query-builders/ORMs) and passed as `tx`; the driver runs its insert on it and never owns commit/rollback (file 09). The driver keeps an internal `runInTransaction` for its own atomic sequences.
 - **Advisory lock** used for scheduler/retention/migration leader election (optimization).
 
 ## 11.2 PGLite driver (`drivers/pglite`)
@@ -59,6 +59,7 @@ General rules for every driver:
 ## 11.7 Local final-check checklist
 
 - [ ] Each driver honestly declares capabilities; `probe()` verifies and warns on mismatch.
+- [ ] **No driver emits a relational `JOIN`** (no-join rule, file 04 §04.1) — relationships resolve via separate id-keyed lookups; the conformance kit rejects any cross-table join so the model stays NoSQL-portable.
 - [ ] Postgres + PGLite share a dialect base; Oracle/SQLite override only what differs — minimal duplication.
 - [ ] SQLite/PGLite paths are the ones exercised by tests and behave identically to Postgres at the API level.
 - [ ] All DB clients are optional peers; a missing client yields a clear install-me error, never a cryptic crash.

@@ -15,7 +15,7 @@ The raw plan is emphatic: **never crash**, **log everything at the right level**
 - `TRACE/DEBUG` — claim cycles, notify/poll ticks, lock extensions, backoff calculations, monitor samples.
 - `INFO` — client start/stop, migrations applied, worker start/stop, queue pause/resume, schedule fired.
 - `WARN` — job stalled/reclaimed, system pressure high, retryable handler failure (attempt < max), notify-unavailable-falling-back-to-poll.
-- `ERROR` — terminal job failure (dead-letter), driver errors, hook/listener exceptions, migration failure.
+- `ERROR` — terminal job failure, driver errors, hook/listener exceptions, migration failure.
 - `FATAL` — unrecoverable startup errors (bad config, incompatible schema in `VALIDATE_ONLY`).
 
 ## 10.2 Error taxonomy (typed, coded)
@@ -27,7 +27,7 @@ All errors thrown by the public surface extend a base `PortQueueError` with:
 - `cause` — the underlying error where relevant (`Error.cause`).
 
 `PortQueueErrorCode` (representative set):
-- `NOT_STARTED` — used a client before `start()`.
+- `NOT_STARTED` — used a client before `init()`.
 - `ALREADY_STARTED` / `ALREADY_STOPPED`.
 - `INVALID_OPTIONS` — bad option combination (e.g. both `cron` and `every`, or both `delay` and `startAfter`).
 - `UNSUPPORTED_CAPABILITY` — driver lacks a required capability (`UnsupportedCapabilityError`).
@@ -50,7 +50,7 @@ The worker loop must be **uncrashable**:
 - **Event listener / hook throws** → caught, logged, surfaced via `PortQueueEvent.ERROR`; loop continues (file 08).
 - **Driver/DB error mid-claim** → caught, logged at `ERROR`, the claim cycle backs off (exponential, capped) and retries; the process does not exit. If the DB is down, workers idle-retry until it returns.
 - **Unhandled rejection safety**: internal async paths always attach a `.catch`; the library never relies on the app's `unhandledRejection` handler. Document that the app should still have one.
-- The only place PortQueue intentionally throws to the caller is **synchronous misuse** (bad options, using before start) and **`start()`/migration** failures — i.e. programmer/config errors surfaced early, not runtime job errors.
+- The only place PortQueue intentionally throws to the caller is **synchronous misuse** (bad options, using before init) and **`init()`/migration** failures — i.e. programmer/config errors surfaced early, not runtime job errors.
 
 ## 10.4 Error-message quality (a hard rule)
 
