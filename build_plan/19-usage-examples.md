@@ -16,7 +16,7 @@ await pq.start();
 // producer (API tier)
 const emails = pq.queue<{ to: string; template: string }>('emails');
 const res = await emails.add({ data: { to: 'a@b.com', template: 'welcome' } });
-// res: { jobId, queue: 'emails', state: JobState.CREATED, deduplicated: false, availableAt }
+// res: { jobId, queue: 'emails', status: JobStatus.PENDING, deduplicated: false, startAfter }
 
 // consumer (worker tier — a different process/deployment)
 const worker = pq.createWorker({
@@ -66,13 +66,13 @@ await pq.queue('fulfillment').add({ data, tx: handle });   // app owns commit/ro
 
 ## 19.5 Retries with backoff + dead-letter
 
-**Need:** retry a flaky webhook 5×, exponential, then dead-letter. `JobOptions.maxAttempts/retryDelay/retryBackoff`, `QueueOptions.deadLetterQueue`.
+**Need:** retry a flaky webhook 5×, exponential, then dead-letter. `JobOptions.retryMaxAttempts/retryDelay/retryBackoff`, `QueueOptions.deadLetterQueue`.
 
 ```ts
 const webhooks = pq.queue('webhooks', { deadLetterQueue: 'webhooks.dead' });
 await webhooks.add({
   data,
-  maxAttempts: 5,
+  retryMaxAttempts: 5,
   retryDelay: '2s',
   retryBackoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2, maxDelay: '5m', jitter: true },
 });
@@ -107,17 +107,18 @@ enum OrderStep { VALIDATE = 'VALIDATE', CHARGE = 'CHARGE', SHIP = 'SHIP', NOTIFY
 
 pq.createWorker({
   queue: 'orders',
-  steps: {
-    [OrderStep.VALIDATE]: async (job, step) => step.next(OrderStep.CHARGE, { data: await validate(job.data) }),
-    [OrderStep.CHARGE]:   async (job, step) => step.next(OrderStep.SHIP,   { data: await charge(job.stepData) }),
-    [OrderStep.SHIP]:     async (job, step) => step.next(OrderStep.NOTIFY, { data: await ship(job.stepData) }),
-    [OrderStep.NOTIFY]:   async (job, step) => step.done(await notify(job.stepData)),
-  },
+  // ordered array — array order is the canonical sequence; steps[0] is the initial step
+  steps: [
+    { id: OrderStep.VALIDATE, handler: async (job, step) => step.next(OrderStep.CHARGE, { data: await validate(job.data) }) },
+    { id: OrderStep.CHARGE,   handler: async (job, step) => step.next(OrderStep.SHIP,   { data: await charge(job.lastStepReturnValue) }) },
+    { id: OrderStep.SHIP,     handler: async (job, step) => step.next(OrderStep.NOTIFY, { data: await ship(job.lastStepReturnValue) }) },
+    { id: OrderStep.NOTIFY,   handler: async (job, step) => step.done(await notify(job.lastStepReturnValue)) },
+  ],
 });
 // produce:
-await pq.queue('orders').add({ data: { cartId }, /* first step defaults to VALIDATE */ });
+await pq.queue('orders').add({ data: { cartId }, /* starts at steps[0] = VALIDATE */ });
 ```
-If the process dies after `CHARGE`, another instance resumes at `SHIP` using persisted `stepData` — no re-charge, no lost progress. `step.repeat({ delayMs })` re-runs a step (e.g. poll a shipment status until ready).
+If the process dies after `CHARGE`, another instance resumes at `SHIP` using persisted `lastStepReturnValue` — no re-charge, no lost progress. `step.repeat({ delayMs })` re-runs a step (e.g. poll a shipment status until ready).
 
 ## 19.8 Concurrency + rate limiting + backpressure
 
@@ -174,15 +175,16 @@ import { createDashboard } from '@portqueue/dashboard';
 const dash = createDashboard({ portQueue: pq, basePath: '/portqueue', auth: { mode: 'basic', username, password } });
 app.use('/portqueue', dash.express());
 ```
-Or serve it from the CLI (no app changes): `portqueue dashboard --driver postgres --connection $DATABASE_URL --port 9000 --root-user admin --root-password ****`.
+Or serve it from the CLI (no app changes beyond a config module): `portqueue dashboard --config ./portqueue.config.ts --port 9000 --root-user admin --root-password ****`.
 
 ## 19.13 Operate from the CLI
 
 **Need:** quick stats and a live event feed. `portqueue stats --watch`, `portqueue listen`.
 
 ```bash
-portqueue stats --driver postgres --connection $DATABASE_URL --watch
-portqueue listen --driver postgres --connection $DATABASE_URL --queue orders   # runs infinitely
+# the CLI loads your configured PortQueue from ./portqueue.config.ts (auto-discovered)
+portqueue stats --watch
+portqueue listen --queue orders   # runs infinitely
 portqueue retry --id <jobId> --yes
 ```
 
@@ -195,7 +197,7 @@ import { SqliteDriver } from '@portqueue/core/drivers/sqlite';
 const pq = new PortQueue({ driver: new SqliteDriver({ file: './queue.db' }) });
 // every queue.add / createWorker / schedule call above works identically
 ```
-Custom driver: implement the `Driver` interface, validate with the conformance kit (`@portqueue/testing`), pass `new PortQueue({ driver: myDriver })`.
+Custom driver: implement the `Driver` interface, validate with the conformance kit (`@portqueue/core/conformance`), pass `new PortQueue({ driver: myDriver })`.
 
 ## 19.15 Coverage check (does the API cover the raw plan?)
 

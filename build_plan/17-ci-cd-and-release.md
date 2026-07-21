@@ -16,8 +16,8 @@ GitHub Actions per the `shared-lib-structure` skill (§5): a pipeline owns the n
 
 ### 3. `publish.yml` — npm publish (main only)
 - Triggers: release/version event on `main` (see 17.3 for how versioning is driven), not on every push.
-- Steps (skill §5 order): `npm ci` → `lint` → `test` → `build` → **publish** each public package (`@portqueue/core`, `@portqueue/dashboard`, `@portqueue/cli`, and `@portqueue/ui` if published) with `--access public`, using the `NPM_TOKEN` **CI secret** (installed by an admin, never held by a developer).
-- Publishing is gated on lint+test+build passing. Private packages (`eslint-config`, test utils) are excluded (`private: true`).
+- Steps (skill §5 order): `npm ci` → `lint` → `test` → `build` → **publish** the three public packages (`@portqueue/core`, `@portqueue/dashboard`, `@portqueue/cli`) with `--access public`, using the `NPM_TOKEN` **CI secret** (installed by an admin, never held by a developer).
+- Publishing is gated on lint+test+build passing. Private packages (`@portqueue/ui`, `eslint-config`) are excluded (`private: true`). There is no separate test-utils package — test helpers live inside `packages/core` and the conformance kit ships as a `@portqueue/core` subpath (file 16).
 
 ## 17.2 Automatic changelog (pushed to main, no republish loop)
 

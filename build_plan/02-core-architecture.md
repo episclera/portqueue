@@ -71,7 +71,7 @@ packages/core/src/
     stats.service.ts             Read-side aggregations for dashboard/CLI
 
   retention/
-    retention.service.ts         Deletes/archives finished jobs per retention policy
+    retention.service.ts         Hard-deletes finished jobs from `job` per retention policy
 
   events/
     event-name.enum.ts           PortQueueEvent enum (file 08)
@@ -80,7 +80,7 @@ packages/core/src/
 
   jobs/
     job.ts                       Job context object handed to handlers (public; file 05)
-    job-state.enum.ts            JobState enum (file 06)
+    job-state.enum.ts            JobStatus enum (file 06)
     job-record.ts                Internal row shape ↔ public Job mapping
 
   errors/
@@ -138,7 +138,7 @@ Details of graceful shutdown semantics are in [`07`](./07-concurrency-scaling-ra
 3. `ClaimService` claims up to `min(concurrency - active, batchSize)` due jobs for the queue via `Driver.claimJobs` (`SKIP LOCKED` or fallback), respecting the **rate limiter** and **backpressure** from the monitor.
 4. For each claimed job, `ExecutionService` builds the `Job` context and runs the handler (or the current step via `StepMachineService`), inside a heartbeat that extends the lock.
 5. `CompletionService` marks the outcome atomically: complete, schedule a retry (with backoff), advance/repeat a step, or move to dead-letter. Emits the matching event.
-6. `RetentionService` later deletes/archives finished rows per policy.
+6. `RetentionService` later hard-deletes finished rows from `job` per policy.
 
 ## 02.6 Concurrency model (v1)
 

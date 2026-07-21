@@ -93,7 +93,16 @@ Posts use the tabbed code component and link out (new tab) to references.
 
 - `deploy-docs` GitHub Action builds the static site and publishes `docs/build/` to GitHub Pages, **on main only** (file 17). Fully static — no server.
 
-## 15.11 Local final-check checklist
+## 15.11 Responsive & mobile-friendly (design requirement)
+
+The docs site **must be fully responsive and mobile-friendly** — this is a first-class design constraint, considered from the start, not retrofitted:
+- **Mobile-first**: every page (landing, guide, blog, API reference) reads and navigates cleanly on phones and tablets, not just desktop. Design and review each layout at small breakpoints first, then scale up.
+- The sidebar collapses to a drawer, the right-side TOC hides/relocates, and the header (logo + search + version + theme switcher + GitHub) reflows to a compact mobile bar on narrow viewports.
+- **Code tabs / `CodeTabs`**, callouts, tables, and landing-page sections stay usable on small screens (horizontal scroll for wide code, wrap for prose; no fixed widths that overflow).
+- Tap targets are finger-sized; nothing depends on hover; text stays legible without zoom.
+- Shared tokens/components from `@portqueue/ui` (file 14) provide the responsive breakpoints so docs and dashboard behave consistently.
+
+## 15.12 Local final-check checklist
 
 - [ ] Header: logo left, centered borderless shadowed search, right-side version + theme switcher + GitHub (new tab).
 - [ ] Footer on every page with light colors and the deduced columns incl. Changelog → repo `CHANGELOG.md`.
@@ -104,3 +113,4 @@ Posts use the tabbed code component and link out (new tab) to references.
 - [ ] Landing page states free/OSS/no-license; ≥5 blog posts incl. comparisons; local (non-SaaS) search.
 - [ ] Getting Started gives a smooth onboarding path; Contributing page present.
 - [ ] Uses shared `@portqueue/ui` theme + AI-generated SVG logo; image placeholders where assets are pending.
+- [ ] **Fully responsive & mobile-friendly**: mobile-first layouts; sidebar→drawer, TOC + header reflow; code tabs/tables usable on phones; finger-sized tap targets; verified at small breakpoints.

@@ -85,7 +85,7 @@ The raw plan asks us to weigh pg-boss, BullMQ, and Celery and take the best. Con
 - `packages/core` → `@portqueue/core` — the library + bundled first-party drivers.
 - `packages/dashboard` → `@portqueue/dashboard` — the pluggable React dashboard middleware.
 - `packages/cli` → `@portqueue/cli` — the command-line tool.
-- `packages/ui` → `@portqueue/ui` — shared theme/components (private-to-project design system, published only if the dashboard needs it at runtime; see [`14`](./14-ui-and-design-system.md)).
+- `packages/ui` → `@portqueue/ui` — shared theme/components, **`private: true`, never published**. Consumed at build time and bundled into the docs site and dashboard only; external users never install it directly. See [`14`](./14-ui-and-design-system.md).
 - `docs/` — the Docusaurus site deployed to GitHub Pages.
 - CI/CD: lint+test on every push (every branch), deploy-docs on main, npm publish on main, automatic changelog.
 - A test suite targeting high coverage using PGLite + SQLite only.

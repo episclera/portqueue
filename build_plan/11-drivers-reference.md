@@ -16,7 +16,7 @@ General rules for every driver:
 - **Capabilities:** `LISTEN_NOTIFY`, `SKIP_LOCKED`, `RETURNING`, `DB_GENERATED_UUID` (`gen_random_uuid()` / `pgcrypto`), `TRANSACTIONS`, `ADVISORY_LOCK`, `JSON_NATIVE` (`JSONB`), `UPSERT` (`ON CONFLICT`). Full-feature reference driver.
 - **Notify:** dedicated `LISTEN` connection (its own client checked out of the pool, not shared with query traffic). Channel names namespaced by `namespace`/prefix. Payload is a small signal (`{queue}`), size-bounded (Postgres NOTIFY payload limit ~8000 bytes — we send tiny signals only).
 - **Claim:** `SELECT ... FOR UPDATE SKIP LOCKED LIMIT n` + update in one statement/CTE (`UPDATE ... FROM (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`).
-- **Types:** `TIMESTAMPTZ`, native enums (`job_state_enum`, `instance_type_enum`), `JSONB` for `data`/`result`/`step_data`.
+- **Types:** `TIMESTAMPTZ`, native enums (`job_status_enum`, `instance_type_enum`), `JSONB` for `data`/`return_value`/`steps_history`.
 - **Transactions:** managed via a checked-out client; `adoptTransaction` accepts a `pg.PoolClient`/`pg.Client` mid-transaction, or a TypeORM/Knex query-runner exposing the underlying client (documented adapters).
 - **Advisory lock** used for scheduler/retention/migration leader election (optimization).
 
@@ -30,7 +30,7 @@ General rules for every driver:
 ## 11.3 SQLite driver (`drivers/sqlite`)
 
 - **Client:** prefer Node's built-in `node:sqlite` (Node 22+/24+) to avoid a native dep; support `better-sqlite3` as an alternative peer. Decide the default in implementation based on the pinned Node LTS; document both. Whichever, it's a peer/optional, never bundled.
-- **Capabilities:** `RETURNING` (modern SQLite), `UPSERT` (`ON CONFLICT`), `TRANSACTIONS`. **No** `LISTEN_NOTIFY` → interval polling. **No** `SKIP_LOCKED` → use the atomic-update claim fallback (file 03.5); SQLite's single-writer model makes the guarded `UPDATE ... WHERE state=CREATED ... RETURNING` naturally exclusive. **No** `DB_GENERATED_UUID` → app-generated UUID (`node:crypto`). `JSON_NATIVE`: SQLite has JSON functions but stores as TEXT — treat as **no** native JSON type; store payloads as TEXT and (de)serialize in the driver.
+- **Capabilities:** `RETURNING` (modern SQLite), `UPSERT` (`ON CONFLICT`), `TRANSACTIONS`. **No** `LISTEN_NOTIFY` → interval polling. **No** `SKIP_LOCKED` → use the atomic-update claim fallback (file 03.5); SQLite's single-writer model makes the guarded `UPDATE ... WHERE state=PENDING ... RETURNING` naturally exclusive. **No** `DB_GENERATED_UUID` → app-generated UUID (`node:crypto`). `JSON_NATIVE`: SQLite has JSON functions but stores as TEXT — treat as **no** native JSON type; store payloads as TEXT and (de)serialize in the driver.
 - **Types:** timestamps as integer epoch-ms (chosen for cheap comparisons and index-friendliness; document the choice); booleans as `0/1`; enums as `TEXT` + `CHECK` constraints.
 - **Concurrency:** enable WAL mode; set a `busy_timeout`. Single-writer means claiming is simple and correct; multiple *processes* sharing one SQLite file works but is throughput-limited — document that SQLite is best for single-instance or low-throughput deployments, and point higher-scale users to Postgres.
 - Primary role: **the other test driver** (file 16) and small single-node deployments.

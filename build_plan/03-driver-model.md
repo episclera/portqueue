@@ -42,29 +42,29 @@ A driver is an injected class implementing this contract. Grouped by concern; ev
 - `deleteSchedule({ scheduleId, tx? }): Promise<boolean>`.
 
 **Claiming & completing (the hot path)**
-- `claimJobs({ queue, limit, lockDurationMs, now, instanceId }): Promise<ClaimedJobRow[]>` — atomically claim up to `limit` due, visible jobs for a queue (ordered by priority then scheduled time), marking them active with a lock/visibility deadline and the claiming instance id. Uses `SKIP LOCKED` when available; otherwise the fallback in 03.5.
+- `claimJobs({ queueId, limit, lockDurationMs, now, instanceId }): Promise<ClaimedJobRow[]>` — atomically claim up to `limit` due, visible jobs for a queue (ordered by priority then scheduled time), marking them active with a lock/visibility deadline and the claiming instance id. Uses `SKIP LOCKED` when available; otherwise the fallback in 03.5.
 - `extendLock({ jobId, lockDurationMs, now }): Promise<boolean>` — heartbeat; returns false if the job was lost (reclaimed).
-- `completeJob({ jobId, result?, tx? }): Promise<void>`.
-- `retryJob({ jobId, nextRunAt, attempt, lastError }): Promise<void>` — reschedule for retry.
+- `completeJob({ jobId, returnValue?, tx? }): Promise<void>`.
+- `retryJob({ jobId, nextRunAt, retryAttempt, lastError }): Promise<void>` — reschedule for retry.
 - `failJob({ jobId, lastError, deadLetter }): Promise<void>` — terminal failure (optionally into dead-letter state).
-- `advanceStep({ jobId, nextStep, stepData, resetLock }): Promise<void>` — multi-step transition (file 06).
-- `reclaimStalledJobs({ queue?, now }): Promise<number>` — return jobs whose lock deadline passed to a claimable state.
-- `expireDueJobs({ queue?, now }): Promise<number>` — mark `CREATED`/`RETRY` jobs whose `expire_at <= now` as `EXPIRED` before they run (owned by the scheduler tick; file 06.3).
+- `advanceStep({ jobId, fromStep, toStep, returnValue, resetLock }): Promise<void>` — multi-step transition (file 06): atomically finalize `fromStep`'s current `steps_history` entry (`returnValue` + `completedAt`) and **append** a new entry for `toStep` (`startedAt`, `input = returnValue`), then set `current_step = toStep`.
+- `reclaimStalledJobs({ queueId?, now }): Promise<number>` — return jobs whose lock deadline passed to a claimable state.
+- `expireDueJobs({ queueId?, now }): Promise<number>` — mark `PENDING`/`RETRY` jobs whose `expire_at <= now` as `EXPIRED` before they run (owned by the scheduler tick; file 06.3).
+- `requeueJob({ jobId, from }): Promise<void>` — **manual** retry of a finished/failed job (file 06.8.1). `from = FROM_FAILED_STEP` re-arms `current_step` (status → `PENDING`, `steps_history` kept); `from = FROM_START` resets `current_step` to the initial step and begins a fresh `steps_history`. (Distinct from `retryJob`, which is the automatic backoff retry.)
 
 **Reading (dashboard/CLI/stats)**
 - `getJob({ jobId }): Promise<JobRow | null>`.
-- `getJobs({ queue?, states?, limit, offset, order }): Promise<JobRow[]>`.
-- `countJobsByState({ queue? }): Promise<Record<JobState, number>>`.
+- `getJobs({ queueId?, statuses?, limit, offset, order }): Promise<JobRow[]>`.
+- `countJobsByStatus({ queueId? }): Promise<Record<JobStatus, number>>`.
 - `listQueues(): Promise<QueueRow[]>`.
-- `getThroughput({ queue?, sinceMs }): Promise<ThroughputPoint[]>` — for dashboard graphs.
+- `getThroughput({ queueId?, sinceMs }): Promise<ThroughputPoint[]>` — for dashboard graphs.
 
 **Queue control**
-- `setQueuePaused({ queue, paused, tx? }): Promise<void>` — persisted pause flag read by workers.
-- `ensureQueue({ queue, options, tx? }): Promise<QueueRow>` — register a queue definition.
+- `setQueuePaused({ queueId, paused, tx? }): Promise<void>` — persisted pause flag read by workers.
+- `ensureQueue({ name, options, tx? }): Promise<QueueRow>` — register (create-if-absent) a queue by **name**; returns the row including its `id`, which the core caches as `queue_id` for all subsequent job operations.
 
 **Retention**
-- `deleteFinishedJobs({ olderThan, states, limit }): Promise<number>`.
-- `archiveFinishedJobs({ olderThan, states, limit }): Promise<number>` — only if archive strategy is enabled.
+- `deleteFinishedJobs({ olderThan, statuses, limit }): Promise<number>` — the only retention primitive; hard-deletes finished rows from `job` in bounded batches. There is no archive table or archive method.
 
 **Pub/sub (only meaningful when `LISTEN_NOTIFY`)**
 - `notify({ channel, payload }): Promise<void>`.
@@ -93,7 +93,7 @@ Constructed from client options and passed to the driver so all object names are
 The claim is the correctness-critical operation. Two strategies, chosen by capability:
 
 - **`SKIP LOCKED` (Postgres, Oracle, and SQLite/PGLite where viable):** a single statement selects due rows `FOR UPDATE SKIP LOCKED LIMIT n`, and the same transaction marks them active with a lock deadline and instance id. Concurrent instances skip each other's locked rows — no contention, no double-claim.
-- **Atomic-claim fallback (engines without `SKIP LOCKED`):** a conditional `UPDATE ... SET state=active, locked_until=..., instance_id=... WHERE id IN (SELECT ... due ORDER BY priority LIMIT n AND state=created) RETURNING ...` (or update-then-select in one transaction when `RETURNING` is absent). Because the update is atomic and guarded by the current state, only one instance wins each row. SQLite's single-writer model actually makes this safe and simple.
+- **Atomic-claim fallback (engines without `SKIP LOCKED`):** a conditional `UPDATE ... SET status=active, locked_until=..., instance_id=... WHERE id IN (SELECT ... due ORDER BY priority LIMIT n AND status=pending) RETURNING ...` (or update-then-select in one transaction when `RETURNING` is absent). Because the update is atomic and guarded by the current status, only one instance wins each row. SQLite's single-writer model actually makes this safe and simple.
 
 In both cases the claimed rows get a **visibility deadline** (`locked_until`). A job whose deadline passes without completion is **stalled** and reclaimable by `reclaimStalledJobs` — this is how we survive instance crashes (Celery-style visibility timeout / late ack).
 
@@ -101,7 +101,7 @@ In both cases the claimed rows get a **visibility deadline** (`locked_until`). A
 
 Third parties implement the `Driver` interface and pass an instance to `new PortQueue({ driver })`. To make this pleasant:
 - Ship an abstract **`BaseDriver`** with engine-neutral helpers (row↔Job mapping, migration bookkeeping, default retention SQL shape, capability-defaulting) so a custom SQL driver overrides only what differs.
-- Export a **driver conformance test kit** from `@portqueue/testing` (file 16): a suite a custom driver runs against a live connection to prove it upholds the contract (claim atomicity, visibility timeout, ordering, idempotency, transactional enqueue).
+- Export a **driver conformance test kit** from the `@portqueue/core/conformance` subpath (file 16): a suite a custom driver runs against a live connection to prove it upholds the contract (claim atomicity, visibility timeout, ordering, idempotency, transactional enqueue).
 - Document the contract with the exact semantics each method must guarantee (ordering, atomicity, at-least-once vs at-most-once) in the docs (file 15).
 
 ## 03.7 Local final-check checklist

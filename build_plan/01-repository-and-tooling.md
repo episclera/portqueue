@@ -14,9 +14,8 @@ portqueue/
     core/                 → @portqueue/core        (the library + first-party drivers)
     dashboard/            → @portqueue/dashboard    (pluggable React dashboard middleware)
     cli/                  → @portqueue/cli          (command-line tool)
-    ui/                   → @portqueue/ui           (shared theme + components; see file 14)
+    ui/                   → @portqueue/ui           (private, never published — shared theme + components; see file 14)
     eslint-config/        → private, never published (shared flat ESLint base)
-    testing/              → @portqueue/testing OR private (shared test harness/fixtures; decide per file 16)
   docs/                   Docusaurus static site (its own workspace)
   .github/workflows/      CI/CD (lint-test, deploy-docs, publish, changelog)
   scripts/
@@ -44,9 +43,10 @@ The scope is the **project** (`@portqueue`), not the org. Folder `core` publishe
 | `packages/core` | `@portqueue/core` | yes (public) | Queue engine, driver model, first-party drivers, events, scheduler, monitor, migrations |
 | `packages/dashboard` | `@portqueue/dashboard` | yes (public) | React dashboard + framework middleware adapters; consumes a `PortQueue` instance |
 | `packages/cli` | `@portqueue/cli` | yes (public) | CLI for stats/actions and for serving the dashboard |
-| `packages/ui` | `@portqueue/ui` | see file 14 | Shared AntD theme tokens + design primitives for dashboard & docs |
+| `packages/ui` | `@portqueue/ui` | **no** (`private: true`) | Shared AntD theme tokens + design primitives, bundled into dashboard & docs at build time |
 | `packages/eslint-config` | — | **no** (`private: true`) | Shared flat ESLint base re-exported by every workspace |
-| `packages/testing` | see file 16 | maybe | Shared test harness (clean-DB helpers, fake clock, fixtures) |
+
+**Exactly these five folders live under `packages/` — `core`, `dashboard`, `cli`, `ui`, `eslint-config` — and no others.** There is **no `packages/testing` package**: tests live **inside each package** (co-located `*.test.ts` / `__tests__/` under that package's `src/`). Shared internal test helpers (clean-DB `createTestQueue`, fake clock, fixtures) live in `packages/core` under a non-published test-utils folder; the **driver conformance kit** external authors need is shipped as a `@portqueue/core` subpath export (`@portqueue/core/conformance`). See file 16.
 
 Rationale for splitting `core` from `dashboard`/`cli`: a production backend installs only `@portqueue/core` (small, zero React). The dashboard and CLI are opt-in operational tools. See files 12–13.
 
@@ -59,7 +59,7 @@ Per the skill, build every publishable package with **Vite in library mode**.
   - Externalize all peer dependencies (the DB clients) in `rollupOptions.external`.
 - **`@portqueue/dashboard`**: builds two artifacts — (a) the server/middleware entry (Node ESM+CJS) and (b) the client bundle (static JS/CSS assets the middleware serves). React and AntD are peer/externalized where appropriate; the client bundle is self-contained static assets.
 - **`@portqueue/cli`**: Node build with a `bin` entry; ESM primary.
-- **`@portqueue/ui`**: ESM library, React/AntD externalized.
+- **`@portqueue/ui`**: ESM library, React/AntD externalized. **`private: true`** — built for consumption by the docs site and dashboard within the repo, never published to npm.
 
 Keep all other tooling (ESLint flat config, Prettier, Jest, standalone tsconfig) exactly as the skills prescribe.
 
@@ -85,6 +85,7 @@ The contract with consumers. Key requirements:
 - An **`exports` map** with the root plus **per-driver subpaths**, so consumers import exactly the driver they use:
   - `"."` → the core API (client, queue, worker, enums, errors, types).
   - `"./drivers/postgres"`, `"./drivers/pglite"`, `"./drivers/sqlite"`, `"./drivers/oracle"` → each driver as its own entry, each declaring its DB client as a peer.
+  - `"./conformance"` → the driver conformance test kit (file 16) so custom-driver authors can validate against the contract. (The internal `test-utils` folder is **not** exported and is excluded from `files`.)
   - Each subpath has `types`/`import`/`require` conditions.
 - `files` whitelists `dist/` + `README` + `LICENSE`. Verify with `npm pack --dry-run`.
 - **`peerDependencies` + `peerDependenciesMeta`** list every DB client (`pg`, `@electric-sql/pglite`, `better-sqlite3` or `node:sqlite`, `oracledb`) as **optional** peers. They are never runtime `dependencies`; the consumer installs only the one for their DB. (Raw plan: no auto-installing third-party libs for the dev.)
@@ -92,7 +93,7 @@ The contract with consumers. Key requirements:
 - `sideEffects: false` to help tree-shaking (the driver subpaths make this safe).
 - `version` and publishing are owned by the pipeline, never a laptop (skill §5).
 
-The same `exports`/`files`/`publishConfig` discipline applies to `@portqueue/dashboard`, `@portqueue/cli`, `@portqueue/ui`.
+The same `exports`/`files`/`publishConfig` discipline applies to the other **published** packages, `@portqueue/dashboard` and `@portqueue/cli`. (`@portqueue/ui` is `private: true` and never published — it needs no `publishConfig`.)
 
 ## 01.7 Zero-third-party-runtime-deps policy
 

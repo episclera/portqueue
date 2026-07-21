@@ -18,10 +18,10 @@ Lifecycle / client:
 
 Job lifecycle (generic — fire for every queue):
 - `JOB_ADDED` (`{ jobId, queue, deduplicated }`)
-- `JOB_ACTIVE` (`{ jobId, queue, attempt, instanceId }`)
-- `JOB_COMPLETED` (`{ jobId, queue, result, durationMs }`)
-- `JOB_FAILED` (`{ jobId, queue, error, attempt, deadLetter }`)
-- `JOB_RETRYING` (`{ jobId, queue, attempt, nextRunAt }`)
+- `JOB_ACTIVE` (`{ jobId, queue, retryAttempt, instanceId }`)
+- `JOB_COMPLETED` (`{ jobId, queue, returnValue, durationMs }`)
+- `JOB_FAILED` (`{ jobId, queue, error, retryAttempt, deadLetter }`)
+- `JOB_RETRYING` (`{ jobId, queue, retryAttempt, nextRunAt }`)
 - `JOB_STALLED` (`{ jobId, queue, previousInstanceId }`)
 - `JOB_EXPIRED`, `JOB_CANCELLED`, `JOB_REMOVED`
 - `JOB_STEP_COMPLETED` (`{ jobId, queue, step, nextStep }`)

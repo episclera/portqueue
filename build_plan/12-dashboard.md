@@ -51,6 +51,12 @@ Single named-options factory (no positional args):
 
 Design shares the `@portqueue/ui` theme with the docs (file 14) so dashboard and docs are visibly one product. AntD components throughout.
 
+**Responsive & mobile-friendly (design requirement).** The dashboard **must be fully responsive** and usable on phones/tablets — an operator often checks queues or pauses a queue from their phone during an incident. Design mobile-first and keep it in mind for every page:
+- KPI cards stack, the per-queue and jobs tables switch to a card/stacked layout (or horizontal-scroll with sticky key columns) on narrow viewports — no clipped, unusable grids.
+- Navigation and filters collapse into a drawer/menu; primary actions (pause/resume, retry, add) remain reachable with finger-sized tap targets; nothing depends on hover.
+- Graphs/sparklines and forms reflow to fit; long ids/values truncate with copy affordances.
+- Uses the shared `@portqueue/ui` responsive breakpoints (file 14) so it behaves consistently with the docs.
+
 **Overview (home)** — the "at a glance" page:
 - Top KPI cards: totals for `ACTIVE / RETRY / FAILED / STALLED / COMPLETED` across all queues, plus jobs/min throughput and failure rate.
 - A **per-queue table**: name, counts by state, throughput sparkline, paused indicator, quick actions (pause/resume, open).
@@ -65,9 +71,12 @@ Design shares the `@portqueue/ui` theme with the docs (file 14) so dashboard and
 - **Bulk actions** on selected jobs: retry, remove, cancel.
 
 **Job detail page** (`/jobs/:id`):
-- Full record: state, attempts, timings, priority, instance attribution, error (message + stack from the typed columns), step + step_data for multi-step, schedule id link.
-- Actions: **retry**, **clone** (open the add-job form pre-filled from this job's data/options), **remove**, and for recurring, link to the schedule and its sibling runs.
-- Log lines from `job.log()` are shown **when log capture is enabled** for the queue (`captureLogs`, files 05/04); otherwise the panel shows "log capture disabled" (logs went to the app logger only). The dashboard never invents logs it can't read from the row.
+- Full record: status, attempts, priority, instance attribution, the **`failure_message`** (message with stack, when failed), timings, and the schedule id link.
+- **Job lifecycle timeline** — a compact vertical timeline built from the job's lifecycle timestamps (`created_at → started_at → completed_at` / `failed_at` / `cancelled_at` / `expired_at`, with `retried_at` and `stalled_at` markers and the attempt count). It reads as "what happened to this job, and when," showing the **duration between transitions** and the current status at the head. This renders for **every** job (single-function or multi-step).
+- **Per-step history** (multi-step jobs) — a step-by-step view from `steps_history` in **execution order**: one row/segment **per run**, each showing the step id, an outcome badge (running / completed / failed), `started_at` → `completed_at`/`failed_at` with **duration**, **expandable** `data` (input) and `return_value` JSON, and the `failure_message` on failure. Because `steps_history` is append-only, a step that **repeated or was retried shows as repeated rows**, so the real execution path is visible — not just the latest. Steps declared on the worker but not yet run render as **pending**, and a header shows progress (e.g. "3 / 5 steps completed") against the worker's declared `steps`. Presented as a readable timeline/stepper (mobile: a stacked list), not a raw JSON dump.
+- Actions: **retry** — with a `RetryMode` choice: **from the failed step** (default, resume where it stopped) or **from the start** (re-run the whole job); for single-function jobs the choice collapses to one. Plus **clone** (open the add-job form pre-filled from this job's data/options), **remove**, and for recurring, link to the schedule and its sibling runs. (No arbitrary-step picker — file 06.8.1.)
+
+_(PortQueue does not store handler logs — there is no log column and no `job.log()`; use your own logger/console, files 04/05.)_
 
 **Schedules page** — all recurring definitions across queues, with next-run, timezone, and CRUD.
 
@@ -98,7 +107,9 @@ All destructive/mutating actions are hidden entirely in `readOnly` mode and gate
 - [ ] Mounts as middleware on raw Node / Express / Koa / Fastify from one `createDashboard(options)` factory (named options only).
 - [ ] Uses the provided `PortQueue` instance; never opens its own DB connection or asks for DB creds.
 - [ ] Overview, queue-detail, job-detail, schedules pages exist with the specified stats, graphs, and instance attribution.
+- [ ] Job detail shows a **lifecycle timeline** (every job) and a **per-step run history** from `steps_history` (multi-step) — execution order, repeats/retries visible, durations, expandable input/return, pending steps + progress.
 - [ ] Add / clone / retry / remove / cancel / purge and **bulk actions**; pause supports "stop handling" vs "stop accepting".
 - [ ] Pluggable auth (basic/custom/none) + `readOnly`; destructive actions gated + confirmed; endpoints CSRF-safe and input-validated.
 - [ ] Live updates via event stream with DB reconciliation.
 - [ ] Shares `@portqueue/ui` theme + logo with docs.
+- [ ] **Fully responsive & mobile-friendly**: mobile-first; tables→stacked/scroll, nav→drawer, actions reachable with finger-sized tap targets; verified on phone-width viewports.

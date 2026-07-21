@@ -35,7 +35,7 @@ Result: scale out by running more instances of the consuming app — no configur
 Two distinct, composable limiters (kept separate so the developer isn't confused about scope):
 
 - **Worker limiter** (`WorkerOptions.limiter`) — a token-bucket `{ max, duration }` limiting how many jobs *this worker instance* starts per window. In-process; simple and precise for a single worker.
-- **Queue rate limit** (`QueueOptions.rateLimit`) — a cluster-wide cap on how many jobs of a queue start per window across *all* instances. Enforced at claim time using a DB-backed token/counter (a small counter row or a windowed count query) so all instances share the budget. Document that cluster-wide limiting has DB cost and slight imprecision at window edges; the per-worker limiter is exact but local.
+- **Queue rate limit** (`QueueOptions.rateLimit`) — a cluster-wide cap on how many jobs of a queue start per window across *all* instances. The `max`/`duration` are **in-memory config** on each instance (same code / shared config module — not a queue-table column); enforcement at claim time shares only a **usage counter** in the DB (a small counter row keyed by `queue_id`, or a windowed count of recent starts) so all instances draw from one budget. Document that cluster-wide limiting has DB cost and slight imprecision at window edges; the per-worker limiter is exact but local.
 
 Both are advisory throttles on *starting* work, not hard admission control on *adding* jobs (adding is always allowed unless the queue is paused with `PauseMode.ALL`).
 
@@ -69,7 +69,7 @@ Wire `stop()` to `SIGTERM`/`SIGINT` in the docs' deployment guide (but the libra
 
 ## 07.7 Fairness & starvation
 
-- Ordering `priority DESC, available_at ASC` means low-priority jobs can be delayed by a steady stream of high-priority ones. Document this, and offer guidance (separate queues per priority tier if strict fairness matters). Optionally expose a future `maxPriorityStarvationMs` — noted in roadmap, not v1.
+- Ordering `priority DESC, start_after ASC` means low-priority jobs can be delayed by a steady stream of high-priority ones. Document this, and offer guidance (separate queues per priority tier if strict fairness matters). Optionally expose a future `maxPriorityStarvationMs` — noted in roadmap, not v1.
 - `batchSize` and `concurrency` interact: claiming in batches reduces DB round-trips but can let one worker grab a burst; keep `batchSize` ≈ `concurrency` by default so claims track real capacity.
 
 ## 07.7b Many queues on one instance (poll-storm caution)

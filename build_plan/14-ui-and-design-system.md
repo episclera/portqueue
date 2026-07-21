@@ -6,6 +6,7 @@ A single design system shared by the **docs site** and the **dashboard** so they
 
 - Holds the **theme tokens**, brand assets (incl. the logo — 14.5), and a small set of **shared presentational components/styling primitives** used by both the dashboard (React app) and the docs site (Docusaurus/React).
 - Both consumers import from here so a color/spacing/typography change happens in one place and both update. This is what makes "docs and dashboard feel built for the same project" true rather than aspirational.
+- **Responsive by design.** The shared tokens include the **breakpoints** and responsive primitives both consumers use, so the docs (file 15) and dashboard (file 12) are **mobile-friendly and fully responsive** consistently. Components ship mobile-first; responsiveness is a design constraint kept in mind from the start, not bolted on.
 
 ## 14.2 Ant Design + CSS-in-JS choice
 
@@ -25,7 +26,7 @@ packages/ui/src/
     typography.ts        Font stack + the distinctive display font for the wordmark (14.5)
   components/
     Logo.tsx             The brand wordmark/logo component (renders the SVG; size/variant props)
-    StateTag.tsx         JobState → colored AntD Tag (single source of state colors, shared by dashboard)
+    StatusTag.tsx         JobStatus → colored AntD Tag (single source of state colors, shared by dashboard)
     ThemeSwitcher.tsx    Light/dark/system switcher (14.4)
     Callout.tsx / CodeTabs primitives  Shared doc/dashboard bits where it makes sense
   styles/
@@ -36,8 +37,8 @@ packages/ui/src/
   index.ts               Barrel
 ```
 
-- `StateTag` centralizes the **JobState → color** mapping so the dashboard, and any docs example, render states identically (`ACTIVE` cyan, `COMPLETED` green, `FAILED` red, `RETRY` yellow, `STALLED` magenta, `CREATED` default, `CANCELLED/EXPIRED` grey). One source of truth for state colors.
-- Publish decision: publish `@portqueue/ui` **only if** the dashboard needs it at runtime as a separate installable (it's consumed at build time by both docs and dashboard, so it can be a `private: true` workspace consumed internally and bundled — decide in implementation; default to `private: true` and bundle into consumers, since external users don't import it directly). Record the decision per file 01.
+- `StatusTag` centralizes the **JobStatus → color** mapping so the dashboard, and any docs example, render states identically (`ACTIVE` cyan, `COMPLETED` green, `FAILED` red, `RETRY` yellow, `STALLED` magenta, `PENDING` default, `CANCELLED/EXPIRED` grey). One source of truth for state colors.
+- Publish decision (**settled**): `@portqueue/ui` is **`private: true` and never published to npm**. It is consumed at build time by both the docs site and the dashboard and bundled into each; external users never import it directly. It is excluded from `publish.yml` (file 17).
 
 ## 14.4 Theming: light/dark + system preference
 
@@ -77,5 +78,5 @@ Requirements:
 - [ ] `antd-style` (AntD-recommended CSS-in-JS) is used for custom components; rationale recorded.
 - [ ] An **AI-generated SVG logo** exists in `@portqueue/ui`, theme-aware, in full/mark/mono variants, used in **both** docs and dashboard headers, with favicon derived from it.
 - [ ] Light/dark + system preference with a switcher; manual override resets on OS theme change.
-- [ ] `StateTag` is the single source of JobState colors, shared everywhere.
+- [ ] `StatusTag` is the single source of JobStatus colors, shared everywhere.
 - [ ] Placeholder convention (alt-text boxes) in place for missing images; no third-party font/CDN calls.

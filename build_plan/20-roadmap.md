@@ -6,7 +6,7 @@ Deferred features and — more importantly — **how today's interfaces are shap
 
 - **v1:** handlers run on the main event loop (file 02.6). No worker threads.
 - **How v1 leaves room:** execution is isolated behind an internal **`Executor` strategy** inside `ExecutionService`, and the `Job` context passed to handlers is a plain serializable-friendly view + control methods routed through the worker (not direct DB handles). A future `ThreadExecutor` (Node `worker_threads`) or `ProcessExecutor` can run the handler off-thread and marshal results back, selected via a future `WorkerOptions.executor` option that **defaults to the in-process one** — so existing code keeps working unchanged.
-- Constraints to preserve now: don't hand handlers non-serializable live objects (DB connections, the raw driver) in the public `Job` type; keep handler input/output JSON-serializable-friendly; keep `job.log`/`extendLock`/step control as message-able operations. This is already the v1 shape.
+- Constraints to preserve now: don't hand handlers non-serializable live objects (DB connections, the raw driver) in the public `Job` type; keep handler input/output JSON-serializable-friendly; keep `extendLock`/step control as message-able operations. This is already the v1 shape.
 
 ## 20.2 More first-party drivers
 
@@ -50,5 +50,5 @@ Deferred features and — more importantly — **how today's interfaces are shap
 
 - Any accepted exception to "zero runtime deps" (file 01.7) is logged here with justification (e.g. if a cron parser or CLI arg parser is pulled in).
 - If typedi's per-instance scoping (file 02.1) proves too awkward, the switch to a hand-rolled constructor-injection container is recorded here (public API unaffected).
-- Any engine that needed a 5th physical table beyond the archive (file 04.6) is logged here with why.
-- The `@portqueue/ui` publish-vs-bundle decision (file 14.3) is recorded here once made.
+- Any engine that needed a physical table beyond the four logical tables (file 04.1) is logged here with why.
+- The `@portqueue/ui` publish-vs-bundle question is **settled**: `private: true`, never published, bundled into docs + dashboard (file 14.3). Revisit only if an external runtime consumer ever needs it.

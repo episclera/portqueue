@@ -12,7 +12,8 @@ Jest across the monorepo, aiming for **very high coverage** (target 100% where s
 ## 16.2 Isolation: a clean DB per suite
 
 - Every `describe`/spec gets a **fresh, clean database** (new in-memory instance or a uniquely-named/temp file), migrated fresh, torn down after. No shared mutable state across specs, so tests are order-independent and parallelizable.
-- A shared helper in `@portqueue/testing` (`packages/testing`, or a private test-utils workspace) provides `createTestQueue({ engine })` that spins up a clean PortQueue on the chosen test driver and returns it plus a `cleanup()`.
+- Tests live **inside each package** — co-located `*.test.ts` / `__tests__/` under that package's `src/`. There is **no `packages/testing` package**; `packages/` holds exactly `core`, `dashboard`, `cli`, `ui`, `eslint-config` (file 01).
+- A shared helper (`createTestQueue({ engine })`) that spins up a clean PortQueue on the chosen test driver and returns it plus a `cleanup()` lives in a **non-published test-utils folder inside `packages/core`** (e.g. `packages/core/src/test-utils/`, excluded from the published `files` whitelist). Other packages import it via the workspace for their own tests.
 
 ## 16.3 Minimal mocking
 
@@ -38,7 +39,7 @@ Jest across the monorepo, aiming for **very high coverage** (target 100% where s
 
 ## 16.6 Driver conformance kit
 
-- Exported from `@portqueue/testing`: a parameterized suite that takes a `Driver` factory and asserts the contract (file 03) — claim atomicity, ordering (`priority`, `available_at`), visibility timeout/reclaim, RETURNING/insert semantics, idempotency/singleton uniqueness, transactional enqueue, schedule upsert idempotency.
+- Exported from the `@portqueue/core/conformance` subpath: a parameterized suite that takes a `Driver` factory and asserts the contract (file 03) — claim atomicity, ordering (`priority`, `start_after`), visibility timeout/reclaim, RETURNING/insert semantics, idempotency/singleton uniqueness, transactional enqueue, schedule upsert idempotency.
 - Run in-repo against PGLite & SQLite. Shipped so **custom-driver authors** validate their driver the same way (file 03.6).
 
 ## 16.7 Coverage policy
