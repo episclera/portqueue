@@ -2,6 +2,8 @@
 
 A beautiful, developer-friendly documentation site built with **Docusaurus**, deployed to **GitHub Pages** (`deploy-docs` workflow, main only — file 17). It shares the `@portqueue/ui` theme and logo (file 14) so it matches the dashboard. This file specifies information architecture, the landing page, blog, search, chrome (header/footer), the per-driver code-tab component, and cross-cutting rules.
 
+**Modern design (hard requirement).** The docs site **must look genuinely modern** — a polished, marketing-quality developer site (think the docs of a top-tier OSS project), following the shared **modern design language (file 14.1a)**: spacious content-first layout, strong typographic hierarchy, **soft shadows and rounded surfaces over hard borders** (the borderless shadowed search input in §15.2 is the reference), tasteful modern surface treatments (subtle gradients/mesh and optional glass on the hero, sticky header, and cards), purposeful `prefers-reduced-motion`-aware motion, and polished loading/empty states. It must not read as a default Docusaurus/Infima theme — the brand tokens and swizzled components (§14.6) make it modern and identical in feel to the dashboard.
+
 ## 15.1 Tech & structure
 
 - Docusaurus (latest v3+), TypeScript config, MDX content. Its own workspace under `docs/` (in the root `workspaces` globs).
@@ -20,8 +22,9 @@ A beautiful, developer-friendly documentation site built with **Docusaurus**, de
 - Deduced link columns:
   - **Docs:** Getting Started, Core Concepts, Production Best Practices, API Reference, Dashboard, CLI.
   - **Resources:** Blog, Events reference, Performance & Optimization, Scalability, Troubleshooting.
-  - **Project:** GitHub (new tab), **Changelog** (links to the `CHANGELOG.md` in the repo root — file 17), Contributing, License.
+  - **Project:** GitHub (new tab), **Changelog** (links to the `CHANGELOG.md` in the repo root — file 17), Contributing, **Team**, License.
   - A line restating: *free & open source, commercial use, no license needed.*
+  - A **creator credit line**: *"Created by [Gheorghe Gherciu](…) — the main developer."* (the name links to the **Team** page, §15.13). This appears on every page via the footer.
 
 ## 15.4 In-page chrome (every doc page)
 
@@ -36,7 +39,10 @@ A beautiful, developer-friendly documentation site built with **Docusaurus**, de
 Every code example is **not a bare code card** — it's a **tabbed card**:
 - For DB-specific examples: one tab per driver (**Postgres / PGLite / SQLite / Oracle**). If the code is identical across drivers, show a **single tab clearly labeled "All databases"** (explicitly indicate sameness rather than hiding it).
 - For installation and package-manager examples: tabs per **package manager** (npm / pnpm / yarn / bun) and per driver where relevant, each showing the exact `install` + client peer command (file 11.6).
-- Syntax-highlighted (Docusaurus Prism, TypeScript grammar). A reusable `<CodeTabs>` MDX component (backed by `@portqueue/ui`) standardizes this so authors just supply the per-tab snippets and a "same for all?" flag.
+- **Syntax highlighting (required, library-based).** Every code snippet is **syntax-highlighted** — never plain monospace text. Use a real highlighting library, defaulting to Docusaurus's built-in **Prism** (`prism-react-renderer`) with the **TypeScript/TSX** grammar (plus `bash`, `json`, `sql` for install/config/SQL blocks). If richer, VS-Code-quality highlighting is wanted, **Shiki** (via a Docusaurus plugin) is the recommended alternative — pick one and record the choice in the docs "why" note; do not hand-roll highlighting.
+  - Ship a **light + dark Prism/Shiki theme** derived from the shared `@portqueue/ui` tokens (§14) so highlighted code matches the site theme and switches with it.
+  - Enable the modern code-block affordances: a **copy button**, optional line numbers, line highlighting, and a language/filename label — consistently on both bare blocks and the `<CodeTabs>` tabs (§15.5 above).
+- A reusable `<CodeTabs>` MDX component (backed by `@portqueue/ui`) standardizes this so authors just supply the per-tab snippets and a "same for all?" flag.
 
 ## 15.6 Information architecture (left sidebar, ordered by priority)
 
@@ -81,6 +87,7 @@ Split meaningfully; each section flows logically without jumping topics.
 18. **API Reference** — generated/curated reference of every public method, option, result, enum (kept in sync with file 05).
 19. **Troubleshooting** — keyed by `PortQueueErrorCode` (file 10.4).
 20. **Contributing** — how to contribute, dev setup, conventions link to `ai-utils`, code of conduct (raw-plan: contributions page).
+21. **Team** — who builds PortQueue (§15.13).
 
 "Why we chose X over Y" call-outs are sprinkled where a non-obvious decision was made (workflows-as-separate-jobs vs numeric progress, no per-job names, few tables, no broker, notify-after-commit).
 
@@ -122,15 +129,25 @@ The docs site **must be fully responsive and mobile-friendly** — this is a fir
 - Tap targets are finger-sized; nothing depends on hover; text stays legible without zoom.
 - Shared tokens/components from `@portqueue/ui` (file 14) provide the responsive breakpoints so docs and dashboard behave consistently.
 
-## 15.12 Local final-check checklist
+## 15.13 Team page
+
+- A dedicated **Team** page (linked from the footer **Project** column §15.3 and the sidebar IA §15.6) presenting who builds PortQueue.
+- For now it lists a **single person — Gheorghe Gherciu — as the main developer & maintainer** (the sole/lead contributor). Present him as the headline entry with role ("Creator & Lead Developer"), a short bio line, and optional links (GitHub, site) — placeholder avatar acceptable per file 14.7 until a real image is provided.
+- The layout is a **contributor card grid** built to scale: it renders from a small `team` data array (name, role, avatar, links) so additional contributors can be added later by appending entries — but **only Gheorghe Gherciu is listed now**.
+- A brief closing line invites contributions and links to the **Contributing** page (§15.6 #20). Uses the shared `@portqueue/ui` theme so it matches the rest of the site.
+
+## 15.14 Local final-check checklist
 
 - [ ] Header: logo left, centered borderless shadowed search, right-side version + theme switcher + GitHub (new tab).
-- [ ] Footer on every page with light colors and the deduced columns incl. Changelog → repo `CHANGELOG.md`.
+- [ ] Footer on every page with light colors and the deduced columns incl. Changelog → repo `CHANGELOG.md`, and a **"Created by Gheorghe Gherciu — the main developer" credit line** linking to the Team page.
+- [ ] **Team page** exists, linked from footer + sidebar, listing **only Gheorghe Gherciu as Creator & Lead Developer** (data-driven card grid ready for more contributors later).
 - [ ] Left sidebar ordered by priority + right-side TOC; prev/next + report-issue (opens GitHub issues, new tab); related links at page end.
 - [ ] Every code example is tabbed per driver (or clearly "All databases"); install examples tabbed per manager/driver.
+- [ ] All code snippets are **syntax-highlighted via a library** (Prism `prism-react-renderer`, or Shiki) with a theme-aware light/dark palette from `@portqueue/ui` + a copy button — never plain monospace.
 - [ ] Dedicated pages for all events/hooks and for performance/optimization; a strong scalability section.
 - [ ] External mentions are links opening in new tabs.
 - [ ] Landing page states free/OSS/no-license; ≥5 blog posts incl. comparisons; local (non-SaaS) search.
 - [ ] Getting Started gives a smooth onboarding path; Contributing page present.
 - [ ] Uses shared `@portqueue/ui` theme + AI-generated SVG logo; image placeholders where assets are pending.
+- [ ] **Modern design (file 14.1a)**: polished marketing-quality look, spacious content-first layout + strong type hierarchy, soft shadows/rounded surfaces, tasteful gradient/glass accents, `prefers-reduced-motion`-aware motion — not a default Docusaurus/Infima theme.
 - [ ] **Fully responsive & mobile-friendly**: mobile-first layouts; sidebar→drawer, TOC + header reflow; code tabs/tables usable on phones; finger-sized tap targets; verified at small breakpoints.

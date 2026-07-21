@@ -69,10 +69,16 @@ Docs (file 15) show running the dashboard via the CLI in a container:
 
 ## 13.5 Output & UX details
 
-- Tables use aligned columns; state names are colorized (`ACTIVE` cyan, `COMPLETED` green, `FAILED` red, `RETRY` yellow, `STALLED` magenta).
+The CLI is **colorful, modern, and developer-friendly** — pleasant to read in a terminal and unambiguous to script against.
+
+- **Semantic color throughout:** state names are colorized (`ACTIVE` cyan, `COMPLETED` green, `FAILED` red, `RETRY` yellow, `STALLED` magenta), success/warn/error messages use consistent colors + symbols (✔ / ⚠ / ✖), and headings/keys are dimmed vs values so scannable at a glance.
+- Tables use aligned columns with subtle separators; long ids truncate with a hint to widen or use `--json`.
 - Durations/timestamps rendered human-friendly (`2m ago`, `in 30s`) with `--utc`/`--iso` for exact values.
-- Non-zero exit codes on failure so the CLI is script-friendly; `--json` output is stable and documented.
-- Every command has `--help` with examples.
+- **Spinners/progress** for long ops (migrate, purge, bulk actions), and `--watch`/`listen` render a clean live-updating view.
+- **Helpful, actionable errors:** every failure explains what went wrong and the next step (e.g. missing config → the exact loader command; missing peer driver → the install command, file 11.6) — never a bare stack trace unless `--log-level debug`.
+- **Respects the environment:** auto-disables color when not a TTY or when `NO_COLOR`/`--no-color` is set or `--json` is used; `--json` output is stable, documented, and color-free for piping.
+- Non-zero exit codes on failure so the CLI is script-friendly.
+- Every command has `--help` with a description, flags, and **copy-pasteable examples**; a top-level `portqueue --help` lists grouped commands.
 
 ## 13.6 Local final-check checklist
 
@@ -81,4 +87,4 @@ Docs (file 15) show running the dashboard via the CLI in a container:
 - [ ] `listen` runs infinitely streaming events; `--watch` live-refreshes stats.
 - [ ] `dashboard` starts a simple Node server behind required basic auth (root user/pass), documented as the first hosting option, with a docker example that ships the config module.
 - [ ] Reuses core APIs on the loaded instance (custom drivers included); clear early error if the config can't load or the driver's peer client is missing.
-- [ ] Colorized, human-friendly output with `--json`/`--no-color` and script-friendly exit codes.
+- [ ] Colorized, human-friendly, modern output (semantic state/success/warn/error colors + symbols, aligned tables, spinners, human durations); actionable errors with the exact fix; every command has `--help` with examples; `--json`/`--no-color`/`NO_COLOR`/non-TTY disable color; script-friendly exit codes.

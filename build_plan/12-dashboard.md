@@ -51,6 +51,8 @@ Single named-options factory (no positional args):
 
 Design shares the `@portqueue/ui` theme with the docs (file 14) so dashboard and docs are visibly one product. AntD components throughout.
 
+**Modern design (hard requirement).** The dashboard **must look genuinely modern** — it follows the shared **modern design language (file 14.1a)**: spacious, content-first layout with a clear hierarchy, **soft shadows and rounded surfaces over hard borders**, a restrained accent palette, tasteful modern surface treatments (subtle gradients/glass on the header and hero/empty states), purposeful micro-interactions (hover/focus/route/theme transitions, `prefers-reduced-motion`-aware), and polished loading via **skeletons** rather than bare spinners. It should read as a contemporary product dashboard, not a default AntD admin template.
+
 **Responsive & mobile-friendly (design requirement).** The dashboard **must be fully responsive** and usable on phones/tablets — an operator often checks queues or pauses a queue from their phone during an incident. Design mobile-first and keep it in mind for every page:
 - KPI cards stack, the per-queue and jobs tables switch to a card/stacked layout (or horizontal-scroll with sticky key columns) on narrow viewports — no clipped, unusable grids.
 - Navigation and filters collapse into a drawer/menu; primary actions (pause/resume, retry, add) remain reachable with finger-sized tap targets; nothing depends on hover.
@@ -93,10 +95,28 @@ All destructive/mutating actions are hidden entirely in `readOnly` mode and gate
 - `readOnly` + auth compose: a common setup is authenticated read-only for most, full control for admins (custom guard returns a role).
 - All action endpoints are CSRF-safe (same-origin checks / token) and require the mutating capability; input is validated server-side against the same option schemas as core.
 
-## 12.6 Live updates
+## 12.6 Live updates & data refetching
 
 - The API exposes an event stream (SSE, no dep) the client subscribes to; the server bridges `PortQueueEvent`s to the stream, filtered by what the current page needs.
-- The client also polls the read APIs on an interval to reconcile (events accelerate, DB is truth — file 08).
+- **The client also polls the read APIs on an interval to reconcile** (events accelerate, DB is truth — file 08). This is the core refetch model: rather than assuming the screen is live forever, the dashboard periodically **refetches** the data backing the current page so counts, tables, and graphs stay current even if an SSE event was missed or the stream dropped.
+
+**Default refetch interval.** Data-heavy, always-changing pages **refetch every 30 seconds by default** so the operator sees fresh numbers without a manual reload. This applies to pages whose data drifts continuously:
+- Overview (KPI cards, per-queue table, throughput graph, jobs-per-instance).
+- Queue detail (state counts, graphs, jobs table).
+- Schedules page (next-run times).
+
+Mostly-static or terminal views (e.g. a completed/failed **job detail** record) don't need aggressive polling and can refetch on-demand or on a slower cadence — only pages that genuinely change on their own poll on the 30s interval.
+
+**Refetch behavior details:**
+- The interval is a single shared constant (default `30_000` ms) so every polling page uses the same cadence; it is exposed in one place for future configurability.
+- Polling **pauses while the browser tab is hidden** and resumes (with an immediate refetch) on focus, so a backgrounded dashboard doesn't hammer the provided `PortQueue` instance.
+- Refetches are **background/non-blocking**: they update data in place without blowing away the current view, filters, selection, or scroll position — no full-page flicker.
+- Incoming SSE events can trigger an early refetch of the affected data so updates feel immediate; the 30s poll is the reconciliation floor, not the only update path.
+
+**Header switcher to stop updates.** The dashboard header includes a **live-updates toggle** (a switch/pause control, present on every page) that lets the operator **stop the automatic refetching**:
+- When **on** (default), pages poll on the 30s interval and consume the SSE stream as described above.
+- When **off**, the dashboard **stops both the interval polling and (optionally) the live event stream**, freezing the currently displayed data. This is useful for inspecting a snapshot without rows shifting under the cursor, or to reduce load. A manual **"Refresh now"** action remains available while paused.
+- The toggle state is **global** (applies to all pages) and **persisted** (e.g. `localStorage`) so it survives navigation and reloads; a clear indicator shows when auto-updates are paused so a stale screen is never mistaken for a live one.
 
 ## 12.7 Branding
 
@@ -110,6 +130,8 @@ All destructive/mutating actions are hidden entirely in `readOnly` mode and gate
 - [ ] Job detail shows a **lifecycle timeline** (every job) and, for workflow jobs, a **run view** assembled from the run's `job` rows via `getWorkflow` (execution order, repeats/retries visible, durations, expandable input/output, pending steps + progress) — no `steps_history`.
 - [ ] Add / clone / retry / remove / cancel / purge and **bulk actions**; pause supports "stop handling" vs "stop accepting".
 - [ ] Pluggable auth (basic/custom/none) + `readOnly`; destructive actions gated + confirmed; endpoints CSRF-safe and input-validated.
-- [ ] Live updates via event stream with DB reconciliation.
+- [ ] Live updates via event stream with DB reconciliation; data-heavy pages (overview, queue detail, schedules) **refetch every 30s by default**, background/non-blocking, paused when the tab is hidden.
+- [ ] Header **live-updates toggle** (global + persisted) stops interval polling/stream and freezes data, with a "Refresh now" action and a clear paused indicator.
 - [ ] Shares `@portqueue/ui` theme + logo with docs.
+- [ ] **Modern design (file 14.1a)**: spacious content-first layout, soft shadows/rounded surfaces over hard borders, tasteful surface/accent treatments, `prefers-reduced-motion`-aware micro-interactions, skeleton loaders — reads as a contemporary product, not a default admin template.
 - [ ] **Fully responsive & mobile-friendly**: mobile-first; tables→stacked/scroll, nav→drawer, actions reachable with finger-sized tap targets; verified on phone-width viewports.

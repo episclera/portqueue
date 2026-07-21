@@ -8,6 +8,19 @@ A single design system shared by the **docs site** and the **dashboard** so they
 - Both consumers import from here so a color/spacing/typography change happens in one place and both update. This is what makes "docs and dashboard feel built for the same project" true rather than aspirational.
 - **Responsive by design.** The shared tokens include the **breakpoints** and responsive primitives both consumers use, so the docs (file 15) and dashboard (file 12) are **mobile-friendly and fully responsive** consistently. Components ship mobile-first; responsiveness is a design constraint kept in mind from the start, not bolted on.
 
+## 14.1a Modern design language (hard requirement)
+
+Both the **dashboard** and the **docs site must look genuinely modern** — contemporary, polished, and clearly of-2025, not a default AntD/Bootstrap admin template. This is a first-class design goal and the shared tokens exist to enforce it consistently. Encode it in `tokens.ts` and the shared primitives so both surfaces inherit it:
+
+- **Clean, spacious, content-first.** Generous whitespace and a consistent spacing scale (e.g. 4px base), a clear typographic hierarchy with a modern variable/system font stack, comfortable line-heights, and restrained accent color over large flat neutral fields — not dense, boxed-in chrome.
+- **Soft depth, not heavy borders.** Prefer **subtle shadows, layering, and generous border-radii** (rounded cards/inputs/buttons) over hard 1px borders — matching the raw-plan "borderless, soft-shadow" search input. Consistent elevation tokens (shadow scale) in `tokens.ts`.
+- **Modern surface treatments** where tasteful and performant: soft gradients / mesh accents on hero and empty states, optional subtle glassmorphism (backdrop-blur) on sticky headers/overlays, and a cohesive accent palette. Keep it legible and never at the cost of contrast/accessibility.
+- **Purposeful motion.** Smooth, quick micro-interactions and transitions (hover, focus, page/route and theme changes, skeleton→content) via a shared motion/easing token set — subtle, fast, and **respecting `prefers-reduced-motion`**.
+- **Polished states.** First-class **skeleton loaders**, empty states with illustration/iconography, and clear focus-visible rings — no jarring layout shift, no bare spinners as the only feedback.
+- **Accessible & consistent.** Modern ≠ low-contrast: meet WCAG AA contrast in both light and dark, keyboard-navigable, visible focus. The look is identical across docs and dashboard because it flows from these shared tokens/primitives.
+
+_This design language is normative for files 12 (dashboard) and 15 (docs); their own sections reference back here rather than re-specifying it._
+
 ## 14.2 Ant Design + CSS-in-JS choice
 
 - **Component library:** Ant Design (AntD) — used by both dashboard and docs custom components. (Docusaurus itself uses Infima for its base chrome; AntD is used for our custom docs components and the whole dashboard — 14.6 reconciles the two.)
@@ -75,6 +88,7 @@ Requirements:
 ## 14.8 Local final-check checklist
 
 - [ ] One shared token set drives both dashboard (AntD theme) and docs (Docusaurus CSS vars).
+- [ ] **Modern design language (§14.1a)** encoded in tokens/primitives: spacious content-first layout, soft shadows + rounded surfaces over hard borders, tasteful modern surface/accent treatments, purposeful `prefers-reduced-motion`-aware motion, skeleton/empty/focus states, AA contrast — applied consistently to docs + dashboard.
 - [ ] `antd-style` (AntD-recommended CSS-in-JS) is used for custom components; rationale recorded.
 - [ ] An **AI-generated SVG logo** exists in `@portqueue/ui`, theme-aware, in full/mark/mono variants, used in **both** docs and dashboard headers, with favicon derived from it.
 - [ ] Light/dark + system preference with a switcher; manual override resets on OS theme change.
