@@ -1,0 +1,52 @@
+import { createServer } from 'node:http';
+import { flagBool, flagNumber, flagString } from '../args.js';
+import { CliError } from '../errors.js';
+import { success } from '../output.js';
+import { CommandGroup, type Command } from './types.js';
+
+const DEFAULT_PORT = 4321;
+const DEFAULT_HOST = '127.0.0.1';
+const DEFAULT_BASE_PATH = '/portqueue';
+
+/** `portqueue dashboard --port [--root-user --root-password] [--read-only --base-path]` */
+export const dashboardCommand: Command = {
+  name: 'dashboard',
+  group: CommandGroup.Operational,
+  summary: 'Serve the web dashboard',
+  usage: '--port <n> --root-user <u> --root-password <p> [--read-only --base-path]',
+  persistent: true,
+  async run({ pq, flags }) {
+    const port = flagNumber(flags, 'port') ?? DEFAULT_PORT;
+    const user = flagString(flags, 'root-user') ?? process.env.PORTQUEUE_ROOT_USER;
+    const password = flagString(flags, 'root-password') ?? process.env.PORTQUEUE_ROOT_PASSWORD;
+    if (!user || !password) {
+      throw new CliError(
+        'The served dashboard requires credentials. Pass --root-user and --root-password ' +
+          '(or set PORTQUEUE_ROOT_USER / PORTQUEUE_ROOT_PASSWORD).',
+      );
+    }
+
+    const basePath = flagString(flags, 'base-path');
+    const { createDashboard } = await import('@portqueue/dashboard');
+    const dashboard = createDashboard({
+      portQueue: pq,
+      auth: { mode: 'basic', username: user, password },
+      readOnly: flagBool(flags, 'read-only'),
+      ...(basePath ? { basePath } : {}),
+    });
+
+    const handler = dashboard.node();
+    const server = createServer((req, res) => {
+      if (!handler(req, res)) {
+        res.statusCode = 404;
+        res.end('Not found');
+      }
+    });
+    const host = flagString(flags, 'host') ?? DEFAULT_HOST;
+    await new Promise<void>((resolve) => server.listen(port, host, resolve));
+    success(
+      `Dashboard serving at http://${host}:${port}${basePath ?? DEFAULT_BASE_PATH} (basic auth).`,
+    );
+    await new Promise(() => {});
+  },
+};

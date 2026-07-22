@@ -2,6 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import type { PortQueue } from '@portqueue/core';
+import { CliError } from './errors.js';
 
 const CONFIG_NAMES = [
   'portqueue.config.ts',
@@ -66,5 +67,3 @@ function discoverConfig(start: string): string | null {
     dir = parent;
   }
 }
-
-export class CliError extends Error {}

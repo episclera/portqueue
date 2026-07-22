@@ -6,6 +6,7 @@
     "lib": ["ES2023"],
     "types": ["node", "jest"],
     "noEmit": true,
+    "rootDir": "src",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,

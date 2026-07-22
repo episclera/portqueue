@@ -7,6 +7,10 @@
     "jsx": "react-jsx",
     "types": ["node", "react"],
     "noEmit": true,
+    // Typecheck-only config: the @portqueue/ui path below pulls a sibling
+    // workspace's source into the program, so the common root is packages/.
+    // Emit is owned by Vite (vite-plugin-dts), so rootDir has no output effect.
+    "rootDir": "..",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,

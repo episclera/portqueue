@@ -1,0 +1,22 @@
+import { RetryMode } from '@portqueue/core';
+import { flagString } from '../args.js';
+import { CliError } from '../errors.js';
+import { success } from '../output.js';
+import { requireFlag } from './helpers.js';
+import { CommandGroup, type Command } from './types.js';
+
+/** `portqueue retry --id [--from failed|start]` */
+export const retryCommand: Command = {
+  name: 'retry',
+  group: CommandGroup.Actions,
+  summary: 'Requeue a failed job',
+  usage: '--id <jobId> [--from failed|start]',
+  async run({ pq, flags }) {
+    const from =
+      flagString(flags, 'from') === 'start' ? RetryMode.FROM_START : RetryMode.FROM_FAILED_STEP;
+    const snap = await pq.getJob({ jobId: requireFlag(flags, 'id') });
+    if (!snap) throw new CliError(`Job '${flagString(flags, 'id')}' not found.`);
+    const res = await pq.createQueue(snap.queue).retryJob({ jobId: snap.id, from });
+    success(`Requeued job ${snap.id} (${from}) → ${res.jobId}.`);
+  },
+};
