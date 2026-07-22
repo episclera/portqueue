@@ -51,7 +51,7 @@ await emails.addJob({ data: { to: 'a@b.com' } });
 
 ## Contributing
 
-- Install: `nvm use && npm install` (installs all workspaces).
+- Setup: run `./scripts/dev/setup.sh` (or `npm run setup`) — it selects the pinned Node version and installs all workspaces. That's all you need to get the repo ready.
 - Build: `npm run build`. Test: `npm test`. Lint + typecheck: `npm run lint` (ESLint + `tsc --noEmit` in one step).
 - Commits follow **Conventional Commits** (enforced by commitlint) — the changelog is derived from them.
 - Tests use **PGLite + SQLite only** (no external DB server needed).

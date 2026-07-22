@@ -22,6 +22,7 @@
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish",
+    "setup": "bash scripts/dev/setup.sh",
     "cli": "bash scripts/cli/run.sh",
     "dev:docs": "bash scripts/dev/start-docs.sh",
     "db:pg:up": "bash scripts/dev/start-postgres.sh",
