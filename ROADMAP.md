@@ -17,6 +17,36 @@ today's interfaces already leave room for it, and the decisions we may revisit.
 
 ---
 
+## Execution locality (instance affinity) 🔭
+
+Pin work to a specific instance, with a liveness-aware fallback so nothing strands on
+a dead node. Two defaults, each overridable:
+
+- **Workflows — default *same machine*.** All steps of a run execute on the instance that
+  ran the first step (data stays hot, no cross-node handoff), with an opt-in
+  `distributed` mode that lets any instance claim each step (today's behavior).
+- **Schedules — default *distributed*.** Any instance runs each produced job, with an
+  opt-in "prefer the first-run machine **if it's still alive**" mode for cache/warm-path
+  affinity.
+
+**Why it's not in v1.** Doing this safely needs plumbing that doesn't exist yet:
+
+1. An **instance-liveness subsystem** — an instances table with heartbeats, so the claim
+   path can tell which `run_on_instance_id`s are still alive. Without it, a job pinned to a
+   crashed instance would never be reclaimed.
+2. A **claim-time affinity filter** — `claimJobs` today stamps `run_on_instance_id` but
+   never filters on it. It would gain `(run_on_instance_id IS NULL OR = :self OR owner is
+   dead)` across all four drivers, plus conformance coverage.
+3. **Schedule first-run pinning** — record the instance that ran a schedule's first job and
+   stamp subsequent produced jobs with it (liveness-gated).
+
+**How the API stays additive:** the `run_on_instance_id` / `run_on_instance_type` columns
+already exist and workflow-step spawns already carry them forward. This lands as new
+optional options with safe defaults — a workflow `execution: 'same-machine' | 'distributed'`
+and a schedule affinity flag — never a signature change.
+
+---
+
 ## Execution model
 
 ### Worker threads / out-of-process execution 💤
