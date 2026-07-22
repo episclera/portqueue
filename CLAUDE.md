@@ -4,7 +4,8 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
 
 ## Hard rules
 - **Never run package installs** (`npm install`/`ci`, `pnpm`, `yarn`, `bun`). When deps are needed, print the exact command and ask the user to run it.
-- **Never auto-commit, push, create branches, or publish.** Print the commands; a human runs them. CI is the only actor that publishes.
+- **Never auto-commit, push, or publish.** Print the commands; a human runs them. CI is the only actor that publishes.
+- **Never create git branches.** Always work on the **current branch**. Only create a branch when the user explicitly asks for it in a prompt — never on your own initiative, and never as a step before committing.
 - **Never interactive logins** or anything needing network/credentials — surface the command for the user.
 - **Keep the docs in sync with the public API.** Every time the public API of the tool (`@portqueue/core`), the dashboard, or the CLI changes — new/renamed/removed options, methods, DTOs, events, endpoints, or CLI flags — check the Docusaurus site under `docs/` and improve the developer-facing docs if needed (guides, API reference, dashboard/CLI pages, and register any new page in `docs/sidebars.ts`).
 
