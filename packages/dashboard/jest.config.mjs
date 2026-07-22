@@ -1,0 +1,43 @@
+/** @type {import('jest').Config} */
+export default {
+  preset: 'ts-jest/presets/default-esm',
+  // Default to Node; component tests opt into jsdom via a per-file docblock:
+  //   /** @jest-environment jsdom */
+  testEnvironment: 'node',
+  extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  roots: ['<rootDir>/src'],
+  testMatch: ['**/*.test.ts', '**/*.test.tsx'],
+  moduleNameMapper: {
+    // Resolve workspace siblings to their source so tests need no prior build.
+    '^@portqueue/core$': '<rootDir>/../core/src/index.ts',
+    '^@portqueue/ui$': '<rootDir>/../ui/src/index.ts',
+    // Stub stylesheet imports (jsdom can't parse CSS and we don't assert on it).
+    '\\.(css|less|scss)$': '<rootDir>/src/test-support/style-stub.cjs',
+    // NodeNext ESM requires .js extensions on relative imports; strip them for ts-jest.
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
+  transform: {
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        useESM: true,
+        // Transpile-only: type-checking is handled by `tsc --noEmit` in the lint step.
+        isolatedModules: true,
+        tsconfig: {
+          verbatimModuleSyntax: false,
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+          jsx: 'react-jsx',
+        },
+      },
+    ],
+  },
+  collectCoverageFrom: [
+    'src/server/**/*.ts',
+    'src/client/components/format.ts',
+    '!src/**/*.test.ts',
+    '!src/**/*.test.tsx',
+  ],
+  coverageProvider: 'v8',
+  testTimeout: 15000,
+};
