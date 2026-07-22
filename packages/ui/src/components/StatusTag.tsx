@@ -7,7 +7,7 @@ export interface StatusTagProps {
 }
 
 /**
- * The single source of truth for JobStatus → color (build_plan/14.3), shared by the
+ * The single source of truth for JobStatus → color, shared by the
  * dashboard and any docs example so states render identically everywhere.
  */
 export function StatusTag({ status }: StatusTagProps): React.ReactElement {

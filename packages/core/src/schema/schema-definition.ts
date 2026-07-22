@@ -1,36 +1,42 @@
 import { TableName, type TableNames } from './table-names.js';
 
 /**
- * Engine-neutral DDL (build_plan/04). For portability and simplicity across the
+ * Engine-neutral DDL. For portability and simplicity across the
  * PG-family and SQLite we store timestamps/durations as BIGINT epoch-ms, JSON as TEXT,
  * and booleans as small integers 0/1 on every engine (a justified physical deviation
- * recorded in build_plan/20 — the logical four-table model and public API are identical).
+ * recorded in — the logical model and public API are identical).
  * BIGINT is required so epoch-ms values don't overflow Postgres' 32-bit INTEGER; SQLite
- * treats BIGINT as its native 64-bit INTEGER via type affinity. All constraint/index
- * names are explicit per the naming convention (build_plan/04.2).
+ * treats BIGINT as its native 64-bit INTEGER via type affinity.
+ *
+ * **Sharded-DB portability.** These tables carry NO primary keys, unique
+ * constraints, check constraints, foreign keys, or secondary indexes. Distributed / sharded
+ * engines frequently reject or silently ignore them, so every invariant that a constraint or
+ * index would enforce (name uniqueness, idempotency/singleton dedup, the workflow-pair rule)
+ * is instead enforced in the tool. Relationships link by **name or key**, never by a numeric
+ * id — a job carries its `queue_name` directly, a schedule its `queue_name`, an instance its
+ * `instance_key`. This keeps every table independently shardable with no cross-table joins.
  */
 export function buildSchemaStatements(t: TableNames): string[] {
   const job = t.bare(TableName.JOB);
   const queue = t.bare(TableName.QUEUE);
   const schedule = t.bare(TableName.SCHEDULE);
-  const migration = t.bare(TableName.MIGRATION_STATE);
-  const p = t.prefix;
+  const instance = t.bare(TableName.INSTANCE);
+  const migration = t.bare(TableName.MIGRATION);
 
   return [
+    // Queues are identified by name (no surrogate id). Uniqueness is tool-managed.
     `CREATE TABLE IF NOT EXISTS ${queue} (
-      id TEXT NOT NULL,
       name TEXT NOT NULL,
       processing_paused SMALLINT NOT NULL DEFAULT 0,
       accepting_paused SMALLINT NOT NULL DEFAULT 0,
       created_at BIGINT NOT NULL,
-      updated_at BIGINT NOT NULL,
-      CONSTRAINT pk_${p}queue PRIMARY KEY (id),
-      CONSTRAINT uq_${p}queue_name UNIQUE (name)
+      updated_at BIGINT NOT NULL
     )`,
 
+    // A job links to its queue by name and carries instance-affinity keys directly.
     `CREATE TABLE IF NOT EXISTS ${job} (
       id TEXT NOT NULL,
-      queue_id TEXT NOT NULL,
+      queue_name TEXT NOT NULL,
       status TEXT NOT NULL,
       priority INTEGER NOT NULL DEFAULT 0,
       data TEXT,
@@ -49,8 +55,11 @@ export function buildSchemaStatements(t: TableNames): string[] {
       expired_at BIGINT,
       locked_until BIGINT,
       locked_by_instance_id TEXT,
-      run_on_instance_id TEXT,
-      run_on_instance_type TEXT,
+      preferred_instance_key TEXT,
+      preferred_instance_key_pattern TEXT,
+      fallback_instance_key TEXT,
+      fallback_instance_key_pattern TEXT,
+      processed_on_instance_key TEXT,
       retry_attempt INTEGER NOT NULL DEFAULT 0,
       retry_max_attempts INTEGER NOT NULL DEFAULT 1,
       retry_delay_ms BIGINT NOT NULL DEFAULT 0,
@@ -65,25 +74,14 @@ export function buildSchemaStatements(t: TableNames): string[] {
       schedule_id TEXT,
       singleton_key TEXT,
       workflow_id TEXT,
-      workflow_step_key TEXT,
-      CONSTRAINT pk_${p}job PRIMARY KEY (id),
-      CONSTRAINT ck_${p}job_workflow CHECK (
-        (workflow_id IS NULL AND workflow_step_key IS NULL) OR
-        (workflow_id IS NOT NULL AND workflow_step_key IS NOT NULL)
-      )
+      workflow_step_key TEXT
     )`,
 
-    `CREATE INDEX IF NOT EXISTS ix_${p}job_claim ON ${job} (queue_id, status, priority DESC, start_after)`,
-    `CREATE INDEX IF NOT EXISTS ix_${p}job_locked_until ON ${job} (status, locked_until)`,
-    `CREATE INDEX IF NOT EXISTS ix_${p}job_schedule ON ${job} (schedule_id)`,
-    `CREATE INDEX IF NOT EXISTS ix_${p}job_workflow ON ${job} (workflow_id, created_at)`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS uq_${p}job_queue_idempotency ON ${job} (queue_id, idempotency_key) WHERE idempotency_key IS NOT NULL`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS uq_${p}job_singleton ON ${job} (queue_id, singleton_key) WHERE singleton_key IS NOT NULL AND status IN ('PENDING','ACTIVE','RETRY')`,
-
+    // A schedule's identity is (queue_name, cron+timezone) or (queue_name, every_ms) — no
+    // separate key column; re-adding the same recurrence updates the same row.
     `CREATE TABLE IF NOT EXISTS ${schedule} (
       id TEXT NOT NULL,
-      key TEXT NOT NULL,
-      queue_id TEXT NOT NULL,
+      queue_name TEXT NOT NULL,
       cron TEXT,
       every_ms BIGINT,
       timezone TEXT,
@@ -97,33 +95,28 @@ export function buildSchemaStatements(t: TableNames): string[] {
       start_at BIGINT,
       end_at BIGINT,
       created_at BIGINT NOT NULL,
-      updated_at BIGINT NOT NULL,
-      CONSTRAINT pk_${p}schedule PRIMARY KEY (id),
-      CONSTRAINT uq_${p}schedule_queue_key UNIQUE (queue_id, key),
-      CONSTRAINT ck_${p}schedule_mode CHECK (
-        (cron IS NOT NULL AND every_ms IS NULL) OR (cron IS NULL AND every_ms IS NOT NULL)
-      )
+      updated_at BIGINT NOT NULL
     )`,
-    `CREATE INDEX IF NOT EXISTS ix_${p}schedule_due ON ${schedule} (enabled, next_run_at)`,
+
+    // Instance liveness + per-instance pause. Identified by instance_key;
+    // `last_seen_at` is bumped by each instance's heartbeat and drives claim-time liveness.
+    `CREATE TABLE IF NOT EXISTS ${instance} (
+      instance_key TEXT NOT NULL,
+      processing_paused SMALLINT NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL,
+      updated_at BIGINT NOT NULL,
+      last_seen_at BIGINT NOT NULL
+    )`,
 
     `CREATE TABLE IF NOT EXISTS ${migration} (
       version INTEGER NOT NULL,
       applied_at BIGINT NOT NULL,
       checksum TEXT NOT NULL,
       created_at BIGINT NOT NULL,
-      updated_at BIGINT NOT NULL,
-      CONSTRAINT pk_${p}migration PRIMARY KEY (version)
-    )`,
-
-    // Cluster-wide rate-limit usage counter (build_plan/07.4).
-    `CREATE TABLE IF NOT EXISTS ${p}rate_usage (
-      queue_id TEXT NOT NULL,
-      window_start BIGINT NOT NULL,
-      used INTEGER NOT NULL DEFAULT 0,
-      CONSTRAINT pk_${p}rate_usage PRIMARY KEY (queue_id)
+      updated_at BIGINT NOT NULL
     )`,
   ];
 }
 
-/** The current schema version this build ships (build_plan/04.7). */
+/** The current schema version this build ships. */
 export const CURRENT_SCHEMA_VERSION = 1;

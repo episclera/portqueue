@@ -1,5 +1,5 @@
 /**
- * Queue detail page (build_plan/12.4): scoped KPI cards, a filterable/paginated jobs table,
+ * Queue detail page: scoped KPI cards, a filterable/paginated jobs table,
  * pause/resume (with PauseMode choice), add-a-job, purge-by-state, and a schedules panel.
  */
 import React, { useMemo, useState } from 'react';

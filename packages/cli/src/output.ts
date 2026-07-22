@@ -26,7 +26,7 @@ export function color(text: string, ...styles: Ansi[]): string {
   return styles.map((s) => CODES[s]).join('') + text + CODES.reset;
 }
 
-/** Semantic color per job status (build_plan/13.5), mirroring the dashboard StatusTag. */
+/** Semantic color per job status, mirroring the dashboard StatusTag. */
 export function colorStatus(status: JobStatus | string): string {
   switch (status) {
     case JobStatus.ACTIVE:

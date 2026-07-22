@@ -1,5 +1,5 @@
 /**
- * An injectable clock (build_plan/16.5) so delay/cron/backoff/retention/visibility
+ * An injectable clock so delay/cron/backoff/retention/visibility
  * logic is testable deterministically without real waiting.
  */
 export interface Clock {

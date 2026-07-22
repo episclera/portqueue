@@ -13,7 +13,7 @@ interface Registration {
 }
 
 /**
- * Typed event bus (build_plan/08.3). Synchronous fan-out; listeners may be async but the
+ * Typed event bus. Synchronous fan-out; listeners may be async but the
  * bus never awaits them (observation must not block the hot path). A throwing listener is
  * caught, logged, and re-surfaced as {@link PortQueueEvent.ERROR} — never breaks emission.
  */

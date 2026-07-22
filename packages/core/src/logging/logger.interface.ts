@@ -1,6 +1,6 @@
 import type { LogLevel } from './log-level.enum.js';
 
-/** Structured log context — no positional interpolation (build_plan/10.1). */
+/** Structured log context — no positional interpolation. */
 export interface LogContext {
   queue?: string;
   jobId?: string;
@@ -12,7 +12,7 @@ export interface LogContext {
 }
 
 /**
- * The logger contract (build_plan/10.1). Injected at construction; core never imports
+ * The logger contract. Injected at construction; core never imports
  * a logging library. Bring your own by implementing this interface.
  */
 export interface Logger {

@@ -1,5 +1,4 @@
 import { JobStatus } from '../jobs/job-state.enum.js';
-import { DeduplicationReason } from '../options/enums.js';
 import { PortQueueEvent } from '../events/event-name.enum.js';
 import { InvalidOptionsError, PayloadTooLargeError, QueuePausedError } from '../errors/errors.js';
 import { toMs } from '../util/duration.js';
@@ -12,7 +11,7 @@ import type { Runtime } from '../client/runtime.js';
 import type { NotifierService } from '../pubsub/notifier.service.js';
 
 /**
- * Insert/dedup/schedule logic behind the Queue handle (build_plan/02.2 / 05.3).
+ * Insert/dedup/schedule logic behind the Queue handle.
  */
 export class ProducerService {
   constructor(
@@ -34,7 +33,7 @@ export class ProducerService {
       );
     }
 
-    // Payload size guard (build_plan/18.2).
+    // Payload size guard.
     const queueOptions = registry.getOptions(queue);
     const maxBytes = queueOptions.maxPayloadBytes ?? this.runtime.maxPayloadBytes;
     const serialized = opts.data === undefined ? 'null' : JSON.stringify(opts.data);
@@ -50,6 +49,8 @@ export class ProducerService {
 
     const row = await registry.ensure(queue);
     if (row.acceptingPaused) throw new QueuePausedError(queue);
+
+    const affinity = this.resolveAffinity(queue, opts);
 
     const now = clock.now();
     const resolved = resolver.resolve({
@@ -74,7 +75,7 @@ export class ProducerService {
     }
 
     const job: NewJobRecord = {
-      queueId: row.id,
+      queueName: queue,
       status: JobStatus.PENDING,
       priority: resolved.priority,
       data: opts.data,
@@ -95,8 +96,10 @@ export class ProducerService {
       singletonKey: resolved.singletonKey,
       workflowId,
       workflowStepKey,
-      runOnInstanceId: null,
-      runOnInstanceType: null,
+      preferredInstanceKey: affinity.preferredInstanceKey,
+      preferredInstanceKeyPattern: affinity.preferredInstanceKeyPattern,
+      fallbackInstanceKey: affinity.fallbackInstanceKey,
+      fallbackInstanceKeyPattern: affinity.fallbackInstanceKeyPattern,
       createdAt: now,
     };
 
@@ -109,7 +112,7 @@ export class ProducerService {
       startAfter: new Date(inserted.startAfter),
       deduplicated: inserted.deduplicated,
       ...(inserted.deduplicationReason
-        ? { deduplicationReason: inserted.deduplicationReason as DeduplicationReason }
+        ? { deduplicationReason: inserted.deduplicationReason }
         : {}),
       ...(inserted.workflowId ? { workflowId: inserted.workflowId } : {}),
     };
@@ -140,25 +143,87 @@ export class ProducerService {
     return results;
   }
 
+  /**
+   * Validate and normalize the multi-instance affinity options. Affinity is only meaningful when
+   * this PortQueue declared an `instanceKey`; a job may target instances by exact key or by regex
+   * pattern, but never both for the same role.
+   */
+  private resolveAffinity(
+    queue: string,
+    opts: AddJobOptions<unknown>,
+  ): {
+    preferredInstanceKey: string | null;
+    preferredInstanceKeyPattern: string | null;
+    fallbackInstanceKey: string | null;
+    fallbackInstanceKeyPattern: string | null;
+  } {
+    const { preferredInstanceKey, preferredInstanceKeyPattern } = opts;
+    const { fallbackInstanceKey, fallbackInstanceKeyPattern } = opts;
+    const any =
+      preferredInstanceKey != null ||
+      preferredInstanceKeyPattern != null ||
+      fallbackInstanceKey != null ||
+      fallbackInstanceKeyPattern != null;
+    if (any && !this.runtime.instanceKey) {
+      throw new InvalidOptionsError(
+        `Job on queue '${queue}' sets instance affinity (preferred/fallbackInstanceKey), but this ` +
+          `PortQueue is not in multi-instance mode. Pass an \`instanceKey\` to the PortQueue ` +
+          `constructor to enable it.`,
+        { queue },
+      );
+    }
+    this.validateAffinityRole(queue, 'preferred', preferredInstanceKey, preferredInstanceKeyPattern);
+    this.validateAffinityRole(queue, 'fallback', fallbackInstanceKey, fallbackInstanceKeyPattern);
+    return {
+      preferredInstanceKey: preferredInstanceKey ?? null,
+      preferredInstanceKeyPattern: preferredInstanceKeyPattern ?? null,
+      fallbackInstanceKey: fallbackInstanceKey ?? null,
+      fallbackInstanceKeyPattern: fallbackInstanceKeyPattern ?? null,
+    };
+  }
+
+  /** A role (preferred/fallback) takes an exact key XOR a valid regex pattern, not both. */
+  private validateAffinityRole(
+    queue: string,
+    role: 'preferred' | 'fallback',
+    key: string | undefined,
+    pattern: string | undefined,
+  ): void {
+    if (key != null && pattern != null) {
+      throw new InvalidOptionsError(
+        `Job on queue '${queue}' sets both '${role}InstanceKey' and '${role}InstanceKeyPattern' — provide exactly one.`,
+        { queue },
+      );
+    }
+    if (pattern != null) {
+      try {
+        new RegExp(pattern);
+      } catch (err) {
+        throw new InvalidOptionsError(
+          `Job on queue '${queue}' has an invalid '${role}InstanceKeyPattern' regular expression: ${String(err)}`,
+          { queue },
+        );
+      }
+    }
+  }
+
   private async upsertSchedule<TData>(
     queue: string,
     opts: AddJobOptions<TData>,
   ): Promise<AddJobResult> {
     this.validateSchedule(queue, opts);
     const { registry, driver, clock, resolver, events } = this.runtime;
-    const row = await registry.ensure(queue);
+    await registry.ensure(queue);
     const now = clock.now();
     const resolved = resolver.resolve({ job: opts, now });
     const cron = opts.cron != null ? normalizeCron(opts.cron) : null;
     const everyMs = opts.startEvery != null ? toMs(opts.startEvery) : null;
-    // Keyless API: the recurrence pattern IS the identity. Re-adding the same pattern on a
-    // queue updates that schedule; a different pattern makes a new one (build_plan/05.3).
-    const key = cron ? `cron:${cron.pattern}@${cron.tz}` : `every:${everyMs}`;
+    // Keyless API: the recurrence IS the identity. Re-adding the same cron+timezone (or the same
+    // interval) on a queue updates that schedule; a different recurrence makes a new one.
     const nextRunAt = this.computeNextRun(opts, now);
 
     const newSchedule: NewScheduleRow = {
-      key,
-      queueId: row.id,
+      queueName: queue,
       cron: cron?.pattern ?? null,
       everyMs,
       timezone: cron?.tz ?? null,
@@ -171,7 +236,9 @@ export class ProducerService {
       startAt: null,
       endAt: null,
     };
-    const existing = (await driver.listSchedules({ queueId: row.id })).find((s) => s.key === key);
+    const existing = (await driver.listSchedules({ queueName: queue })).find((s) =>
+      cron ? s.cron === cron.pattern && s.timezone === cron.tz : s.everyMs === everyMs,
+    );
     const saved = await driver.upsertSchedule({
       schedule: newSchedule,
       ...(opts.tx ? { tx: opts.tx } : {}),
@@ -206,8 +273,8 @@ export class ProducerService {
   }
 
   async getSchedules(queue: string): Promise<ScheduleInfo[]> {
-    const row = await this.runtime.registry.ensure(queue);
-    const rows = await this.runtime.driver.listSchedules({ queueId: row.id });
+    await this.runtime.registry.ensure(queue);
+    const rows = await this.runtime.driver.listSchedules({ queueName: queue });
     return rows.map((s) => ({
       scheduleId: s.id,
       cron: s.cron,

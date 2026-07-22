@@ -2,7 +2,7 @@ import { LOG_LEVEL_SEVERITY, LogLevel } from './log-level.enum.js';
 import type { Logger, LogContext, LoggerOptions } from './logger.interface.js';
 
 /**
- * Zero-dependency default logger (build_plan/10.1). Writes structured lines to
+ * Zero-dependency default logger. Writes structured lines to
  * stdout/stderr honoring the configured level.
  */
 export class ConsoleLogger implements Logger {

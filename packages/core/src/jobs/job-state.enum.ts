@@ -1,5 +1,5 @@
 /**
- * Job lifecycle states (build_plan/06.1). Exported so consumers never use magic strings.
+ * Job lifecycle states. Exported so consumers never use magic strings.
  * `STALLED` is a *derived* status (an ACTIVE row past its lock deadline) — never stored.
  */
 export enum JobStatus {

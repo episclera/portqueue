@@ -1,5 +1,5 @@
 /**
- * Shared styles via antd-style `createStyles` (build_plan/14.2 — the AntD-recommended
+ * Shared styles via antd-style `createStyles` (the AntD-recommended
  * CSS-in-JS). Encodes the modern design language: soft shadows, rounded surfaces, subtle
  * header glass, reduced-motion-aware transitions.
  */

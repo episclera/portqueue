@@ -1,18 +1,19 @@
 import { InvalidOptionsError } from '../errors/errors.js';
 
-/** Logical table names (build_plan/04.1). Never a string literal at a query site. */
+/** Logical table names. Never a string literal at a query site. */
 export enum TableName {
   QUEUE = 'queue',
   JOB = 'job',
   SCHEDULE = 'schedule',
-  MIGRATION_STATE = 'migration_state',
+  INSTANCE = 'instance',
+  MIGRATION = 'migration',
 }
 
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
  * Validate a user-influenced identifier (schema / tablePrefix) against a strict
- * allowlist (build_plan/18.1). Fails fast with a clear error; never reaches SQL raw.
+ * allowlist. Fails fast with a clear error; never reaches SQL raw.
  */
 export function validateIdentifier(kind: string, value: string, maxLen = 63): string {
   if (!IDENTIFIER_RE.test(value)) {
@@ -29,7 +30,7 @@ export function validateIdentifier(kind: string, value: string, maxLen = 63): st
 }
 
 /**
- * Resolves fully-qualified, prefixed, schema-qualified object names once (build_plan/03.3).
+ * Resolves fully-qualified, prefixed, schema-qualified object names once.
  */
 export class TableNames {
   readonly prefix: string;

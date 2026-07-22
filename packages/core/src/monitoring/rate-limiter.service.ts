@@ -3,7 +3,7 @@ import type { RateLimiterOptions } from '../options/common.js';
 import type { Clock } from '../util/clock.js';
 
 /**
- * A worker-local token-bucket limiter (build_plan/07.4). Exact and in-process; limits how
+ * A worker-local token-bucket limiter. Exact and in-process; limits how
  * many jobs this worker starts per window. Distinct from the cluster-wide queue rate limit.
  */
 export class RateLimiterService {

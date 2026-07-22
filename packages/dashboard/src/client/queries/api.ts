@@ -6,7 +6,7 @@ import type {
   ActionRequestDto,
   ActionResultDto,
   DashboardConfigDto,
-  InstanceBreakdownDto,
+  InstanceDto,
   JobDto,
   JobPageDto,
   QueueDto,
@@ -14,6 +14,7 @@ import type {
   StatsDto,
   WorkflowDto,
 } from '../../shared/dto.js';
+import { REQUESTED_WITH_HEADER, REQUESTED_WITH_MARKER } from '../../shared/constants.js';
 
 declare global {
   interface Window {
@@ -40,7 +41,7 @@ async function get<T>(path: string, params?: Record<string, string | undefined>)
         .join('&')
     : '';
   const res = await fetch(`${API}${path}${qs}`, {
-    headers: { 'x-requested-with': 'portqueue-dashboard' },
+    headers: { [REQUESTED_WITH_HEADER]: REQUESTED_WITH_MARKER },
     credentials: 'same-origin',
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -63,14 +64,14 @@ export const api = {
   getWorkflow: (workflowId: string) =>
     get<WorkflowDto>(`/workflows/${encodeURIComponent(workflowId)}`),
   getSchedules: (queue?: string) => get<ScheduleDto[]>('/schedules', { queue }),
-  getInstances: (queue?: string) => get<InstanceBreakdownDto[]>('/instances', { queue }),
+  getInstances: () => get<InstanceDto[]>('/instances'),
 
   action: async (body: ActionRequestDto): Promise<ActionResultDto> => {
     const res = await fetch(`${API}/actions`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-requested-with': 'portqueue-dashboard',
+        [REQUESTED_WITH_HEADER]: REQUESTED_WITH_MARKER,
       },
       credentials: 'same-origin',
       body: JSON.stringify(body),

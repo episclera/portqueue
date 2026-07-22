@@ -26,7 +26,7 @@ pq.createWorker({
 `concurrency` sets how many handlers run **in parallel** within one worker. Because each
 job is an independently claimed row, there is **no head-of-line blocking** inside a
 queue — a slow job never stalls the others. Queues are also independent: a job never
-waits on another queue (per-queue claim loops, `queue_id`-scoped claiming). Scale out by
+waits on another queue (per-queue claim loops, `queue_name`-scoped claiming). Scale out by
 raising `concurrency` and by running more instances.
 
 ## Error handling & retries
@@ -69,7 +69,8 @@ A worker-local, in-process limiter (exact for this worker):
 pq.createWorker({ queue: 'third-party', concurrency: 10, limiter: { max: 50, duration: '1m' } });
 ```
 
-For a **cluster-wide** cap, set `rateLimit` on the queue — see [Rate limiting](./rate-limiting.md).
+The `limiter` is worker-local (in-process) — see [Rate limiting](./rate-limiting.md). There is no
+cluster-wide job-rate cap: scale throughput by adding or removing workers/instances.
 
 ## Observing
 

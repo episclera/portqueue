@@ -23,7 +23,7 @@ interface SqliteDatabase {
 }
 
 /**
- * SQLite driver (build_plan/11.3). Uses Node's built-in `node:sqlite` (no native dep).
+ * SQLite driver. Uses Node's built-in `node:sqlite` (no native dep).
  * No LISTEN/NOTIFY (interval polling) and no SKIP LOCKED (SQLite's single-writer model
  * makes the guarded-UPDATE claim naturally exclusive). App-generated UUIDs.
  */
@@ -31,7 +31,6 @@ export class SqliteDriver extends SqlDriver {
   readonly engine = DatabaseEngine.SQLITE;
   readonly capabilities: DriverCapabilitySet = capabilities({
     [DriverCapability.RETURNING]: true,
-    [DriverCapability.UPSERT]: true,
     [DriverCapability.TRANSACTIONS]: true,
   });
   protected readonly placeholderStyle = 'question' as const;

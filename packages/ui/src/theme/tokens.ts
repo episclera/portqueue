@@ -1,5 +1,5 @@
 /**
- * Design tokens shared by the docs site and dashboard (build_plan/14.1a). Encodes the
+ * Design tokens shared by the docs site and dashboard. Encodes the
  * modern design language: spacious spacing scale, soft elevation over hard borders,
  * rounded surfaces, a restrained accent palette, and motion tokens.
  */

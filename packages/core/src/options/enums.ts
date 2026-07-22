@@ -1,10 +1,10 @@
-/** Retry backoff strategies (build_plan/06.4). */
+/** Retry backoff strategies. */
 export enum BackoffStrategy {
   FIXED = 'FIXED',
   EXPONENTIAL = 'EXPONENTIAL',
 }
 
-/** Manual-retry modes for a failed job/workflow (build_plan/06.8.1). */
+/** Manual-retry modes for a failed job/workflow. */
 export enum RetryMode {
   /** Re-arm the failed step's own job with its persisted data (default). */
   FROM_FAILED_STEP = 'FROM_FAILED_STEP',
@@ -12,7 +12,7 @@ export enum RetryMode {
   FROM_START = 'FROM_START',
 }
 
-/** How a queue is paused (build_plan/05.3). */
+/** How a queue is paused. */
 export enum PauseMode {
   /** Workers stop claiming/running jobs, but the queue still accepts new adds. */
   PROCESSING = 'PROCESSING',
@@ -20,26 +20,26 @@ export enum PauseMode {
   ALL = 'ALL',
 }
 
-/** Why an add was deduplicated (build_plan/05.3 / 06.6). */
+/** Why an add was deduplicated. */
 export enum DeduplicationReason {
   IDEMPOTENCY = 'IDEMPOTENCY',
   SINGLETON = 'SINGLETON',
 }
 
-/** Retention policy modes (build_plan/06.9). */
+/** Retention policy modes. */
 export enum RetentionMode {
   KEEP_FOREVER = 'KEEP_FOREVER',
   DELETE_AFTER = 'DELETE_AFTER',
 }
 
-/** Auto-migration behavior on init (build_plan/04.7). */
+/** Auto-migration behavior on init. */
 export enum MigrationMode {
   AUTO = 'AUTO',
   MANUAL = 'MANUAL',
   VALIDATE_ONLY = 'VALIDATE_ONLY',
 }
 
-/** Database engines a driver can advertise (build_plan/03.2). */
+/** Database engines a driver can advertise. */
 export enum DatabaseEngine {
   POSTGRES = 'POSTGRES',
   PGLITE = 'PGLITE',
@@ -48,7 +48,7 @@ export enum DatabaseEngine {
   CUSTOM = 'CUSTOM',
 }
 
-/** How the running process is classified for job attribution (build_plan/07.3). */
+/** How the running process is classified for job attribution. */
 export enum InstanceType {
   CONTAINER = 'CONTAINER',
   BARE_METAL = 'BARE_METAL',

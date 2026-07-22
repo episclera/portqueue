@@ -2,7 +2,7 @@ import type { AddJobOptions, JobOptions } from '../options/job-options.js';
 import type { Job } from '../jobs/job.js';
 import type { AddJobResult } from '../producer/results.js';
 
-/** Hook lifecycle phases (build_plan/08.4). */
+/** Hook lifecycle phases. */
 export enum HookPhase {
   BEFORE_ADD = 'BEFORE_ADD',
   AFTER_ADD = 'AFTER_ADD',
@@ -22,7 +22,7 @@ export interface BeforeAddResult<TData = unknown> {
 }
 
 /**
- * Participation-hook registration (build_plan/08.4). Hooks are awaited, run in
+ * Participation-hook registration. Hooks are awaited, run in
  * registration order, and can mutate BEFORE_ADD/BEFORE_PROCESS or veto by throwing.
  */
 export interface HookRegistration {

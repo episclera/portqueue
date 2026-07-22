@@ -1,5 +1,5 @@
 /**
- * NestJS adapter (build_plan/12.2). Nest's default platform is Express, so the dashboard mounts
+ * NestJS adapter. Nest's default platform is Express, so the dashboard mounts
  * as ordinary functional middleware — no `@nestjs/*` dependency is required. Wire it in a module:
  *
  * ```ts

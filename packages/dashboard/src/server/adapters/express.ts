@@ -1,5 +1,5 @@
 /**
- * Express adapter (build_plan/12.2). `app.use(basePath, expressAdapter(dashboard))` or
+ * Express adapter. `app.use(basePath, expressAdapter(dashboard))` or
  * `app.use(dashboard.express())`.
  */
 import type { DashboardEngine } from '../engine.js';

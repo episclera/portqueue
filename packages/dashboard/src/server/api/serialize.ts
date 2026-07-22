@@ -1,9 +1,10 @@
 /**
- * Maps PortQueue snapshots → wire DTOs (build_plan/12.2). Pure functions, fully typed;
+ * Maps PortQueue snapshots → wire DTOs. Pure functions, fully typed;
  * the single place Dates become ISO strings for the JSON boundary.
  */
 import type {
   JobSnapshot,
+  InstanceInfo,
   QueueInfo,
   QueueStats,
   ScheduleInfo,
@@ -17,7 +18,7 @@ import type {
   ScheduleDto,
   StatsDto,
   WorkflowDto,
-  InstanceBreakdownDto,
+  InstanceDto,
   CountsDto,
 } from '../../shared/dto.js';
 
@@ -53,8 +54,11 @@ export function serializeJob(job: JobSnapshot): JobDto {
     retriedAt: iso(job.retriedAt),
     stalledAt: iso(job.stalledAt),
     lockedUntil: iso(job.lockedUntil),
-    runOnInstanceId: job.runOnInstanceId,
-    runOnInstanceType: job.runOnInstanceType,
+    preferredInstanceKey: job.preferredInstanceKey,
+    preferredInstanceKeyPattern: job.preferredInstanceKeyPattern,
+    fallbackInstanceKey: job.fallbackInstanceKey,
+    fallbackInstanceKeyPattern: job.fallbackInstanceKeyPattern,
+    processedOnInstanceKey: job.processedOnInstanceKey,
     failureMessage: job.failureMessage,
     idempotencyKey: job.idempotencyKey,
     scheduleId: job.scheduleId,
@@ -111,16 +115,15 @@ export function serializeSchedule(s: ScheduleInfo, queue: string): ScheduleDto {
   };
 }
 
-/** Roll a page of jobs up into a per-instance attribution breakdown. */
-export function instanceBreakdown(jobs: JobSnapshot[]): InstanceBreakdownDto[] {
-  const byInstance = new Map<string, InstanceBreakdownDto>();
-  for (const job of jobs) {
-    const id = job.runOnInstanceId ?? 'unattributed';
-    const type = job.runOnInstanceType ?? 'UNKNOWN';
-    const key = `${id}::${type}`;
-    const existing = byInstance.get(key);
-    if (existing) existing.count += 1;
-    else byInstance.set(key, { instanceId: id, instanceType: type, count: 1 });
-  }
-  return [...byInstance.values()].sort((a, b) => b.count - a.count);
+/** Serialize an instance overview row. */
+export function serializeInstance(i: InstanceInfo): InstanceDto {
+  return {
+    instanceKey: i.instanceKey,
+    processingPaused: i.processingPaused,
+    alive: i.alive,
+    createdAt: i.createdAt.toISOString(),
+    updatedAt: i.updatedAt.toISOString(),
+    lastSeenAt: i.lastSeenAt.toISOString(),
+    counts: counts(i.counts),
+  };
 }

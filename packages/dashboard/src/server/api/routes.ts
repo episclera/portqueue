@@ -1,5 +1,5 @@
 /**
- * Framework-agnostic JSON API + SSE event stream (build_plan/12.4/12.5/12.6).
+ * Framework-agnostic JSON API + SSE event stream.
  *
  * The core is a pure `handle(input) => Promise<HandlerResult>` for JSON endpoints, plus a
  * separate SSE helper the node adapter wires to the response socket. All mutations are gated
@@ -22,9 +22,10 @@ import {
   serializeSchedule,
   serializeStats,
   serializeWorkflow,
-  instanceBreakdown,
+  serializeInstance,
 } from './serialize.js';
 import type { ActionRequestDto, ActionResultDto } from '../../shared/dto.js';
+import { REQUESTED_WITH_HEADER, REQUESTED_WITH_MARKER } from '../../shared/constants.js';
 
 export interface RouterOptions {
   portQueue: PortQueue;
@@ -83,7 +84,7 @@ function sameOrigin(headers: HandlerInput['headers']): boolean {
   const source = origin ?? referer;
   if (!source) {
     // No Origin/Referer (e.g. a non-browser client). Require an explicit fetch marker.
-    return firstHeader(headers['x-requested-with']) === 'portqueue-dashboard';
+    return firstHeader(headers[REQUESTED_WITH_HEADER]) === REQUESTED_WITH_MARKER;
   }
   try {
     return new URL(source).host === host;
@@ -186,14 +187,9 @@ export function createRouter(options: RouterOptions): {
         return json(200, serializeJobPage(page));
       }
       if (path === '/api/instances') {
-        // Attribution: sample recent jobs across the (optional) queue.
-        const queue = params.get('queue') ?? undefined;
-        const page = await portQueue.getJobs({
-          ...(queue ? { queue } : {}),
-          limit: 200,
-          order: 'desc',
-        });
-        return json(200, instanceBreakdown(page.items));
+        // Real instance rows with liveness + per-instance job attribution.
+        const instances = await portQueue.getInstances();
+        return json(200, instances.map(serializeInstance));
       }
       const jobMatch = /^\/api\/jobs\/([^/]+)$/.exec(path);
       if (jobMatch && jobMatch[1]) {
@@ -243,6 +239,16 @@ export function createRouter(options: RouterOptions): {
 
 /** Execute a validated mutation against the provided PortQueue instance. */
 async function runAction(portQueue: PortQueue, action: ActionRequestDto): Promise<HandlerResult> {
+  // Instance actions are queue-less and handled up front.
+  if (action?.kind === 'pauseInstance' || action?.kind === 'resumeInstance') {
+    if (typeof action.instanceKey !== 'string' || !action.instanceKey) {
+      return json(400, { error: 'Missing instanceKey' });
+    }
+    if (action.kind === 'pauseInstance') await portQueue.pauseInstance({ instanceKey: action.instanceKey });
+    else await portQueue.resumeInstance({ instanceKey: action.instanceKey });
+    return json(200, { ok: true } satisfies ActionResultDto);
+  }
+
   if (!action || typeof action.queue !== 'string' || !action.queue) {
     return json(400, { error: 'Missing queue' });
   }
@@ -323,6 +329,8 @@ export const STREAMED_EVENTS: readonly PortQueueEvent[] = [
   PortQueueEvent.WORKFLOW_FAILED,
   PortQueueEvent.QUEUE_PAUSED,
   PortQueueEvent.QUEUE_RESUMED,
+  PortQueueEvent.INSTANCE_PAUSED,
+  PortQueueEvent.INSTANCE_RESUMED,
   PortQueueEvent.SCHEDULE_CREATED,
   PortQueueEvent.SCHEDULE_UPDATED,
   PortQueueEvent.SCHEDULE_REMOVED,

@@ -66,8 +66,10 @@ export function JobsTable(props: JobsTableProps): React.ReactElement {
       key: 'instance',
       responsive: ['lg'],
       render: (_: unknown, r) =>
-        r.runOnInstanceId ? (
-          <Tooltip title={r.runOnInstanceId}>{truncate(r.runOnInstanceId, 6, 4)}</Tooltip>
+        r.processedOnInstanceKey ? (
+          <Tooltip title={r.processedOnInstanceKey}>
+            {truncate(r.processedOnInstanceKey, 6, 4)}
+          </Tooltip>
         ) : (
           '—'
         ),

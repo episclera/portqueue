@@ -2,7 +2,7 @@ import { theme, type ThemeConfig } from 'antd';
 import { tokens } from './tokens.js';
 import { typography } from './typography.js';
 
-/** AntD light theme derived from the shared tokens (build_plan/14.4). */
+/** AntD light theme derived from the shared tokens. */
 export const lightTheme: ThemeConfig = {
   algorithm: theme.defaultAlgorithm,
   token: {

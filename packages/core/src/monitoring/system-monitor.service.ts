@@ -9,7 +9,7 @@ import type { Logger } from '../logging/logger.interface.js';
 type EventLoopDelayMonitor = ReturnType<typeof monitorEventLoopDelay>;
 
 /**
- * Samples event-loop lag / CPU / memory and sets a backpressure flag (build_plan/07.5).
+ * Samples event-loop lag / CPU / memory and sets a backpressure flag.
  * Workers with `respectSystemPressure` stop claiming while pressure is high. Uses only Node
  * built-ins. Pressure transitions are observed via the event bus, never a callback option.
  */

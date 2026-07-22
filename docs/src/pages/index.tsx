@@ -7,49 +7,34 @@ import styles from './index.module.css';
 
 const FEATURES: { icon: string; title: string; body: string }[] = [
   {
+    icon: '🌐',
+    title: 'Distributed from the ground up',
+    body: 'Built to run across many instances at once — they cooperate through row-level claiming, so no job is ever processed twice. Runs just as well on a single instance: scalable from one to infinity.',
+  },
+  {
     icon: '🗄️',
-    title: 'Multi-driver',
-    body: 'First-class Postgres, Oracle, PGLite, and SQLite drivers — plus a custom-driver interface. One API across every engine.',
+    title: 'Plugs into your database',
+    body: 'Point it at the database you already run — Postgres, Oracle, PGLite, or SQLite (or a custom driver). Enqueue inside your own transaction, and if your query rolls back, the job never existed.',
   },
   {
-    icon: '🚫',
-    title: 'No broker needed',
-    body: 'Your database is the single source of truth. No Redis, no message broker to run or pay for.',
-  },
-  {
-    icon: '📈',
-    title: 'Horizontally scalable',
-    body: 'Instances cooperate through row-level claiming (SKIP LOCKED) and visibility timeouts — no double-processing.',
-  },
-  {
-    icon: '🔒',
-    title: 'Transactional enqueue',
-    body: 'A job exists only if your business transaction commits. Pass a tx adapter and kill the dual-write bug.',
-  },
-  {
-    icon: '⏰',
-    title: 'Cron & scheduling',
-    body: 'Delayed jobs, fixed intervals, and cron with timezones — one addJob method, no separate schedule() call.',
+    icon: '🖥️',
+    title: 'A powerful dashboard',
+    body: 'A mountable React dashboard (plus a full CLI) to monitor and control both queues and instances live — pause, resume, retry, and watch throughput, with no third-party service.',
   },
   {
     icon: '🔁',
     title: 'Resumable workflows',
-    body: 'Multi-step jobs where each step is its own row — crash-safe and resumable, not fragile numeric progress.',
+    body: 'Multi-step jobs where each step is its own row — crash-safe and resumable, with same-machine affinity, not a fragile numeric progress counter.',
   },
   {
-    icon: '🚦',
-    title: 'Rate limiting & backpressure',
-    body: 'Cluster-wide queue caps, per-worker local limits, and system-pressure backpressure built in.',
+    icon: '⏰',
+    title: 'Scheduling & cron',
+    body: 'Delayed jobs, fixed intervals, and cron with timezones — one addJob method, no separate schedule() call.',
   },
   {
-    icon: '🖥️',
-    title: 'Dashboard + CLI',
-    body: 'Operational visibility with a mountable dashboard and a full CLI — no third-party service.',
-  },
-  {
-    icon: '🧩',
-    title: 'Strictly typed',
-    body: 'Named options, importable enums, and payload types that flow through generics end to end. No any.',
+    icon: '🛡️',
+    title: 'Fault-tolerant & observable',
+    body: 'Automatic retries with backoff, stalled-job reclaim, liveness-aware fallback, and at-least-once delivery — with rich events and hooks for metrics and tracing.',
   },
 ];
 
@@ -84,9 +69,6 @@ export default function Home(): ReactNode {
         <img src="/portqueue/img/logo.svg" alt="PortQueue logo" className={styles.heroLogo} />
         <h1 className={styles.heroTitle}>PortQueue</h1>
         <p className={styles.heroTagline}>{siteConfig.tagline}</p>
-        <p className={styles.license}>
-          Free and open source. Commercial use permitted. No license fee, no obligations.
-        </p>
         <div className={styles.ctas}>
           <Link
             className="button button--primary button--lg"
@@ -103,6 +85,9 @@ export default function Home(): ReactNode {
             GitHub
           </Link>
         </div>
+        <p className={styles.license}>
+          Free and open source. Commercial use permitted. No license fee, no obligations.
+        </p>
       </header>
 
       <main>

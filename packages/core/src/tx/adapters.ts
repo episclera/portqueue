@@ -1,6 +1,6 @@
 import type { TransactionHandle, TxQueryResult } from './transaction-handle.js';
 
-/** Build a {@link TransactionHandle} from a raw executor (build_plan/09.2). */
+/** Build a {@link TransactionHandle} from a raw executor. */
 function makeHandle(
   engine: string,
   execute: (sql: string, params: readonly unknown[]) => Promise<TxQueryResult>,
@@ -23,7 +23,7 @@ function normalizeRows(result: unknown): TxQueryResult {
 
 // --- Raw clients ---
 
-/** Wrap a `pg` PoolClient/Client mid-transaction (build_plan/09.2). */
+/** Wrap a `pg` PoolClient/Client mid-transaction. */
 export function fromPg(client: {
   query(sql: string, params?: readonly unknown[]): Promise<unknown>;
 }): TransactionHandle {

@@ -12,7 +12,7 @@ import type { EventBusService } from './event-bus.service.js';
 import { PortQueueEvent } from './event-name.enum.js';
 
 /**
- * Runs participation hooks (build_plan/08.4). Hooks are awaited, in registration order.
+ * Runs participation hooks. Hooks are awaited, in registration order.
  * A BEFORE_* throw aborts the operation; an AFTER_* throw is logged and surfaced via ERROR
  * but does not undo the completed operation.
  */

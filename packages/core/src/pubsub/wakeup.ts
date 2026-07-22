@@ -1,5 +1,5 @@
 /**
- * A debounced "there is work" signal that wakes claim loops (build_plan/02.2).
+ * A debounced "there is work" signal that wakes claim loops.
  * Per-queue subscribers are notified when a job is added or a NOTIFY/poll fires.
  */
 export class Wakeup {

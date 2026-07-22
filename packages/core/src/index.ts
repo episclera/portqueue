@@ -1,4 +1,4 @@
-// @portqueue/core — the developer-facing barrel (build_plan/05.7).
+// @portqueue/core — the developer-facing barrel.
 
 // Client, handles, and the Job context type
 export { PortQueue } from './port-queue.js';
@@ -55,6 +55,7 @@ export type {
   WorkflowSnapshot,
   ScheduleInfo,
   QueueInfo,
+  InstanceInfo,
   QueueStats,
   GetJobsQuery,
 } from './producer/results.js';

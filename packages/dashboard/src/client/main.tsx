@@ -1,5 +1,5 @@
 /**
- * Client entry (build_plan/12.2). Mounts the SPA: wires the shared `@portqueue/ui` light/dark
+ * Client entry. Mounts the SPA: wires the shared `@portqueue/ui` light/dark
  * themes into AntD's ConfigProvider (following system preference with a switcher), the AntD
  * `App` wrapper (message/modal context), and the global LiveProvider.
  */

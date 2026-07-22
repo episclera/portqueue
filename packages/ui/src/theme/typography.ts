@@ -1,4 +1,4 @@
-/** Font stacks (build_plan/14.1a). Self-hosted / system — no third-party CDN calls. */
+/** Font stacks. Self-hosted / system — no third-party CDN calls. */
 export const typography = {
   /** Modern variable/system UI stack. */
   fontFamily:

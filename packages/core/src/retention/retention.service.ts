@@ -2,7 +2,7 @@ import { FINISHED_STATUSES, JobStatus } from '../jobs/job-state.enum.js';
 import type { Runtime } from '../client/runtime.js';
 
 /**
- * Hard-deletes finished jobs per retention policy, in bounded batches (build_plan/06.9).
+ * Hard-deletes finished jobs per retention policy, in bounded batches.
  * Default is keep-forever; only jobs whose resolved retention is DELETE_AFTER and whose TTL
  * has elapsed are removed. Cluster-coordinated by running on the same interval tick.
  */

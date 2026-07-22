@@ -2,7 +2,7 @@ import { TableNames } from '../schema/table-names.js';
 
 /**
  * Shared value object passed to a driver so all object names are computed once
- * (build_plan/03.3). Also carries the pub/sub namespace.
+ *. Also carries the pub/sub namespace.
  */
 export class DriverContext {
   readonly tableNames: TableNames;

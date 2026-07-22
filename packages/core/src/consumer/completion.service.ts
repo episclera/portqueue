@@ -6,7 +6,7 @@ import type { JobRecord } from '../jobs/job-record.js';
 import type { Runtime } from '../client/runtime.js';
 import type { ProcessOutcome } from '../events/hooks.js';
 
-/** Marks complete/failed/retry atomically and emits the matching event (build_plan/02.5). */
+/** Marks complete/failed/retry atomically and emits the matching event. */
 export class CompletionService {
   constructor(private readonly runtime: Runtime) {}
 
@@ -27,7 +27,7 @@ export class CompletionService {
     return { kind: 'completed', returnValue };
   }
 
-  /** Decide retry-vs-fail after a handler throw (build_plan/06.4). */
+  /** Decide retry-vs-fail after a handler throw. */
   async failOrRetry(
     record: JobRecord,
     queueName: string,

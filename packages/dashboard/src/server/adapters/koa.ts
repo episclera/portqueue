@@ -1,5 +1,5 @@
 /**
- * Koa adapter (build_plan/12.2). `app.use(koaAdapter(dashboard))` or
+ * Koa adapter. `app.use(koaAdapter(dashboard))` or
  * `app.use(dashboard.koa())`.
  */
 import type { DashboardEngine } from '../engine.js';

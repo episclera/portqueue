@@ -17,33 +17,29 @@ today's interfaces already leave room for it, and the decisions we may revisit.
 
 ---
 
-## Execution locality (instance affinity) 🔭
+## Execution locality (instance affinity) ✅ / 🔭
 
-Pin work to a specific instance, with a liveness-aware fallback so nothing strands on
-a dead node. Two defaults, each overridable:
+**Shipped in v1.** Opt in with an `instanceKey` on the `PortQueue` constructor (multi-instance
+mode). Jobs can be pinned with `preferredInstanceKey` / `preferredInstanceKeyPattern` (a regex)
+and a liveness-aware `fallbackInstanceKey` / `fallbackInstanceKeyPattern`, so nothing strands on a
+dead node. Delivered together:
 
-- **Workflows — default *same machine*.** All steps of a run execute on the instance that
-  ran the first step (data stays hot, no cross-node handoff), with an opt-in
-  `distributed` mode that lets any instance claim each step (today's behavior).
-- **Schedules — default *distributed*.** Any instance runs each produced job, with an
-  opt-in "prefer the first-run machine **if it's still alive**" mode for cache/warm-path
-  affinity.
+- an **instance-liveness subsystem** — an `instance` table (`instance_key`, `processing_paused`,
+  `last_seen_at`, timestamps) with a per-instance heartbeat;
+- a **claim-time affinity filter** — evaluated in-tool (portable regex + liveness) in `claimJobs`,
+  covered by the conformance kit;
+- **per-instance pause/resume** and an **Instances dashboard page** with live attribution
+  (`processed_on_instance_key`).
 
-**Why it's not in v1.** Doing this safely needs plumbing that doesn't exist yet:
+See the [multi-instance guide](./docs/docs/guides/multi-instance.md).
 
-1. An **instance-liveness subsystem** — an instances table with heartbeats, so the claim
-   path can tell which `run_on_instance_id`s are still alive. Without it, a job pinned to a
-   crashed instance would never be reclaimed.
-2. A **claim-time affinity filter** — `claimJobs` today stamps `run_on_instance_id` but
-   never filters on it. It would gain `(run_on_instance_id IS NULL OR = :self OR owner is
-   dead)` across all four drivers, plus conformance coverage.
-3. **Schedule first-run pinning** — record the instance that ran a schedule's first job and
-   stamp subsequent produced jobs with it (liveness-gated).
+**Still planned 🔭.** Two ergonomic defaults on top of the primitives above:
 
-**How the API stays additive:** the `run_on_instance_id` / `run_on_instance_type` columns
-already exist and workflow-step spawns already carry them forward. This lands as new
-optional options with safe defaults — a workflow `execution: 'same-machine' | 'distributed'`
-and a schedule affinity flag — never a signature change.
+- **Workflows — default *same machine*.** Steps carry affinity forward today; a future
+  `execution: 'same-machine' | 'distributed'` would auto-pin an unpinned run to the instance that
+  ran its first step.
+- **Schedules — default *distributed*.** An opt-in "prefer the first-run machine if it's still
+  alive" mode for cache/warm-path affinity.
 
 ---
 

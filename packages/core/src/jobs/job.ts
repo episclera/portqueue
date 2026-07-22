@@ -1,7 +1,7 @@
 import type { JobMetadata } from '../options/common.js';
 
 /**
- * The runtime view of a job handed to a handler (build_plan/05.5). Read-only fields
+ * The runtime view of a job handed to a handler. Read-only fields
  * plus a couple of control methods. This is NOT how you construct jobs.
  */
 export interface Job<TData = unknown> {
@@ -18,18 +18,18 @@ export interface Job<TData = unknown> {
   readonly workflowId?: string;
   readonly workflowStepKey?: string;
   readonly metadata: JobMetadata;
-  /** Aborts on graceful-shutdown timeout / cooperative cancel (build_plan/07.6). */
+  /** Aborts on graceful-shutdown timeout / cooperative cancel. */
   readonly signal: AbortSignal;
   /** Manually extend the visibility timeout for a long unit of work. */
   extendLock(options?: { byMs?: number }): Promise<void>;
 }
 
-/** A single-function job handler (build_plan/05.4). */
+/** A single-function job handler. */
 export type JobHandler<TData = unknown, TResult = unknown> = (
   job: Job<TData>,
 ) => Promise<TResult> | TResult;
 
-/** A workflow step handler (build_plan/05.4 / 06.8). Transitions live on the `step` controller. */
+/** A workflow step handler. Transitions live on the `step` controller. */
 export type StepHandler<TData = unknown> = (
   job: Job<TData>,
   step: StepController,
@@ -55,7 +55,7 @@ export type StepOutcome =
   | { readonly kind: 'done'; readonly result?: unknown };
 
 /**
- * One declared step of a workflow (build_plan/05.4). A worker becomes a workflow worker
+ * One declared step of a workflow. A worker becomes a workflow worker
  * simply by passing an ordered array of these as its `handler`.
  */
 export interface WorkflowStep<TData = unknown> {

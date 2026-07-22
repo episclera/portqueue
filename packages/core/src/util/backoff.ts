@@ -17,7 +17,7 @@ export interface BackoffInput {
 }
 
 /**
- * Compute the delay (ms) before the next retry (build_plan/06.4).
+ * Compute the delay (ms) before the next retry.
  * - FIXED: `baseDelayMs` each time.
  * - EXPONENTIAL: `baseDelayMs * factor^(attempt-1)`, capped at `maxDelayMs`.
  * Optional full jitter multiplies the result by a random factor in [0,1].

@@ -2,7 +2,7 @@ import { InvalidOptionsError } from '../errors/errors.js';
 
 /**
  * A duration expressed either as milliseconds (number) or a human string
- * like `'30s'`, `'5m'`, `'1h'`, `'2d'`, `'500ms'` (build_plan/05.7).
+ * like `'30s'`, `'5m'`, `'1h'`, `'2d'`, `'500ms'`.
  */
 export type Duration = number | string;
 

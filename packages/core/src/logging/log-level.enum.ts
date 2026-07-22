@@ -1,4 +1,4 @@
-/** Log levels (build_plan/10.1). Ordered lowest → highest severity. */
+/** Log levels. Ordered lowest → highest severity. */
 export enum LogLevel {
   TRACE = 'TRACE',
   DEBUG = 'DEBUG',

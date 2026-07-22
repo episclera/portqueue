@@ -1,12 +1,12 @@
 /**
- * Global live-updates state (build_plan/12.6): a persisted toggle that pauses interval
+ * Global live-updates state: a persisted toggle that pauses interval
  * polling and the SSE stream, plus the shared 30s refetch cadence. One provider at the app
  * root; every polling page reads it through the hooks in `use-poll.ts`.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { eventsUrl } from '../queries/api.js';
 
-/** Single shared refetch cadence (build_plan/12.6); exposed here for future configurability. */
+/** Single shared refetch cadence; exposed here for future configurability. */
 export const REFETCH_INTERVAL_MS = 30_000;
 
 const STORAGE_KEY = 'portqueue-live-updates';

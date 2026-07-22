@@ -12,7 +12,7 @@ const CONFIG_NAMES = [
 ];
 
 /**
- * Loads the user's own PortQueue instance from a config module (build_plan/13.2). The CLI
+ * Loads the user's own PortQueue instance from a config module. The CLI
  * never builds its own instance from a connection string — it uses exactly what the app
  * configures (driver, options, in-memory defaults). Errors early with an actionable message.
  */

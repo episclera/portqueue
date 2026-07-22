@@ -2,9 +2,10 @@ import type { Driver, Subscription } from '../driver/driver.interface.js';
 import { DriverCapability } from '../driver/driver-capabilities.js';
 import type { Logger } from '../logging/logger.interface.js';
 import type { Wakeup } from './wakeup.js';
+import { PubSubChannel } from './channels.js';
 
 /**
- * Listens for DB notifications and wakes claim loops (build_plan/03.4). When LISTEN/NOTIFY
+ * Listens for DB notifications and wakes claim loops. When LISTEN/NOTIFY
  * is unavailable it relies on each worker's interval poller; a "safety poll" also runs even
  * when LISTEN is available to catch missed notifications (delayed jobs, stalled reclaims).
  */
@@ -23,7 +24,7 @@ export class SubscriberService {
     if (this.driver.capabilities[DriverCapability.LISTEN_NOTIFY]) {
       try {
         this.subscription = await this.driver.subscribe({
-          channel: 'jobs',
+          channel: PubSubChannel.JOBS,
           onNotification: (payload) => {
             try {
               const { queue } = JSON.parse(payload) as { queue?: string };

@@ -9,7 +9,7 @@ const REPO_URL = 'https://github.com/episclera/portqueue';
 
 const config: Config = {
   title: 'PortQueue',
-  tagline: 'A database-backed job queue for Node.js — no broker required.',
+  tagline: 'The distributed, fault-tolerant job queue that runs on your own database.',
   favicon: 'img/favicon.svg',
 
   // GitHub Pages deployment (build_plan/15.10). Adjust `url` to the real Pages domain.

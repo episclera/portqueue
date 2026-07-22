@@ -13,27 +13,28 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 
 | Export | Purpose |
 |---|---|
-| `PortQueue<TQueues>` | The client. One per database. Owns connection, migration, services; produces handles. |
-| `Queue<TData>` | Producer handle for one queue. |
+| `PortQueue<TQueues, TInstanceKey>` | The client. One per database. Owns connection, migration, services; produces handles. `TInstanceKey` (optional) types the multi-instance keys. |
+| `Queue<TData, TInstanceKey>` | Producer handle for one queue. |
 | `Worker<TData, TResult>` | Consumer registration for one queue (simple handler or workflow steps). |
 | `duration()` | Parse a `Duration` string like `"30s"`. |
 | `ConsoleLogger`, `NoopLogger` | Built-in loggers. |
 
 ## `PortQueue`
 
-- `new PortQueue<TQueues>(options: PortQueueOptions)` — DI only, no I/O.
+- `new PortQueue<TQueues, TInstanceKey>(options: PortQueueOptions<TInstanceKey>)` — DI only, no I/O.
 - `init(): Promise<void>` — connect, migrate, start services (idempotent).
 - `shutdown(options?: ShutdownOptions): Promise<void>` — `{ graceful?, timeoutMs?, drain? }`.
 - `get isRunning(): boolean`.
-- `createQueue<TData>(name, options?): Queue<TData>`.
+- `createQueue<TData>(name, options?): Queue<TData, TInstanceKey>`.
 - `createWorker<TData, TResult>(options: WorkerOptions): Worker`.
 - `getQueues()`, `getQueueStats({ queue? })`, `getJob({ jobId })`, `getJobs(query)`, `getWorkflow({ workflowId })`.
 - `on(event, listener, filter?)` / `off(...)` / `once(...)`; `useHook(hook)`.
 - `pauseQueue({ queue, mode? })` / `resumeQueue({ queue })`.
+- **Multi-instance:** `getInstances()` → `InstanceInfo[]`; `pauseInstance({ instanceKey })` / `resumeInstance({ instanceKey })`. See [Multi-instance](./guides/multi-instance.md).
 
-## `Queue<TData>`
+## `Queue<TData, TInstanceKey>`
 
-- `addJob(options: AddJobOptions<TData>): Promise<AddJobResult>` — pass `schedule` to make it recurring.
+- `addJob(options: AddJobOptions<TData, TInstanceKey>): Promise<AddJobResult>` — pass `startEvery`/`cron` to make it recurring; pass `preferredInstanceKey`/`preferredInstanceKeyPattern`/`fallbackInstanceKey`/`fallbackInstanceKeyPattern` for [instance affinity](./guides/multi-instance.md).
 - `addJobs({ jobs })`.
 - `getSchedules()`, `getJob`, `getJobs`, `getQueueStats`.
 - `retryJob({ jobId, from? })`, `cancelJob({ jobId })`, `cancelRunningJob({ jobId })`.
@@ -61,11 +62,11 @@ transitions are on the `step` controller (`next` / `repeat` / `done`), not on `J
   `retryMaxAttempts`, `retryDelay`, `retryBackoff`, `expireIn`, `retention`,
   `idempotencyKey`, `singletonKey`, `metadata`, `tx`. Recurring adds use `startEvery` or
   `cron` (a `CronSpec`: string, or `{ pattern, tz }`) on `AddJobOptions`.
-- `QueueOptions` — `defaultJobOptions`, `retention`, `rateLimit`, `priorityEnabled`.
+- `QueueOptions` — `defaultJobOptions`, `retention`, `priorityEnabled`, `maxPayloadBytes`, `hooks`.
 - `WorkerOptions` — consumer-only (above).
 - `PortQueueOptions` — `driver` (required), `logger`, `schema`, `tablePrefix`,
   `migration`, `defaultJobOptions`, `monitor`, `retention`, `maxPayloadBytes`,
-  `instance`, `namespace`.
+  `instance`, `instanceKey`, `instanceHeartbeatIntervalMs`, `namespace`.
 
 **Precedence (low → high):** client `defaultJobOptions` → queue `defaultJobOptions` → job.
 
@@ -73,7 +74,7 @@ transitions are on the `step` controller (`next` / `repeat` / `done`), not on `J
 
 `AddJobResult` (`jobId?`, `scheduleId?`, `nextRunAt?`, `queue`, `status?`, `deduplicated`,
 `deduplicationReason?`, `startAfter?`, `workflowId?`), `JobSnapshot`, `WorkflowSnapshot`,
-`ScheduleInfo`, `QueueInfo`, `QueueStats`, `GetJobsQuery`, `Page<T>`.
+`ScheduleInfo`, `QueueInfo`, `InstanceInfo`, `QueueStats`, `GetJobsQuery`, `Page<T>`.
 
 ## Enums
 

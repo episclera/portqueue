@@ -1,4 +1,4 @@
-/** Typed, importable error codes (build_plan/10.2). No magic strings. */
+/** Typed, importable error codes. No magic strings. */
 export enum PortQueueErrorCode {
   NOT_STARTED = 'NOT_STARTED',
   ALREADY_STARTED = 'ALREADY_STARTED',

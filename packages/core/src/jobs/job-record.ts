@@ -1,15 +1,15 @@
 import type { JobStatus } from './job-state.enum.js';
-import { BackoffStrategy, InstanceType, RetentionMode } from '../options/enums.js';
+import { BackoffStrategy, DeduplicationReason, RetentionMode } from '../options/enums.js';
 import type { JobMetadata } from '../options/common.js';
 
 /**
- * The normalized in-memory shape of a `job` row (build_plan/04.2). Drivers own the
+ * The normalized in-memory shape of a `job` row. Drivers own the
  * mapping between engine storage (timestamps, JSON, enums) and this record; core only
  * ever sees this shape. All keys camelCase; timestamps are epoch ms or null.
  */
 export interface JobRecord {
   id: string;
-  queueId: string;
+  queueName: string;
   status: JobStatus;
   priority: number;
   data: unknown;
@@ -27,9 +27,18 @@ export interface JobRecord {
   cancelledAt: number | null;
   expiredAt: number | null;
   lockedUntil: number | null;
+  /** The auto-detected identity of the process currently holding the lock (stall attribution). */
   lockedByInstanceId: string | null;
-  runOnInstanceId: string | null;
-  runOnInstanceType: InstanceType | null;
+  /** The instance key this job prefers to run on (affinity), or null for any instance. */
+  preferredInstanceKey: string | null;
+  /** A regex (source string) matching the instance keys this job prefers to run on. */
+  preferredInstanceKeyPattern: string | null;
+  /** The instance key to fall back to if no preferred instance is alive. */
+  fallbackInstanceKey: string | null;
+  /** A regex (source string) matching the fallback instance keys, used when preferred is dead. */
+  fallbackInstanceKeyPattern: string | null;
+  /** The instance key that actually claimed/processed this job (set at claim time). */
+  processedOnInstanceKey: string | null;
   retryAttempt: number;
   retryMaxAttempts: number;
   retryDelayMs: number;
@@ -47,10 +56,10 @@ export interface JobRecord {
   workflowStepKey: string | null;
 }
 
-/** The row to insert — a fully resolved job with defaults applied (build_plan/02.5). */
+/** The row to insert — a fully resolved job with defaults applied. */
 export interface NewJobRecord {
   id?: string;
-  queueId: string;
+  queueName: string;
   status: JobStatus;
   priority: number;
   data: unknown;
@@ -71,24 +80,25 @@ export interface NewJobRecord {
   singletonKey: string | null;
   workflowId: string | null;
   workflowStepKey: string | null;
-  runOnInstanceId: string | null;
-  runOnInstanceType: InstanceType | null;
+  preferredInstanceKey: string | null;
+  preferredInstanceKeyPattern: string | null;
+  fallbackInstanceKey: string | null;
+  fallbackInstanceKeyPattern: string | null;
   createdAt: number;
 }
 
-/** The result of an insert (build_plan/03.2). */
+/** The result of an insert. */
 export interface InsertedJobRow {
   id: string;
   status: JobStatus;
   startAfter: number;
   workflowId: string | null;
-  /** True if a unique constraint matched and the existing row is returned instead. */
+  /** True if an idempotency/singleton match returned the existing job instead of inserting. */
   deduplicated: boolean;
-  deduplicationReason?: 'IDEMPOTENCY' | 'SINGLETON';
+  deduplicationReason?: DeduplicationReason;
 }
 
 export interface QueueRow {
-  id: string;
   name: string;
   processingPaused: boolean;
   acceptingPaused: boolean;
@@ -96,10 +106,18 @@ export interface QueueRow {
   updatedAt: number;
 }
 
+/** The normalized in-memory shape of an `instance` row. */
+export interface InstanceRow {
+  instanceKey: string;
+  processingPaused: boolean;
+  createdAt: number;
+  updatedAt: number;
+  lastSeenAt: number;
+}
+
 export interface ScheduleRow {
   id: string;
-  key: string;
-  queueId: string;
+  queueName: string;
   cron: string | null;
   everyMs: number | null;
   timezone: string | null;
@@ -119,8 +137,7 @@ export interface ScheduleRow {
 /** A new schedule to upsert. */
 export interface NewScheduleRow {
   id?: string;
-  key: string;
-  queueId: string;
+  queueName: string;
   cron: string | null;
   everyMs: number | null;
   timezone: string | null;

@@ -1,5 +1,5 @@
 /**
- * Shared data-fetching hooks (build_plan/12.6). `useQuery` fetches once and on `pulse`;
+ * Shared data-fetching hooks. `useQuery` fetches once and on `pulse`;
  * `usePoll` layers the 30s reconciliation interval on top, pausing while the tab is hidden
  * and refetching immediately on focus. Background/non-blocking: data updates in place without
  * clearing the previous view.

@@ -6,7 +6,7 @@ import type { InstanceIdentityOptions } from '../options/common.js';
 import type { Logger } from '../logging/logger.interface.js';
 
 /**
- * Resolves this process's instance id + type once at startup (build_plan/07.3).
+ * Resolves this process's instance id + type once at startup.
  * Best-effort and never throws; failures fall back to UNKNOWN + a random id.
  */
 export class InstanceIdentityService {
@@ -64,7 +64,7 @@ export class InstanceIdentityService {
     return `container-${randomUUID().slice(0, 8)}`;
   }
 
-  /** Stable, unprivileged bare-metal id: hostname + MAC hash (build_plan/07.3). */
+  /** Stable, unprivileged bare-metal id: hostname + MAC hash. */
   private bareMetalId(): string {
     const macs: string[] = [];
     const ifaces = networkInterfaces();

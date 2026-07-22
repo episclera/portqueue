@@ -1,11 +1,11 @@
 import type { JobHandler, WorkflowStep } from '../jobs/job.js';
 import type { RateLimiterOptions } from './common.js';
 
-/** An error constructor for `dontAutoretryFor` matching (build_plan/05.4). */
+/** An error constructor for `dontAutoretryFor` matching. */
 export type ErrorClass = new (...args: never[]) => Error;
 
 /**
- * Consumer-only options (build_plan/05.4). Never contains job/priority/delay fields.
+ * Consumer-only options. Never contains job/priority/delay fields.
  *
  * `handler` is the processor in one of two modes:
  * - **simple** — a single {@link JobHandler} function, or

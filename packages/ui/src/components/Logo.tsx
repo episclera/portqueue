@@ -10,7 +10,7 @@ export interface LogoProps {
 }
 
 /**
- * The PortQueue brand mark (build_plan/14.5) — an AI-authored, hand-editable SVG. A rounded
+ * The PortQueue brand mark — an AI-authored, hand-editable SVG. A rounded
  * gateway (the "port") with an ordered set of queued units flowing through it. Theme-aware
  * via `currentColor`; the accent stripe uses the brand color unless `mono`.
  */

@@ -10,7 +10,7 @@ export interface ThemeSwitcherProps {
 
 const STORAGE_KEY = 'portqueue-theme';
 
-/** Light/dark/system switcher (build_plan/14.4). */
+/** Light/dark/system switcher. */
 export function ThemeSwitcher({ value, onChange }: ThemeSwitcherProps): React.ReactElement {
   return (
     <Segmented
@@ -28,7 +28,7 @@ export function ThemeSwitcher({ value, onChange }: ThemeSwitcherProps): React.Re
 
 /**
  * Resolves the effective theme, following the OS preference by default and resetting a
- * manual override back to "system" when the OS theme changes (build_plan/14.4).
+ * manual override back to "system" when the OS theme changes.
  */
 export function useThemeMode(): {
   mode: ThemeMode;

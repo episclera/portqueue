@@ -1,5 +1,5 @@
 /**
- * Job detail page (build_plan/12.4): full record, lifecycle timeline (every job), workflow run
+ * Job detail page: full record, lifecycle timeline (every job), workflow run
  * view (multi-step), and actions — retry (with RetryMode choice), clone (prefilled add form),
  * remove, cancel. Terminal records refetch on-demand rather than on the 30s poll.
  */
@@ -147,9 +147,7 @@ export function JobDetailPage(): React.ReactElement {
                 {j.retryAttempt} / {j.retryMaxAttempts}
               </Descriptions.Item>
               <Descriptions.Item label="Instance">
-                {j.runOnInstanceId
-                  ? `${j.runOnInstanceId} (${j.runOnInstanceType ?? 'UNKNOWN'})`
-                  : '—'}
+                {j.processedOnInstanceKey ?? '—'}
               </Descriptions.Item>
               <Descriptions.Item label="Created">{formatDate(j.createdAt)}</Descriptions.Item>
               <Descriptions.Item label="Start after">{formatDate(j.startAfter)}</Descriptions.Item>

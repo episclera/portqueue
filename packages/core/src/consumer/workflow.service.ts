@@ -8,7 +8,7 @@ import type { ProcessOutcome } from '../events/hooks.js';
 import { UnsupportedForWorkerTypeError } from '../errors/errors.js';
 
 /**
- * Workflow (multi-step) dispatch + atomic step advance/spawn (build_plan/06.8). Completing
+ * Workflow (multi-step) dispatch + atomic step advance/spawn. Completing
  * a step and spawning the next happen in one driver transaction (`advanceWorkflowStep`).
  */
 export class WorkflowService {
@@ -108,7 +108,7 @@ export class WorkflowService {
     });
 
     const spawn: NewJobRecord = {
-      queueId: record.queueId,
+      queueName: record.queueName,
       status: JobStatus.PENDING,
       priority: record.priority,
       data: carriedData,
@@ -129,8 +129,11 @@ export class WorkflowService {
       singletonKey: null,
       workflowId: record.workflowId,
       workflowStepKey: nextKey,
-      runOnInstanceId: record.runOnInstanceId,
-      runOnInstanceType: record.runOnInstanceType,
+      // Carry affinity forward so a pinned workflow stays on its instance across steps.
+      preferredInstanceKey: record.preferredInstanceKey,
+      preferredInstanceKeyPattern: record.preferredInstanceKeyPattern,
+      fallbackInstanceKey: record.fallbackInstanceKey,
+      fallbackInstanceKeyPattern: record.fallbackInstanceKeyPattern,
       createdAt: now,
     };
 

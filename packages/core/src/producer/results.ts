@@ -5,7 +5,7 @@ import type { JobMetadata } from '../options/common.js';
 export type { Page } from '../options/common.js';
 
 /**
- * The structured result of producing a job (build_plan/05.3). One shape for both the
+ * The structured result of producing a job. One shape for both the
  * one-off and recurring modes; fields are populated per mode. Never a bare id.
  */
 export interface AddJobResult {
@@ -27,7 +27,7 @@ export interface AddJobResult {
   workflowId?: string;
 }
 
-/** A read-side snapshot of a job (build_plan/05.2). */
+/** A read-side snapshot of a job. */
 export interface JobSnapshot<TData = unknown> {
   id: string;
   queue: string;
@@ -49,25 +49,28 @@ export interface JobSnapshot<TData = unknown> {
   retriedAt?: Date | null;
   stalledAt?: Date | null;
   lockedUntil?: Date | null;
-  runOnInstanceId?: string | null;
-  runOnInstanceType?: string | null;
+  preferredInstanceKey?: string | null;
+  preferredInstanceKeyPattern?: string | null;
+  fallbackInstanceKey?: string | null;
+  fallbackInstanceKeyPattern?: string | null;
+  processedOnInstanceKey?: string | null;
   failureMessage?: string | null;
   idempotencyKey?: string | null;
   scheduleId?: string | null;
   workflowId?: string | null;
   workflowStepKey?: string | null;
-  /** True when ACTIVE and past its lock deadline (derived, build_plan/06.1). */
+  /** True when ACTIVE and past its lock deadline (derived). */
   stalled: boolean;
 }
 
-/** A whole workflow run: its steps as an ordered list of snapshots (build_plan/05.3). */
+/** A whole workflow run: its steps as an ordered list of snapshots. */
 export interface WorkflowSnapshot {
   workflowId: string;
   queue: string;
   steps: JobSnapshot[];
 }
 
-/** Info about a recurring schedule (build_plan/05.3). */
+/** Info about a recurring schedule. */
 export interface ScheduleInfo {
   scheduleId: string;
   cron?: string | null;
@@ -78,7 +81,7 @@ export interface ScheduleInfo {
   enabled: boolean;
 }
 
-/** Queue overview info (build_plan/05.2). */
+/** Queue overview info. */
 export interface QueueInfo {
   name: string;
   processingPaused: boolean;
@@ -86,7 +89,20 @@ export interface QueueInfo {
   counts: Record<JobStatus, number>;
 }
 
-/** Aggregated stats for a queue or the whole client (build_plan/05.2). */
+/** Instance overview info for the dashboard/CLI. */
+export interface InstanceInfo {
+  instanceKey: string;
+  processingPaused: boolean;
+  /** True when the instance's last heartbeat is within the liveness window. */
+  alive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  lastSeenAt: Date;
+  /** Job counts by status attributed to this instance (by `processedOnInstanceKey`). */
+  counts: Record<JobStatus, number>;
+}
+
+/** Aggregated stats for a queue or the whole client. */
 export interface QueueStats {
   queue?: string;
   counts: Record<JobStatus, number>;
@@ -96,7 +112,7 @@ export interface QueueStats {
   failureRate: number;
 }
 
-/** Query for paged job reads (build_plan/05.2). */
+/** Query for paged job reads. */
 export interface GetJobsQuery {
   queue?: string;
   statuses?: JobStatus[];

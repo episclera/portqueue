@@ -1,7 +1,7 @@
 import { InvalidOptionsError } from '../errors/errors.js';
 
 /**
- * A small, dependency-free cron parser (build_plan/06.7). Supports:
+ * A small, dependency-free cron parser. Supports:
  *  - 5-field: minute hour day-of-month month day-of-week
  *  - optional leading seconds field (6-field)
  *  - ranges (`1-5`), lists (`1,3,5`), steps (`* /10`), and `*`

@@ -4,7 +4,7 @@ import { JobStatus } from './job-state.enum.js';
 
 const d = (ms: number | null | undefined): Date | null => (ms == null ? null : new Date(ms));
 
-/** Map an internal {@link JobRecord} to a public {@link JobSnapshot} (build_plan/05.2). */
+/** Map an internal {@link JobRecord} to a public {@link JobSnapshot}. */
 export function toSnapshot<TData = unknown>(
   record: JobRecord,
   queueName: string,
@@ -33,8 +33,11 @@ export function toSnapshot<TData = unknown>(
     retriedAt: d(record.retriedAt),
     stalledAt: d(record.stalledAt),
     lockedUntil: d(record.lockedUntil),
-    runOnInstanceId: record.runOnInstanceId,
-    runOnInstanceType: record.runOnInstanceType,
+    preferredInstanceKey: record.preferredInstanceKey,
+    preferredInstanceKeyPattern: record.preferredInstanceKeyPattern,
+    fallbackInstanceKey: record.fallbackInstanceKey,
+    fallbackInstanceKeyPattern: record.fallbackInstanceKeyPattern,
+    processedOnInstanceKey: record.processedOnInstanceKey,
     failureMessage: record.failureMessage,
     idempotencyKey: record.idempotencyKey,
     scheduleId: record.scheduleId,

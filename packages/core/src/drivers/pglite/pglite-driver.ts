@@ -21,8 +21,8 @@ interface PGliteInstance extends PGliteQueryable {
 }
 
 /**
- * PGLite driver (build_plan/11.2) — Postgres compiled to WASM, in-process. Shares the
- * Postgres dialect (SKIP LOCKED, RETURNING, UPSERT, transactions). Primarily for
+ * PGLite driver — Postgres compiled to WASM, in-process. Shares the
+ * Postgres dialect (SKIP LOCKED, RETURNING, transactions). Primarily for
  * embedded/edge use and tests. LISTEN/NOTIFY is left off (polling backstop is used).
  */
 export class PgliteDriver extends PgDialectDriver {

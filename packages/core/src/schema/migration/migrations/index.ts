@@ -2,8 +2,8 @@ import type { MigrationStep } from '../../../driver/driver.interface.js';
 import { buildSchemaStatements } from '../../schema-definition.js';
 
 /**
- * Ordered, numbered migration steps (build_plan/04.7). Each is checksum-guarded.
- * Migration 1 creates the base four-table schema + rate-usage bookkeeping.
+ * Ordered, numbered migration steps. Each is checksum-guarded.
+ * Migration 1 creates the base schema (queue, job, schedule, instance, migration).
  */
 export const MIGRATIONS: MigrationStep[] = [
   {

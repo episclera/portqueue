@@ -1,5 +1,5 @@
 /**
- * Add-a-job form (build_plan/12.4). The same modal creates a recurring definition when the
+ * Add-a-job form. The same modal creates a recurring definition when the
  * schedule fields are filled, mirroring core `addJob({ schedule })`. Supports clone pre-fill.
  */
 import React, { useState } from 'react';

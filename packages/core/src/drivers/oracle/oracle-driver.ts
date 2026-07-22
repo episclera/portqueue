@@ -32,10 +32,9 @@ interface OraclePool {
 }
 
 /**
- * Oracle driver (build_plan/11.4). Uses `oracledb` (optional peer), `:1` binds, and
- * `MERGE` for upsert. Oracle is validated by the conformance kit against a real server
- * rather than in CI (build_plan/16.1); this implementation provides the connection +
- * dialect wiring. GUID↔UUID mapping and RETURNING INTO out-binds are handled here.
+ * Oracle driver. Uses `oracledb` (optional peer) and `:1` binds. Oracle is validated by the
+ * conformance kit against a real server rather than in CI; this implementation provides the
+ * connection + dialect wiring. GUID↔UUID mapping and RETURNING INTO out-binds are handled here.
  */
 export class OracleDriver extends SqlDriver {
   readonly engine = DatabaseEngine.ORACLE;
@@ -43,7 +42,6 @@ export class OracleDriver extends SqlDriver {
     [DriverCapability.SKIP_LOCKED]: true,
     [DriverCapability.RETURNING]: true,
     [DriverCapability.TRANSACTIONS]: true,
-    [DriverCapability.UPSERT]: true,
     [DriverCapability.DB_GENERATED_UUID]: false,
   });
   protected readonly placeholderStyle = 'colon' as const;

@@ -1,7 +1,7 @@
 /** @jest-environment node */
-import type { JobSnapshot } from '@portqueue/core';
+import type { InstanceInfo, JobSnapshot } from '@portqueue/core';
 import {
-  instanceBreakdown,
+  serializeInstance,
   serializeJob,
   serializeSchedule,
   serializeStats,
@@ -78,16 +78,22 @@ describe('serializeSchedule', () => {
   });
 });
 
-describe('instanceBreakdown', () => {
-  it('groups by instance, counts, and sorts by count desc', () => {
-    const jobs = [
-      baseJob({ runOnInstanceId: 'a', runOnInstanceType: 'WORKER' }),
-      baseJob({ runOnInstanceId: 'a', runOnInstanceType: 'WORKER' }),
-      baseJob({ runOnInstanceId: 'b', runOnInstanceType: 'WORKER' }),
-      baseJob({ runOnInstanceId: null, runOnInstanceType: null }),
-    ];
-    const rows = instanceBreakdown(jobs);
-    expect(rows[0]).toEqual({ instanceId: 'a', instanceType: 'WORKER', count: 2 });
-    expect(rows).toContainEqual({ instanceId: 'unattributed', instanceType: 'UNKNOWN', count: 1 });
+describe('serializeInstance', () => {
+  it('ISO-formats timestamps and copies liveness + counts', () => {
+    const info: InstanceInfo = {
+      instanceKey: 'worker-eu-1',
+      processingPaused: true,
+      alive: true,
+      createdAt: new Date('2026-07-22T00:00:00.000Z'),
+      updatedAt: new Date('2026-07-22T00:01:00.000Z'),
+      lastSeenAt: new Date('2026-07-22T00:02:00.000Z'),
+      counts: { COMPLETED: 3 } as never,
+    };
+    const dto = serializeInstance(info);
+    expect(dto.instanceKey).toBe('worker-eu-1');
+    expect(dto.processingPaused).toBe(true);
+    expect(dto.alive).toBe(true);
+    expect(dto.lastSeenAt).toBe('2026-07-22T00:02:00.000Z');
+    expect(dto.counts).toEqual({ COMPLETED: 3 });
   });
 });

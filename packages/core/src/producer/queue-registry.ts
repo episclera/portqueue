@@ -11,7 +11,7 @@ interface QueueEntry {
 }
 
 /**
- * Caches queue name → id + in-memory options + workflow steps (build_plan/04.3).
+ * Caches queue name → id + in-memory options + workflow steps.
  * The name→id lookup (via idempotent `ensureQueue`) happens once per queue, so the hot
  * path stays single-table and join-free.
  */

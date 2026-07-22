@@ -49,8 +49,33 @@ your own pruning); keep failed jobs longer than completed.
 
 ## Backpressure & rate limits
 
-Enable the `SystemMonitor` and set queue/worker
-[rate limits](./guides/rate-limiting.md) for third-party APIs.
+Enable the `SystemMonitor` and set a worker-local
+[rate limiter](./guides/rate-limiting.md) for third-party APIs.
+
+## Multi-instance & execution locality
+
+For most deployments, leave `instanceKey` unset — interchangeable workers are simplest and most
+resilient. Turn on [multi-instance mode](./guides/multi-instance.md) only when work needs
+locality (warm cache, local data, region, specialized hardware):
+
+- Give each process a **stable `instanceKey`** (e.g. from your orchestrator's pod/host id). Reuse
+  the same key across restarts of the *same* logical instance so affinity and liveness stay
+  meaningful.
+- Pin with `preferredInstanceKey`/`preferredInstanceKeyPattern`, and **always set a fallback**
+  (`fallbackInstanceKey`/`...Pattern`) for jobs that must not stall if a node dies — a dead
+  preferred instance hands off to the fallback, then to the cluster.
+- Tune `instanceHeartbeatIntervalMs` (default 15s) to your failover appetite: an instance is
+  "dead" after ~3 missed beats, which is how long a pinned job waits before a fallback rescues it.
+- Use the dashboard **Instances** page (or `pauseInstance`/`resumeInstance`) to drain one node for
+  a deploy without touching the rest.
+
+:::caution Dedup is tool-managed
+The schema is deliberately **index-free and constraint-free** for sharded/distributed databases.
+Idempotency/singleton dedup and queue-name uniqueness are enforced in the tool with a pre-insert
+lookup, not a database `UNIQUE` index. This is best-effort under a tight cross-instance race:
+two instances inserting the *same* `idempotencyKey` in the same instant can both win. Where exact
+once-only insertion is critical, also guard with your own transaction/business key.
+:::
 
 ## Observability
 
@@ -76,7 +101,8 @@ until `init()` resolved.
 - [ ] Handlers idempotent; `idempotencyKey`/`singletonKey` where relevant.
 - [ ] Retries with jitter + cap; `dontAutoretryFor` for non-retryable errors.
 - [ ] Retention on; failed kept longer than completed.
-- [ ] `SystemMonitor` on; rate limits set for third-party APIs.
+- [ ] `SystemMonitor` on; worker-local rate limiter set for third-party APIs.
+- [ ] Multi-instance (if used): stable `instanceKey` per process; fallbacks set on pinned jobs; heartbeat interval tuned.
 - [ ] `PortQueueEvent.ERROR` subscribed; metrics/tracing via hooks.
 - [ ] Dashboard/CLI behind auth; `maxPayloadBytes` set.
 - [ ] Readiness gated on `pq.isRunning` + driver ping.

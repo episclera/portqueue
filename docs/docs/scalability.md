@@ -22,7 +22,7 @@ pq.createWorker({ queue: 'emails', concurrency: 50 });
 
 ## How queues stay independent
 
-Each queue has its **own claim loop** with `queue_id`-scoped claiming, so a job **never
+Each queue has its **own claim loop** with `queue_name`-scoped claiming, so a job **never
 waits on another queue**. Busy `orders` traffic can't starve `emails`.
 
 ## How instances cooperate

@@ -2,6 +2,7 @@ import type { DatabaseEngine } from '../options/enums.js';
 import type { JobStatus } from '../jobs/job-state.enum.js';
 import type {
   InsertedJobRow,
+  InstanceRow,
   JobRecord,
   NewJobRecord,
   NewScheduleRow,
@@ -23,7 +24,7 @@ export interface Subscription {
   unsubscribe(): Promise<void>;
 }
 
-/** Where a manual requeue restarts from (build_plan/03.2). */
+/** Where a manual requeue restarts from. */
 export type RequeueFrom = 'FROM_FAILED_STEP' | 'FROM_START';
 
 export interface MigrationStep {
@@ -33,7 +34,7 @@ export interface MigrationStep {
   up(driver: Driver, context: DriverContext): Promise<void>;
 }
 
-/** The next-step descriptor for an atomic workflow advance (build_plan/03.2). */
+/** The next-step descriptor for an atomic workflow advance. */
 export interface WorkflowNext {
   workflowStepKey: string;
   data: unknown;
@@ -41,7 +42,7 @@ export interface WorkflowNext {
 }
 
 /**
- * The database-agnostic seam (build_plan/03.2). ALL SQL and engine-specific behavior
+ * The database-agnostic seam. ALL SQL and engine-specific behavior
  * lives behind this contract. Core services branch on {@link DriverCapability}, never
  * on driver identity. Every method with >1 argument takes a named-options object.
  */
@@ -70,12 +71,16 @@ export interface Driver {
 
   // Claiming & completing (hot path)
   claimJobs(options: {
-    queueId: string;
+    queueName: string;
     limit: number;
     lockDurationMs: number;
     now: number;
-    instanceId: string;
-    instanceType: string;
+    /** Auto-detected identity of this process (recorded as the lock owner). */
+    lockedByInstanceId: string;
+    /** This instance's multi-instance key, or null in single-instance mode. */
+    instanceKey?: string | null;
+    /** Keys of instances whose heartbeat is fresh (for liveness-aware affinity). */
+    aliveInstanceKeys?: readonly string[];
   }): Promise<JobRecord[]>;
   extendLock(options: { jobId: string; lockDurationMs: number; now: number }): Promise<boolean>;
   completeJob(options: {
@@ -100,8 +105,8 @@ export interface Driver {
     spawn?: NewJobRecord;
     tx?: TransactionHandle;
   }): Promise<InsertedJobRow | null>;
-  reclaimStalledJobs(options: { queueId?: string; now: number }): Promise<JobRecord[]>;
-  expireDueJobs(options: { queueId?: string; now: number }): Promise<JobRecord[]>;
+  reclaimStalledJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
+  expireDueJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
   requeueJob(options: {
     jobId: string;
     from: RequeueFrom;
@@ -112,27 +117,31 @@ export interface Driver {
   // Reading
   getJob(options: { jobId: string }): Promise<JobRecord | null>;
   getJobs(options: {
-    queueId?: string;
+    queueName?: string;
     statuses?: JobStatus[];
     scheduleId?: string;
     workflowId?: string;
+    processedOnInstanceKey?: string;
     limit: number;
     offset: number;
     order: 'asc' | 'desc';
   }): Promise<JobRecord[]>;
-  countJobsByStatus(options: { queueId?: string }): Promise<Record<JobStatus, number>>;
+  countJobsByStatus(options: {
+    queueName?: string;
+    processedOnInstanceKey?: string;
+  }): Promise<Record<JobStatus, number>>;
   listQueues(): Promise<QueueRow[]>;
-  listSchedules(options: { queueId?: string }): Promise<ScheduleRow[]>;
+  listSchedules(options: { queueName?: string }): Promise<ScheduleRow[]>;
   getSchedule(options: { scheduleId: string }): Promise<ScheduleRow | null>;
   getThroughput(options: {
-    queueId?: string;
+    queueName?: string;
     sinceMs: number;
     now: number;
   }): Promise<ThroughputPoint[]>;
   getDueSchedules(options: { now: number; limit: number }): Promise<ScheduleRow[]>;
   /**
    * Advance a schedule's next-run, guarded on its previous value so only one instance
-   * claims each tick (build_plan/06.7). Returns true if this caller won the claim.
+   * claims each tick. Returns true if this caller won the claim.
    */
   advanceSchedule(options: {
     scheduleId: string;
@@ -144,12 +153,12 @@ export interface Driver {
   // Job control
   cancelJob(options: { jobId: string; now: number }): Promise<boolean>;
   removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean>;
-  removeJobsByIds(options: { jobIds: string[]; queueId: string }): Promise<number>;
-  removeJobsByStatus(options: { queueId: string; statuses: JobStatus[] }): Promise<number>;
+  removeJobsByIds(options: { jobIds: string[]; queueName: string }): Promise<number>;
+  removeJobsByStatus(options: { queueName: string; statuses: JobStatus[] }): Promise<number>;
 
   // Queue control
   setQueuePaused(options: {
-    queueId: string;
+    queueName: string;
     processingPaused?: boolean;
     acceptingPaused?: boolean;
     now: number;
@@ -163,21 +172,25 @@ export interface Driver {
   }): Promise<QueueRow>;
   getQueueByName(options: { name: string }): Promise<QueueRow | null>;
 
+  // Instance liveness & per-instance pause
+  upsertInstance(options: {
+    instanceKey: string;
+    now: number;
+  }): Promise<InstanceRow>;
+  listInstances(): Promise<InstanceRow[]>;
+  getInstance(options: { instanceKey: string }): Promise<InstanceRow | null>;
+  setInstancePaused(options: {
+    instanceKey: string;
+    processingPaused: boolean;
+    now: number;
+  }): Promise<void>;
+
   // Retention
   deleteFinishedJobs(options: {
     olderThan: number;
     statuses: JobStatus[];
     limit: number;
     now: number;
-  }): Promise<number>;
-
-  // Cluster-wide rate-limit usage counter (build_plan/07.4)
-  tryConsumeRateLimit(options: {
-    queueId: string;
-    max: number;
-    windowMs: number;
-    now: number;
-    count: number;
   }): Promise<number>;
 
   // Pub/sub (only meaningful with LISTEN_NOTIFY)
@@ -190,7 +203,7 @@ export interface Driver {
   // Transactions (internal use only)
   runInTransaction<T>(options: { fn: (tx: TransactionHandle) => Promise<T> }): Promise<T>;
 
-  // Advisory lock for leader-only tasks (optional; build_plan/03.1)
+  // Advisory lock for leader-only tasks (optional)
   tryAdvisoryLock?(options: { key: string }): Promise<boolean>;
   releaseAdvisoryLock?(options: { key: string }): Promise<void>;
 }

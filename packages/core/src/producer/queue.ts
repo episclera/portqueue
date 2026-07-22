@@ -17,10 +17,10 @@ import type { Runtime } from '../client/runtime.js';
 import type { TransactionHandle } from '../tx/transaction-handle.js';
 
 /**
- * The producer handle for one queue (build_plan/05.3). Add/schedule/inspect/control jobs.
+ * The producer handle for one queue. Add/schedule/inspect/control jobs.
  * Getting a Queue does no I/O beyond lazily ensuring the queue is registered.
  */
-export class Queue<TData = unknown> {
+export class Queue<TData = unknown, TInstanceKey extends string = string> {
   constructor(
     readonly name: string,
     private readonly producer: ProducerService,
@@ -29,11 +29,11 @@ export class Queue<TData = unknown> {
   ) {}
 
   // --- Adding jobs (one-off and recurring) ---
-  addJob(options: AddJobOptions<TData>): Promise<AddJobResult> {
+  addJob(options: AddJobOptions<TData, TInstanceKey>): Promise<AddJobResult> {
     return this.producer.addJob(this.name, options);
   }
 
-  addJobs(options: { jobs: AddJobOptions<TData>[] }): Promise<AddJobResult[]> {
+  addJobs(options: { jobs: AddJobOptions<TData, TInstanceKey>[] }): Promise<AddJobResult[]> {
     return this.producer.addJobs(this.name, options.jobs);
   }
 
@@ -86,7 +86,7 @@ export class Queue<TData = unknown> {
     return ok;
   }
 
-  /** Request cooperative cancellation of an active job by firing its signal (build_plan/05.3). */
+  /** Request cooperative cancellation of an active job by firing its signal. */
   async cancelRunningJob(options: { jobId: string }): Promise<boolean> {
     return this.runtime.cancelRunning?.(options.jobId) ?? false;
   }
@@ -115,23 +115,27 @@ export class Queue<TData = unknown> {
   }
 
   async removeJobs(options: { jobIds: string[] } | { statuses: JobStatus[] }): Promise<number> {
-    const row = await this.runtime.registry.ensure(this.name);
     if ('jobIds' in options)
-      return this.runtime.driver.removeJobsByIds({ jobIds: options.jobIds, queueId: row.id });
-    return this.runtime.driver.removeJobsByStatus({ queueId: row.id, statuses: options.statuses });
+      return this.runtime.driver.removeJobsByIds({ jobIds: options.jobIds, queueName: this.name });
+    return this.runtime.driver.removeJobsByStatus({
+      queueName: this.name,
+      statuses: options.statuses,
+    });
   }
 
   async purgeJobs(options: { statuses: JobStatus[] }): Promise<number> {
-    const row = await this.runtime.registry.ensure(this.name);
-    return this.runtime.driver.removeJobsByStatus({ queueId: row.id, statuses: options.statuses });
+    return this.runtime.driver.removeJobsByStatus({
+      queueName: this.name,
+      statuses: options.statuses,
+    });
   }
 
   // --- Queue control (persisted, cluster-wide) ---
   async pause(options: { mode?: PauseMode } = {}): Promise<void> {
     const mode = options.mode ?? PauseMode.PROCESSING;
-    const row = await this.runtime.registry.ensure(this.name);
+    await this.runtime.registry.ensure(this.name);
     await this.runtime.driver.setQueuePaused({
-      queueId: row.id,
+      queueName: this.name,
       processingPaused: true,
       acceptingPaused: mode === PauseMode.ALL,
       now: this.runtime.clock.now(),
@@ -141,9 +145,9 @@ export class Queue<TData = unknown> {
   }
 
   async resume(): Promise<void> {
-    const row = await this.runtime.registry.ensure(this.name);
+    await this.runtime.registry.ensure(this.name);
     await this.runtime.driver.setQueuePaused({
-      queueId: row.id,
+      queueName: this.name,
       processingPaused: false,
       acceptingPaused: false,
       now: this.runtime.clock.now(),

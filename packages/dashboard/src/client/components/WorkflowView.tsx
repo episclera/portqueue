@@ -1,5 +1,5 @@
 /**
- * Workflow run view (build_plan/12.4): a step-by-step timeline built from the run's job rows
+ * Workflow run view: a step-by-step timeline built from the run's job rows
  * (getWorkflow), in created_at order. One segment per step job with its workflow_step_key,
  * an outcome badge, started→ended with duration, expandable data/return_value JSON, and the
  * failure message on failure. Repeats/retries show as repeated rows; a header shows progress.

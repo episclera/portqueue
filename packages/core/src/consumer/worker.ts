@@ -7,7 +7,6 @@ import type { JobHandler, WorkflowStep } from '../jobs/job.js';
 import type { ErrorClass } from '../options/worker-options.js';
 import type { QueueOptions } from '../options/queue-options.js';
 import type { Runtime } from '../client/runtime.js';
-import { toMs } from '../util/duration.js';
 import type { RateLimiterOptions } from '../options/common.js';
 
 export interface WorkerConfig {
@@ -25,8 +24,8 @@ export interface WorkerConfig {
 }
 
 /**
- * The consumer for one queue (build_plan/05.4). Owns its own claim loop, heartbeat, and
- * wakeup subscription — queues are independent lanes (build_plan/07.2b). A registration,
+ * The consumer for one queue. Owns its own claim loop, heartbeat, and
+ * wakeup subscription — queues are independent lanes. A registration,
  * not a control surface: it begins claiming when the client starts and its queue isn't
  * paused, and stops when the client stops. No public methods.
  */
@@ -36,7 +35,7 @@ export class Worker {
   private activeCount = 0;
   private stopping = false;
   private started = false;
-  private queueId: string | null = null;
+  private queueName: string | null = null;
   private pumping = false;
   private unsubscribeWakeup: (() => void) | null = null;
   private pollTimer: NodeJS.Timeout | null = null;
@@ -66,7 +65,7 @@ export class Worker {
     this.started = true;
     this.stopping = false;
     const row = await this.runtime.registry.ensure(this.config.queue);
-    this.queueId = row.id;
+    this.queueName = row.name;
     this.unsubscribeWakeup = this.runtime.wakeup.subscribe(
       this.config.queue,
       () => void this.pump(),
@@ -96,9 +95,11 @@ export class Worker {
         if (capacity <= 0) break;
         if (this.config.respectSystemPressure && this.isPressureHigh()) break;
 
-        // Observe cluster-wide pause state (build_plan/07.2).
+        // Observe cluster-wide pause state.
         const row = await this.runtime.registry.refresh(this.config.queue);
         if (row?.processingPaused) break;
+        // Observe this instance's own pause state (multi-instance mode).
+        if (this.runtime.instances?.processingPaused) break;
 
         let want = Math.min(capacity, this.config.batchSize);
         if (this.limiter) {
@@ -106,27 +107,17 @@ export class Worker {
           if (granted <= 0) break;
           want = granted;
         }
-        // Cluster-wide queue rate limit (build_plan/07.4).
-        const clusterLimit = this.config.queueOptions.rateLimit;
-        if (clusterLimit && this.queueId) {
-          const granted = await this.runtime.driver.tryConsumeRateLimit({
-            queueId: this.queueId,
-            max: clusterLimit.max,
-            windowMs: toMs(clusterLimit.duration),
-            now: this.runtime.clock.now(),
-            count: want,
-          });
-          if (granted <= 0) break;
-          want = granted;
-        }
 
         const jobs = await this.runtime.driver.claimJobs({
-          queueId: this.queueId!,
+          queueName: this.queueName!,
           limit: want,
           lockDurationMs: this.config.lockDurationMs,
           now: this.runtime.clock.now(),
-          instanceId: this.runtime.identity.id,
-          instanceType: this.runtime.identity.type,
+          lockedByInstanceId: this.runtime.identity.id,
+          instanceKey: this.runtime.instanceKey,
+          ...(this.runtime.instances
+            ? { aliveInstanceKeys: this.runtime.instances.aliveKeys }
+            : {}),
         });
         if (jobs.length === 0) break;
 
@@ -145,7 +136,7 @@ export class Worker {
         }
       }
     } catch (err) {
-      // A DB error mid-claim must never crash the loop (build_plan/10.3).
+      // A DB error mid-claim must never crash the loop.
       this.runtime.events.emit(PortQueueEvent.ERROR, { error: err, source: 'claim' });
     } finally {
       this.pumping = false;

@@ -3,6 +3,7 @@ import { toSnapshot } from '../jobs/snapshot.js';
 import type { Runtime } from '../client/runtime.js';
 import type {
   GetJobsQuery,
+  InstanceInfo,
   JobSnapshot,
   Page,
   QueueInfo,
@@ -11,28 +12,16 @@ import type {
 } from '../producer/results.js';
 
 /**
- * Read-side aggregations for the API, dashboard, and CLI (build_plan/10.5). Resolves a
- * job's queue name via a separate keyed lookup / the per-instance cache — never a JOIN.
+ * Read-side aggregations for the API, dashboard, and CLI. A job carries its
+ * `queueName` directly, so there is no id→name lookup and never a JOIN.
  */
 export class ReadService {
   constructor(private readonly runtime: Runtime) {}
 
-  private async queueNameById(queueId: string): Promise<string> {
-    // Prefer the per-instance cache; fall back to a keyed single-table lookup.
-    for (const q of await this.runtime.driver.listQueues()) {
-      if (q.id === queueId) return q.name;
-    }
-    return queueId;
-  }
-
   async getJob<TData = unknown>(jobId: string): Promise<JobSnapshot<TData> | null> {
     const record = await this.runtime.driver.getJob({ jobId });
     if (!record) return null;
-    return toSnapshot<TData>(
-      record,
-      await this.queueNameById(record.queueId),
-      this.runtime.clock.now(),
-    );
+    return toSnapshot<TData>(record, record.queueName, this.runtime.clock.now());
   }
 
   async getJobs<TData = unknown>(query: GetJobsQuery): Promise<Page<JobSnapshot<TData>>> {
@@ -40,10 +29,8 @@ export class ReadService {
     const offset = query.cursor
       ? Number(Buffer.from(query.cursor, 'base64').toString('utf8')) || 0
       : 0;
-    let queueId: string | undefined;
-    if (query.queue) queueId = (await this.runtime.registry.ensure(query.queue)).id;
     const records = await this.runtime.driver.getJobs({
-      ...(queueId ? { queueId } : {}),
+      ...(query.queue ? { queueName: query.queue } : {}),
       ...(query.statuses ? { statuses: query.statuses } : {}),
       ...(query.scheduleId ? { scheduleId: query.scheduleId } : {}),
       ...(query.workflowId ? { workflowId: query.workflowId } : {}),
@@ -54,16 +41,7 @@ export class ReadService {
     const hasMore = records.length > limit;
     const page = records.slice(0, limit);
     const now = this.runtime.clock.now();
-    const nameCache = new Map<string, string>();
-    const items: JobSnapshot<TData>[] = [];
-    for (const r of page) {
-      let name = nameCache.get(r.queueId);
-      if (!name) {
-        name = query.queue ?? (await this.queueNameById(r.queueId));
-        nameCache.set(r.queueId, name);
-      }
-      items.push(toSnapshot<TData>(r, name, now));
-    }
+    const items = page.map((r) => toSnapshot<TData>(r, r.queueName, now));
     return {
       items,
       cursor: hasMore ? Buffer.from(String(offset + limit)).toString('base64') : null,
@@ -80,21 +58,19 @@ export class ReadService {
     });
     if (!records.length) return null;
     const now = this.runtime.clock.now();
-    const queue = await this.queueNameById(records[0]!.queueId);
+    const queue = records[0]!.queueName;
     return {
       workflowId,
       queue,
-      steps: records.map((r) => toSnapshot(r, queue, now)),
+      steps: records.map((r) => toSnapshot(r, r.queueName, now)),
     };
   }
 
   async getQueueStats(queue?: string): Promise<QueueStats> {
-    let queueId: string | undefined;
-    if (queue) queueId = (await this.runtime.registry.ensure(queue)).id;
-    const counts = await this.runtime.driver.countJobsByStatus(queueId ? { queueId } : {});
+    const counts = await this.runtime.driver.countJobsByStatus(queue ? { queueName: queue } : {});
     const now = this.runtime.clock.now();
     const points = await this.runtime.driver.getThroughput({
-      ...(queueId ? { queueId } : {}),
+      ...(queue ? { queueName: queue } : {}),
       sinceMs: now - 3_600_000,
       now,
     });
@@ -117,11 +93,34 @@ export class ReadService {
     const rows = await this.runtime.driver.listQueues();
     const out: QueueInfo[] = [];
     for (const row of rows) {
-      const counts = await this.runtime.driver.countJobsByStatus({ queueId: row.id });
+      const counts = await this.runtime.driver.countJobsByStatus({ queueName: row.name });
       out.push({
         name: row.name,
         processingPaused: row.processingPaused,
         acceptingPaused: row.acceptingPaused,
+        counts,
+      });
+    }
+    return out;
+  }
+
+  /** Instance overview with liveness + per-instance job attribution. */
+  async getInstances(): Promise<InstanceInfo[]> {
+    const rows = await this.runtime.driver.listInstances();
+    const now = this.runtime.clock.now();
+    const staleAfter = (this.runtime.options.instanceHeartbeatIntervalMs ?? 15000) * 3;
+    const out: InstanceInfo[] = [];
+    for (const row of rows) {
+      const counts = await this.runtime.driver.countJobsByStatus({
+        processedOnInstanceKey: row.instanceKey,
+      });
+      out.push({
+        instanceKey: row.instanceKey,
+        processingPaused: row.processingPaused,
+        alive: row.lastSeenAt >= now - staleAfter,
+        createdAt: new Date(row.createdAt),
+        updatedAt: new Date(row.updatedAt),
+        lastSeenAt: new Date(row.lastSeenAt),
         counts,
       });
     }

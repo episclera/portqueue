@@ -6,23 +6,23 @@ sidebar_label: Rate limiting
 
 # Rate limiting & backpressure
 
-Two rate limits with different scopes, plus system-pressure backpressure.
+A worker-local rate limit plus system-pressure backpressure.
 
-## Cluster-wide vs worker-local
+## Worker-local limiter
 
-- **Queue `rateLimit`** — a **cluster-wide** cap across every instance (a shared,
-  DB-backed usage counter). Use it to protect a third-party API from the whole fleet.
 - **Worker `limiter`** — a **worker-local**, in-process token bucket (exact for that
-  worker). Use it to bound one process's throughput.
+  worker). Use it to bound one process's throughput, e.g. to protect a third-party API.
+
+PortQueue has **no cluster-wide job-rate cap** — there is no shared DB counter throttling how
+many jobs the fleet may process. If a worker is running, it claims the work that's there;
+scale throughput by adding/removing workers and instances, and bound a single process with its
+local `limiter`. (Cluster-wide *pause* is still available via queue and instance pause.)
 
 ```ts
 const pq = new PortQueue({
   driver,
   monitor: { maxEventLoopDelayMs: 200, maxCpuPercent: 85, resumeHysteresis: '5s' },
 });
-
-// cluster-wide: at most 100 / minute across all instances
-const api = pq.createQueue('third-party', { rateLimit: { max: 100, duration: '1m' } });
 
 pq.createWorker({
   queue: 'third-party',
@@ -32,7 +32,7 @@ pq.createWorker({
 });
 ```
 
-Both use `{ max, duration }` where `duration` is a `Duration` string like `'1m'`.
+The limiter uses `{ max, duration }` where `duration` is a `Duration` string like `'1m'`.
 
 ## System-pressure backpressure
 

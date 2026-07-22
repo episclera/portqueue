@@ -2,7 +2,7 @@ import type { Duration } from '../util/duration.js';
 import { BackoffStrategy, RetentionMode } from './enums.js';
 import type { JobStatus } from '../jobs/job-state.enum.js';
 
-/** Exponential/fixed backoff configuration (build_plan/05.6). */
+/** Exponential/fixed backoff configuration. */
 export interface BackoffOptions {
   strategy: BackoffStrategy;
   /** Growth factor for EXPONENTIAL (default 2); ignored for FIXED. */
@@ -13,7 +13,7 @@ export interface BackoffOptions {
   jitter?: boolean;
 }
 
-/** Retention policy (build_plan/06.9). Default is keep-forever. */
+/** Retention policy. Default is keep-forever. */
 export interface RetentionOptions {
   mode: RetentionMode;
   /** How long after finishing before deletion is allowed (required for DELETE_AFTER). */
@@ -22,24 +22,24 @@ export interface RetentionOptions {
   statuses?: JobStatus[];
 }
 
-/** Token-bucket rate limiter config (build_plan/07.4). */
+/** Token-bucket rate limiter config. */
 export interface RateLimiterOptions {
   max: number;
   duration: Duration;
 }
 
-/** Opaque developer metadata for correlation/tracing (build_plan/05.6). */
+/** Opaque developer metadata for correlation/tracing. */
 export type JobMetadata = Record<string, unknown>;
 
-/** Override auto-detected instance identity (build_plan/07.3). */
+/** Override auto-detected instance identity. */
 export interface InstanceIdentityOptions {
   id?: string;
   type?: import('./enums.js').InstanceType;
-  /** Path to persist a generated bare-metal id (build_plan/07.3). */
+  /** Path to persist a generated bare-metal id. */
   persistPath?: string;
 }
 
-/** System-pressure backpressure config (build_plan/07.5). */
+/** System-pressure backpressure config. */
 export interface SystemMonitorOptions {
   sampleIntervalMs?: number;
   maxEventLoopDelayMs?: number;
@@ -50,7 +50,7 @@ export interface SystemMonitorOptions {
   resumeHysteresis?: number;
 }
 
-/** Cursor-based page result (build_plan/05.2). */
+/** Cursor-based page result. */
 export interface Page<T> {
   items: T[];
   cursor: string | null;

@@ -28,6 +28,7 @@ const sidebars: SidebarsConfig = {
     'guides/transactions',
     'guides/rate-limiting',
     'guides/retention',
+    'guides/multi-instance',
     {
       type: 'category',
       label: 'Workflows',

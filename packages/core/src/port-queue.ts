@@ -1,4 +1,5 @@
 import { PauseMode } from './options/enums.js';
+import { PortQueueEvent } from './events/event-name.enum.js';
 import { DriverCapability } from './driver/driver-capabilities.js';
 import { DriverContext } from './driver/driver-context.js';
 import { ConsoleLogger } from './logging/console-logger.js';
@@ -26,9 +27,10 @@ import type { JobHandler, WorkflowStep } from './jobs/job.js';
 import type { Logger } from './logging/logger.interface.js';
 import type { Runtime } from './client/runtime.js';
 import type { HookRegistration } from './events/hooks.js';
-import type { PortQueueEvent, EventListener, Unsubscribe } from './events/event-name.enum.js';
+import type { EventListener, Unsubscribe } from './events/event-name.enum.js';
 import type {
   GetJobsQuery,
+  InstanceInfo,
   JobSnapshot,
   Page,
   QueueInfo,
@@ -37,14 +39,17 @@ import type {
 } from './producer/results.js';
 
 /**
- * The top-level client (build_plan/05.2). One per database. Owns connection, migration,
+ * The top-level client. One per database. Owns connection, migration,
  * shared services, and produces Queue/Worker handles. A thin facade — all real work lives
  * in focused services. Construction wires dependencies only; no I/O until `init()`.
  *
  * @typeParam TQueues - an optional string enum/union of this app's queue names, threaded
  * through every queue-name argument for compile-time safety (defaults to `string`).
  */
-export class PortQueue<TQueues extends string = string> {
+export class PortQueue<
+  TQueues extends string = string,
+  TInstanceKey extends string = string,
+> {
   private readonly runtime: Runtime;
   private readonly producer: ProducerService;
   private readonly reads: ReadService;
@@ -57,7 +62,7 @@ export class PortQueue<TQueues extends string = string> {
   private readonly state = { running: false };
   private readonly hookedQueues = new Set<string>();
 
-  constructor(options: PortQueueOptions) {
+  constructor(options: PortQueueOptions<TInstanceKey>) {
     if (!options.driver) {
       throw new InvalidOptionsError(
         'PortQueue requires a `driver`. Pass a driver instance, e.g. `new SqliteDriver(...)`.',
@@ -92,6 +97,8 @@ export class PortQueue<TQueues extends string = string> {
       wakeup,
       maxPayloadBytes: options.maxPayloadBytes ?? 1024 * 1024,
       namespace: context.namespace,
+      instanceKey: options.instanceKey ?? null,
+      instances: null,
       isRunning: () => this.state.running,
       cancelRunning: (jobId: string) => this.clientRegistry.cancelRunning(jobId),
     };
@@ -129,24 +136,27 @@ export class PortQueue<TQueues extends string = string> {
     return this.state.running;
   }
 
-  /** Force-apply migrations (the programmatic MANUAL path; build_plan/04.7). */
+  /** Force-apply migrations (the programmatic MANUAL path). */
   migrate(): Promise<void> {
     return this.lifecycle.migrate();
   }
 
   // --- Handles ---
-  createQueue<TData = unknown>(name: TQueues, options: QueueOptions = {}): Queue<TData> {
+  createQueue<TData = unknown>(
+    name: TQueues,
+    options: QueueOptions = {},
+  ): Queue<TData, TInstanceKey> {
     this.runtime.registry.define(name, options);
-    // Register queue-scoped hooks once (build_plan/08.4 — QueueOptions.hooks).
+    // Register queue-scoped hooks once (QueueOptions.hooks).
     if (options.hooks && !this.hookedQueues.has(name)) {
       this.hookedQueues.add(name);
       for (const hook of options.hooks) {
         this.hooks.register(hook.queue ? hook : { ...hook, queue: name });
       }
     }
-    const existing = this.clientRegistry.getQueue(name) as Queue<TData> | undefined;
+    const existing = this.clientRegistry.getQueue(name) as Queue<TData, TInstanceKey> | undefined;
     if (existing) return existing;
-    const queue = new Queue<TData>(name, this.producer, this.reads, this.runtime);
+    const queue = new Queue<TData, TInstanceKey>(name, this.producer, this.reads, this.runtime);
     this.clientRegistry.addQueue(name, queue as Queue<unknown>);
     return queue;
   }
@@ -211,7 +221,7 @@ export class PortQueue<TQueues extends string = string> {
     return this.reads.getQueueStats(options.queue);
   }
 
-  /** Client-wide stats across all queues (build_plan/10.5 `pq.getStats`). */
+  /** Client-wide stats across all queues (`pq.getStats`). */
   getStats(): Promise<QueueStats> {
     return this.reads.getQueueStats();
   }
@@ -257,6 +267,40 @@ export class PortQueue<TQueues extends string = string> {
   async resumeQueue(options: { queue: TQueues }): Promise<void> {
     await this.createQueue(options.queue).resume();
   }
+
+  // --- Instances (multi-instance mode) ---
+  /** All known instances with liveness + per-instance job attribution (for the dashboard/CLI). */
+  getInstances(): Promise<InstanceInfo[]> {
+    return this.reads.getInstances();
+  }
+
+  /** Stop the named instance from claiming jobs (persisted; the target picks it up on heartbeat). */
+  async pauseInstance(options: { instanceKey: TInstanceKey | string }): Promise<void> {
+    await this.runtime.driver.setInstancePaused({
+      instanceKey: options.instanceKey,
+      processingPaused: true,
+      now: this.runtime.clock.now(),
+    });
+    // If pausing ourselves, reflect it immediately rather than waiting for the next beat.
+    if (this.runtime.instances?.instanceKey === options.instanceKey) {
+      await this.runtime.instances.beat();
+    }
+    this.events.emit(PortQueueEvent.INSTANCE_PAUSED, { instanceKey: options.instanceKey });
+  }
+
+  /** Resume the named instance's job claiming. */
+  async resumeInstance(options: { instanceKey: TInstanceKey | string }): Promise<void> {
+    await this.runtime.driver.setInstancePaused({
+      instanceKey: options.instanceKey,
+      processingPaused: false,
+      now: this.runtime.clock.now(),
+    });
+    if (this.runtime.instances?.instanceKey === options.instanceKey) {
+      await this.runtime.instances.beat();
+    }
+    this.runtime.wakeup.signalAll();
+    this.events.emit(PortQueueEvent.INSTANCE_RESUMED, { instanceKey: options.instanceKey });
+  }
 }
 
 function resolveLogger(logger: PortQueueOptions['logger']): Logger {
@@ -265,7 +309,7 @@ function resolveLogger(logger: PortQueueOptions['logger']): Logger {
 }
 
 /**
- * Validate a workflow worker's steps (build_plan/05.3): non-empty, non-empty keys, and
+ * Validate a workflow worker's steps: non-empty, non-empty keys, and
  * unique keys. Returns the same array so it can be registered/stored as the canonical
  * ordered sequence (`steps[0]` is the entry step).
  */

@@ -3,8 +3,21 @@ import type { JobStatus, PauseMode, RetryMode } from '@portqueue/core';
 
 /** Body of a mutation request. `kind` selects the action; other fields are per-action. */
 export interface ActionRequestDto {
-  kind: 'pause' | 'resume' | 'retry' | 'remove' | 'cancel' | 'purge' | 'add' | 'removeSchedule';
-  queue: string;
+  kind:
+    | 'pause'
+    | 'resume'
+    | 'retry'
+    | 'remove'
+    | 'cancel'
+    | 'purge'
+    | 'add'
+    | 'removeSchedule'
+    | 'pauseInstance'
+    | 'resumeInstance';
+  /** Target queue name — required for all queue/job actions; omitted for instance actions. */
+  queue?: string;
+  /** Target instance key — required for `pauseInstance` / `resumeInstance`. */
+  instanceKey?: string;
   jobId?: string;
   jobIds?: string[];
   scheduleId?: string;

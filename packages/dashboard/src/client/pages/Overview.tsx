@@ -1,5 +1,5 @@
 /**
- * Overview (home) page (build_plan/12.4): KPI cards, a per-queue table with paused indicator
+ * Overview (home) page: KPI cards, a per-queue table with paused indicator
  * and quick actions, a throughput trend, and a jobs-per-instance breakdown. Polls every 30s.
  */
 import React, { useEffect, useRef, useState } from 'react';
@@ -9,7 +9,7 @@ import { PauseOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { JobStatus } from '../queries/enums.js';
 import { StatusTag, tokens } from '@portqueue/ui';
 import type { ColumnsType } from 'antd/es/table';
-import type { InstanceBreakdownDto, QueueDto, StatsDto } from '../../shared/dto.js';
+import type { InstanceDto, QueueDto, StatsDto } from '../../shared/dto.js';
 import { api, config } from '../queries/api.js';
 import { usePoll } from '../queries/use-poll.js';
 import { useAction } from '../queries/use-action.js';
@@ -24,7 +24,7 @@ export function OverviewPage(): React.ReactElement {
 
   const stats = usePoll<StatsDto>(() => api.getStats(), []);
   const queues = usePoll<QueueDto[]>(() => api.getQueues(), []);
-  const instances = usePoll<InstanceBreakdownDto[]>(() => api.getInstances(), []);
+  const instances = usePoll<InstanceDto[]>(() => api.getInstances(), []);
 
   // Client-side throughput history for the trend (server exposes a scalar; we sample it).
   const [history, setHistory] = useState<number[]>([]);
@@ -136,7 +136,11 @@ export function OverviewPage(): React.ReactElement {
                 </Space>
               )}
             </Card>
-            <Card className={styles.card} title="Jobs per instance">
+            <Card
+              className={styles.card}
+              title="Instances"
+              extra={<Link to="/instances">Manage</Link>}
+            >
               {instances.loading && !instances.data ? (
                 <Skeleton active />
               ) : (
@@ -150,32 +154,28 @@ export function OverviewPage(): React.ReactElement {
   );
 }
 
-function InstanceList({ rows }: { rows: InstanceBreakdownDto[] }): React.ReactElement {
+function InstanceList({ rows }: { rows: InstanceDto[] }): React.ReactElement {
   if (!rows.length)
-    return <Typography.Text type="secondary">No recent attribution.</Typography.Text>;
-  const max = Math.max(...rows.map((r) => r.count), 1);
+    return (
+      <Typography.Text type="secondary">
+        No instances registered. Set an <code>instanceKey</code> to enable multi-instance mode.
+      </Typography.Text>
+    );
+  const totals = rows.map((r) => totalCount(r.counts));
+  const max = Math.max(...totals, 1);
   return (
     <Space direction="vertical" size="small" style={{ width: '100%' }}>
-      {rows.slice(0, 8).map((r) => (
-        <div key={`${r.instanceId}-${r.instanceType}`}>
+      {rows.slice(0, 8).map((r, i) => (
+        <div key={r.instanceKey}>
           <Space style={{ justifyContent: 'space-between', width: '100%' }}>
             <Space size={6}>
-              <Tag
-                color={
-                  r.instanceType === 'CONTAINER'
-                    ? 'blue'
-                    : r.instanceType === 'BARE_METAL'
-                      ? 'green'
-                      : 'default'
-                }
-              >
-                {r.instanceType}
-              </Tag>
+              <Tag color={r.alive ? 'green' : 'default'}>{r.alive ? 'alive' : 'stale'}</Tag>
+              {r.processingPaused && <Tag color="warning">paused</Tag>}
               <Typography.Text style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
-                {r.instanceId}
+                {r.instanceKey}
               </Typography.Text>
             </Space>
-            <Typography.Text strong>{r.count}</Typography.Text>
+            <Typography.Text strong>{totals[i]}</Typography.Text>
           </Space>
           <div
             style={{
@@ -188,7 +188,7 @@ function InstanceList({ rows }: { rows: InstanceBreakdownDto[] }): React.ReactEl
             <div
               style={{
                 height: 4,
-                width: `${(r.count / max) * 100}%`,
+                width: `${(totals[i]! / max) * 100}%`,
                 background: tokens.color.accent,
                 borderRadius: 4,
               }}

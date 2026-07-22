@@ -1,7 +1,7 @@
 import type { Worker } from '../consumer/worker.js';
 import type { Queue } from '../producer/queue.js';
 
-/** Tracks live Queue/Worker handles for graceful shutdown & stats (build_plan/02.2). */
+/** Tracks live Queue/Worker handles for graceful shutdown & stats. */
 export class ClientRegistryService {
   private readonly workers: Worker[] = [];
   private readonly queues = new Map<string, Queue<unknown>>();

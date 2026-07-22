@@ -1,6 +1,6 @@
 import { PortQueueErrorCode } from './error-codes.enum.js';
 
-/** Typed details attached to an error (build_plan/10.2). */
+/** Typed details attached to an error. */
 export interface ErrorContext {
   queue?: string;
   jobId?: string;
@@ -19,7 +19,7 @@ export interface PortQueueErrorOptions {
 }
 
 /**
- * Base error for everything the public surface throws (build_plan/10.2). Carries an
+ * Base error for everything the public surface throws. Carries an
  * enum `code`, typed `context`, and `cause`. Messages must state what/why/how-to-fix.
  */
 export class PortQueueError extends Error {

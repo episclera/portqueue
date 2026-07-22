@@ -1,5 +1,5 @@
 /**
- * Client-safe mirror of the core enums the SPA needs as *values* (build_plan/12 — no magic
+ * Client-safe mirror of the core enums the SPA needs as *values* (no magic
  * strings). Importing the `@portqueue/core` barrel into the browser bundle would pull in its
  * node-only services (fs/os/crypto), so the client re-declares the small set of string enums
  * it uses. These MUST stay byte-identical to `@portqueue/core`'s enum values; they are the

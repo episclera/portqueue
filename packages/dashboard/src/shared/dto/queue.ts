@@ -17,9 +17,13 @@ export interface StatsDto {
   failureRate: number;
 }
 
-/** Per-instance job attribution row for the Overview page. */
-export interface InstanceBreakdownDto {
-  instanceId: string;
-  instanceType: string;
-  count: number;
+/** An instance row with liveness + per-instance job attribution (mirrors core `InstanceInfo`). */
+export interface InstanceDto {
+  instanceKey: string;
+  processingPaused: boolean;
+  alive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastSeenAt: string;
+  counts: CountsDto;
 }

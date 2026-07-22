@@ -1,4 +1,4 @@
-/** Schedules page (build_plan/12.4): all recurring definitions across queues. Polls every 30s. */
+/** Schedules page: all recurring definitions across queues. Polls every 30s. */
 import React from 'react';
 import { Card, Space, Typography } from 'antd';
 import type { ScheduleDto } from '../../shared/dto.js';

@@ -1,5 +1,5 @@
 /**
- * A tiny dependency-free argv parser (build_plan/13.1): subcommands + `--flag value`
+ * A tiny dependency-free argv parser: subcommands + `--flag value`
  * (and `--bool`). No positional soup. `--` is not needed; the first non-flag token is the
  * (sub)command path.
  */

@@ -1,5 +1,5 @@
 /**
- * Job lifecycle timeline (build_plan/12.4): a compact vertical timeline from the job's
+ * Job lifecycle timeline: a compact vertical timeline from the job's
  * lifecycle timestamps, showing the current status at the head and the duration between
  * transitions. Renders for every job (single-function or multi-step).
  */

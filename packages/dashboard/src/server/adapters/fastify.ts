@@ -1,5 +1,5 @@
 /**
- * Fastify adapter (build_plan/12.2). `app.register(fastifyAdapter(dashboard))` or
+ * Fastify adapter. `app.register(fastifyAdapter(dashboard))` or
  * `app.register(dashboard.fastify())`.
  */
 import type { DashboardEngine } from '../engine.js';

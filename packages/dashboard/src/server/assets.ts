@@ -1,5 +1,5 @@
 /**
- * Serves the built client bundle + index.html (build_plan/12.2/12.4). Reads static assets
+ * Serves the built client bundle + index.html. Reads static assets
  * from the packaged `client-dist` directory; if that directory is absent (e.g. the client
  * hasn't been built yet), serves a minimal inline HTML shell that boots the SPA from a CDN-
  * free fallback so the mount still responds. No dependency beyond Node fs.

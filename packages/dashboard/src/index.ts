@@ -1,5 +1,5 @@
 /**
- * `@portqueue/dashboard` public API (build_plan/12.3). The `createDashboard` factory plus its
+ * `@portqueue/dashboard` public API. The `createDashboard` factory plus its
  * option, handler, and auth types. The client SPA is a build artifact served by the middleware;
  * only the server surface is exported here.
  */

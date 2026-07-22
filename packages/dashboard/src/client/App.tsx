@@ -1,5 +1,5 @@
 /**
- * App shell + routing (build_plan/12.4). Header carries the Logo, global search, the
+ * App shell + routing. Header carries the Logo, global search, the
  * live-updates toggle, and the ThemeSwitcher. Uses react-router v5. AntD theming is driven by
  * the shared `@portqueue/ui` themes through ConfigProvider (wired in main.tsx).
  */
@@ -23,6 +23,7 @@ import { OverviewPage } from './pages/Overview.js';
 import { QueueDetailPage } from './pages/QueueDetail.js';
 import { JobDetailPage } from './pages/JobDetail.js';
 import { SchedulesPage } from './pages/Schedules.js';
+import { InstancesPage } from './pages/Instances.js';
 
 export interface AppProps {
   themeMode: ThemeMode;
@@ -98,6 +99,11 @@ export function App({ themeMode, onThemeChange }: AppProps): React.ReactElement 
           <Link to="/" aria-label="Home" style={{ display: 'inline-flex' }}>
             <Logo variant="full" size={30} />
           </Link>
+          <Space size="middle" style={{ marginLeft: 16 }}>
+            <Link to="/">Overview</Link>
+            <Link to="/instances">Instances</Link>
+            <Link to="/schedules">Schedules</Link>
+          </Space>
           <div className={styles.headerSpacer} />
           <Space size="middle" wrap>
             <SearchOutlined style={{ opacity: 0.6 }} />
@@ -119,6 +125,7 @@ export function App({ themeMode, onThemeChange }: AppProps): React.ReactElement 
           <div className={styles.content}>
             <Switch>
               <Route exact path="/" component={OverviewPage} />
+              <Route exact path="/instances" component={InstancesPage} />
               <Route exact path="/queues/:name" component={QueueDetailPage} />
               <Route exact path="/jobs/:id" component={JobDetailPage} />
               <Route exact path="/schedules" component={SchedulesPage} />

@@ -2,7 +2,7 @@ import { theme, type ThemeConfig } from 'antd';
 import { tokens } from './tokens.js';
 import { typography } from './typography.js';
 
-/** AntD dark theme derived from the shared tokens (build_plan/14.4). */
+/** AntD dark theme derived from the shared tokens. */
 export const darkTheme: ThemeConfig = {
   algorithm: theme.darkAlgorithm,
   token: {

@@ -5,7 +5,7 @@ import type { NewJobRecord, ScheduleRow } from '../jobs/job-record.js';
 import type { Runtime } from '../client/runtime.js';
 
 /**
- * Turns due schedules into concrete jobs (build_plan/06.7). Production is exactly-once per
+ * Turns due schedules into concrete jobs. Production is exactly-once per
  * tick across the cluster (guarded `advanceSchedule`). A missed schedule fires once and
  * advances to the next future slot — it never backfills every missed occurrence.
  * The tick also owns expiring due-but-unstarted jobs and reclaiming stalled jobs.
@@ -51,9 +51,9 @@ export class SchedulerService {
     if (!won) return;
 
     const resolved = this.runtime.resolver.resolve({ job: {}, now });
-    const queueName = await this.queueName(schedule.queueId);
+    const queueName = schedule.queueName;
     const job: NewJobRecord = {
-      queueId: schedule.queueId,
+      queueName: schedule.queueName,
       status: JobStatus.PENDING,
       priority: schedule.priority ?? resolved.priority,
       data: schedule.data,
@@ -74,8 +74,10 @@ export class SchedulerService {
       singletonKey: null,
       workflowId: null,
       workflowStepKey: null,
-      runOnInstanceId: null,
-      runOnInstanceType: null,
+      preferredInstanceKey: null,
+      preferredInstanceKeyPattern: null,
+      fallbackInstanceKey: null,
+      fallbackInstanceKeyPattern: null,
       createdAt: now,
     };
     const inserted = await this.runtime.driver.insertJob({ job });
@@ -95,22 +97,11 @@ export class SchedulerService {
     return null;
   }
 
-  private async queueName(queueId: string): Promise<string> {
-    const cached = this.queueNames.get(queueId);
-    if (cached) return cached;
-    for (const q of await this.runtime.driver.listQueues()) {
-      this.queueNames.set(q.id, q.name);
-    }
-    return this.queueNames.get(queueId) ?? queueId;
-  }
-  private readonly queueNames = new Map<string, string>();
-
   private async expireDue(): Promise<void> {
     const now = this.runtime.clock.now();
     const expired = await this.runtime.driver.expireDueJobs({ now });
     for (const job of expired) {
-      const queue = await this.queueName(job.queueId);
-      this.runtime.events.emit(PortQueueEvent.JOB_EXPIRED, { jobId: job.id, queue });
+      this.runtime.events.emit(PortQueueEvent.JOB_EXPIRED, { jobId: job.id, queue: job.queueName });
     }
   }
 
@@ -118,13 +109,12 @@ export class SchedulerService {
     const now = this.runtime.clock.now();
     const reclaimed = await this.runtime.driver.reclaimStalledJobs({ now });
     for (const job of reclaimed) {
-      const queue = await this.queueName(job.queueId);
       this.runtime.events.emit(PortQueueEvent.JOB_STALLED, {
         jobId: job.id,
-        queue,
+        queue: job.queueName,
         previousInstanceId: job.lockedByInstanceId,
       });
-      this.runtime.wakeup.signal(queue);
+      this.runtime.wakeup.signal(job.queueName);
     }
   }
 }

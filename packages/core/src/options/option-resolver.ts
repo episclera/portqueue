@@ -3,7 +3,7 @@ import type { JobOptions } from './job-options.js';
 import type { RetentionOptions } from './common.js';
 import { toMs } from '../util/duration.js';
 
-/** The fully-resolved per-job settings frozen onto a `job` row (build_plan/04.2). */
+/** The fully-resolved per-job settings frozen onto a `job` row. */
 export interface ResolvedJobOptions {
   priority: number;
   startAfter: number;
@@ -23,7 +23,7 @@ export interface ResolvedJobOptions {
 
 /**
  * Merges client → queue → job options (job wins) and freezes resolved values
- * (build_plan/02 / 05.6). Resolution happens once, at insert time.
+ *. Resolution happens once, at insert time.
  */
 export class OptionResolver {
   constructor(

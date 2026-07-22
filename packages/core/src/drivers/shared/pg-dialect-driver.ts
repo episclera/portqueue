@@ -6,8 +6,8 @@ import {
 import { SqlDriver } from './sql-driver.js';
 
 /**
- * Shared Postgres-dialect base (build_plan/11.2). PGLite and Postgres share ~90% of SQL;
- * both use `$1`-style placeholders and support SKIP LOCKED / RETURNING / UPSERT. Concrete
+ * Shared Postgres-dialect base. PGLite and Postgres share ~90% of SQL;
+ * both use `$1`-style placeholders and support SKIP LOCKED / RETURNING / transactions. Concrete
  * drivers provide connection management and the notify decision.
  */
 export abstract class PgDialectDriver extends SqlDriver {
@@ -20,7 +20,6 @@ export abstract class PgDialectDriver extends SqlDriver {
       [DriverCapability.SKIP_LOCKED]: true,
       [DriverCapability.RETURNING]: true,
       [DriverCapability.TRANSACTIONS]: true,
-      [DriverCapability.UPSERT]: true,
       ...extra,
     });
   }

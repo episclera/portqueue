@@ -5,6 +5,7 @@ import { SubscriberService } from '../pubsub/subscriber.service.js';
 import { SchedulerService } from '../scheduling/scheduler.service.js';
 import { RetentionService } from '../retention/retention.service.js';
 import { SystemMonitorService } from '../monitoring/system-monitor.service.js';
+import { InstanceService } from './instance.service.js';
 import { MigrationRunner } from '../schema/migration/migration-runner.service.js';
 import type { Runtime } from './runtime.js';
 import type { ClientRegistryService } from './client-registry.service.js';
@@ -14,7 +15,7 @@ interface Mutable {
 }
 
 /**
- * Owns the strict ordered startup and reverse-ordered shutdown (build_plan/02.4).
+ * Owns the strict ordered startup and reverse-ordered shutdown.
  */
 export class ClientLifecycleService {
   private subscriber: SubscriberService | null = null;
@@ -73,6 +74,17 @@ export class ClientLifecycleService {
     this.tickTimer = setInterval(() => void this.tick(), tickInterval);
     this.tickTimer.unref?.();
 
+    // 6b. Multi-instance liveness: register + start heartbeating before workers claim.
+    if (this.runtime.instanceKey) {
+      const instances = new InstanceService(
+        this.runtime,
+        this.runtime.instanceKey,
+        options.instanceHeartbeatIntervalMs ?? 15000,
+      );
+      this.runtime.instances = instances;
+      await instances.start();
+    }
+
     // 7. Mark running and start workers.
     this.state.running = true;
     for (const worker of this.registry.allWorkers()) await worker.start();
@@ -110,8 +122,9 @@ export class ClientLifecycleService {
     const { events } = this.runtime;
     events.emit(PortQueueEvent.CLIENT_STOPPING, { instanceId: this.runtime.identity.id });
 
-    // Reverse order (build_plan/02.4).
+    // Reverse order.
     if (this.tickTimer) clearInterval(this.tickTimer);
+    await this.runtime.instances?.stop();
     await this.subscriber?.stop();
     this.state.running = false; // stop new claims
 

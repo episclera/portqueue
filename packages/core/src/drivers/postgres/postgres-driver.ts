@@ -30,7 +30,7 @@ interface PgPool {
 }
 
 /**
- * Postgres driver (build_plan/11.1) — the full-feature reference driver. LISTEN/NOTIFY
+ * Postgres driver — the full-feature reference driver. LISTEN/NOTIFY
  * on a dedicated connection, advisory locks for leader-only tasks, SKIP LOCKED claiming.
  * The `pg` package is an optional peer dependency.
  */
@@ -112,7 +112,7 @@ export class PostgresDriver extends PgDialectDriver {
 
   // --- LISTEN/NOTIFY ---
   private channel(name: string): string {
-    // Sanitize to a safe channel token (build_plan/18.1) — hash arbitrary names.
+    // Sanitize to a safe channel token — hash arbitrary names.
     const token = createHash('sha1')
       .update(`${this.context.namespace}:${name}`)
       .digest('hex')

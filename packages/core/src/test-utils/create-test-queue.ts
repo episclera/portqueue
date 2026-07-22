@@ -8,7 +8,7 @@ import type { PortQueueOptions } from '../options/client-options.js';
 
 export type TestEngine = 'pglite' | 'sqlite';
 
-/** Both test engines, for parameterized suites (build_plan/16.1). */
+/** Both test engines, for parameterized suites. */
 export const TEST_ENGINES: TestEngine[] = ['pglite', 'sqlite'];
 
 export function createDriver(engine: TestEngine): Driver {
@@ -23,7 +23,7 @@ export interface TestQueueHandle {
 }
 
 /**
- * Spin up a clean in-memory PortQueue on the chosen test driver (build_plan/16.2).
+ * Spin up a clean in-memory PortQueue on the chosen test driver.
  * Uses a FakeClock and a very fast tick, with the system monitor disabled.
  */
 export async function createTestQueue(

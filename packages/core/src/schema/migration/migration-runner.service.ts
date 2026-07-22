@@ -10,7 +10,7 @@ import type { Logger } from '../../logging/logger.interface.js';
 import type { EventBusService } from '../../events/event-bus.service.js';
 
 /**
- * Applies ordered, checksum-guarded migrations (build_plan/04.7). Race-safe across
+ * Applies ordered, checksum-guarded migrations. Race-safe across
  * instances via an advisory lock where available. Supports AUTO / MANUAL / VALIDATE_ONLY.
  */
 export class MigrationRunner {

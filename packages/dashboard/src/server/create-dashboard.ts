@@ -1,5 +1,5 @@
 /**
- * `createDashboard(options)` (build_plan/12.3) — the single named-options factory. Builds the
+ * `createDashboard(options)` — the single named-options factory. Builds the
  * framework-agnostic engine (see `engine.ts`) once, then exposes per-framework handlers, each
  * of which is a thin wrapper defined in `adapters/`. Uses the provided PortQueue instance only;
  * never opens a DB connection.

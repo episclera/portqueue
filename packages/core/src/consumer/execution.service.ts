@@ -18,8 +18,8 @@ export interface ExecutionConfig {
 }
 
 /**
- * Runs handlers, catches every error, and routes to retry/fail/step-advance (build_plan/02.5,
- * 10.3). A throw never propagates to the claim loop. Each job runs under a heartbeat that
+ * Runs handlers, catches every error, and routes to retry/fail/step-advance. A throw never
+ * propagates to the claim loop. Each job runs under a heartbeat that
  * extends the lock and an AbortSignal fired on shutdown/cooperative-cancel.
  */
 export class ExecutionService {

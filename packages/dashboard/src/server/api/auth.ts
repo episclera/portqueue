@@ -1,5 +1,5 @@
 /**
- * Pluggable dashboard auth guard (build_plan/12.5). Protects the dashboard endpoint
+ * Pluggable dashboard auth guard. Protects the dashboard endpoint
  * itself, never the DB. `readOnly` is enforced separately in routes; this module only
  * answers "may this request reach the dashboard at all?".
  */
