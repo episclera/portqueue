@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Shared helpers for the dev scripts. Source this from a script:
-#   source "$(dirname "$0")/../lib.sh"
+# Docker Compose helpers for the dev scripts. Source this from a script:
+#   source "$(dirname "${BASH_SOURCE[0]}")/../utils/compose.sh"
 set -euo pipefail
 
 # Repo root, resolved relative to this file (works from any cwd).
