@@ -11,5 +11,6 @@ docs/build/
 *.sqlite-journal
 *.db
 .pglite/
+scripts/cli/.data/
 .env
 .env.local

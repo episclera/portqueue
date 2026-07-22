@@ -1,0 +1,50 @@
+# PortQueue local dev services.
+#
+# Postgres and Oracle for local development and manual driver testing. Each service
+# is started independently — see scripts/dev/{start,stop}-{postgres,oracle}.sh, or:
+#
+#   docker compose -f .docker/docker-compose.yml up -d postgres
+#   docker compose -f .docker/docker-compose.yml up -d oracle
+#
+# Credentials are dev-only. Do not reuse them anywhere real.
+name: portqueue-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: portqueue-postgres
+    environment:
+      POSTGRES_USER: portqueue
+      POSTGRES_PASSWORD: portqueue
+      POSTGRES_DB: portqueue
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U portqueue -d portqueue']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  oracle:
+    # Community lightweight Oracle image, ideal for local dev/testing.
+    image: gvenzl/oracle-free:23-slim
+    container_name: portqueue-oracle
+    environment:
+      ORACLE_PASSWORD: portqueue
+      APP_USER: portqueue
+      APP_USER_PASSWORD: portqueue
+    ports:
+      - '1521:1521'
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres-data:
+  oracle-data:
