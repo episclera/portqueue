@@ -1,0 +1,16 @@
+# Belt-and-suspenders blocklist. The `files` allowlist in package.json is the
+# primary control (it publishes only dist/, README, LICENSE); this file is a
+# second net so internal sources never leak into the tarball even if `files`
+# is later widened. NOTE: once this file exists, npm stops consulting
+# .gitignore for this package — keep the `files` allowlist as the real guard.
+src/
+*.test.ts
+tsconfig*.json
+eslint.config.mjs
+vite.config.*
+vite.client.config.*
+jest.config.*
+index.html
+coverage/
+.env*
+*.tsbuildinfo
