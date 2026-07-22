@@ -1,0 +1,140 @@
+---
+id: installation
+title: Installation
+sidebar_label: Installation
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Installation
+
+Install `@portqueue/core` plus the **client for your database** — the DB clients are
+**optional peer dependencies**, never auto-installed, so you only pull in what you use.
+
+<Tabs groupId="driver">
+  <TabItem value="postgres" label="Postgres" default>
+
+```bash
+npm install @portqueue/core pg
+```
+
+  </TabItem>
+  <TabItem value="pglite" label="PGLite">
+
+```bash
+npm install @portqueue/core @electric-sql/pglite
+```
+
+  </TabItem>
+  <TabItem value="sqlite" label="SQLite">
+
+```bash
+npm install @portqueue/core better-sqlite3
+```
+
+  </TabItem>
+  <TabItem value="oracle" label="Oracle">
+
+```bash
+npm install @portqueue/core oracledb
+```
+
+  </TabItem>
+</Tabs>
+
+Prefer another package manager? The install is identical apart from the command:
+
+<Tabs groupId="pm">
+  <TabItem value="npm" label="npm" default>
+
+```bash
+npm install @portqueue/core pg
+```
+
+  </TabItem>
+  <TabItem value="pnpm" label="pnpm">
+
+```bash
+pnpm add @portqueue/core pg
+```
+
+  </TabItem>
+  <TabItem value="yarn" label="yarn">
+
+```bash
+yarn add @portqueue/core pg
+```
+
+  </TabItem>
+  <TabItem value="bun" label="bun">
+
+```bash
+bun add @portqueue/core pg
+```
+
+  </TabItem>
+</Tabs>
+
+## Connect
+
+Construction wires dependencies only — **no connection, no I/O**. `init()` connects,
+migrates, and starts services. It is idempotent, so it's safe to await once.
+
+<Tabs groupId="driver">
+  <TabItem value="postgres" label="Postgres" default>
+
+```ts
+import { PortQueue } from '@portqueue/core';
+import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+
+const pq = new PortQueue({
+  driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }),
+});
+await pq.init();
+```
+
+  </TabItem>
+  <TabItem value="pglite" label="PGLite">
+
+```ts
+import { PortQueue } from '@portqueue/core';
+import { PgliteDriver } from '@portqueue/core/drivers/pglite';
+
+const pq = new PortQueue({ driver: new PgliteDriver({ dataDir: './pgdata' }) });
+await pq.init();
+```
+
+  </TabItem>
+  <TabItem value="sqlite" label="SQLite">
+
+```ts
+import { PortQueue } from '@portqueue/core';
+import { SqliteDriver } from '@portqueue/core/drivers/sqlite';
+
+const pq = new PortQueue({ driver: new SqliteDriver({ file: './queue.db' }) });
+await pq.init();
+```
+
+  </TabItem>
+  <TabItem value="oracle" label="Oracle">
+
+```ts
+import { PortQueue } from '@portqueue/core';
+import { OracleDriver } from '@portqueue/core/drivers/oracle';
+
+const pq = new PortQueue({
+  driver: new OracleDriver({ connectString: process.env.ORACLE_DSN, user: 'app', password: process.env.ORACLE_PW }),
+});
+await pq.init();
+```
+
+  </TabItem>
+</Tabs>
+
+:::tip One API, any engine
+Every `createQueue` / `addJob` / `createWorker` call below works identically no matter
+which driver you constructed. Swapping engines is a one-line import change.
+:::
+
+Next: create your [first queue](./first-queue.md).

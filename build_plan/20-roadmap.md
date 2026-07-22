@@ -52,3 +52,16 @@ Deferred features and — more importantly — **how today's interfaces are shap
 - If typedi's per-instance scoping (file 02.1) proves too awkward, the switch to a hand-rolled constructor-injection container is recorded here (public API unaffected).
 - Any engine that needed a physical table beyond the four logical tables (file 04.1) is logged here with why.
 - The `@portqueue/ui` publish-vs-bundle question is **settled**: `private: true`, never published, bundled into docs + dashboard (file 14.3). Revisit only if an external runtime consumer ever needs it.
+
+### Deviations taken by the initial implementation (v0.1.0)
+
+These are the concrete deviations made while first building the plan; each keeps the public API and logical model intact.
+
+1. **Hand-rolled DI instead of typedi (file 02.1).** typedi's per-instance `Container.of(scopeId)` scoping is a documented sharp edge and pulls in `reflect-metadata` + decorator build config. Per the plan's own sanctioned fallback, services use plain constructor injection wired in a per-`PortQueue` `Runtime` object (`src/client/runtime.ts`). Each `PortQueue` gets its own service graph; no global container; public API unaffected. Zero added runtime deps (a net win for file 01.7).
+2. **Uniform physical storage across engines (file 04.6).** For portability and to keep the PG-family and SQLite dialects ~identical, all timestamps/durations are stored as `BIGINT` epoch-ms, JSON columns as `TEXT`, and booleans as small integers `0/1` on **every** engine (rather than Postgres `TIMESTAMPTZ`/`JSONB`/native enums). `BIGINT` is required so epoch-ms doesn't overflow Postgres' 32-bit `INTEGER`; SQLite treats it as its native 64-bit integer. The **logical** four-table model, column set, indexes, and public API are exactly as specified. Native `JSONB`/enum/timestamptz storage can be reintroduced per-driver later without an API change.
+3. **`schema` qualification validated but not applied on the test engines.** `schema`/`tablePrefix` are allowlist-validated at construction (file 18.1); table names use the prefix. Schema-qualified names are a per-driver concern reintroduced when needed (Postgres/Oracle); SQLite has no schemas.
+4. **DB-generated UUIDs disabled (`DB_GENERATED_UUID` = false everywhere).** UUIDs are app-generated via `node:crypto` uniformly, simplifying the insert path across engines. The capability flag remains so a driver may opt in later.
+5. **Oracle driver is structurally implemented, not CI-tested (file 16.1).** Connection/dialect wiring (`:1` binds, MERGE-capable dialect base) is in place; it is validated by the conformance kit against a real Oracle server rather than in CI, exactly as the plan scopes. `RETURNING INTO` out-binds/GUID mapping are the follow-up items for full Oracle parity.
+6. **Build tool naming.** Vite library mode uses `lib.fileName` (not `output.entryFileNames`) to emit reliable `index.mjs`/`index.cjs` entries for the multi-entry driver subpaths.
+7. **DI container (typedi) → see #1.** No `reflect-metadata`, no decorators; keeps the strict-TS build clean.
+

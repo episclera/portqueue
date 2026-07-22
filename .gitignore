@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+.DS_Store
+*.tsbuildinfo
+.docusaurus/
+docs/build/
+*.sqlite
+*.sqlite-journal
+*.db
+.pglite/
+.env
+.env.local

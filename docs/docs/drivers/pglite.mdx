@@ -1,0 +1,70 @@
+---
+id: pglite
+title: PGLite driver
+sidebar_label: PGLite
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# PGLite driver
+
+An **embedded Postgres** (WASM) — real Postgres semantics with no server to run. Ideal
+for local development, tests, and single-process apps that want Postgres behavior.
+
+## Install
+
+<Tabs groupId="pm">
+  <TabItem value="npm" label="npm" default>
+
+```bash
+npm install @portqueue/core @electric-sql/pglite
+```
+
+  </TabItem>
+  <TabItem value="pnpm" label="pnpm">
+
+```bash
+pnpm add @portqueue/core @electric-sql/pglite
+```
+
+  </TabItem>
+  <TabItem value="yarn" label="yarn">
+
+```bash
+yarn add @portqueue/core @electric-sql/pglite
+```
+
+  </TabItem>
+  <TabItem value="bun" label="bun">
+
+```bash
+bun add @portqueue/core @electric-sql/pglite
+```
+
+  </TabItem>
+</Tabs>
+
+## Connect
+
+```ts
+import { PortQueue } from '@portqueue/core';
+import { PgliteDriver } from '@portqueue/core/drivers/pglite';
+
+// in-memory (great for tests) or a persisted data dir
+const pq = new PortQueue({ driver: new PgliteDriver({ dataDir: 'memory://' }) });
+await pq.init();
+```
+
+## Capabilities & notes
+
+- Postgres-compatible SQL, including `SKIP LOCKED` and `RETURNING`.
+- **Single-process** by design — it runs in your Node process, so it is not for
+  multi-instance coordination. Cross-instance `LISTEN/NOTIFY` doesn't apply; core uses a
+  polling loop within the process.
+- Its wire-compatibility makes it the backbone of the PortQueue **test suite** (with SQLite).
+
+:::tip Optimization
+Use `memory://` for fast tests; persist to a `dataDir` when you want durability on a
+single node. For anything multi-instance, use [Postgres](./postgres.mdx).
+:::

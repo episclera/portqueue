@@ -1,0 +1,150 @@
+/**
+ * PortQueue docs theme — maps Docusaurus Infima variables to the shared
+ * `@portqueue/ui` brand tokens (build_plan/14 tokens.ts).
+ * Modern, spacious, rounded, soft-shadow; prefers-reduced-motion aware.
+ * No third-party font CDN calls — system font stack only.
+ */
+
+:root {
+  /* Brand accent (indigo) from tokens.color.brand #4f46e5. */
+  --ifm-color-primary: #4f46e5;
+  --ifm-color-primary-dark: #3f36e0;
+  --ifm-color-primary-darker: #3730d4;
+  --ifm-color-primary-darkest: #2d28ae;
+  --ifm-color-primary-light: #6366f1;
+  --ifm-color-primary-lighter: #7c7ff3;
+  --ifm-color-primary-lightest: #a5a8f7;
+
+  /* Neutral fields. */
+  --ifm-background-color: #f7f8fa;
+  --ifm-background-surface-color: #ffffff;
+  --ifm-font-color-base: #1a1d23;
+
+  /* Rounded surfaces + soft depth over hard borders. */
+  --ifm-global-radius: 10px;
+  --ifm-card-border-radius: 16px;
+  --ifm-button-border-radius: 10px;
+  --ifm-code-border-radius: 8px;
+  --ifm-global-shadow-lw: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
+  --ifm-global-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.06);
+  --ifm-global-shadow-tl: 0 12px 32px rgba(16, 24, 40, 0.12), 0 6px 16px rgba(16, 24, 40, 0.08);
+
+  /* Spacious typography (4px base scale). */
+  --ifm-font-family-base:
+    system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji';
+  --ifm-font-family-monospace:
+    ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --ifm-line-height-base: 1.7;
+  --ifm-heading-font-weight: 700;
+  --ifm-spacing-horizontal: 1.25rem;
+  --ifm-navbar-height: 4rem;
+
+  --ifm-code-font-size: 92%;
+  --docusaurus-highlighted-code-line-bg: rgba(79, 70, 229, 0.1);
+
+  /* Motion tokens mirrored from tokens.motion. */
+  --ifm-transition-fast: 120ms;
+  --ifm-transition-slow: 320ms;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #818cf8;
+  --ifm-color-primary-dark: #6366f1;
+  --ifm-color-primary-darker: #4f46e5;
+  --ifm-color-primary-darkest: #4338ca;
+  --ifm-color-primary-light: #a5b4fc;
+  --ifm-color-primary-lighter: #c7d2fe;
+  --ifm-color-primary-lightest: #e0e7ff;
+
+  --ifm-background-color: #0b0e14;
+  --ifm-background-surface-color: #131722;
+  --ifm-font-color-base: #e6e8ec;
+
+  --docusaurus-highlighted-code-line-bg: rgba(129, 140, 248, 0.15);
+}
+
+/* Sticky navbar with subtle glass — soft shadow, no hard border. */
+.navbar {
+  box-shadow: var(--ifm-global-shadow-lw);
+  border-bottom: none;
+  backdrop-filter: saturate(180%) blur(10px);
+  background-color: rgba(255, 255, 255, 0.82);
+}
+[data-theme='dark'] .navbar {
+  background-color: rgba(19, 23, 34, 0.82);
+}
+
+.navbar__title {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Rounded, soft-shadow search input — the reference "borderless" style. */
+.navbar__search-input,
+.DocSearch-Button {
+  border: none;
+  border-radius: 999px;
+  background-color: rgba(16, 24, 40, 0.05);
+  box-shadow: var(--ifm-global-shadow-lw);
+}
+
+/* Buttons: rounded, spacious, soft hover lift. */
+.button {
+  box-shadow: var(--ifm-global-shadow-lw);
+  transition:
+    transform var(--ifm-transition-fast) ease,
+    box-shadow var(--ifm-transition-fast) ease;
+}
+.button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--ifm-global-shadow-md);
+}
+
+/* Cards & surfaces. */
+.card {
+  box-shadow: var(--ifm-global-shadow-md);
+  border: none;
+  border-radius: var(--ifm-card-border-radius);
+}
+
+/* Code blocks: rounded, soft shadow. */
+.theme-code-block,
+pre[class*='language-'] {
+  border-radius: 12px;
+  box-shadow: var(--ifm-global-shadow-md);
+}
+
+/* Admonitions / callouts: rounded and airy. */
+.theme-admonition {
+  border-radius: 12px;
+  box-shadow: var(--ifm-global-shadow-lw);
+}
+
+/* Light footer with a soft top separation. */
+.footer--light {
+  background-color: #f0f2f6;
+}
+[data-theme='dark'] .footer--light {
+  background-color: #0e1119;
+}
+
+/* Sidebar polish. */
+.menu__link {
+  border-radius: 8px;
+}
+.menu__link--active {
+  font-weight: 600;
+}
+
+/* Respect reduced motion (build_plan/14.1a). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

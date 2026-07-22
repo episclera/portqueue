@@ -1,0 +1,85 @@
+---
+id: transactions
+title: Transactional enqueue
+sidebar_label: Transactions
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Transactional enqueue
+
+The classic **dual-write bug**: you write a business row, then enqueue a job — but the
+process crashes between the two, or the write rolls back after the job was queued. Now a
+job references data that doesn't exist (or vice-versa).
+
+PortQueue fixes this by letting the insert join **your own** transaction. The job exists
+**iff** your business write commits. The `NOTIFY` that wakes workers fires only **after**
+commit.
+
+:::tip Why we chose this
+**PortQueue never opens, commits, or rolls back a transaction.** There is no
+`pq.transaction(fn)` and no `pq.adoptTransaction(...)`. You start the transaction with
+your own ORM/query-builder, wrap it with a small **adapter**, and pass it as `tx`. Your
+code stays the single owner of commit/rollback.
+:::
+
+## Adapters from `@portqueue/core/tx`
+
+<Tabs groupId="tx">
+  <TabItem value="knex" label="Knex" default>
+
+```ts
+import { fromKnex } from '@portqueue/core/tx';
+
+await knex.transaction(async (trx) => {
+  await trx('order').insert(order);
+  await pq.createQueue('fulfillment').addJob({ data: { orderId }, tx: fromKnex(trx) });
+}); // the developer's trx owns commit/rollback
+```
+
+  </TabItem>
+  <TabItem value="pg" label="Raw pg">
+
+```ts
+import { fromPg } from '@portqueue/core/tx';
+
+await client.query('BEGIN');
+await client.query('INSERT INTO "order" (...) VALUES (...)');
+await pq.createQueue('fulfillment').addJob({ data, tx: fromPg(client) });
+await client.query('COMMIT'); // the app owns commit/rollback
+```
+
+  </TabItem>
+  <TabItem value="prisma" label="Prisma">
+
+```ts
+import { fromPrisma } from '@portqueue/core/tx';
+
+await prisma.$transaction(async (px) => {
+  await px.order.create({ data: order });
+  await pq.createQueue('fulfillment').addJob({ data: { orderId }, tx: fromPrisma(px) });
+});
+```
+
+  </TabItem>
+  <TabItem value="drizzle" label="Drizzle">
+
+```ts
+import { fromDrizzle } from '@portqueue/core/tx';
+
+await db.transaction(async (tx) => {
+  await tx.insert(orders).values(order);
+  await pq.createQueue('fulfillment').addJob({ data: { orderId }, tx: fromDrizzle(tx) });
+});
+```
+
+  </TabItem>
+</Tabs>
+
+Adapters ship for `fromKnex`, `fromTypeorm`, `fromPrisma`, `fromDrizzle`, `fromKysely`,
+`fromSequelize`, `fromMikroOrm`, and the raw clients `fromPg`, `fromBetterSqlite3`,
+`fromNodeSqlite`, and `fromOracle`.
+
+When no `tx` is passed, the method runs autonomously in its own short transaction. Every
+producing method (`addJob`, `addJobs`, `removeJob`, `removeSchedule`, …) accepts `tx`.

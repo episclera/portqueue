@@ -1,0 +1,30 @@
+:root {
+  --pq-radius-md: 10px;
+  --pq-radius-lg: 16px;
+  --pq-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.06);
+  --pq-motion-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Soft, content-first surfaces over hard borders (build_plan/14.1a). */
+.pq-surface {
+  border-radius: var(--pq-radius-lg);
+  box-shadow: var(--pq-shadow-md);
+  transition:
+    box-shadow var(--pq-motion-base),
+    transform var(--pq-motion-base);
+}
+
+.pq-surface:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

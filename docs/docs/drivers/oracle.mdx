@@ -1,0 +1,75 @@
+---
+id: oracle
+title: Oracle driver
+sidebar_label: Oracle
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Oracle driver
+
+For teams shipping on Oracle Database. Uses row-level locking (`FOR UPDATE SKIP LOCKED`)
+for claiming.
+
+## Install
+
+<Tabs groupId="pm">
+  <TabItem value="npm" label="npm" default>
+
+```bash
+npm install @portqueue/core oracledb
+```
+
+  </TabItem>
+  <TabItem value="pnpm" label="pnpm">
+
+```bash
+pnpm add @portqueue/core oracledb
+```
+
+  </TabItem>
+  <TabItem value="yarn" label="yarn">
+
+```bash
+yarn add @portqueue/core oracledb
+```
+
+  </TabItem>
+  <TabItem value="bun" label="bun">
+
+```bash
+bun add @portqueue/core oracledb
+```
+
+  </TabItem>
+</Tabs>
+
+## Connect
+
+```ts
+import { PortQueue } from '@portqueue/core';
+import { OracleDriver } from '@portqueue/core/drivers/oracle';
+
+const pq = new PortQueue({
+  driver: new OracleDriver({
+    connectString: process.env.ORACLE_DSN,
+    user: 'app',
+    password: process.env.ORACLE_PW,
+  }),
+});
+await pq.init();
+```
+
+## Capabilities & notes
+
+- **`FOR UPDATE SKIP LOCKED`** — yes (Oracle 12c+), for contention-free claiming.
+- No built-in cross-instance pub/sub equivalent to `LISTEN/NOTIFY` is assumed; core uses
+  polling for wake-ups. Tune `pollIntervalMs` to your latency budget.
+- Transactional enqueue via `fromOracle(connection)`.
+- The client (`oracledb`) may require Oracle Instant Client libraries on the host.
+
+:::tip Optimization
+Use a connection pool sized to the sum of worker concurrencies. Prefer thin-mode
+`oracledb` where possible to avoid the Instant Client dependency.
+:::

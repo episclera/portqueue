@@ -1,0 +1,79 @@
+---
+id: postgres
+title: Postgres driver
+sidebar_label: Postgres
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Postgres driver
+
+The recommended production driver. Uses `SKIP LOCKED` for contention-free claiming and
+`LISTEN/NOTIFY` for low-latency wake-ups — the full feature set with no fallbacks.
+
+## Install
+
+<Tabs groupId="pm">
+  <TabItem value="npm" label="npm" default>
+
+```bash
+npm install @portqueue/core pg
+```
+
+  </TabItem>
+  <TabItem value="pnpm" label="pnpm">
+
+```bash
+pnpm add @portqueue/core pg
+```
+
+  </TabItem>
+  <TabItem value="yarn" label="yarn">
+
+```bash
+yarn add @portqueue/core pg
+```
+
+  </TabItem>
+  <TabItem value="bun" label="bun">
+
+```bash
+bun add @portqueue/core pg
+```
+
+  </TabItem>
+</Tabs>
+
+## Connect
+
+```ts
+import { PortQueue } from '@portqueue/core';
+import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+
+const pq = new PortQueue({
+  driver: new PostgresDriver({
+    connectionString: process.env.DATABASE_URL,
+    // or a pool config; you can also pass schema/tablePrefix on PortQueue itself
+  }),
+  schema: 'public',
+  tablePrefix: 'pq_',
+});
+await pq.init();
+```
+
+## Capabilities & notes
+
+- **`SKIP LOCKED`** — yes. Contention-free claiming across many instances.
+- **`LISTEN/NOTIFY`** — yes. Workers wake within milliseconds of an add; `pollIntervalMs`
+  is only a safety net.
+- **`RETURNING`** — yes. Single-round-trip claims and inserts.
+- **Transactional enqueue** — use `fromPg(client)` or your ORM adapter; `NOTIFY` fires
+  only after commit.
+
+:::tip Optimization
+Size the pool for the **sum of worker concurrencies** plus headroom for claim/heartbeat/
+notify traffic. Keep handler transactions short. Turn on
+[retention](../guides/retention.md) so the `job` table stays lean, and keep the default
+indexes.
+:::

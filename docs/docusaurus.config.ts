@@ -1,0 +1,140 @@
+import { themes as prismThemes } from 'prism-react-renderer';
+import type { Config } from '@docusaurus/types';
+import type * as Preset from '@docusaurus/preset-classic';
+
+// Brand tokens mirrored from `@portqueue/ui` (build_plan/14 — tokens.ts).
+// Kept in sync manually here so the docs chrome (Infima) matches the dashboard
+// without pulling the AntD/CSS-in-JS package into the static Docusaurus config.
+const REPO_URL = 'https://github.com/episclera/portqueue';
+
+const config: Config = {
+  title: 'PortQueue',
+  tagline: 'A database-backed job queue for Node.js — no broker required.',
+  favicon: 'img/favicon.svg',
+
+  // GitHub Pages deployment (build_plan/15.10). Adjust `url` to the real Pages domain.
+  url: 'https://episclera.github.io',
+  baseUrl: '/portqueue/',
+  organizationName: 'episclera',
+  projectName: 'portqueue',
+  trailingSlash: false,
+
+  // Do NOT hard-fail on broken links — warn instead (task requirement).
+  onBrokenLinks: 'warn',
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
+  },
+
+  i18n: {
+    defaultLocale: 'en',
+    locales: ['en'],
+  },
+
+  presets: [
+    [
+      'classic',
+      {
+        docs: {
+          sidebarPath: './sidebars.ts',
+          editUrl: `${REPO_URL}/tree/main/docs/`,
+        },
+        blog: {
+          showReadingTime: true,
+          blogTitle: 'PortQueue Blog',
+          blogDescription: 'News, design notes, and comparisons from the PortQueue team.',
+          feedOptions: {
+            type: ['rss', 'atom'],
+            xslt: true,
+          },
+          editUrl: `${REPO_URL}/tree/main/docs/`,
+          onInlineTags: 'warn',
+          onInlineAuthors: 'warn',
+          onUntruncatedBlogPosts: 'warn',
+        },
+        theme: {
+          customCss: './src/css/custom.css',
+        },
+      } satisfies Preset.Options,
+    ],
+  ],
+
+  themeConfig: {
+    image: 'img/social-card.png',
+    // Follow system preference on first load (build_plan/14.4).
+    colorMode: {
+      defaultMode: 'light',
+      respectPrefersColorScheme: true,
+    },
+    navbar: {
+      title: 'PortQueue',
+      logo: {
+        alt: 'PortQueue',
+        src: 'img/logo.svg',
+      },
+      items: [
+        { type: 'docSidebar', sidebarId: 'docsSidebar', position: 'left', label: 'Docs' },
+        { to: '/docs/api-reference', label: 'API', position: 'left' },
+        { to: '/blog', label: 'Blog', position: 'left' },
+        {
+          href: REPO_URL,
+          label: 'GitHub',
+          position: 'right',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        },
+      ],
+    },
+    footer: {
+      // Light-color footer (build_plan/15.3) — styled via custom.css.
+      style: 'light',
+      links: [
+        {
+          title: 'Docs',
+          items: [
+            { label: 'Getting Started', to: '/docs/getting-started/installation' },
+            { label: 'Core Concepts', to: '/docs/core-concepts/model' },
+            { label: 'Production Best Practices', to: '/docs/production' },
+            { label: 'API Reference', to: '/docs/api-reference' },
+            { label: 'Dashboard', to: '/docs/dashboard' },
+            { label: 'CLI', to: '/docs/cli' },
+          ],
+        },
+        {
+          title: 'Resources',
+          items: [
+            { label: 'Blog', to: '/blog' },
+            { label: 'Events reference', to: '/docs/events-hooks/events' },
+            { label: 'Troubleshooting', to: '/docs/troubleshooting' },
+            { label: 'Drivers', to: '/docs/drivers/overview' },
+            { label: 'Workflows', to: '/docs/workflows/what-is-a-workflow' },
+          ],
+        },
+        {
+          title: 'Project',
+          items: [
+            { label: 'GitHub', href: REPO_URL, target: '_blank', rel: 'noopener noreferrer' },
+            {
+              label: 'Changelog',
+              href: `${REPO_URL}/blob/main/CHANGELOG.md`,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+            },
+            { label: 'Contributing', to: '/docs/contributing' },
+            { label: 'Team', to: '/docs/team' },
+            { label: 'License', to: '/docs/introduction#license' },
+          ],
+        },
+      ],
+      copyright: `Free and open source. Commercial use permitted. No license fee, no obligations. (MIT)<br/>Created by <a href="/portqueue/docs/team">Gheorghe Gherciu</a> — the main developer. © ${new Date().getFullYear()} PortQueue.`,
+    },
+    prism: {
+      theme: prismThemes.oneLight,
+      darkTheme: prismThemes.oneDark,
+      additionalLanguages: ['bash', 'json', 'sql'],
+    },
+  } satisfies Preset.ThemeConfig,
+};
+
+export default config;

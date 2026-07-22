@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" role="img" aria-label="PortQueue">
+  <defs>
+    <linearGradient id="pqg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+  </defs>
+  <!-- Port / gateway frame -->
+  <rect x="2" y="2" width="36" height="36" rx="10" fill="url(#pqg)"/>
+  <!-- Ordered, aligned queue units flowing toward the gateway -->
+  <rect x="9" y="11" width="12" height="4.5" rx="2.25" fill="#ffffff" opacity="0.95"/>
+  <rect x="9" y="17.75" width="16" height="4.5" rx="2.25" fill="#ffffff" opacity="0.8"/>
+  <rect x="9" y="24.5" width="9" height="4.5" rx="2.25" fill="#ffffff" opacity="0.65"/>
+  <!-- The port: a rounded outlet the units flow through -->
+  <path d="M28 14 a6 6 0 0 1 0 12" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

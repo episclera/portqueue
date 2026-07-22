@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+coverage
+.docusaurus
+package-lock.json
+build_plan
+docs/build
+**/*.md
+CHANGELOG.md

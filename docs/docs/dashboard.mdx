@@ -1,0 +1,54 @@
+---
+id: dashboard
+title: Dashboard
+sidebar_label: Dashboard
+---
+
+# Dashboard
+
+`@portqueue/dashboard` is a pluggable React ops dashboard — queues, jobs, workflow runs,
+schedules, and live stats — served from the CLI or mounted on your existing HTTP server.
+It shares the `@portqueue/ui` theme, so it looks identical to these docs.
+
+## Serve it from the CLI (no app changes)
+
+The quickest way — point the CLI at your config module:
+
+```bash
+portqueue dashboard --config ./portqueue.config.ts --port 9000 \
+  --root-user admin --root-password ****
+```
+
+## Mount on an existing app
+
+<div style={{border: '2px dashed var(--ifm-color-primary)', borderRadius: 12, padding: '2rem', textAlign: 'center', margin: '1.5rem 0', opacity: 0.85}}>
+  🖼️ <strong>Placeholder</strong> — screenshot: <em>"PortQueue dashboard — queues overview with per-state job counts and throughput chart"</em>
+</div>
+
+```ts
+import { createDashboard } from '@portqueue/dashboard';
+
+const dash = createDashboard({
+  portQueue: pq,
+  basePath: '/portqueue',
+  auth: { mode: 'basic', username, password },
+});
+
+app.use('/portqueue', dash.express()); // Express — Koa/Fastify/raw Node adapters also ship
+```
+
+## Securing
+
+- **Basic auth** via the `auth` option (shown above).
+- **Custom auth** — provide your own middleware/guard for SSO or session checks.
+- Always mount it behind your platform's auth in production; set `maxPayloadBytes` on the
+  client and rely on parameterized queries.
+
+## Docker
+
+Run the CLI-served dashboard in a container, pointing `--config` at a mounted config
+module and exposing the chosen `--port`. See the [CLI](./cli.md) page for flags.
+
+<div style={{border: '2px dashed var(--ifm-color-primary)', borderRadius: 12, padding: '2rem', textAlign: 'center', margin: '1.5rem 0', opacity: 0.85}}>
+  🖼️ <strong>Placeholder</strong> — screenshot: <em>"PortQueue dashboard — workflow run view: ordered steps with per-step status and timings"</em>
+</div>
