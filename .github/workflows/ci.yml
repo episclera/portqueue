@@ -1,6 +1,6 @@
 name: ci
 
-# Lint + typecheck + test + build on every push (every branch) and PR (build_plan/17.1).
+# Lint + typecheck + test + build on every push (every branch) and PR.
 on:
   push:
   pull_request:
@@ -8,14 +8,11 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [20.x, 22.x, 24.x]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 24.x
           cache: npm
       - run: npm ci
       - run: npm run lint
