@@ -7,7 +7,7 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
 - **Never auto-commit, push, create branches, or publish.** Print the commands; a human runs them. CI is the only actor that publishes.
 - **Never interactive logins** or anything needing network/credentials — surface the command for the user.
 
-## Design invariants (see build_plan/)
+## Design invariants
 - **Named options over positional args** for any method with >1 input; `data` is a named key.
 - **Enums, not magic strings** for states, events, steps, capabilities, error codes, engines, instance types.
 - **No `any`** in the public surface; generics carry the payload type end-to-end.

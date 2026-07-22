@@ -56,7 +56,7 @@ await emails.addJob({ data: { to: 'a@b.com' } });
 - Commits follow **Conventional Commits** (enforced by commitlint) — the changelog is derived from them.
 - Tests use **PGLite + SQLite only** (no external DB server needed).
 
-See [`build_plan/`](./build_plan) for the full design specification.
+See [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 
 ## License
 
