@@ -3,5 +3,8 @@
   "[javascriptreact]": { "editor.formatOnSave": true },
   "[typescript]": { "editor.formatOnSave": true },
   "[typescriptreact]": { "editor.formatOnSave": true },
-  "js/ts.tsdk.path": "./node_modules/typescript/lib"
+  "js/ts.tsdk.path": "./node_modules/typescript/lib",
+  "cSpell.words": [
+    "necesary"
+  ]
 }
