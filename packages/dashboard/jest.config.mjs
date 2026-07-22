@@ -12,7 +12,7 @@ export default {
     '^@portqueue/core$': '<rootDir>/../core/src/index.ts',
     '^@portqueue/ui$': '<rootDir>/../ui/src/index.ts',
     // Stub stylesheet imports (jsdom can't parse CSS and we don't assert on it).
-    '\\.(css|less|scss)$': '<rootDir>/src/test-support/style-stub.cjs',
+    '\\.(css|less|scss)$': '<rootDir>/src/test-support/style-stub.js',
     // NodeNext ESM requires .js extensions on relative imports; strip them for ts-jest.
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
