@@ -18,7 +18,8 @@ effects.
 
 ```ts
 // idempotencyKey — never insert a duplicate job for the same logical action
-const r = await pq.createQueue('payments').addJob({
+const payments = pq.createQueue('payments');
+const r = await payments.addJob({
   data: { orderId },
   idempotencyKey: `charge:${orderId}`,
 });
@@ -28,7 +29,8 @@ if (r.deduplicated) {
 }
 
 // singletonKey — at most one *active* job with this key at a time
-await pq.createQueue('reindex').addJob({ data: { tenantId }, singletonKey: `reindex:${tenantId}` });
+const reindex = pq.createQueue('reindex');
+await reindex.addJob({ data: { tenantId }, singletonKey: `reindex:${tenantId}` });
 ```
 
 - `idempotencyKey` prevents inserting a duplicate row (dedup at enqueue).

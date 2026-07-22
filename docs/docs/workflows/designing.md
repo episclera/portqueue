@@ -53,7 +53,8 @@ keys, records the ordered steps and the entry step, and is imported by **both** 
 pq.createWorker(orderWorkflow);
 
 // producer tier — starting a run is just add({ data })
-const { workflowId } = await pq.createQueue(orderWorkflow).addJob({ data: { cartId } });
+const orders = pq.createQueue(orderWorkflow);
+const { workflowId } = await orders.addJob({ data: { cartId } });
 ```
 
 Step keys and their order are a single source of truth across the produce/consume split.

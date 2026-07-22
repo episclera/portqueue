@@ -13,7 +13,8 @@ Errors are typed. Catch `PortQueueError` (the base) and branch on `error.code`
 import { PortQueueError, PortQueueErrorCode } from '@portqueue/core';
 
 try {
-  await pq.createQueue('emails').addJob({ data });
+  const emails = pq.createQueue('emails');
+  await emails.addJob({ data });
 } catch (err) {
   if (err instanceof PortQueueError && err.code === PortQueueErrorCode.QUEUE_PAUSED) {
     // handle the specific case

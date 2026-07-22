@@ -34,7 +34,8 @@ the two tiers agree on the queue with no extra coordination.
 
 ```ts
 // api-server.ts — producer only, no worker here
-await pq.createQueue(QueueName.Emails).addJob({ data: { to: 'a@b.com', template: 'welcome' } });
+const emails = pq.createQueue(QueueName.Emails);
+await emails.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
 // → handled by the worker tier, not this process
 ```
 

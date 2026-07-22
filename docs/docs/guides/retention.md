@@ -41,5 +41,6 @@ Manual pruning is always available:
 ```ts
 import { JobStatus } from '@portqueue/core';
 
-await pq.createQueue('emails').purgeJobs({ statuses: [JobStatus.COMPLETED] });
+const emails = pq.createQueue('emails');
+await emails.purgeJobs({ statuses: [JobStatus.COMPLETED] });
 ```

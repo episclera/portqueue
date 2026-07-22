@@ -37,10 +37,12 @@ await emails.addJob({ data, startAfter: new Date('2026-08-01T09:00:00Z') });
 ## Idempotency & singleton
 
 ```ts
-const r = await pq.createQueue('payments').addJob({ data: { orderId }, idempotencyKey: `charge:${orderId}` });
+const payments = pq.createQueue('payments');
+const r = await payments.addJob({ data: { orderId }, idempotencyKey: `charge:${orderId}` });
 if (r.deduplicated) logger.info('already queued', { jobId: r.jobId });
 
-await pq.createQueue('reindex').addJob({ data, singletonKey: `reindex:${tenantId}` });
+const reindex = pq.createQueue('reindex');
+await reindex.addJob({ data, singletonKey: `reindex:${tenantId}` });
 ```
 
 ## Transactional enqueue
@@ -53,7 +55,8 @@ import { fromKnex } from '@portqueue/core/tx';
 
 await knex.transaction(async (trx) => {
   await trx('order').insert(order);
-  await pq.createQueue('fulfillment').addJob({ data: { orderId }, tx: fromKnex(trx) });
+  const fulfillment = pq.createQueue('fulfillment');
+  await fulfillment.addJob({ data: { orderId }, tx: fromKnex(trx) });
 });
 ```
 

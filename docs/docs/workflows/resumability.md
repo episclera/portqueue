@@ -34,11 +34,12 @@ forward.
 import { RetryMode } from '@portqueue/core';
 
 // re-arm the failed step's own job with its persisted data (default)
-await pq.createQueue('orders').retryJob({ jobId, from: RetryMode.FROM_FAILED_STEP });
+const orders = pq.createQueue('orders');
+await orders.retryJob({ jobId, from: RetryMode.FROM_FAILED_STEP });
 
 // start a fresh run from the entry step under a new workflowId,
 // seeded from the original run's entry-step data
-await pq.createQueue('orders').retryJob({ jobId, from: RetryMode.FROM_START });
+await orders.retryJob({ jobId, from: RetryMode.FROM_START });
 ```
 
 :::tip Why there is no arbitrary-step selector

@@ -12,8 +12,9 @@ Scheduling is **the `schedule` option on `addJob`** — there is **no separate
 ## Delayed (one-off)
 
 ```ts
-await pq.createQueue('emails').addJob({ data, delay: '24h' });
-await pq.createQueue('emails').addJob({ data, startAfter: new Date('2026-08-01T09:00:00Z') });
+const emails = pq.createQueue('emails');
+await emails.addJob({ data, delay: '24h' });
+await emails.addJob({ data, startAfter: new Date('2026-08-01T09:00:00Z') });
 ```
 
 ## Recurring — cron with timezone
@@ -22,7 +23,8 @@ Passing `schedule` makes `addJob` create/update a **recurring producer**; `data`
 job options become the **template** for every produced run.
 
 ```ts
-const r = await pq.createQueue('reports').addJob({
+const reports = pq.createQueue('reports');
+const r = await reports.addJob({
   data: { kind: 'sales' },       // template for each run
   priority: 5,                   // job options apply to each run
   schedule: {
@@ -41,14 +43,16 @@ neither.
 ## Recurring — fixed interval
 
 ```ts
-await pq.createQueue('healthchecks').addJob({ data: {}, schedule: { key: 'ping', every: '30s' } });
+const healthchecks = pq.createQueue('healthchecks');
+await healthchecks.addJob({ data: {}, schedule: { key: 'ping', every: '30s' } });
 ```
 
 ## Inspecting & unscheduling
 
 ```ts
-await pq.createQueue('reports').getSchedules();               // list recurring definitions
-await pq.createQueue('reports').removeSchedule({ scheduleId: r.scheduleId });
+const reports = pq.createQueue('reports');
+await reports.getSchedules();               // list recurring definitions
+await reports.removeSchedule({ scheduleId: r.scheduleId });
 ```
 
 `removeSchedule` stops future production but does **not** delete jobs already produced —

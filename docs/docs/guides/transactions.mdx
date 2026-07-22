@@ -34,7 +34,8 @@ import { fromKnex } from '@portqueue/core/tx';
 
 await knex.transaction(async (trx) => {
   await trx('order').insert(order);
-  await pq.createQueue('fulfillment').addJob({ data: { orderId }, tx: fromKnex(trx) });
+  const fulfillment = pq.createQueue('fulfillment');
+  await fulfillment.addJob({ data: { orderId }, tx: fromKnex(trx) });
 }); // the developer's trx owns commit/rollback
 ```
 
@@ -46,7 +47,8 @@ import { fromPg } from '@portqueue/core/tx';
 
 await client.query('BEGIN');
 await client.query('INSERT INTO "order" (...) VALUES (...)');
-await pq.createQueue('fulfillment').addJob({ data, tx: fromPg(client) });
+const fulfillment = pq.createQueue('fulfillment');
+await fulfillment.addJob({ data, tx: fromPg(client) });
 await client.query('COMMIT'); // the app owns commit/rollback
 ```
 
@@ -58,7 +60,8 @@ import { fromPrisma } from '@portqueue/core/tx';
 
 await prisma.$transaction(async (px) => {
   await px.order.create({ data: order });
-  await pq.createQueue('fulfillment').addJob({ data: { orderId }, tx: fromPrisma(px) });
+  const fulfillment = pq.createQueue('fulfillment');
+  await fulfillment.addJob({ data: { orderId }, tx: fromPrisma(px) });
 });
 ```
 
@@ -70,7 +73,8 @@ import { fromDrizzle } from '@portqueue/core/tx';
 
 await db.transaction(async (tx) => {
   await tx.insert(orders).values(order);
-  await pq.createQueue('fulfillment').addJob({ data: { orderId }, tx: fromDrizzle(tx) });
+  const fulfillment = pq.createQueue('fulfillment');
+  await fulfillment.addJob({ data: { orderId }, tx: fromDrizzle(tx) });
 });
 ```
 
