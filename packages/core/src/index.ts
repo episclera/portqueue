@@ -11,9 +11,7 @@ export type {
   StepController,
   StepOutcome,
   WorkflowStep,
-  WorkflowDefinition,
 } from './jobs/job.js';
-export { defineWorkflow } from './producer/define-workflow.js';
 
 // Enums (no magic strings)
 export { JobStatus } from './jobs/job-state.enum.js';
@@ -37,7 +35,7 @@ export { DriverCapability } from './driver/driver-capabilities.js';
 export type { PortQueueOptions, ShutdownOptions } from './options/client-options.js';
 export type { QueueOptions } from './options/queue-options.js';
 export type { WorkerOptions, ErrorClass } from './options/worker-options.js';
-export type { JobOptions, AddJobOptions, ScheduleSpec } from './options/job-options.js';
+export type { JobOptions, AddJobOptions, CronSpec } from './options/job-options.js';
 export type {
   BackoffOptions,
   RetentionOptions,

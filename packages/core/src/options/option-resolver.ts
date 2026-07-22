@@ -65,11 +65,6 @@ export class OptionResolver {
   }
 
   private resolveStartAfter(options: JobOptions, now: number): number {
-    if (options.delay != null && options.startAfter != null) {
-      // Guarded at the API layer, but keep resolution deterministic here too.
-      return now + toMs(options.delay);
-    }
-    if (options.delay != null) return now + toMs(options.delay);
     if (options.startAfter != null) {
       if (options.startAfter instanceof Date) return options.startAfter.getTime();
       return now + toMs(options.startAfter);

@@ -80,7 +80,7 @@ const JOB_COLUMNS = [
 
 /**
  * A SQL-dialect base implementing the whole {@link Driver} contract (build_plan/11.5).
- * Concrete drivers (SQLite, PGLite, Postgres, Oracle) provide only connection management,
+ * Concrete drivers (Postgres, Oracle, PGLite, SQLite) provide only connection management,
  * the placeholder style, and any dialect specifics. No driver method emits a relational
  * JOIN — every relationship is resolved by an id-keyed single-table lookup (build_plan/04.1).
  */

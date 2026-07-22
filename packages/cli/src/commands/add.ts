@@ -18,15 +18,16 @@ export const addCommand: Command = {
   group: CommandGroup.Actions,
   summary: 'Enqueue a job or create a recurring schedule',
   usage:
-    '--queue <name> --data <json|@file> [--priority --delay --idempotency-key\n' +
-    '      --schedule-key <k> (--cron "<expr>" | --every <ms>) --timezone <tz>]',
+    '--queue <name> --data <json|@file> [--priority --start-after <duration>\n' +
+    '      --idempotency-key <k> | --cron "<expr>" --timezone <tz> | --every <ms>]',
   async run({ pq, flags }) {
     const queue = requireFlag(flags, 'queue');
     const data = await parseData(requireFlag(flags, 'data'));
 
     const options: Record<string, unknown> = { data };
     if (flagNumber(flags, 'priority') !== undefined) options.priority = flagNumber(flags, 'priority');
-    if (flagNumber(flags, 'delay') !== undefined) options.delay = flagNumber(flags, 'delay');
+    const startAfter = flagString(flags, 'start-after');
+    if (startAfter) options.startAfter = /^\d+$/.test(startAfter) ? Number(startAfter) : startAfter;
     if (flagNumber(flags, 'retry-max-attempts') !== undefined) {
       options.retryMaxAttempts = flagNumber(flags, 'retry-max-attempts');
     }
@@ -34,17 +35,13 @@ export const addCommand: Command = {
       options.idempotencyKey = flagString(flags, 'idempotency-key');
     }
 
-    const scheduleKey = flagString(flags, 'schedule-key');
-    if (scheduleKey) {
-      const cron = flagString(flags, 'cron');
-      const every = flagNumber(flags, 'every');
-      options.schedule = {
-        key: scheduleKey,
-        ...(cron ? { cron } : {}),
-        ...(every ? { every } : {}),
-        ...(flagString(flags, 'timezone') ? { timezone: flagString(flags, 'timezone') } : {}),
-      };
-    }
+    // Recurring: `--cron` (optionally with `--timezone`) or `--every <ms>`. No key needed —
+    // the pattern is the identity.
+    const cron = flagString(flags, 'cron');
+    const timezone = flagString(flags, 'timezone');
+    const every = flagNumber(flags, 'every');
+    if (cron) options.cron = timezone ? { pattern: cron, tz: timezone } : cron;
+    else if (every !== undefined) options.startEvery = every;
 
     const result = await pq.createQueue(queue).addJob(options as never);
     if (flagBool(flags, 'json')) return printJson(result);

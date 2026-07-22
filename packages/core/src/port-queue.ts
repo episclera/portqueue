@@ -22,7 +22,7 @@ import { SystemClock } from './util/clock.js';
 import type { PortQueueOptions, ShutdownOptions } from './options/client-options.js';
 import type { QueueOptions } from './options/queue-options.js';
 import type { WorkerOptions } from './options/worker-options.js';
-import type { WorkflowDefinition } from './jobs/job.js';
+import type { JobHandler, WorkflowStep } from './jobs/job.js';
 import type { Logger } from './logging/logger.interface.js';
 import type { Runtime } from './client/runtime.js';
 import type { HookRegistration } from './events/hooks.js';
@@ -135,18 +135,8 @@ export class PortQueue<TQueues extends string = string> {
   }
 
   // --- Handles ---
-  createQueue<TData = unknown>(
-    nameOrWorkflow: TQueues | WorkflowDefinition<TData, TQueues>,
-    options: QueueOptions = {},
-  ): Queue<TData> {
-    let name: string;
-    if (typeof nameOrWorkflow === 'string') {
-      name = nameOrWorkflow;
-      this.runtime.registry.define(name, options);
-    } else {
-      name = nameOrWorkflow.queue;
-      this.runtime.registry.define(name, options, nameOrWorkflow as WorkflowDefinition);
-    }
+  createQueue<TData = unknown>(name: TQueues, options: QueueOptions = {}): Queue<TData> {
+    this.runtime.registry.define(name, options);
     // Register queue-scoped hooks once (build_plan/08.4 — QueueOptions.hooks).
     if (options.hooks && !this.hookedQueues.has(name)) {
       this.hookedQueues.add(name);
@@ -162,39 +152,43 @@ export class PortQueue<TQueues extends string = string> {
   }
 
   createWorker<TData = unknown, TResult = unknown>(
-    options: WorkerOptions<TData, TResult, TQueues> | WorkflowDefinition<TData, TQueues>,
+    options: WorkerOptions<TData, TResult, TQueues>,
   ): Worker {
-    // A WorkflowDefinition (from defineWorkflow) supplies queue + steps directly.
-    const opts: WorkerOptions<TData, TResult, TQueues> =
-      'entryStep' in options
-        ? ({ queue: options.queue, steps: options.steps } as WorkerOptions<TData, TResult, TQueues>)
-        : options;
-    const hasHandler = typeof opts.handler === 'function';
-    const hasSteps = Array.isArray(opts.steps) && opts.steps.length > 0;
-    if (hasHandler === hasSteps) {
+    // The handler is either a single function (simple mode) or an ordered array of
+    // workflow steps (workflow mode). There is no separate workflow-definition object.
+    let handler: JobHandler | undefined;
+    let steps: ReadonlyArray<WorkflowStep> | undefined;
+    if (Array.isArray(options.handler)) {
+      steps = validateWorkflowSteps(options.queue, options.handler as ReadonlyArray<WorkflowStep>);
+    } else if (typeof options.handler === 'function') {
+      handler = options.handler as unknown as JobHandler;
+    } else {
       throw new InvalidOptionsError(
-        `createWorker for queue '${opts.queue}' requires exactly one of 'handler' (single-function) or 'steps' (workflow).`,
-        { queue: opts.queue },
+        `createWorker for queue '${options.queue}' requires 'handler' to be a function (simple job) or a non-empty array of steps (workflow).`,
+        { queue: options.queue },
       );
     }
-    // Ensure the queue is defined (so pause/resume and options resolve).
-    this.runtime.registry.define(opts.queue, this.runtime.registry.getOptions(opts.queue));
-    const concurrency = opts.concurrency ?? 1;
+    // A workflow worker registers its steps so the producer mints workflow jobs
+    // (workflowId + entry step) when adding to this queue.
+    this.runtime.registry.define(
+      options.queue,
+      this.runtime.registry.getOptions(options.queue),
+      steps,
+    );
+    const concurrency = options.concurrency ?? 1;
     const notifyCapable = this.runtime.driver.capabilities[DriverCapability.LISTEN_NOTIFY];
     const config: WorkerConfig = {
-      queue: opts.queue,
-      ...(opts.handler
-        ? { handler: opts.handler as unknown as NonNullable<WorkerConfig['handler']> }
-        : {}),
-      ...(opts.steps ? { steps: opts.steps as unknown as NonNullable<WorkerConfig['steps']> } : {}),
+      queue: options.queue,
+      ...(handler ? { handler } : {}),
+      ...(steps ? { steps } : {}),
       concurrency,
-      batchSize: opts.batchSize ?? concurrency,
-      lockDurationMs: opts.lockDurationMs ?? 30000,
-      pollIntervalMs: opts.pollIntervalMs ?? (notifyCapable ? 5000 : 1000),
-      ...(opts.limiter ? { limiter: opts.limiter } : {}),
-      respectSystemPressure: opts.respectSystemPressure ?? true,
-      dontAutoretryFor: opts.dontAutoretryFor ?? [],
-      queueOptions: this.runtime.registry.getOptions(opts.queue),
+      batchSize: options.batchSize ?? concurrency,
+      lockDurationMs: options.lockDurationMs ?? 30000,
+      pollIntervalMs: options.pollIntervalMs ?? (notifyCapable ? 5000 : 1000),
+      ...(options.limiter ? { limiter: options.limiter } : {}),
+      respectSystemPressure: options.respectSystemPressure ?? true,
+      dontAutoretryFor: options.dontAutoretryFor ?? [],
+      queueOptions: this.runtime.registry.getOptions(options.queue),
     };
     const worker = new Worker(
       this.runtime,
@@ -268,4 +262,38 @@ export class PortQueue<TQueues extends string = string> {
 function resolveLogger(logger: PortQueueOptions['logger']): Logger {
   if (logger && typeof (logger as Logger).info === 'function') return logger as Logger;
   return new ConsoleLogger((logger as ConstructorParameters<typeof ConsoleLogger>[0]) ?? {});
+}
+
+/**
+ * Validate a workflow worker's steps (build_plan/05.3): non-empty, non-empty keys, and
+ * unique keys. Returns the same array so it can be registered/stored as the canonical
+ * ordered sequence (`steps[0]` is the entry step).
+ */
+function validateWorkflowSteps(
+  queue: string,
+  steps: ReadonlyArray<WorkflowStep>,
+): ReadonlyArray<WorkflowStep> {
+  if (steps.length === 0) {
+    throw new InvalidOptionsError(
+      `Workflow worker for queue '${queue}' must declare at least one step (an ordered array of { key, handler }).`,
+      { queue },
+    );
+  }
+  const seen = new Set<string>();
+  for (const step of steps) {
+    if (!step.key) {
+      throw new InvalidOptionsError(
+        `Workflow worker for queue '${queue}' has a step with an empty key.`,
+        { queue },
+      );
+    }
+    if (seen.has(step.key)) {
+      throw new InvalidOptionsError(
+        `Workflow worker for queue '${queue}' has a duplicate step key '${step.key}'. Step keys must be unique.`,
+        { queue },
+      );
+    }
+    seen.add(step.key);
+  }
+  return steps;
 }

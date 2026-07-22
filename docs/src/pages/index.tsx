@@ -9,7 +9,7 @@ const FEATURES: { icon: string; title: string; body: string }[] = [
   {
     icon: '🗄️',
     title: 'Multi-driver',
-    body: 'First-class Postgres, PGLite, SQLite, and Oracle drivers — plus a custom-driver interface. One API across every engine.',
+    body: 'First-class Postgres, Oracle, PGLite, and SQLite drivers — plus a custom-driver interface. One API across every engine.',
   },
   {
     icon: '🚫',
@@ -53,7 +53,7 @@ const FEATURES: { icon: string; title: string; body: string }[] = [
   },
 ];
 
-const DRIVERS = ['Postgres', 'PGLite', 'SQLite', 'Oracle', 'Custom driver'];
+const DRIVERS = ['Postgres', 'Oracle', 'PGLite', 'SQLite', 'Custom driver'];
 
 const QUICK_START = `import { PortQueue } from '@portqueue/core';
 import { PostgresDriver } from '@portqueue/core/drivers/postgres';

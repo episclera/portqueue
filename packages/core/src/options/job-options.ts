@@ -8,8 +8,7 @@ import type { TransactionHandle } from '../tx/transaction-handle.js';
  */
 export interface JobOptions {
   priority?: number;
-  /** `delay` and `startAfter` both mean "not before"; pass at most one. */
-  delay?: Duration;
+  /** Delay a one-off job — run not before this time. A `Date`, or a `Duration` from now. */
   startAfter?: Date | Duration;
   retryMaxAttempts?: number;
   retryDelay?: Duration;
@@ -24,27 +23,29 @@ export interface JobOptions {
   tx?: TransactionHandle;
 }
 
-/** A recurring schedule specification (build_plan/05.3). */
-export interface ScheduleSpec {
-  /** Stable id; re-adding with the same (queue, key) updates the schedule. */
-  key: string;
-  /** Exactly one of `cron` or `every`. */
-  cron?: string;
-  every?: Duration;
-  /** IANA timezone for cron evaluation (default UTC). */
-  timezone?: string;
-  startAt?: Date;
-  endAt?: Date;
-}
+/**
+ * A cron schedule (build_plan/05.3): a 5- or 6-field expression string evaluated in UTC,
+ * or an object pairing the expression with an IANA timezone.
+ */
+export type CronSpec = string | { pattern: string; tz?: string };
 
 /**
  * The full add-a-job options (build_plan/05.3). `data` is a named key, never positional.
- * Passing `schedule` turns this into a recurring producer instead of a one-off insert.
+ *
+ * Timing is one of three mutually-exclusive modes:
+ * - **one-off** (default) — runs immediately, or at `startAfter` if given;
+ * - **recurring interval** — `startEvery` (a `Duration` between runs);
+ * - **recurring cron** — `cron` (a {@link CronSpec}).
+ *
+ * A recurring add creates/updates a schedule keyed by its own pattern: re-adding the same
+ * `startEvery`/`cron` on a queue updates that schedule; a different pattern makes a new one.
  */
 export type AddJobOptions<TData> = JobOptions & {
   data: TData;
-  /** Present → create/update a recurring schedule using `data` + options as the template. */
-  schedule?: ScheduleSpec;
+  /** Recurring: a fixed interval between runs, e.g. `'30s'`. */
+  startEvery?: Duration;
+  /** Recurring: a cron expression, optionally with a timezone. */
+  cron?: CronSpec;
   /** For a workflow queue: begin at a non-entry step (rare; defaults to the entry step). */
   startStep?: string;
 };

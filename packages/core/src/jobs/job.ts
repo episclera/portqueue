@@ -54,18 +54,11 @@ export type StepOutcome =
   | { readonly kind: 'repeat'; readonly data?: unknown; readonly delayMs?: number }
   | { readonly kind: 'done'; readonly result?: unknown };
 
-/** One declared step of a workflow (build_plan/05.4). */
+/**
+ * One declared step of a workflow (build_plan/05.4). A worker becomes a workflow worker
+ * simply by passing an ordered array of these as its `handler`.
+ */
 export interface WorkflowStep<TData = unknown> {
   key: string;
   handler: StepHandler<TData>;
-}
-
-/**
- * A pure, shared workflow definition (build_plan/05.3). Imported by both the producer
- * (`pq.createQueue(def)`) and worker (`pq.createWorker(def)`) tiers.
- */
-export interface WorkflowDefinition<TData = unknown, TQueue extends string = string> {
-  readonly queue: TQueue;
-  readonly steps: ReadonlyArray<WorkflowStep<TData>>;
-  readonly entryStep: string;
 }

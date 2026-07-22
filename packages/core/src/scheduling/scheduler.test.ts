@@ -21,7 +21,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     const queue = h.pq.createQueue('reports');
     const res = await queue.addJob({
       data: { report: 'daily' },
-      schedule: { key: 'daily', every: 1000 },
+      startEvery: 1000,
     });
     expect(res.scheduleId).toBeTruthy();
     expect(res.nextRunAt).toBeInstanceOf(Date);
@@ -38,7 +38,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
 
   it('lists schedules and removes them', async () => {
     const queue = h.pq.createQueue('sched');
-    const res = await queue.addJob({ data: {}, schedule: { key: 'k', cron: '0 0 * * *' } });
+    const res = await queue.addJob({ data: {}, cron: '0 0 * * *' });
     let schedules = await queue.getSchedules();
     expect(schedules).toHaveLength(1);
     expect(schedules[0]!.cron).toBe('0 0 * * *');

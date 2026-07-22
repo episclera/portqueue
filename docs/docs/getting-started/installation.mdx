@@ -20,6 +20,13 @@ npm install @portqueue/core pg
 ```
 
   </TabItem>
+  <TabItem value="oracle" label="Oracle">
+
+```bash
+npm install @portqueue/core oracledb
+```
+
+  </TabItem>
   <TabItem value="pglite" label="PGLite">
 
 ```bash
@@ -31,13 +38,6 @@ npm install @portqueue/core @electric-sql/pglite
 
 ```bash
 npm install @portqueue/core better-sqlite3
-```
-
-  </TabItem>
-  <TabItem value="oracle" label="Oracle">
-
-```bash
-npm install @portqueue/core oracledb
 ```
 
   </TabItem>
@@ -95,6 +95,19 @@ await pq.init();
 ```
 
   </TabItem>
+  <TabItem value="oracle" label="Oracle">
+
+```ts
+import { PortQueue } from '@portqueue/core';
+import { OracleDriver } from '@portqueue/core/drivers/oracle';
+
+const pq = new PortQueue({
+  driver: new OracleDriver({ connectString: process.env.ORACLE_DSN, user: 'app', password: process.env.ORACLE_PW }),
+});
+await pq.init();
+```
+
+  </TabItem>
   <TabItem value="pglite" label="PGLite">
 
 ```ts
@@ -113,19 +126,6 @@ import { PortQueue } from '@portqueue/core';
 import { SqliteDriver } from '@portqueue/core/drivers/sqlite';
 
 const pq = new PortQueue({ driver: new SqliteDriver({ file: './queue.db' }) });
-await pq.init();
-```
-
-  </TabItem>
-  <TabItem value="oracle" label="Oracle">
-
-```ts
-import { PortQueue } from '@portqueue/core';
-import { OracleDriver } from '@portqueue/core/drivers/oracle';
-
-const pq = new PortQueue({
-  driver: new OracleDriver({ connectString: process.env.ORACLE_DSN, user: 'app', password: process.env.ORACLE_PW }),
-});
 await pq.init();
 ```
 

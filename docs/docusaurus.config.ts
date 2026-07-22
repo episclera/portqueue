@@ -127,7 +127,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Free and open source. Commercial use permitted. No license fee, no obligations. (MIT)<br/>Created by <a href="/portqueue/docs/team">Gheorghe Gherciu</a> — the main developer. © ${new Date().getFullYear()} PortQueue.`,
+      copyright: `Free and open source. Commercial use permitted. No license fee, no obligations. (MIT)<br/>Created by <a href="/portqueue/docs/team">Gheorghe Gherciu</a>. © ${new Date().getFullYear()} PortQueue.`,
     },
     prism: {
       theme: prismThemes.oneLight,

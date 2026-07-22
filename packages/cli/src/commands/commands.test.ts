@@ -86,9 +86,9 @@ describe('schedulesCommand', () => {
     const { stdout } = await run(
       schedulesCommand,
       { queue: 'emails' },
-      { schedules: [{ key: 'daily', cron: '0 0 * * *', nextRunAt: null, enabled: true }] },
+      { schedules: [{ scheduleId: 'sch-daily', cron: '0 0 * * *', nextRunAt: null, enabled: true }] },
     );
-    expect(stdout).toContain('daily');
+    expect(stdout).toContain('sch-daily');
     expect(stdout).toContain('0 0 * * *');
   });
 });
@@ -109,14 +109,34 @@ describe('addCommand', () => {
     expect(calls.addJob[0]).toMatchObject({ data: { from: 'file' } });
   });
 
-  it('creates a schedule when --schedule-key is given', async () => {
+  it('creates a schedule when --cron is given', async () => {
     const { stdout, calls } = await run(
       addCommand,
-      { queue: 'emails', data: '{"x":1}', 'schedule-key': 'daily', cron: '0 0 * * *' },
+      { queue: 'emails', data: '{"x":1}', cron: '0 0 * * *' },
       { addResult: { scheduleId: 'sch-1', nextRunAt: null } },
     );
     expect(stdout).toContain('Schedule sch-1 created');
-    expect(calls.addJob[0]).toMatchObject({ schedule: { key: 'daily', cron: '0 0 * * *' } });
+    expect(calls.addJob[0]).toMatchObject({ cron: '0 0 * * *' });
+  });
+
+  it('creates a cron schedule with a timezone object when --timezone is given', async () => {
+    const { calls } = await run(
+      addCommand,
+      { queue: 'emails', data: '{"x":1}', cron: '0 8 * * *', timezone: 'America/New_York' },
+      { addResult: { scheduleId: 'sch-2', nextRunAt: null } },
+    );
+    expect(calls.addJob[0]).toMatchObject({
+      cron: { pattern: '0 8 * * *', tz: 'America/New_York' },
+    });
+  });
+
+  it('creates an interval schedule when --every is given', async () => {
+    const { calls } = await run(
+      addCommand,
+      { queue: 'emails', data: '{"x":1}', every: '30000' },
+      { addResult: { scheduleId: 'sch-3', nextRunAt: null } },
+    );
+    expect(calls.addJob[0]).toMatchObject({ startEvery: 30000 });
   });
 });
 

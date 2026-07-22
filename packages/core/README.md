@@ -1,14 +1,14 @@
 # @portqueue/core
 
-The engine and first-party drivers for **PortQueue** — a database-backed job queue for Node.js that works across multiple database engines (Postgres, PGLite, SQLite, Oracle) through one API.
+The engine and first-party drivers for **PortQueue** — a database-backed job queue for Node.js that works across multiple database engines (Postgres, Oracle, PGLite, SQLite) through one API.
 
 ```bash
 npm install @portqueue/core
 # + the client for your DB, e.g. one of:
 npm install pg              # Postgres
+npm install oracledb        # Oracle
 npm install @electric-sql/pglite   # PGLite (embedded/edge/tests)
 npm install better-sqlite3  # SQLite (or use Node's built-in node:sqlite)
-npm install oracledb        # Oracle
 ```
 
 ```ts
@@ -25,7 +25,7 @@ await emails.addJob({ data: { to: 'a@b.com' } });
 
 **Free and open source. Commercial use permitted. No license fee, no obligations.** (MIT)
 
-- Subpath driver imports: `@portqueue/core/drivers/{postgres,pglite,sqlite,oracle}`
+- Subpath driver imports: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite}`
 - Transaction adapters: `@portqueue/core/tx` (`fromKnex`, `fromPg`, …)
 - Custom-driver conformance kit: `@portqueue/core/conformance`
 

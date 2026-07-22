@@ -9,8 +9,8 @@ sidebar_position: 1
 
 **PortQueue is a database-backed job queue for Node.js.** It treats your relational
 database as the single source of truth and works across multiple engines through a
-driver abstraction — with first-class drivers for **Postgres, PGLite, SQLite, and
-Oracle**, plus a custom-driver interface for anything else.
+driver abstraction — with first-class drivers for **Postgres, Oracle, PGLite, and
+SQLite**, plus a custom-driver interface for anything else.
 
 It is for teams who already run a relational database and don't want to add Redis (or
 any other broker) just to get a reliable queue. It takes the best ergonomics from

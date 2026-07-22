@@ -21,39 +21,40 @@ the next step's job.
 ## A worked pipeline: validate → charge → ship → notify
 
 ```ts
+import type { WorkflowStep } from '@portqueue/core';
+
 enum OrderStep { VALIDATE = 'VALIDATE', CHARGE = 'CHARGE', SHIP = 'SHIP', NOTIFY = 'NOTIFY' }
 
-export const orderWorkflow = defineWorkflow({
-  queue: 'orders',
-  steps: [
-    {
-      key: OrderStep.VALIDATE,
-      handler: async (job, step) => {
-        const validated = await validate(job.data);
-        return step.next({ data: validated });        // → CHARGE (next in order)
-      },
+const orderSteps: WorkflowStep[] = [
+  {
+    key: OrderStep.VALIDATE,
+    handler: async (job, step) => {
+      const validated = await validate(job.data);
+      return step.next({ data: validated });        // → CHARGE (next in order)
     },
-    {
-      key: OrderStep.CHARGE,
-      handler: async (job, step) => {
-        const charged = await charge(job.data);
-        return step.next({ data: charged });           // → SHIP
-      },
+  },
+  {
+    key: OrderStep.CHARGE,
+    handler: async (job, step) => {
+      const charged = await charge(job.data);
+      return step.next({ data: charged });           // → SHIP
     },
-    {
-      key: OrderStep.SHIP,
-      handler: async (job, step) => {
-        const shipment = await ship(job.data);
-        if (!shipment.ready) return step.repeat({ delayMs: 60_000 }); // poll again in 1m
-        return step.next({ data: shipment });          // → NOTIFY
-      },
+  },
+  {
+    key: OrderStep.SHIP,
+    handler: async (job, step) => {
+      const shipment = await ship(job.data);
+      if (!shipment.ready) return step.repeat({ delayMs: 60_000 }); // poll again in 1m
+      return step.next({ data: shipment });          // → NOTIFY
     },
-    {
-      key: OrderStep.NOTIFY,
-      handler: async (job, step) => step.done({ result: await notify(job.data) }),
-    },
-  ],
-});
+  },
+  {
+    key: OrderStep.NOTIFY,
+    handler: async (job, step) => step.done({ result: await notify(job.data) }),
+  },
+];
+
+pq.createWorker({ queue: 'orders', handler: orderSteps });
 ```
 
 To skip ahead, pass `to`: `step.next({ to: OrderStep.SHIP })`.

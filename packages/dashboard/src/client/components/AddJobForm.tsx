@@ -19,7 +19,6 @@ interface FormValues {
   data: string;
   priority?: number;
   idempotencyKey?: string;
-  scheduleKey?: string;
   cron?: string;
   everyMs?: number;
   timezone?: string;
@@ -56,15 +55,15 @@ export function AddJobForm({ open, queue, onClose, initial }: AddJobFormProps): 
         data,
         ...(typeof values.priority === 'number' ? { priority: values.priority } : {}),
         ...(values.idempotencyKey ? { idempotencyKey: values.idempotencyKey } : {}),
-        ...(mode === 'recurring' && values.scheduleKey
+        ...(mode === 'recurring' && values.cron
           ? {
-              schedule: {
-                key: values.scheduleKey,
-                ...(values.cron ? { cron: values.cron } : {}),
-                ...(typeof values.everyMs === 'number' ? { every: values.everyMs } : {}),
-                ...(values.timezone ? { timezone: values.timezone } : {}),
-              },
+              cron: values.timezone
+                ? { pattern: values.cron, tz: values.timezone }
+                : values.cron,
             }
+          : {}),
+        ...(mode === 'recurring' && !values.cron && typeof values.everyMs === 'number'
+          ? { startEvery: values.everyMs }
           : {}),
       },
     };
@@ -116,9 +115,6 @@ export function AddJobForm({ open, queue, onClose, initial }: AddJobFormProps): 
           </Form.Item>
           {mode === 'recurring' && (
             <>
-              <Form.Item label="Schedule key" name="scheduleKey" rules={[{ required: true }]}>
-                <Input placeholder="Stable id; re-adding updates it" />
-              </Form.Item>
               <Form.Item
                 label="Cron expression"
                 name="cron"
@@ -130,7 +126,7 @@ export function AddJobForm({ open, queue, onClose, initial }: AddJobFormProps): 
                 <InputNumber style={{ width: '100%' }} placeholder="e.g. 60000" />
               </Form.Item>
               <Form.Item label="Timezone" name="timezone">
-                <Input placeholder="IANA tz, e.g. UTC" />
+                <Input placeholder="IANA tz, e.g. UTC (cron only)" />
               </Form.Item>
             </>
           )}

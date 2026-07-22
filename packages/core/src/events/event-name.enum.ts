@@ -110,8 +110,8 @@ export interface PortQueueEventPayloads {
     error: unknown;
   };
 
-  [PortQueueEvent.SCHEDULE_CREATED]: { scheduleId: string; queue: string; key: string };
-  [PortQueueEvent.SCHEDULE_UPDATED]: { scheduleId: string; queue: string; key: string };
+  [PortQueueEvent.SCHEDULE_CREATED]: { scheduleId: string; queue: string };
+  [PortQueueEvent.SCHEDULE_UPDATED]: { scheduleId: string; queue: string };
   [PortQueueEvent.SCHEDULE_REMOVED]: { scheduleId: string; queue: string };
   [PortQueueEvent.SCHEDULE_FIRED]: { scheduleId: string; jobId: string; queue: string };
 

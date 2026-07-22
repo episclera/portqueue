@@ -102,15 +102,12 @@ export function serializeSchedule(s: ScheduleInfo, queue: string): ScheduleDto {
   return {
     scheduleId: s.scheduleId,
     queue,
-    key: s.key,
     cron: s.cron,
     every: s.every,
     timezone: s.timezone,
     nextRunAt: iso(s.nextRunAt),
     lastRunAt: iso(s.lastRunAt),
     enabled: s.enabled,
-    startAt: iso(s.startAt),
-    endAt: iso(s.endAt),
   };
 }
 

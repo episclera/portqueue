@@ -40,9 +40,3 @@ your app uses, so the CLI, dashboard, and app all agree on driver, schema, and q
 Run the CLI in a container for one-off ops or to host the dashboard: mount your config
 module, pass `--config`, and expose the dashboard `--port`. Because everything is driven
 by the shared config, no app changes are needed.
-
-:::tip Migrations in production
-Prefer running `portqueue migrate` as a **separate, single deploy step** before rolling
-app instances, with the client in `MigrationMode.MANUAL`/`VALIDATE_ONLY`. See
-[Production](./production.md).
-:::

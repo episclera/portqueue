@@ -16,9 +16,9 @@ export const schedulesCommand: Command = {
     if (flagBool(flags, 'json')) return printJson(list);
     heading(`Schedules — ${queue}`);
     table(
-      ['Key', 'Cron/Every', 'Next Run', 'Enabled'],
+      ['Schedule ID', 'Cron/Every', 'Next Run', 'Enabled'],
       list.map((s) => [
-        s.key,
+        s.scheduleId,
         s.cron ?? `every ${s.every}ms`,
         relativeTime(s.nextRunAt ?? null),
         s.enabled ? 'yes' : 'no',

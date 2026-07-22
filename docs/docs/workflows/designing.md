@@ -41,20 +41,27 @@ carried value the minimal thing the next step needs — avoid hidden cross-step 
 - **Repeat** a step (poll until ready) with `step.repeat({ delayMs })`.
 - **Finish** the whole run with `step.done({ result })`.
 
-Next: sharing the definition across tiers, on [the step controller](./step-controller.md) page.
+Next: how transitions work, on [the step controller](./step-controller.md) page.
 
-## Sharing the definition across tiers
+## Producing and consuming a workflow
 
-`defineWorkflow({ queue, steps })` is a **pure** factory (no I/O). It validates unique
-keys, records the ordered steps and the entry step, and is imported by **both** tiers:
+A workflow lives entirely on the worker: pass the ordered `steps` array as the worker's
+`handler`. There is no separate definition object to import — the worker validates unique
+keys and records the entry step (`steps[0]`), and the producer picks it up automatically.
 
 ```ts
-// worker tier — consume (many steps)
-pq.createWorker(orderWorkflow);
+import type { WorkflowStep } from '@portqueue/core';
+
+const orderSteps: WorkflowStep[] = [
+  /* { key, handler } — one per step, entry step first */
+];
+
+// worker tier — consume (handler is the ordered steps array)
+pq.createWorker({ queue: 'orders', handler: orderSteps });
 
 // producer tier — starting a run is just add({ data })
-const orders = pq.createQueue(orderWorkflow);
+const orders = pq.createQueue('orders');
 const { workflowId } = await orders.addJob({ data: { cartId } });
 ```
 
-Step keys and their order are a single source of truth across the produce/consume split.
+Step keys and their order are the single source of truth for the run.

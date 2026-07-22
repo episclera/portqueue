@@ -11,19 +11,19 @@ export interface ActionRequestDto {
   mode?: PauseMode;
   from?: RetryMode;
   statuses?: JobStatus[];
-  /** For `add`: the AddJobOptions payload (data + options + optional schedule). */
+  /** For `add`: the AddJobOptions payload (data + options + optional recurring timing). */
   add?: {
     data: unknown;
     priority?: number;
     idempotencyKey?: string;
     singletonKey?: string;
     metadata?: Record<string, unknown>;
-    schedule?: {
-      key: string;
-      cron?: string;
-      every?: number;
-      timezone?: string;
-    };
+    /** One-off delay (a Duration string, ms number, or ISO date string). */
+    startAfter?: number | string;
+    /** Recurring: fixed interval (a Duration string or ms number). */
+    startEvery?: number | string;
+    /** Recurring: cron expression, optionally with a timezone. */
+    cron?: string | { pattern: string; tz?: string };
   };
 }
 

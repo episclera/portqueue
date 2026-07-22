@@ -15,9 +15,27 @@ It's an npm-workspaces monorepo:
 ```bash
 git clone https://github.com/episclera/portqueue
 cd portqueue
-npm install
+./scripts/dev/setup.sh   # or: npm run setup
+```
+
+`setup.sh` selects the pinned Node version and installs all workspaces — that's all you
+need to get the repo ready. Then:
+
+```bash
 npm run build      # build every package
 npm test           # test suite (PGLite + SQLite — no external services needed)
+npm run lint       # ESLint + `tsc --noEmit` in one step
+```
+
+Commits follow **[Conventional Commits](https://www.conventionalcommits.org)** (enforced
+by commitlint) — the changelog is derived from them.
+
+Tests use **PGLite + SQLite only**, so they run anywhere with no external DB server. If
+you need a real Postgres or Oracle (e.g. for manual driver testing), start one in Docker:
+
+```bash
+npm run db:pg:up       # Postgres   (stop with db:pg:down)
+npm run db:oracle:up   # Oracle     (stop with db:oracle:down)
 ```
 
 Packages:
@@ -34,8 +52,6 @@ Packages:
 - **Enums, not magic strings** — for states, events, step keys, capabilities, error codes.
 - **Strict types, no `any`** — payload types flow through generics.
 - **Small, focused classes**; explain the "why" in docs when a non-obvious choice is made.
-- The [test suite](https://github.com/episclera/portqueue) targets high coverage using
-  PGLite + SQLite only, so it runs anywhere with no services.
 
 ## Filing issues & PRs
 

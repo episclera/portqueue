@@ -63,15 +63,12 @@ describe('serializeSchedule', () => {
     const dto = serializeSchedule(
       {
         scheduleId: 'sch-1',
-        key: 'daily',
         cron: '0 0 * * *',
         every: null,
         timezone: 'UTC',
         nextRunAt: new Date('2026-07-23T00:00:00.000Z'),
         lastRunAt: null,
         enabled: true,
-        startAt: null,
-        endAt: null,
       } as never,
       'reports',
     );

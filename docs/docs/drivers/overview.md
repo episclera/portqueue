@@ -34,9 +34,9 @@ suffers.
 | Driver | Import | Client peer dep | Best for |
 |---|---|---|---|
 | [Postgres](./postgres.mdx) | `@portqueue/core/drivers/postgres` | `pg` | Production, multi-instance |
+| [Oracle](./oracle.mdx) | `@portqueue/core/drivers/oracle` | `oracledb` | Oracle-shop deployments |
 | [PGLite](./pglite.mdx) | `@portqueue/core/drivers/pglite` | `@electric-sql/pglite` | Embedded Postgres, tests |
 | [SQLite](./sqlite.mdx) | `@portqueue/core/drivers/sqlite` | `better-sqlite3` | Single-node apps, zero services |
-| [Oracle](./oracle.mdx) | `@portqueue/core/drivers/oracle` | `oracledb` | Oracle-shop deployments |
 
 Need another engine? Write a [custom driver](./custom.md) and validate it with the
 conformance kit.

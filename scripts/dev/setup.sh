@@ -15,8 +15,14 @@ if [ -s "${NVM_DIR:-}/nvm.sh" ]; then
   nvm install # installs the .nvmrc version if it isn't present yet
   nvm use
 else
-  echo "nvm not found — using the current Node ($(node -v))."
-  echo "Make sure it matches .nvmrc ($(cat .nvmrc))."
+  echo "nvm not found — checking for a directly installed Node…"
+  if command -v node >/dev/null 2>&1; then
+    echo "Using the installed Node ($(node -v)). (Recommended: .nvmrc → $(cat .nvmrc))"
+  else
+    echo "Node is not installed. Please install Node (see .nvmrc for the pinned version: $(cat .nvmrc))"
+    echo "  e.g. install nvm (https://github.com/nvm-sh/nvm) or download from https://nodejs.org, then re-run this script."
+    exit 1
+  fi
 fi
 
 echo "Installing all workspaces…"

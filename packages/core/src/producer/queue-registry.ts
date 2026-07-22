@@ -1,17 +1,17 @@
 import type { Driver } from '../driver/driver.interface.js';
 import type { QueueRow } from '../jobs/job-record.js';
 import type { QueueOptions } from '../options/queue-options.js';
-import type { WorkflowDefinition } from '../jobs/job.js';
+import type { WorkflowStep } from '../jobs/job.js';
 import type { Clock } from '../util/clock.js';
 
 interface QueueEntry {
   row: QueueRow;
   options: QueueOptions;
-  workflow?: WorkflowDefinition;
+  steps?: ReadonlyArray<WorkflowStep>;
 }
 
 /**
- * Caches queue name → id + in-memory options + workflow definition (build_plan/04.3).
+ * Caches queue name → id + in-memory options + workflow steps (build_plan/04.3).
  * The name→id lookup (via idempotent `ensureQueue`) happens once per queue, so the hot
  * path stays single-table and join-free.
  */
@@ -24,33 +24,34 @@ export class QueueRegistry {
     private readonly clock: Clock,
   ) {}
 
-  /** Record in-memory options / workflow for a queue (no I/O). */
-  define(name: string, options: QueueOptions, workflow?: WorkflowDefinition): void {
+  /** Record in-memory options / workflow steps for a queue (no I/O). */
+  define(name: string, options: QueueOptions, steps?: ReadonlyArray<WorkflowStep>): void {
     const existing = this.entries.get(name);
     if (existing) {
       existing.options = options;
-      if (workflow) existing.workflow = workflow;
+      if (steps) existing.steps = steps;
       return;
     }
-    // Merge into any pending entry so a later define() (e.g. from createWorker) never wipes
-    // a previously-registered workflow definition.
+    // Merge into any pending entry so a later define() (e.g. from createQueue) never wipes
+    // the workflow steps registered by createWorker.
     const pending = this.pendingOptions.get(name) ?? { options: {} };
     pending.options = options;
-    if (workflow) pending.workflow = workflow;
+    if (steps) pending.steps = steps;
     this.pendingOptions.set(name, pending);
   }
 
   private readonly pendingOptions = new Map<
     string,
-    { options: QueueOptions; workflow?: WorkflowDefinition }
+    { options: QueueOptions; steps?: ReadonlyArray<WorkflowStep> }
   >();
 
   getOptions(name: string): QueueOptions {
     return this.entries.get(name)?.options ?? this.pendingOptions.get(name)?.options ?? {};
   }
 
-  getWorkflow(name: string): WorkflowDefinition | undefined {
-    return this.entries.get(name)?.workflow ?? this.pendingOptions.get(name)?.workflow;
+  /** The ordered workflow steps for a queue, if a workflow worker registered them. */
+  getWorkflowSteps(name: string): ReadonlyArray<WorkflowStep> | undefined {
+    return this.entries.get(name)?.steps ?? this.pendingOptions.get(name)?.steps;
   }
 
   /** Resolve (and cache) the queue row, ensuring it exists. Idempotent under concurrency. */
@@ -70,7 +71,7 @@ export class QueueRegistry {
         this.entries.set(name, {
           row,
           options: pending?.options ?? {},
-          ...(pending?.workflow ? { workflow: pending.workflow } : {}),
+          ...(pending?.steps ? { steps: pending.steps } : {}),
         });
         this.pendingOptions.delete(name);
         this.ensuring.delete(name);

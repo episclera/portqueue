@@ -15,8 +15,7 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 |---|---|
 | `PortQueue<TQueues>` | The client. One per database. Owns connection, migration, services; produces handles. |
 | `Queue<TData>` | Producer handle for one queue. |
-| `Worker<TData, TResult>` | Consumer registration for one queue. |
-| `defineWorkflow({ queue, steps })` | Pure factory for a `WorkflowDefinition`, shared by both tiers. |
+| `Worker<TData, TResult>` | Consumer registration for one queue (simple handler or workflow steps). |
 | `duration()` | Parse a `Duration` string like `"30s"`. |
 | `ConsoleLogger`, `NoopLogger` | Built-in loggers. |
 
@@ -26,7 +25,7 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 - `init(): Promise<void>` — connect, migrate, start services (idempotent).
 - `shutdown(options?: ShutdownOptions): Promise<void>` — `{ graceful?, timeoutMs?, drain? }`.
 - `get isRunning(): boolean`.
-- `createQueue<TData>(nameOrWorkflow, options?): Queue<TData>`.
+- `createQueue<TData>(name, options?): Queue<TData>`.
 - `createWorker<TData, TResult>(options: WorkerOptions): Worker`.
 - `getQueues()`, `getQueueStats({ queue? })`, `getJob({ jobId })`, `getJobs(query)`, `getWorkflow({ workflowId })`.
 - `on(event, listener, filter?)` / `off(...)` / `once(...)`; `useHook(hook)`.
@@ -44,7 +43,8 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 
 ## `Worker` — `WorkerOptions`
 
-`queue` (required); exactly one of `handler` or `steps`; `concurrency?`, `limiter?`,
+`queue` (required); `handler` (required) — either a single function (simple job) or an
+ordered array of `{ key, handler }` steps (workflow); `concurrency?`, `limiter?`,
 `batchSize?`, `pollIntervalMs?`, `lockDurationMs?`, `respectSystemPressure?`,
 `dontAutoretryFor?`. **No lifecycle methods** — control via `Queue`, observe via `pq.on`.
 
@@ -57,9 +57,10 @@ transitions are on the `step` controller (`next` / `repeat` / `done`), not on `J
 
 ## Option types (four disjoint bags)
 
-- `JobOptions` — per-job (highest precedence): `priority`, `delay`/`startAfter`,
+- `JobOptions` — per-job (highest precedence): `priority`, `startAfter` (one-off delay),
   `retryMaxAttempts`, `retryDelay`, `retryBackoff`, `expireIn`, `retention`,
-  `idempotencyKey`, `singletonKey`, `metadata`, `tx`.
+  `idempotencyKey`, `singletonKey`, `metadata`, `tx`. Recurring adds use `startEvery` or
+  `cron` (a `CronSpec`: string, or `{ pattern, tz }`) on `AddJobOptions`.
 - `QueueOptions` — `defaultJobOptions`, `retention`, `rateLimit`, `priorityEnabled`.
 - `WorkerOptions` — consumer-only (above).
 - `PortQueueOptions` — `driver` (required), `logger`, `schema`, `tablePrefix`,
@@ -82,13 +83,13 @@ transitions are on the `step` controller (`next` / `repeat` / `done`), not on `J
 
 ## Drivers & transactions
 
-- Drivers: `@portqueue/core/drivers/{postgres,pglite,sqlite,oracle}` — see [Drivers](./drivers/overview.md).
+- Drivers: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite}` — see [Drivers](./drivers/overview.md).
 - Driver contract: `Driver`, `DriverProbe`, `Subscription`, `MigrationStep`,
   `DriverCapabilitySet`, `capabilities`, `DriverContext`; conformance kit at
   `@portqueue/core/conformance`.
 - Transaction adapters (`@portqueue/core/tx`): `fromKnex`, `fromTypeorm`, `fromPrisma`,
   `fromDrizzle`, `fromKysely`, `fromSequelize`, `fromMikroOrm`, `fromPg`,
-  `fromBetterSqlite3`, `fromNodeSqlite`, `fromOracle`.
+  `fromOracle`, `fromBetterSqlite3`, `fromNodeSqlite`.
 
 ## Errors
 

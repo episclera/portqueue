@@ -70,15 +70,12 @@ export interface WorkflowSnapshot {
 /** Info about a recurring schedule (build_plan/05.3). */
 export interface ScheduleInfo {
   scheduleId: string;
-  key: string;
   cron?: string | null;
   every?: number | null;
   timezone?: string | null;
   nextRunAt?: Date | null;
   lastRunAt?: Date | null;
   enabled: boolean;
-  startAt?: Date | null;
-  endAt?: Date | null;
 }
 
 /** Queue overview info (build_plan/05.2). */

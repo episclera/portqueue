@@ -15,9 +15,9 @@ describe('OptionResolver precedence (client < queue < job)', () => {
     expect(resolved.retryMaxAttempts).toBe(3); // queue over client
   });
 
-  it('resolves delay into a future start_after', () => {
+  it('resolves a relative startAfter Duration into a future start_after', () => {
     const resolver = new OptionResolver(undefined, undefined);
-    expect(resolver.resolve({ job: { delay: 5000 }, now }).startAfter).toBe(now + 5000);
+    expect(resolver.resolve({ job: { startAfter: 5000 }, now }).startAfter).toBe(now + 5000);
   });
 
   it('resolves an absolute startAfter Date', () => {
@@ -28,7 +28,7 @@ describe('OptionResolver precedence (client < queue < job)', () => {
 
   it('computes expireAt from expireIn relative to start_after', () => {
     const resolver = new OptionResolver(undefined, undefined);
-    const r = resolver.resolve({ job: { delay: 1000, expireIn: 2000 }, now });
+    const r = resolver.resolve({ job: { startAfter: 1000, expireIn: 2000 }, now });
     expect(r.expireAt).toBe(now + 1000 + 2000);
   });
 

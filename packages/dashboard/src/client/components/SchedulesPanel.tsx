@@ -24,13 +24,13 @@ export function SchedulesPanel({
   const { run } = useAction();
 
   const columns: ColumnsType<ScheduleDto> = [
-    { title: 'Key', dataIndex: 'key', key: 'key', fixed: 'left' },
     ...(showQueueColumn
       ? [
           {
             title: 'Queue',
             dataIndex: 'queue',
             key: 'queue',
+            fixed: 'left',
             render: (q: string) => <Link to={`/queues/${encodeURIComponent(q)}`}>{q}</Link>,
           } as ColumnsType<ScheduleDto>[number],
         ]

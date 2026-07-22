@@ -17,17 +17,19 @@ A workflow is an ordered set of steps sharing a `workflowId`, where **each step 
 own `job` row**. Completing a step atomically **spawns** the next step's job.
 
 ```ts
+import type { WorkflowStep } from '@portqueue/core';
+
 enum OrderStep { VALIDATE = 'VALIDATE', CHARGE = 'CHARGE', SHIP = 'SHIP', NOTIFY = 'NOTIFY' }
 
-export const orderWorkflow = defineWorkflow({
-  queue: 'orders',
-  steps: [
-    { key: OrderStep.VALIDATE, handler: async (job, step) => step.next({ data: await validate(job.data) }) },
-    { key: OrderStep.CHARGE,   handler: async (job, step) => step.next({ data: await charge(job.data) }) },
-    { key: OrderStep.SHIP,     handler: async (job, step) => step.next({ data: await ship(job.data) }) },
-    { key: OrderStep.NOTIFY,   handler: async (job, step) => step.done({ result: await notify(job.data) }) },
-  ],
-});
+const orderSteps: WorkflowStep[] = [
+  { key: OrderStep.VALIDATE, handler: async (job, step) => step.next({ data: await validate(job.data) }) },
+  { key: OrderStep.CHARGE,   handler: async (job, step) => step.next({ data: await charge(job.data) }) },
+  { key: OrderStep.SHIP,     handler: async (job, step) => step.next({ data: await ship(job.data) }) },
+  { key: OrderStep.NOTIFY,   handler: async (job, step) => step.done({ result: await notify(job.data) }) },
+];
+
+// A workflow is just a worker whose `handler` is the ordered steps array.
+pq.createWorker({ queue: 'orders', handler: orderSteps });
 ```
 
 ## Why not numeric progress?

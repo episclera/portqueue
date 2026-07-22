@@ -5,7 +5,7 @@ import { InvalidOptionsError, PayloadTooLargeError, QueuePausedError } from '../
 import { toMs } from '../util/duration.js';
 import { uuid } from '../util/uuid.js';
 import { CronExpression } from '../scheduling/cron.js';
-import type { AddJobOptions, ScheduleSpec } from '../options/job-options.js';
+import type { AddJobOptions, CronSpec } from '../options/job-options.js';
 import type { AddJobResult, ScheduleInfo } from './results.js';
 import type { NewJobRecord, NewScheduleRow } from '../jobs/job-record.js';
 import type { Runtime } from '../client/runtime.js';
@@ -25,9 +25,11 @@ export class ProducerService {
     const merged = await hooks.runBeforeAdd(queue, options as AddJobOptions<unknown>);
     const opts = merged as AddJobOptions<TData>;
 
-    if (opts.delay != null && opts.startAfter != null) {
+    const isRecurring = opts.startEvery != null || opts.cron != null;
+    if (isRecurring && opts.startAfter != null) {
       throw new InvalidOptionsError(
-        `Cannot set both 'delay' and 'startAfter' on a job for queue '${queue}'. Both mean "not before" — pass exactly one.`,
+        `Cannot combine 'startAfter' with a recurring 'startEvery'/'cron' on queue '${queue}'. ` +
+          `'startAfter' delays a one-off job; recurring modes schedule repeated runs.`,
         { queue },
       );
     }
@@ -40,7 +42,7 @@ export class ProducerService {
     if (size > maxBytes) throw new PayloadTooLargeError(queue, size, maxBytes);
 
     // Scheduling mode: create/update a recurring definition instead of a one-off insert.
-    if (opts.schedule) {
+    if (isRecurring) {
       const result = await this.upsertSchedule(queue, opts);
       await hooks.runAfterAdd(queue, result);
       return result;
@@ -57,13 +59,13 @@ export class ProducerService {
       now,
     });
 
-    const workflow = registry.getWorkflow(queue);
+    const steps = registry.getWorkflowSteps(queue);
     let workflowId: string | null = null;
     let workflowStepKey: string | null = null;
-    if (workflow) {
+    if (steps && steps.length > 0) {
       workflowId = uuid();
-      workflowStepKey = opts.startStep ?? workflow.entryStep;
-      if (!workflow.steps.some((s) => s.key === workflowStepKey)) {
+      workflowStepKey = opts.startStep ?? steps[0]!.key;
+      if (!steps.some((s) => s.key === workflowStepKey)) {
         throw new InvalidOptionsError(
           `startStep '${workflowStepKey}' is not a declared step of workflow queue '${queue}'.`,
           { queue },
@@ -142,32 +144,34 @@ export class ProducerService {
     queue: string,
     opts: AddJobOptions<TData>,
   ): Promise<AddJobResult> {
-    const spec = opts.schedule!;
-    this.validateSchedule(queue, spec);
+    this.validateSchedule(queue, opts);
     const { registry, driver, clock, resolver, events } = this.runtime;
     const row = await registry.ensure(queue);
     const now = clock.now();
     const resolved = resolver.resolve({ job: opts, now });
-    const nextRunAt = this.computeNextRun(spec, now);
+    const cron = opts.cron != null ? normalizeCron(opts.cron) : null;
+    const everyMs = opts.startEvery != null ? toMs(opts.startEvery) : null;
+    // Keyless API: the recurrence pattern IS the identity. Re-adding the same pattern on a
+    // queue updates that schedule; a different pattern makes a new one (build_plan/05.3).
+    const key = cron ? `cron:${cron.pattern}@${cron.tz}` : `every:${everyMs}`;
+    const nextRunAt = this.computeNextRun(opts, now);
 
     const newSchedule: NewScheduleRow = {
-      key: spec.key,
+      key,
       queueId: row.id,
-      cron: spec.cron ?? null,
-      everyMs: spec.every != null ? toMs(spec.every) : null,
-      timezone: spec.timezone ?? null,
+      cron: cron?.pattern ?? null,
+      everyMs,
+      timezone: cron?.tz ?? null,
       data: opts.data,
       priority: resolved.priority,
       retryMaxAttempts: resolved.retryMaxAttempts,
       retryDelayMs: resolved.retryDelayMs,
       nextRunAt,
       enabled: true,
-      startAt: spec.startAt ? spec.startAt.getTime() : null,
-      endAt: spec.endAt ? spec.endAt.getTime() : null,
+      startAt: null,
+      endAt: null,
     };
-    const existing = (await driver.listSchedules({ queueId: row.id })).find(
-      (s) => s.key === spec.key,
-    );
+    const existing = (await driver.listSchedules({ queueId: row.id })).find((s) => s.key === key);
     const saved = await driver.upsertSchedule({
       schedule: newSchedule,
       ...(opts.tx ? { tx: opts.tx } : {}),
@@ -175,7 +179,6 @@ export class ProducerService {
     events.emit(existing ? PortQueueEvent.SCHEDULE_UPDATED : PortQueueEvent.SCHEDULE_CREATED, {
       scheduleId: saved.id,
       queue,
-      key: spec.key,
     });
     return {
       queue,
@@ -185,23 +188,21 @@ export class ProducerService {
     };
   }
 
-  private validateSchedule(queue: string, spec: ScheduleSpec): void {
-    const hasCron = spec.cron != null;
-    const hasEvery = spec.every != null;
-    if (hasCron === hasEvery) {
+  private validateSchedule(queue: string, opts: AddJobOptions<unknown>): void {
+    if (opts.cron != null && opts.startEvery != null) {
       throw new InvalidOptionsError(
-        `A schedule for queue '${queue}' (key '${spec.key}') must set exactly one of 'cron' or 'every' — not both, not neither.`,
+        `A recurring job on queue '${queue}' must set exactly one of 'cron' or 'startEvery' — not both.`,
         { queue },
       );
     }
   }
 
-  computeNextRun(spec: ScheduleSpec, now: number): number {
-    const from = spec.startAt && spec.startAt.getTime() > now ? spec.startAt.getTime() - 1 : now;
-    if (spec.cron) {
-      return new CronExpression(spec.cron, spec.timezone ?? 'UTC').next(from);
+  computeNextRun(opts: Pick<AddJobOptions<unknown>, 'cron' | 'startEvery'>, now: number): number {
+    if (opts.cron != null) {
+      const { pattern, tz } = normalizeCron(opts.cron);
+      return new CronExpression(pattern, tz).next(now);
     }
-    return from + toMs(spec.every!);
+    return now + toMs(opts.startEvery!);
   }
 
   async getSchedules(queue: string): Promise<ScheduleInfo[]> {
@@ -209,15 +210,18 @@ export class ProducerService {
     const rows = await this.runtime.driver.listSchedules({ queueId: row.id });
     return rows.map((s) => ({
       scheduleId: s.id,
-      key: s.key,
       cron: s.cron,
       every: s.everyMs,
       timezone: s.timezone,
       nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
       lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,
       enabled: s.enabled,
-      startAt: s.startAt != null ? new Date(s.startAt) : null,
-      endAt: s.endAt != null ? new Date(s.endAt) : null,
     }));
   }
+}
+
+/** Normalize a {@link CronSpec} (string or `{ pattern, tz }`) to a pattern + IANA tz. */
+function normalizeCron(cron: CronSpec): { pattern: string; tz: string } {
+  if (typeof cron === 'string') return { pattern: cron, tz: 'UTC' };
+  return { pattern: cron.pattern, tz: cron.tz ?? 'UTC' };
 }

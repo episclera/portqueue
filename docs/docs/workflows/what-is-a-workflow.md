@@ -12,8 +12,8 @@ A **workflow** is a multi-step job. Its mental model:
 > Completing a step **spawns** the next step's job.
 
 That is the entire idea. A workflow queue differs from a simple queue in exactly one
-way: its worker has many `steps` instead of a single `handler`. **Producing is the same
-`addJob({ data })`** in both cases.
+way: its worker's `handler` is an **ordered array of steps** instead of a single
+function. **Producing is the same `addJob({ data })`** in both cases.
 
 ## Why not numeric progress? {#why}
 
@@ -28,19 +28,19 @@ and is fully introspectable in the dashboard with no JSON progress log.
 ## The shape
 
 ```ts
-import { defineWorkflow } from '@portqueue/core';
+import type { WorkflowStep } from '@portqueue/core';
 
 enum OrderStep { VALIDATE = 'VALIDATE', CHARGE = 'CHARGE', SHIP = 'SHIP', NOTIFY = 'NOTIFY' }
 
-export const orderWorkflow = defineWorkflow({
-  queue: 'orders',
-  steps: [
-    { key: OrderStep.VALIDATE, handler: async (job, step) => step.next({ data: await validate(job.data) }) },
-    { key: OrderStep.CHARGE,   handler: async (job, step) => step.next({ data: await charge(job.data) }) },
-    { key: OrderStep.SHIP,     handler: async (job, step) => step.next({ data: await ship(job.data) }) },
-    { key: OrderStep.NOTIFY,   handler: async (job, step) => step.done({ result: await notify(job.data) }) },
-  ],
-});
+const orderSteps: WorkflowStep[] = [
+  { key: OrderStep.VALIDATE, handler: async (job, step) => step.next({ data: await validate(job.data) }) },
+  { key: OrderStep.CHARGE,   handler: async (job, step) => step.next({ data: await charge(job.data) }) },
+  { key: OrderStep.SHIP,     handler: async (job, step) => step.next({ data: await ship(job.data) }) },
+  { key: OrderStep.NOTIFY,   handler: async (job, step) => step.done({ result: await notify(job.data) }) },
+];
+
+// A workflow worker is just a worker whose `handler` is the steps array.
+pq.createWorker({ queue: 'orders', handler: orderSteps });
 ```
 
 The array **order is the canonical sequence**: `steps[0]` is the entry step and defines

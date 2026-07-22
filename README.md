@@ -2,7 +2,7 @@
 
 **A database-backed job queue for Node.js that works across multiple database engines.**
 
-PortQueue treats your relational database as the single source of truth for background jobs — no Redis, no broker. Write your queue code once and run it on **Postgres, PGLite, SQLite, or Oracle** (or plug in a custom driver for any engine).
+PortQueue treats your relational database as the single source of truth for background jobs — no Redis, no broker. Write your queue code once and run it on **Postgres, Oracle, PGLite, or SQLite** (or plug in a custom driver for any engine).
 
 > **Free and open source. Commercial use permitted. No license fee, no obligations.** (MIT)
 
@@ -29,7 +29,7 @@ PortQueue treats your relational database as the single source of truth for back
 ```bash
 npm install @portqueue/core
 # plus the client for your database, e.g.
-npm install better-sqlite3   # or: pg, @electric-sql/pglite, oracledb
+npm install better-sqlite3   # or: pg, oracledb, @electric-sql/pglite
 ```
 
 ```ts

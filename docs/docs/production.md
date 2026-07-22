@@ -15,16 +15,6 @@ Split **producers** (API tier — no `createWorker`) from **consumers** (worker 
 critical vs bulk workloads as **separate `PortQueue` instances / pools** for hard
 isolation. Wire the **same config module** across every tier so they agree on queues.
 
-## Migrations on deploy
-
-Do **not** auto-migrate in prod. Prefer `MigrationMode.MANUAL` or `VALIDATE_ONLY` and run
-`portqueue migrate` as a **separate, single deploy step** before rolling app instances.
-
-```ts
-import { MigrationMode } from '@portqueue/core';
-const pq = new PortQueue({ driver, migration: MigrationMode.VALIDATE_ONLY });
-```
-
 ## Graceful shutdown
 
 Install `SIGTERM`/`SIGINT` handlers that drain in-flight jobs; honor `job.signal` in long
@@ -81,7 +71,6 @@ until `init()` resolved.
 ## Production checklist
 
 - [ ] Producers and consumers split; critical vs bulk on separate instances/pools.
-- [ ] `MigrationMode.MANUAL`/`VALIDATE_ONLY`; `portqueue migrate` as a separate deploy step.
 - [ ] `SIGTERM`/`SIGINT` → `pq.shutdown({ graceful: true })`; long handlers honor `job.signal`.
 - [ ] Pool sized for the sum of worker concurrencies + headroom.
 - [ ] Handlers idempotent; `idempotencyKey`/`singletonKey` where relevant.

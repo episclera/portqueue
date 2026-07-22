@@ -26,6 +26,8 @@ code stays the single owner of commit/rollback.
 
 ## Adapters from `@portqueue/core/tx`
 
+An adapter exists for every supported client. Pick your tab:
+
 <Tabs groupId="tx">
   <TabItem value="knex" label="Knex" default>
 
@@ -37,19 +39,6 @@ await knex.transaction(async (trx) => {
   const fulfillment = pq.createQueue('fulfillment');
   await fulfillment.addJob({ data: { orderId }, tx: fromKnex(trx) });
 }); // the developer's trx owns commit/rollback
-```
-
-  </TabItem>
-  <TabItem value="pg" label="Raw pg">
-
-```ts
-import { fromPg } from '@portqueue/core/tx';
-
-await client.query('BEGIN');
-await client.query('INSERT INTO "order" (...) VALUES (...)');
-const fulfillment = pq.createQueue('fulfillment');
-await fulfillment.addJob({ data, tx: fromPg(client) });
-await client.query('COMMIT'); // the app owns commit/rollback
 ```
 
   </TabItem>
@@ -79,11 +68,122 @@ await db.transaction(async (tx) => {
 ```
 
   </TabItem>
+  <TabItem value="typeorm" label="TypeORM">
+
+```ts
+import { fromTypeorm } from '@portqueue/core/tx';
+
+await dataSource.transaction(async (em) => {
+  await em.save(Order, order);
+  const fulfillment = pq.createQueue('fulfillment');
+  await fulfillment.addJob({ data: { orderId }, tx: fromTypeorm(em) });
+}); // works with an EntityManager or a QueryRunner's manager
+```
+
+  </TabItem>
+  <TabItem value="kysely" label="Kysely">
+
+```ts
+import { fromKysely } from '@portqueue/core/tx';
+
+await db.transaction().execute(async (trx) => {
+  await trx.insertInto('order').values(order).execute();
+  const fulfillment = pq.createQueue('fulfillment');
+  // fromKysely wraps the transaction's raw executor (executeQuery(sql, params)).
+  await fulfillment.addJob({ data: { orderId }, tx: fromKysely(trx) });
+});
+```
+
+  </TabItem>
+  <TabItem value="sequelize" label="Sequelize">
+
+```ts
+import { fromSequelize } from '@portqueue/core/tx';
+
+await sequelize.transaction(async (t) => {
+  await Order.create(order, { transaction: t });
+  const fulfillment = pq.createQueue('fulfillment');
+  await fulfillment.addJob({ data: { orderId }, tx: fromSequelize(sequelize, t) });
+});
+```
+
+  </TabItem>
+  <TabItem value="mikroorm" label="MikroORM">
+
+```ts
+import { fromMikroOrm } from '@portqueue/core/tx';
+
+await orm.em.transactional(async (em) => {
+  em.persist(new Order(order));
+  const fulfillment = pq.createQueue('fulfillment');
+  await fulfillment.addJob({ data: { orderId }, tx: fromMikroOrm(em) });
+});
+```
+
+  </TabItem>
+  <TabItem value="pg" label="Raw pg">
+
+```ts
+import { fromPg } from '@portqueue/core/tx';
+
+await client.query('BEGIN');
+await client.query('INSERT INTO "order" (...) VALUES (...)');
+const fulfillment = pq.createQueue('fulfillment');
+await fulfillment.addJob({ data, tx: fromPg(client) });
+await client.query('COMMIT'); // the app owns commit/rollback
+```
+
+  </TabItem>
+  <TabItem value="oracle" label="Raw oracledb">
+
+```ts
+import { fromOracle } from '@portqueue/core/tx';
+
+const connection = await oracledb.getConnection();
+try {
+  await connection.execute('INSERT INTO "order" (...) VALUES (...)');
+  const fulfillment = pq.createQueue('fulfillment');
+  await fulfillment.addJob({ data, tx: fromOracle(connection) });
+  await connection.commit(); // the app owns commit/rollback
+} finally {
+  await connection.close();
+}
+```
+
+  </TabItem>
+  <TabItem value="better-sqlite3" label="better-sqlite3">
+
+```ts
+import { fromBetterSqlite3 } from '@portqueue/core/tx';
+
+// better-sqlite3 is synchronous; wrap the add in its transaction().
+const tx = db.transaction((order) => {
+  db.prepare('INSERT INTO "order" (id) VALUES (?)').run(order.id);
+  const fulfillment = pq.createQueue('fulfillment');
+  void fulfillment.addJob({ data: { orderId: order.id }, tx: fromBetterSqlite3(db) });
+});
+tx(order);
+```
+
+  </TabItem>
+  <TabItem value="node-sqlite" label="node:sqlite">
+
+```ts
+import { fromNodeSqlite } from '@portqueue/core/tx';
+
+db.exec('BEGIN');
+db.prepare('INSERT INTO "order" (id) VALUES (?)').run(order.id);
+const fulfillment = pq.createQueue('fulfillment');
+await fulfillment.addJob({ data: { orderId: order.id }, tx: fromNodeSqlite(db) });
+db.exec('COMMIT'); // the app owns commit/rollback
+```
+
+  </TabItem>
 </Tabs>
 
-Adapters ship for `fromKnex`, `fromTypeorm`, `fromPrisma`, `fromDrizzle`, `fromKysely`,
-`fromSequelize`, `fromMikroOrm`, and the raw clients `fromPg`, `fromBetterSqlite3`,
-`fromNodeSqlite`, and `fromOracle`.
+Adapters ship for the query builders `fromKnex`, `fromKysely`, `fromDrizzle`; the ORMs
+`fromPrisma`, `fromTypeorm`, `fromSequelize`, `fromMikroOrm`; and the raw clients
+`fromPg`, `fromOracle`, `fromBetterSqlite3`, and `fromNodeSqlite`.
 
 When no `tx` is passed, the method runs autonomously in its own short transaction. Every
 producing method (`addJob`, `addJobs`, `removeJob`, `removeSchedule`, …) accepts `tx`.

@@ -8,7 +8,7 @@ tags: [announcement]
 **PortQueue is a database-backed job queue for Node.js** — no broker required. If your
 app already runs a relational database, you already have everything you need for a
 reliable queue. PortQueue treats that database as the single source of truth and works
-across Postgres, PGLite, SQLite, and Oracle from one API.
+across Postgres, Oracle, PGLite, and SQLite from one API.
 
 <!-- truncate -->
 

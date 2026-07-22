@@ -8,7 +8,7 @@ import { JobStatus } from '../jobs/job-state.enum.js';
 import { PortQueueEvent } from '../events/event-name.enum.js';
 import { HookPhase } from '../events/hooks.js';
 import { BackoffStrategy, RetryMode } from '../options/enums.js';
-import { defineWorkflow } from './define-workflow.js';
+import type { WorkflowStep } from '../jobs/job.js';
 
 class NonRetryableError extends Error {
   constructor() {
@@ -106,7 +106,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
       pollIntervalMs: 20,
       handler: async (job) => void done.push(job.id),
     });
-    const res = await queue.addJob({ data: {}, delay: 60_000 });
+    const res = await queue.addJob({ data: {}, startAfter: 60_000 });
     await new Promise((r) => setTimeout(r, 120));
     expect(done).toHaveLength(0);
     h.clock.advance(61_000);
@@ -125,7 +125,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
 
   it('cancels a not-yet-active job', async () => {
     const queue = h.pq.createQueue('cancel');
-    const res = await queue.addJob({ data: {}, delay: 60_000 });
+    const res = await queue.addJob({ data: {}, startAfter: 60_000 });
     const ok = await queue.cancelJob({ jobId: res.jobId! });
     expect(ok).toBe(true);
     expect((await queue.getJob({ jobId: res.jobId! }))?.status).toBe(JobStatus.CANCELLED);
@@ -243,20 +243,17 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('repeats a workflow step then finishes', async () => {
-    const wf = defineWorkflow<{ count: number }>({
-      queue: 'repeatwf',
-      steps: [
-        {
-          key: 'tick',
-          handler: async (job, step) =>
-            job.data.count >= 2
-              ? step.done({ result: job.data.count })
-              : step.repeat({ data: { count: job.data.count + 1 } }),
-        },
-      ],
-    });
-    const queue = h.pq.createQueue(wf);
-    h.pq.createWorker(wf);
+    const steps: WorkflowStep<{ count: number }>[] = [
+      {
+        key: 'tick',
+        handler: async (job, step) =>
+          job.data.count >= 2
+            ? step.done({ result: job.data.count })
+            : step.repeat({ data: { count: job.data.count + 1 } }),
+      },
+    ];
+    const queue = h.pq.createQueue<{ count: number }>('repeatwf');
+    h.pq.createWorker<{ count: number }>({ queue: 'repeatwf', handler: steps });
     const res = await queue.addJob({ data: { count: 0 } });
     await waitFor(async () => {
       const run = await h.pq.getWorkflow({ workflowId: res.workflowId! });
@@ -272,24 +269,21 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
 
   it('retries a failed workflow from the failed step (FROM_FAILED_STEP)', async () => {
     let failFirst = true;
-    const wf = defineWorkflow<{ v: number }>({
-      queue: 'retrywf',
-      steps: [
-        { key: 'a', handler: async (_j, step) => step.next({ data: { v: 1 } }) },
-        {
-          key: 'b',
-          handler: async (job, step) => {
-            if (failFirst) {
-              failFirst = false;
-              throw new Error('step b failed');
-            }
-            return step.done({ result: job.data.v });
-          },
+    const steps: WorkflowStep<{ v: number }>[] = [
+      { key: 'a', handler: async (_j, step) => step.next({ data: { v: 1 } }) },
+      {
+        key: 'b',
+        handler: async (job, step) => {
+          if (failFirst) {
+            failFirst = false;
+            throw new Error('step b failed');
+          }
+          return step.done({ result: job.data.v });
         },
-      ],
-    });
-    const queue = h.pq.createQueue(wf);
-    h.pq.createWorker(wf);
+      },
+    ];
+    const queue = h.pq.createQueue<{ v: number }>('retrywf');
+    h.pq.createWorker<{ v: number }>({ queue: 'retrywf', handler: steps });
     const res = await queue.addJob({ data: { v: 0 }, retryMaxAttempts: 1 });
     // Step b fails terminally (1 attempt) → find its FAILED job.
     let failedJobId = '';
