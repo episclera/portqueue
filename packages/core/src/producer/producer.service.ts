@@ -1,5 +1,6 @@
 import { JobStatus } from '../jobs/job-state.enum.js';
 import { PortQueueEvent } from '../events/event-name.enum.js';
+import { DeduplicationReason } from '../options/enums.js';
 import { InvalidOptionsError, PayloadTooLargeError, QueuePausedError } from '../errors/errors.js';
 import { toMs } from '../util/duration.js';
 import { uuid } from '../util/uuid.js';
@@ -40,9 +41,25 @@ export class ProducerService {
     const size = Buffer.byteLength(serialized, 'utf8');
     if (size > maxBytes) throw new PayloadTooLargeError(queue, size, maxBytes);
 
-    // Scheduling mode: create/update a recurring definition instead of a one-off insert.
+    // Idempotency dedup spans BOTH the job and schedule tables, is queue-scoped, and applies to
+    // one-off and recurring adds alike — but only when a key is given. First writer wins: a later
+    // add with the same key returns the existing job or schedule instead of creating anything new,
+    // even when the two adds differ in shape (e.g. a plain job matching a recurring schedule).
+    if (opts.idempotencyKey != null) {
+      const dup = await this.findIdempotencyDuplicate(queue, opts.idempotencyKey, opts.tx);
+      if (dup) {
+        // Only a job match carries a jobId the JOB_ADDED event needs; a schedule match is silent.
+        if (dup.jobId != null) {
+          events.emit(PortQueueEvent.JOB_ADDED, { jobId: dup.jobId, queue, deduplicated: true });
+        }
+        await hooks.runAfterAdd(queue, dup);
+        return dup;
+      }
+    }
+
+    // Scheduling mode: create a recurring definition instead of a one-off insert.
     if (isRecurring) {
-      const result = await this.upsertSchedule(queue, opts);
+      const result = await this.createSchedule(queue, opts);
       await hooks.runAfterAdd(queue, result);
       return result;
     }
@@ -207,7 +224,51 @@ export class ProducerService {
     }
   }
 
-  private async upsertSchedule<TData>(
+  /**
+   * The unified idempotency lookup behind {@link addJob}. Checks the schedule table then the job
+   * table for this queue+key; at most one can exist (first writer wins across both). Returns a
+   * deduplicated result shaped for whichever entity matched, or null when the key is free.
+   */
+  private async findIdempotencyDuplicate(
+    queue: string,
+    idempotencyKey: string,
+    tx?: AddJobOptions<unknown>['tx'],
+  ): Promise<AddJobResult | null> {
+    const { driver } = this.runtime;
+    const schedule = await driver.findScheduleByIdempotencyKey({
+      queueName: queue,
+      idempotencyKey,
+      ...(tx ? { tx } : {}),
+    });
+    if (schedule) {
+      return {
+        queue,
+        scheduleId: schedule.id,
+        nextRunAt: schedule.nextRunAt != null ? new Date(schedule.nextRunAt) : null,
+        deduplicated: true,
+        deduplicationReason: DeduplicationReason.IDEMPOTENCY,
+      };
+    }
+    const job = await driver.findJobByIdempotencyKey({
+      queueName: queue,
+      idempotencyKey,
+      ...(tx ? { tx } : {}),
+    });
+    if (job) {
+      return {
+        jobId: job.id,
+        queue,
+        status: job.status,
+        startAfter: new Date(job.startAfter),
+        deduplicated: true,
+        deduplicationReason: DeduplicationReason.IDEMPOTENCY,
+        ...(job.workflowId ? { workflowId: job.workflowId } : {}),
+      };
+    }
+    return null;
+  }
+
+  private async createSchedule<TData>(
     queue: string,
     opts: AddJobOptions<TData>,
   ): Promise<AddJobResult> {
@@ -218,8 +279,9 @@ export class ProducerService {
     const resolved = resolver.resolve({ job: opts, now });
     const cron = opts.cron != null ? normalizeCron(opts.cron) : null;
     const everyMs = opts.startEvery != null ? toMs(opts.startEvery) : null;
-    // Keyless API: the recurrence IS the identity. Re-adding the same cron+timezone (or the same
-    // interval) on a queue updates that schedule; a different recurrence makes a new one.
+    // No pattern-based dedup: identical recurrences on a queue are allowed to coexist. When the
+    // caller wants exactly one, they pass an idempotencyKey — that dedup ran in addJob() above, so
+    // reaching here means the key was free (or absent) and we always insert a fresh schedule.
     const nextRunAt = this.computeNextRun(opts, now);
 
     const newSchedule: NewScheduleRow = {
@@ -235,15 +297,13 @@ export class ProducerService {
       enabled: true,
       startAt: null,
       endAt: null,
+      idempotencyKey: resolved.idempotencyKey,
     };
-    const existing = (await driver.listSchedules({ queueName: queue })).find((s) =>
-      cron ? s.cron === cron.pattern && s.timezone === cron.tz : s.everyMs === everyMs,
-    );
-    const saved = await driver.upsertSchedule({
+    const saved = await driver.insertSchedule({
       schedule: newSchedule,
       ...(opts.tx ? { tx: opts.tx } : {}),
     });
-    events.emit(existing ? PortQueueEvent.SCHEDULE_UPDATED : PortQueueEvent.SCHEDULE_CREATED, {
+    events.emit(PortQueueEvent.SCHEDULE_CREATED, {
       scheduleId: saved.id,
       queue,
     });
@@ -283,6 +343,7 @@ export class ProducerService {
       nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
       lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,
       enabled: s.enabled,
+      idempotencyKey: s.idempotencyKey,
     }));
   }
 }

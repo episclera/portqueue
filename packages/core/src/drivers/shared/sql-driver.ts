@@ -298,6 +298,7 @@ export abstract class SqlDriver implements Driver {
       enabled: this.boolOut(row.enabled),
       startAt: this.numOrNull(row.start_at),
       endAt: this.numOrNull(row.end_at),
+      idempotencyKey: this.strOrNull(row.idempotency_key),
       createdAt: Number(row.created_at),
       updatedAt: Number(row.updated_at),
     };
@@ -397,22 +398,12 @@ export abstract class SqlDriver implements Driver {
     tx?: TransactionHandle,
   ): Promise<InsertedJobRow | null> {
     if (job.idempotencyKey != null) {
-      const res = await this.runMaybeTx(
-        `SELECT id, status, start_after, workflow_id FROM ${this.t(TableName.JOB)} WHERE queue_name = ${this.ph(0)} AND idempotency_key = ${this.ph(1)}`,
-        [job.queueName, job.idempotencyKey],
-        tx,
-      );
-      if (res.rows[0]) {
-        const row = res.rows[0];
-        return {
-          id: String(row.id),
-          status: row.status as JobStatus,
-          startAfter: Number(row.start_after),
-          workflowId: this.strOrNull(row.workflow_id),
-          deduplicated: true,
-          deduplicationReason: DeduplicationReason.IDEMPOTENCY,
-        };
-      }
+      const existing = await this.findJobByIdempotencyKey({
+        queueName: job.queueName,
+        idempotencyKey: job.idempotencyKey,
+        ...(tx ? { tx } : {}),
+      });
+      if (existing) return existing;
     }
     if (job.singletonKey != null) {
       const res = await this.runMaybeTx(
@@ -435,6 +426,41 @@ export abstract class SqlDriver implements Driver {
     return null;
   }
 
+  async findJobByIdempotencyKey(options: {
+    queueName: string;
+    idempotencyKey: string;
+    tx?: TransactionHandle;
+  }): Promise<InsertedJobRow | null> {
+    const res = await this.runMaybeTx(
+      `SELECT id, status, start_after, workflow_id FROM ${this.t(TableName.JOB)} WHERE queue_name = ${this.ph(0)} AND idempotency_key = ${this.ph(1)}`,
+      [options.queueName, options.idempotencyKey],
+      options.tx,
+    );
+    if (!res.rows[0]) return null;
+    const row = res.rows[0];
+    return {
+      id: String(row.id),
+      status: row.status as JobStatus,
+      startAfter: Number(row.start_after),
+      workflowId: this.strOrNull(row.workflow_id),
+      deduplicated: true,
+      deduplicationReason: DeduplicationReason.IDEMPOTENCY,
+    };
+  }
+
+  async findScheduleByIdempotencyKey(options: {
+    queueName: string;
+    idempotencyKey: string;
+    tx?: TransactionHandle;
+  }): Promise<ScheduleRow | null> {
+    const res = await this.runMaybeTx(
+      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE queue_name = ${this.ph(0)} AND idempotency_key = ${this.ph(1)}`,
+      [options.queueName, options.idempotencyKey],
+      options.tx,
+    );
+    return res.rows[0] ? this.mapSchedule(res.rows[0]) : null;
+  }
+
   async insertJobs(options: {
     jobs: NewJobRecord[];
     tx?: TransactionHandle;
@@ -446,49 +472,15 @@ export abstract class SqlDriver implements Driver {
     return results;
   }
 
-  async upsertSchedule(options: {
+  async insertSchedule(options: {
     schedule: NewScheduleRow;
     tx?: TransactionHandle;
   }): Promise<ScheduleRow> {
     const { schedule, tx } = options;
     const now = Date.now();
-    // Update-first, then insert if absent — NOT a database UPSERT (`ON CONFLICT`/`MERGE`), which
-    // sharded engines reject without the shard key. A schedule's identity is its recurrence on the
-    // queue: (queue_name, cron+timezone) for cron, or (queue_name, every_ms) for an interval. The
-    // guarded UPDATE ... RETURNING resolves the "already scheduled" case in one round-trip; only a
-    // brand-new recurrence falls through to INSERT. (No unique index; a rare add race can leave two
-    // rows, and getDueSchedules/listSchedules tolerate that — the guarded advance still fires once.)
-    const setSql =
-      `SET data = ${this.ph(0)}, priority = ${this.ph(1)}, retry_max_attempts = ${this.ph(2)}, ` +
-      `retry_delay_ms = ${this.ph(3)}, next_run_at = ${this.ph(4)}, enabled = ${this.ph(5)}, ` +
-      `start_at = ${this.ph(6)}, end_at = ${this.ph(7)}, updated_at = ${this.ph(8)}`;
-    const setVals: unknown[] = [
-      this.toJson(schedule.data),
-      schedule.priority,
-      schedule.retryMaxAttempts,
-      schedule.retryDelayMs,
-      schedule.nextRunAt,
-      this.boolIn(schedule.enabled),
-      schedule.startAt,
-      schedule.endAt,
-      now,
-    ];
-    let matchSql = `queue_name = ${this.ph(setVals.length)}`;
-    const matchVals: unknown[] = [schedule.queueName];
-    if (schedule.cron != null) {
-      matchSql += ` AND cron = ${this.ph(setVals.length + 1)} AND timezone = ${this.ph(setVals.length + 2)}`;
-      matchVals.push(schedule.cron, schedule.timezone);
-    } else {
-      matchSql += ` AND every_ms = ${this.ph(setVals.length + 1)}`;
-      matchVals.push(schedule.everyMs);
-    }
-    const updated = await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.SCHEDULE)} ${setSql} WHERE ${matchSql} RETURNING *`,
-      [...setVals, ...matchVals],
-      tx,
-    );
-    if (updated.rows[0]) return this.mapSchedule(updated.rows[0]);
-
+    // Plain INSERT — NOT an UPSERT and no pattern-based dedup. Identical recurrences on a queue are
+    // allowed to coexist by design; the caller enforces idempotency-key dedup ahead of this call
+    // (see ProducerService), so nothing here needs a conflict target that sharded engines reject.
     const id = schedule.id ?? uuid();
     const cols = [
       'id',
@@ -504,6 +496,7 @@ export abstract class SqlDriver implements Driver {
       'enabled',
       'start_at',
       'end_at',
+      'idempotency_key',
       'created_at',
       'updated_at',
     ];
@@ -521,6 +514,7 @@ export abstract class SqlDriver implements Driver {
       this.boolIn(schedule.enabled),
       schedule.startAt,
       schedule.endAt,
+      schedule.idempotencyKey,
       now,
       now,
     ];

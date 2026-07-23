@@ -11,14 +11,17 @@ export type { Page } from '../options/common.js';
 export interface AddJobResult {
   /** The inserted job id (one-off add; absent when only a schedule was created). */
   jobId?: string;
-  /** The schedule correlation id (present when `schedule` was passed or a produced job). */
+  /** The schedule correlation id (present when a schedule was created or matched by dedup). */
   scheduleId?: string;
   /** When the first/next scheduled run materializes. */
   nextRunAt?: Date | null;
   queue: string;
   /** The created job's status (one-off). */
   status?: JobStatus;
-  /** True if an idempotency/singleton guard matched an existing job. */
+  /**
+   * True if an idempotency/singleton guard matched an existing job or schedule and returned it
+   * instead of creating a new one. Idempotency matches span both the job and schedule tables.
+   */
   deduplicated: boolean;
   deduplicationReason?: DeduplicationReason;
   /** When a one-off job becomes due. */
@@ -79,6 +82,8 @@ export interface ScheduleInfo {
   nextRunAt?: Date | null;
   lastRunAt?: Date | null;
   enabled: boolean;
+  /** The dedup token this schedule was created with, if any. */
+  idempotencyKey?: string | null;
 }
 
 /** Queue overview info. */

@@ -46,9 +46,10 @@ const r = await reports.addJob({
 // r.nextRunAt is the first run time.
 ```
 
-**No key required.** The recurrence pattern _is_ the identity: re-adding the same
-`cron`/`startEvery` on a queue **updates** that schedule; a different pattern creates a
-new one.
+**Identical schedules are allowed.** Re-adding the same `cron`/`startEvery` on a queue creates a
+**new, independent schedule** — PortQueue does not deduplicate by recurrence pattern. If you want a
+queue to fire the same pattern twice (say, two different payload templates on the same cron), just
+add it twice. To keep exactly one, opt in with an `idempotencyKey` (next section).
 
 ## Recurring — fixed interval
 
@@ -56,6 +57,33 @@ new one.
 const healthchecks = pq.createQueue('healthchecks');
 await healthchecks.addJob({ data: {}, startEvery: '30s' });
 ```
+
+## Deduplicating with `idempotencyKey`
+
+Because identical recurrences coexist, the way to guarantee **only one** producer is to give it an
+`idempotencyKey`. The key is the dedup identity, scoped to the queue, and it is **first-writer-wins**:
+
+```ts
+const reports = pq.createQueue('reports');
+const a = await reports.addJob({ data: { kind: 'sales' }, cron: '0 8 * * *', idempotencyKey: 'daily-sales' });
+const b = await reports.addJob({ data: { kind: 'sales' }, cron: '0 8 * * *', idempotencyKey: 'daily-sales' });
+// b.deduplicated === true; b.scheduleId === a.scheduleId.
+// The existing schedule is kept **unchanged** — a re-add never mutates it.
+```
+
+The key spans **both the job and the schedule tables**. Whenever an `idempotencyKey` is supplied,
+`addJob` first looks for any existing job _or_ schedule on that queue carrying the same key; if one
+exists, nothing new is created and the existing entity is returned with `deduplicated: true` and
+`deduplicationReason: 'IDEMPOTENCY'`. This holds regardless of the two adds' shapes:
+
+- A recurring add whose key already belongs to a **one-off job** is deduped against that job
+  (`result.jobId` is the existing job; no schedule is created).
+- A plain one-off add whose key already belongs to a **schedule** is deduped against that schedule
+  (`result.scheduleId` is the existing schedule; no job is enqueued) — the key checks the schedule
+  table even when the new add has no recurring options at all.
+
+Without an `idempotencyKey`, no cross-table check happens and every add creates a fresh job or
+schedule. `getSchedules()` surfaces each schedule's `idempotencyKey` for inspection.
 
 ## Inspecting & unscheduling
 

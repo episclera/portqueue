@@ -130,11 +130,13 @@ export interface ScheduleRow {
   enabled: boolean;
   startAt: number | null;
   endAt: number | null;
+  /** Optional dedup token. When set, only one job/schedule with this key exists per queue. */
+  idempotencyKey: string | null;
   createdAt: number;
   updatedAt: number;
 }
 
-/** A new schedule to upsert. */
+/** A new schedule to insert. */
 export interface NewScheduleRow {
   id?: string;
   queueName: string;
@@ -149,6 +151,8 @@ export interface NewScheduleRow {
   enabled: boolean;
   startAt: number | null;
   endAt: number | null;
+  /** Optional dedup token. When set, only one job/schedule with this key exists per queue. */
+  idempotencyKey: string | null;
 }
 
 export interface ThroughputPoint {

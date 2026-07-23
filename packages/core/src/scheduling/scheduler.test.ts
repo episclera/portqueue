@@ -49,6 +49,46 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     expect(schedules).toHaveLength(0);
   });
 
+  it('allows identical recurrences on a queue to coexist (no dedup without a key)', async () => {
+    const queue = h.pq.createQueue('sched-dup');
+    const a = await queue.addJob({ data: { n: 1 }, cron: '0 0 * * *' });
+    const b = await queue.addJob({ data: { n: 2 }, cron: '0 0 * * *' });
+    expect(b.scheduleId).not.toBe(a.scheduleId);
+    expect(b.deduplicated).toBe(false);
+    expect(await queue.getSchedules()).toHaveLength(2);
+  });
+
+  it('deduplicates schedules by idempotency key (keeps the first, unchanged)', async () => {
+    const queue = h.pq.createQueue('sched-idem');
+    const a = await queue.addJob({ data: { n: 1 }, cron: '0 0 * * *', idempotencyKey: 'daily' });
+    const b = await queue.addJob({ data: { n: 2 }, cron: '0 0 * * *', idempotencyKey: 'daily' });
+    expect(b.deduplicated).toBe(true);
+    expect(b.scheduleId).toBe(a.scheduleId);
+    const schedules = await queue.getSchedules();
+    expect(schedules).toHaveLength(1);
+    expect(schedules[0]!.idempotencyKey).toBe('daily');
+  });
+
+  it('idempotency key dedups across the job and schedule tables', async () => {
+    const queue = h.pq.createQueue('sched-cross');
+    // A one-off job claims the key first.
+    const job = await queue.addJob({ data: {}, idempotencyKey: 'shared' });
+    // A later recurring add with the same key is deduped against the existing job, not created.
+    const sched = await queue.addJob({ data: {}, cron: '0 0 * * *', idempotencyKey: 'shared' });
+    expect(sched.deduplicated).toBe(true);
+    expect(sched.jobId).toBe(job.jobId);
+    expect(sched.scheduleId).toBeUndefined();
+    expect(await queue.getSchedules()).toHaveLength(0);
+
+    // And the reverse: a schedule's key blocks a plain one-off add carrying the same key.
+    const other = h.pq.createQueue('sched-cross-2');
+    const s = await other.addJob({ data: {}, startEvery: 1000, idempotencyKey: 'k2' });
+    const dupJob = await other.addJob({ data: {}, idempotencyKey: 'k2' });
+    expect(dupJob.deduplicated).toBe(true);
+    expect(dupJob.scheduleId).toBe(s.scheduleId);
+    expect(dupJob.jobId).toBeUndefined();
+  });
+
   it('deletes finished jobs after their retention TTL elapses', async () => {
     const queue = h.pq.createQueue('ephemeral');
     h.pq.createWorker({ queue: 'ephemeral', handler: async () => 'done' });

@@ -63,10 +63,26 @@ export interface Driver {
   // Producing
   insertJob(options: { job: NewJobRecord; tx?: TransactionHandle }): Promise<InsertedJobRow>;
   insertJobs(options: { jobs: NewJobRecord[]; tx?: TransactionHandle }): Promise<InsertedJobRow[]>;
-  upsertSchedule(options: {
+  /**
+   * Insert a recurring schedule. Identical recurrences are allowed to coexist — dedup (when
+   * wanted) is the caller's job via {@link findScheduleByIdempotencyKey} + a stored idempotency key.
+   */
+  insertSchedule(options: {
     schedule: NewScheduleRow;
     tx?: TransactionHandle;
   }): Promise<ScheduleRow>;
+  /** Find an existing job on this queue carrying this idempotency key (dedup lookup). */
+  findJobByIdempotencyKey(options: {
+    queueName: string;
+    idempotencyKey: string;
+    tx?: TransactionHandle;
+  }): Promise<InsertedJobRow | null>;
+  /** Find an existing schedule on this queue carrying this idempotency key (dedup lookup). */
+  findScheduleByIdempotencyKey(options: {
+    queueName: string;
+    idempotencyKey: string;
+    tx?: TransactionHandle;
+  }): Promise<ScheduleRow | null>;
   deleteSchedule(options: { scheduleId: string; tx?: TransactionHandle }): Promise<boolean>;
 
   // Claiming & completing (hot path)

@@ -77,8 +77,9 @@ export function buildSchemaStatements(t: TableNames): string[] {
       workflow_step_key TEXT
     )`,
 
-    // A schedule's identity is (queue_name, cron+timezone) or (queue_name, every_ms) — no
-    // separate key column; re-adding the same recurrence updates the same row.
+    // Recurring producer definitions. Identical recurrences on a queue are allowed to coexist
+    // (no pattern-based dedup); optional cross-table dedup is by `idempotency_key`, added in a
+    // later migration (this DDL is the frozen v1 snapshot, so the column is introduced by ALTER).
     `CREATE TABLE IF NOT EXISTS ${schedule} (
       id TEXT NOT NULL,
       queue_name TEXT NOT NULL,
@@ -119,4 +120,4 @@ export function buildSchemaStatements(t: TableNames): string[] {
 }
 
 /** The current schema version this build ships. */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;

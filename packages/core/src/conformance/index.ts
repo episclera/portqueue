@@ -170,7 +170,7 @@ export function runConformance(options: ConformanceOptions): void {
       expect(b.deduplicationReason).toBe('IDEMPOTENCY');
     });
 
-    it('upserts schedules idempotently on (queue_name, cron+timezone)', async () => {
+    it('allows identical schedules to coexist and dedups by idempotency key', async () => {
       const base = {
         queueName,
         cron: '0 0 * * *',
@@ -184,12 +184,24 @@ export function runConformance(options: ConformanceOptions): void {
         enabled: true,
         startAt: null,
         endAt: null,
+        idempotencyKey: null,
       };
-      const first = await driver.upsertSchedule({ schedule: base });
-      const second = await driver.upsertSchedule({ schedule: { ...base, nextRunAt: now + 2000 } });
-      expect(second.id).toBe(first.id);
-      const all = await driver.listSchedules({ queueName });
-      expect(all).toHaveLength(1);
+      // No pattern-based dedup: two identical recurrences are two distinct schedule rows.
+      const first = await driver.insertSchedule({ schedule: base });
+      const second = await driver.insertSchedule({ schedule: { ...base, nextRunAt: now + 2000 } });
+      expect(second.id).not.toBe(first.id);
+      expect(await driver.listSchedules({ queueName })).toHaveLength(2);
+
+      // The idempotency key is the opt-in dedup token; it's looked up per queue.
+      const keyed = await driver.insertSchedule({ schedule: { ...base, idempotencyKey: 'sk' } });
+      const found = await driver.findScheduleByIdempotencyKey({
+        queueName,
+        idempotencyKey: 'sk',
+      });
+      expect(found?.id).toBe(keyed.id);
+      expect(await driver.findScheduleByIdempotencyKey({ queueName, idempotencyKey: 'nope' })).toBe(
+        null,
+      );
     });
 
     it('advances a workflow step atomically (complete-this + spawn-next)', async () => {
