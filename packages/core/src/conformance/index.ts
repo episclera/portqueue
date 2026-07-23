@@ -1,5 +1,5 @@
 import { DriverContext } from '../driver/driver-context.js';
-import { MIGRATIONS } from '../schema/migration/migrations/index.js';
+import { MIGRATIONS } from '../schema/migrations/index.js';
 import { JobStatus } from '../jobs/job-state.enum.js';
 import { BackoffStrategy, RetentionMode } from '../options/enums.js';
 import { DriverCapability } from '../driver/driver-capabilities.js';

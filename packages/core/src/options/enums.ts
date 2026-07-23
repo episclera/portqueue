@@ -45,6 +45,7 @@ export enum DatabaseEngine {
   PGLITE = 'PGLITE',
   SQLITE = 'SQLITE',
   ORACLE = 'ORACLE',
+  MYSQL = 'MYSQL',
   CUSTOM = 'CUSTOM',
 }
 
