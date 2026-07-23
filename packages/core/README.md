@@ -1,6 +1,6 @@
 # @portqueue/core
 
-The engine and first-party drivers for **PortQueue** — a database-backed job queue for Node.js that works across multiple database engines (Postgres, Oracle, PGLite, SQLite) through one API.
+The engine and first-party drivers for **PortQueue** — the distributed, fault-tolerant, database-agnostic, performance-focused queue implementation, running on your own database (Postgres, Oracle, PGLite, SQLite) through one API.
 
 ```bash
 npm install @portqueue/core

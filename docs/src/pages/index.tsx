@@ -6,36 +6,48 @@ import CodeBlock from '@theme/CodeBlock';
 import styled from 'styled-components';
 import { DRIVERS } from '@site/src/constants/drivers';
 
-const FEATURES: { icon: string; title: string; body: string }[] = [
+const FEATURES: { icon: string; title: string; body: string; to: string; cta: string }[] = [
   {
     icon: '🌐',
-    title: 'Scales to many servers',
-    body: 'Built to run across many instances at once — they cooperate through row-level claiming, so no job is ever processed twice. Runs just as well on a single instance: scalable from one to infinity.',
+    title: 'Scales To Many Servers',
+    body: 'Add a server and it just starts claiming — no leader election, no reconfiguration. Instances cooperate through row-level claiming, so no job runs twice, and a job can target a preferred server when it needs one.',
+    to: '/docs/scale-horizontally',
+    cta: 'How it scales',
   },
   {
     icon: '🗄️',
-    title: 'Plugs into your database',
-    body: 'Point it at the database you already run — Postgres, MySQL, Oracle, Citus, Yugabyte, PGLite, or SQLite (or a custom driver). Enqueue inside your own transaction, and if your query rolls back, the job never existed.',
+    title: 'Database Agnostic',
+    body: 'Point it at the database you already run — Postgres, MySQL, Oracle, PGLite, or SQLite. Each driver picks the best strategy its engine supports, so your app code stays identical.',
+    to: '/docs/getting-started/installation',
+    cta: 'Pick a driver',
   },
   {
     icon: '🖥️',
-    title: 'A powerful dashboard and CLI',
+    title: 'A Powerful Dashboard & CLI',
     body: 'A mountable React dashboard (plus a full CLI) to monitor and control both queues and instances live — pause, resume, retry, and watch throughput, with no third-party service.',
+    to: '/docs/dashboard',
+    cta: 'See the dashboard',
   },
   {
     icon: '🔁',
-    title: 'Resumable workflows',
+    title: 'Workflows',
     body: 'Multi-step jobs where each step is its own row — crash-safe and resumable, with same-machine affinity, not a fragile numeric progress counter.',
+    to: '/docs/workflows/what-is-a-workflow',
+    cta: 'Build a workflow',
   },
   {
     icon: '⏰',
-    title: 'Scheduling & cron',
+    title: 'Scheduling & Cron',
     body: 'Delayed jobs, fixed intervals, and cron with timezones — one addJob method, no separate schedule() call.',
+    to: '/docs/guides/scheduling',
+    cta: 'Schedule jobs',
   },
   {
     icon: '🛡️',
-    title: 'Fault-tolerant & observable',
+    title: 'Fault-Tolerant & Observable',
     body: 'Automatic retries with backoff, stalled-job reclaim, liveness-aware fallback, and at-least-once delivery — with rich events and hooks for metrics and tracing.',
+    to: '/docs/events-hooks/events',
+    cta: 'Events & hooks',
   },
 ];
 
@@ -162,6 +174,8 @@ const FeatureGrid = styled.div`
 `;
 
 const Feature = styled.div`
+  display: flex;
+  flex-direction: column;
   padding: 1.6rem;
   border-radius: 16px;
   background: var(--surface);
@@ -195,6 +209,19 @@ const FeatureBody = styled.p`
   font-size: 0.95rem;
   opacity: 0.8;
   margin: 0;
+`;
+
+const FeatureLink = styled(Link)`
+  margin-top: auto;
+  padding-top: 1rem;
+  align-self: flex-start;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--primary-dark);
+  &:hover {
+    text-decoration: none;
+    color: var(--primary);
+  }
 `;
 
 const Drivers = styled.div`
@@ -252,6 +279,7 @@ export default function Home(): ReactNode {
                 <FeatureIcon aria-hidden>{f.icon}</FeatureIcon>
                 <FeatureTitle>{f.title}</FeatureTitle>
                 <FeatureBody>{f.body}</FeatureBody>
+                <FeatureLink to={f.to}>{f.cta} →</FeatureLink>
               </Feature>
             ))}
           </FeatureGrid>
@@ -279,8 +307,11 @@ export default function Home(): ReactNode {
           <ScaleStrip>
             <SectionTitle>Built to scale horizontally</SectionTitle>
             <SectionLead>
-              Per-queue claim loops, SKIP LOCKED, and visibility timeouts let N instances cooperate
-              on one queue with no leader election and no cross-queue blocking.
+              Per-queue claim loops with SKIP LOCKED let N instances cooperate on one queue —
+              no leader election, no coordinator, and no cross-queue head-of-line blocking.
+              Jobs can target a preferred server by pattern, and database pub/sub
+              (LISTEN/NOTIFY) wakes workers the moment work lands, so it stays reactive without
+              busy polling.
             </SectionLead>
             <CtaButton $variant="primary" to="/docs/scale-horizontally">
               How it scales

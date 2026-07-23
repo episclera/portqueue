@@ -2,7 +2,7 @@
   "name": "portqueue-monorepo",
   "version": "0.0.0",
   "private": true,
-  "description": "PortQueue — a database-backed job queue for Node.js that works across multiple database engines.",
+  "description": "The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.",
   "license": "MIT",
   "type": "module",
   "engines": {

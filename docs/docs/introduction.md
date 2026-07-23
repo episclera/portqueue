@@ -51,10 +51,11 @@ has many `steps`. Producing is the same `addJob({ data })` in both.
 
 | | PortQueue | pg-boss | BullMQ | Celery |
 |---|---|---|---|---|
-| Storage | Any SQL engine (7 drivers) | Postgres only | Redis | Redis/RabbitMQ + result backend |
+| Storage | Any SQL engine (5 drivers) | Postgres only | Redis | Redis/RabbitMQ + result backend |
 | Broker required | No | No | Yes (Redis) | Yes |
 | Same code, any engine | Yes — swap the driver | Postgres only | Redis only | Broker only |
 | Distributed instances | Yes (`SKIP LOCKED`, opt-in instance keys) | Yes | Yes | Yes |
+| Preferred-server routing | Yes — pin a job to a server by RegEx pattern | No | No | Via routing keys |
 | Transactional enqueue | Yes (your tx) | Limited | No | No |
 | Multi-step resumable jobs | Yes (each step a row) | No | Flows (Redis) | Chains/canvas |
 | Fault tolerance | Visibility timeouts, retries + backoff, stall recovery | Retries | Retries, stalled checks | Retries, acks-late |

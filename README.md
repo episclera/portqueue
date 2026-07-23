@@ -1,6 +1,6 @@
 # PortQueue
 
-**A database-backed job queue for Node.js that works across multiple database engines.**
+**The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.**
 
 PortQueue treats your relational database as the single source of truth for background jobs — no Redis, no broker. Write your queue code once and run it on **Postgres, Oracle, PGLite, or SQLite** (or plug in a custom driver for any engine).
 
