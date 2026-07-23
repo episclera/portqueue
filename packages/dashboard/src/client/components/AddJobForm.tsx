@@ -16,8 +16,8 @@ import {
   Stack,
   Textarea,
 } from '@portqueue/ui';
-import { useAction } from '../queries/use-action.js';
-import type { ActionRequestDto } from '../../shared/dto.js';
+import { useAction } from '../queries/use-action';
+import type { ActionRequestDto } from '../../shared/dto';
 
 export interface AddJobFormProps {
   open: boolean;

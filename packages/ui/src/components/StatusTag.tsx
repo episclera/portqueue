@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tag } from './Tag.js';
-import { tokens, type StatusColorKey } from '../theme/tokens.js';
+import { Tag } from './Tag';
+import { tokens, type StatusColorKey } from '../theme/tokens';
 
 export interface StatusTagProps {
   status: string;

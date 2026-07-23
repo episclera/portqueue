@@ -1,8 +1,8 @@
-import type { Driver } from '../drivers/driver.interface.js';
-import type { QueueRow } from '../jobs/job-record.js';
-import type { QueueOptions } from '../options/queue-options.js';
-import type { WorkflowStep } from '../jobs/job.js';
-import type { Clock } from '../util/clock.js';
+import type { Driver } from '../drivers/driver.interface';
+import type { QueueRow } from '../jobs/job-record';
+import type { QueueOptions } from '../options/queue-options';
+import type { WorkflowStep } from '../jobs/job';
+import type { Clock } from '../util/clock';
 
 interface QueueEntry {
   row: QueueRow;

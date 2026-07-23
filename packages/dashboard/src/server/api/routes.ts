@@ -14,7 +14,7 @@ import {
   type GetJobsQuery,
   type AddJobOptions,
 } from '@portqueue/core';
-import { authorize, type DashboardAuth, type AuthRequest } from './auth.js';
+import { authorize, type DashboardAuth, type AuthRequest } from './auth';
 import {
   serializeJob,
   serializeJobPage,
@@ -23,9 +23,9 @@ import {
   serializeStats,
   serializeWorkflow,
   serializeInstance,
-} from './serialize.js';
-import type { ActionRequestDto, ActionResultDto } from '../../shared/dto.js';
-import { REQUESTED_WITH_HEADER, REQUESTED_WITH_MARKER } from '../../shared/constants.js';
+} from './serialize';
+import type { ActionRequestDto, ActionResultDto } from '../../shared/dto';
+import { REQUESTED_WITH_HEADER, REQUESTED_WITH_MARKER } from '../../shared/constants';
 
 export interface RouterOptions {
   portQueue: PortQueue;

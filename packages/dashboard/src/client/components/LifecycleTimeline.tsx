@@ -6,8 +6,8 @@
 import React from 'react';
 import { Tag, Text, Timeline, tokens } from '@portqueue/ui';
 import type { TimelineItem } from '@portqueue/ui';
-import type { JobDto } from '../../shared/dto.js';
-import { duration, formatDate } from './format.js';
+import type { JobDto } from '../../shared/dto';
+import { duration, formatDate } from './format';
 
 interface Milestone {
   label: string;

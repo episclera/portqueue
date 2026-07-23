@@ -1,5 +1,5 @@
 /** @jest-environment node */
-import { duration, formatDate, relativeTime, totalCount, truncate } from './format.js';
+import { duration, formatDate, relativeTime, totalCount, truncate } from './format';
 
 describe('formatDate', () => {
   it('returns a dash for empty or invalid input', () => {

@@ -1,5 +1,5 @@
-import { heading, success } from '../output.js';
-import { CommandGroup, type Command } from './types.js';
+import { heading, success } from '../output';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue doctor` */
 export const doctorCommand: Command = {

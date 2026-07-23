@@ -1,5 +1,5 @@
-import type { Worker } from '../consumer/worker.js';
-import type { Queue } from '../producer/queue.js';
+import type { Worker } from '../consumer/worker';
+import type { Queue } from '../producer/queue';
 
 /** Tracks live Queue/Worker handles for graceful shutdown & stats. */
 export class ClientRegistryService {

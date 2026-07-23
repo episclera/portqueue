@@ -1,5 +1,5 @@
-import { renderHelp } from './help.js';
-import { COMMANDS } from './commands/index.js';
+import { renderHelp } from './help';
+import { COMMANDS } from './commands/index';
 
 describe('renderHelp', () => {
   const help = renderHelp();

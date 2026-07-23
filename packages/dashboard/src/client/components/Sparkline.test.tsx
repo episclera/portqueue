@@ -1,7 +1,7 @@
 /** @jest-environment jsdom */
 import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
-import { Sparkline } from './Sparkline.js';
+import { Sparkline } from './Sparkline';
 
 describe('Sparkline', () => {
   it('renders a flat baseline line when given fewer than two values', () => {

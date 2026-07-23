@@ -1,5 +1,5 @@
-import type { DatabaseEngine } from '../options/enums.js';
-import type { JobStatus } from '../jobs/job-state.enum.js';
+import type { DatabaseEngine } from '../options/enums';
+import type { JobStatus } from '../jobs/job-state.enum';
 import type {
   InsertedJobRow,
   InstanceRow,
@@ -9,11 +9,11 @@ import type {
   QueueRow,
   ScheduleRow,
   ThroughputPoint,
-} from '../jobs/job-record.js';
-import type { DriverCapability, DriverCapabilitySet } from './driver-capabilities.js';
-import type { DriverContext } from './driver-context.js';
-import type { TransactionHandle } from '../tx/transaction-handle.js';
-import type { QueueOptions } from '../options/queue-options.js';
+} from '../jobs/job-record';
+import type { DriverCapability, DriverCapabilitySet } from './driver-capabilities';
+import type { DriverContext } from './driver-context';
+import type { TransactionHandle } from '../tx/transaction-handle';
+import type { QueueOptions } from '../options/queue-options';
 
 export interface DriverProbe {
   serverVersion: string;

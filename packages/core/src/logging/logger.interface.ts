@@ -1,4 +1,4 @@
-import type { LogLevel } from './log-level.enum.js';
+import type { LogLevel } from './log-level.enum';
 
 /** Structured log context — no positional interpolation. */
 export interface LogContext {

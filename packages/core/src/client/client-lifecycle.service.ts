@@ -1,14 +1,14 @@
-import { MigrationMode } from '../options/enums.js';
-import { DriverCapability } from '../drivers/driver-capabilities.js';
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import { SubscriberService } from '../pubsub/subscriber.service.js';
-import { SchedulerService } from '../scheduling/scheduler.service.js';
-import { RetentionService } from '../retention/retention.service.js';
-import { SystemMonitorService } from '../monitoring/system-monitor.service.js';
-import { InstanceService } from './instance.service.js';
-import { MigrationRunner } from '../drivers/shared/migration-runner.service.js';
-import type { Runtime } from './runtime.js';
-import type { ClientRegistryService } from './client-registry.service.js';
+import { MigrationMode } from '../options/enums';
+import { DriverCapability } from '../drivers/driver-capabilities';
+import { PortQueueEvent } from '../events/event-name.enum';
+import { SubscriberService } from '../pubsub/subscriber.service';
+import { SchedulerService } from '../scheduling/scheduler.service';
+import { RetentionService } from '../retention/retention.service';
+import { SystemMonitorService } from '../monitoring/system-monitor.service';
+import { InstanceService } from './instance.service';
+import { MigrationRunner } from '../drivers/shared/migration-runner.service';
+import type { Runtime } from './runtime';
+import type { ClientRegistryService } from './client-registry.service';
 
 interface Mutable {
   running: boolean;

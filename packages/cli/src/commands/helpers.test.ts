@@ -1,4 +1,4 @@
-import { parseStatus, requireFlag } from './helpers.js';
+import { parseStatus, requireFlag } from './helpers';
 
 describe('requireFlag', () => {
   it('returns the string value when present', () => {

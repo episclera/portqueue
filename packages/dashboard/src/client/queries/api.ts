@@ -13,8 +13,8 @@ import type {
   ScheduleDto,
   StatsDto,
   WorkflowDto,
-} from '../../shared/dto.js';
-import { REQUESTED_WITH_HEADER, REQUESTED_WITH_MARKER } from '../../shared/constants.js';
+} from '../../shared/dto';
+import { REQUESTED_WITH_HEADER, REQUESTED_WITH_MARKER } from '../../shared/constants';
 
 declare global {
   interface Window {

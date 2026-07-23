@@ -1,4 +1,4 @@
-import { run } from './run.js';
+import { run } from './run';
 
 run(process.argv.slice(2))
   .then((code) => process.exit(code))

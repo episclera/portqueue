@@ -16,11 +16,11 @@ import {
   Tooltip,
 } from '@portqueue/ui';
 import type { TableColumn } from '@portqueue/ui';
-import { JobStatus } from '../queries/enums.js';
-import type { JobDto } from '../../shared/dto.js';
-import { config } from '../queries/api.js';
-import { relativeTime, truncate } from './format.js';
-import { useAction } from '../queries/use-action.js';
+import { JobStatus } from '../queries/enums';
+import type { JobDto } from '../../shared/dto';
+import { config } from '../queries/api';
+import { relativeTime, truncate } from './format';
+import { useAction } from '../queries/use-action';
 
 export interface JobsTableProps {
   queue: string;

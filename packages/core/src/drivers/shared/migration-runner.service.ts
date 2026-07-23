@@ -1,12 +1,12 @@
-import { MigrationMode } from '../../options/enums.js';
-import { PortQueueEvent } from '../../events/event-name.enum.js';
-import { MigrationFailedError, SchemaVersionMismatchError } from '../../errors/errors.js';
-import { DriverCapability } from '../driver-capabilities.js';
-import { latestVersion } from './migration.js';
-import type { Driver } from '../driver.interface.js';
-import type { DriverContext } from '../driver-context.js';
-import type { Logger } from '../../logging/logger.interface.js';
-import type { EventBusService } from '../../events/event-bus.service.js';
+import { MigrationMode } from '../../options/enums';
+import { PortQueueEvent } from '../../events/event-name.enum';
+import { MigrationFailedError, SchemaVersionMismatchError } from '../../errors/errors';
+import { DriverCapability } from '../driver-capabilities';
+import { latestVersion } from './migration';
+import type { Driver } from '../driver.interface';
+import type { DriverContext } from '../driver-context';
+import type { Logger } from '../../logging/logger.interface';
+import type { EventBusService } from '../../events/event-bus.service';
 
 /**
  * Applies a driver's ordered, checksum-guarded migrations. The steps come from the driver itself

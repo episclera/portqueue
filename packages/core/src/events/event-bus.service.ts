@@ -3,8 +3,8 @@ import {
   type EventListener,
   type PortQueueEventPayloads,
   type Unsubscribe,
-} from './event-name.enum.js';
-import type { Logger } from '../logging/logger.interface.js';
+} from './event-name.enum';
+import type { Logger } from '../logging/logger.interface';
 
 interface Registration {
   listener: (payload: unknown) => void;

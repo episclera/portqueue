@@ -1,8 +1,8 @@
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import { CronExpression } from './cron.js';
-import type { NewJobRecord, ScheduleRow } from '../jobs/job-record.js';
-import type { Runtime } from '../client/runtime.js';
+import { JobStatus } from '../jobs/job-state.enum';
+import { PortQueueEvent } from '../events/event-name.enum';
+import { CronExpression } from './cron';
+import type { NewJobRecord, ScheduleRow } from '../jobs/job-record';
+import type { Runtime } from '../client/runtime';
 
 /**
  * Turns due schedules into concrete jobs. Production is exactly-once per

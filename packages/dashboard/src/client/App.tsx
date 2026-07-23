@@ -21,13 +21,13 @@ import {
   Tooltip,
   type ThemeMode,
 } from '@portqueue/ui';
-import { config } from './queries/api.js';
-import { useLive } from './components/LiveProvider.js';
-import { OverviewPage } from './pages/Overview.js';
-import { QueueDetailPage } from './pages/QueueDetail.js';
-import { JobDetailPage } from './pages/JobDetail.js';
-import { SchedulesPage } from './pages/Schedules.js';
-import { InstancesPage } from './pages/Instances.js';
+import { config } from './queries/api';
+import { useLive } from './components/LiveProvider';
+import { OverviewPage } from './pages/Overview';
+import { QueueDetailPage } from './pages/QueueDetail';
+import { JobDetailPage } from './pages/JobDetail';
+import { SchedulesPage } from './pages/Schedules';
+import { InstancesPage } from './pages/Instances';
 
 export interface AppProps {
   themeMode: ThemeMode;

@@ -1,5 +1,5 @@
-import { toMs } from './duration.js';
-import { InvalidOptionsError } from '../errors/errors.js';
+import { toMs } from './duration';
+import { InvalidOptionsError } from '../errors/errors';
 
 describe('toMs', () => {
   it('passes through numbers', () => {

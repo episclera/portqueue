@@ -1,8 +1,8 @@
 import { createServer } from 'node:http';
-import { flagBool, flagNumber, flagString } from '../args.js';
-import { CliError } from '../errors.js';
-import { success } from '../output.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagBool, flagNumber, flagString } from '../args';
+import { CliError } from '../errors';
+import { success } from '../output';
+import { CommandGroup, type Command } from './types';
 
 const DEFAULT_PORT = 4321;
 const DEFAULT_HOST = '127.0.0.1';

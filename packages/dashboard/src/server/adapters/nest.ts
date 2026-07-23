@@ -15,9 +15,9 @@
  * The middleware reconstructs the full mount path from `req.originalUrl`, exactly like the
  * Express adapter, so it behaves identically under `@nestjs/platform-express`.
  */
-import type { DashboardEngine } from '../engine.js';
-import type { Dashboard, NestMiddleware } from '../types.js';
-import { createExpressMiddleware } from './express.js';
+import type { DashboardEngine } from '../engine';
+import type { Dashboard, NestMiddleware } from '../types';
+import { createExpressMiddleware } from './express';
 
 export function createNestMiddleware(engine: DashboardEngine): NestMiddleware {
   // Nest (platform-express) middleware is Express middleware.

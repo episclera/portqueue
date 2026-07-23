@@ -1,5 +1,5 @@
-import { FINISHED_STATUSES, JobStatus } from '../jobs/job-state.enum.js';
-import type { Runtime } from '../client/runtime.js';
+import { FINISHED_STATUSES, JobStatus } from '../jobs/job-state.enum';
+import type { Runtime } from '../client/runtime';
 
 /**
  * Hard-deletes finished jobs per retention policy, in bounded batches.

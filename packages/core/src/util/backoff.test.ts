@@ -1,5 +1,5 @@
-import { computeBackoffMs } from './backoff.js';
-import { BackoffStrategy } from '../options/enums.js';
+import { computeBackoffMs } from './backoff';
+import { BackoffStrategy } from '../options/enums';
 
 describe('computeBackoffMs', () => {
   it('returns the base delay for FIXED', () => {

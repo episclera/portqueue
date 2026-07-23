@@ -1,5 +1,5 @@
-import { OptionResolver } from './option-resolver.js';
-import { BackoffStrategy, RetentionMode } from './enums.js';
+import { OptionResolver } from './option-resolver';
+import { BackoffStrategy, RetentionMode } from './enums';
 
 describe('OptionResolver precedence (client < queue < job)', () => {
   const now = 1_000_000;

@@ -1,6 +1,6 @@
 import React from 'react';
-import { tokens } from '../theme/tokens.js';
-import { typography } from '../theme/typography.js';
+import { tokens } from '../theme/tokens';
+import { typography } from '../theme/typography';
 
 export interface LogoProps {
   /** 'full' = mark + wordmark; 'mark' = icon only; 'mono' = single-color. */

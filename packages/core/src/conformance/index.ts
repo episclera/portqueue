@@ -1,9 +1,9 @@
-import { DriverContext } from '../drivers/driver-context.js';
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { BackoffStrategy, RetentionMode } from '../options/enums.js';
-import { DriverCapability } from '../drivers/driver-capabilities.js';
-import type { Driver } from '../drivers/driver.interface.js';
-import type { NewJobRecord } from '../jobs/job-record.js';
+import { DriverContext } from '../drivers/driver-context';
+import { JobStatus } from '../jobs/job-state.enum';
+import { BackoffStrategy, RetentionMode } from '../options/enums';
+import { DriverCapability } from '../drivers/driver-capabilities';
+import type { Driver } from '../drivers/driver.interface';
+import type { NewJobRecord } from '../jobs/job-record';
 
 /**
  * Driver conformance kit. A parameterized suite that takes a `Driver`

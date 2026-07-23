@@ -1,10 +1,10 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { cpuUsage, memoryUsage } from 'node:process';
 import { totalmem } from 'node:os';
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import type { SystemMonitorOptions } from '../options/common.js';
-import type { EventBusService } from '../events/event-bus.service.js';
-import type { Logger } from '../logging/logger.interface.js';
+import { PortQueueEvent } from '../events/event-name.enum';
+import type { SystemMonitorOptions } from '../options/common';
+import type { EventBusService } from '../events/event-bus.service';
+import type { Logger } from '../logging/logger.interface';
 
 type EventLoopDelayMonitor = ReturnType<typeof monitorEventLoopDelay>;
 

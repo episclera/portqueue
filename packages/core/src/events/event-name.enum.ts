@@ -1,4 +1,4 @@
-import type { JobStatus } from '../jobs/job-state.enum.js';
+import type { JobStatus } from '../jobs/job-state.enum';
 
 /**
  * All observable lifecycle events. Emitted on the PortQueue instance.

@@ -1,4 +1,4 @@
-import { InvalidOptionsError } from '../errors/errors.js';
+import { InvalidOptionsError } from '../errors/errors';
 
 /**
  * A small, dependency-free cron parser. Supports:

@@ -1,2 +1,2 @@
-export { PgliteDriver } from './pglite-driver.js';
-export type { PGliteDriverOptions } from './pglite-driver.js';
+export { PgliteDriver } from './pglite-driver';
+export type { PGliteDriverOptions } from './pglite-driver';

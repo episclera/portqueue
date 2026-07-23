@@ -1,10 +1,10 @@
 import type { PortQueue } from '@portqueue/core';
-import { flagBool, flagString, parseArgs } from './args.js';
-import { COMMANDS_BY_NAME } from './commands/index.js';
-import { loadPortQueue } from './config-loader.js';
-import { CliError } from './errors.js';
-import { renderHelp } from './help.js';
-import { fail, setColorEnabled } from './output.js';
+import { flagBool, flagString, parseArgs } from './args';
+import { COMMANDS_BY_NAME } from './commands/index';
+import { loadPortQueue } from './config-loader';
+import { CliError } from './errors';
+import { renderHelp } from './help';
+import { fail, setColorEnabled } from './output';
 
 /** A `--watch` flag turns an otherwise one-shot command into a long-running one. */
 const WATCH_FLAG = 'watch';

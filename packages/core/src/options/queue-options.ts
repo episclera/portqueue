@@ -1,6 +1,6 @@
-import type { JobOptions } from './job-options.js';
-import type { RetentionOptions } from './common.js';
-import type { HookRegistration } from '../events/hooks.js';
+import type { JobOptions } from './job-options';
+import type { RetentionOptions } from './common';
+import type { HookRegistration } from '../events/hooks';
 
 /**
  * Queue-definition options. Defaults for its jobs + queue-level policy.

@@ -5,12 +5,12 @@
  * connection.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { authorize } from './api/auth.js';
-import { createRouter, subscribeEvents, type HandlerInput } from './api/routes.js';
-import { serveAsset } from './assets.js';
-import { normalizeBase, readBody, toHeaders } from './request.js';
-import type { DashboardOptions } from './types.js';
-import type { DashboardConfigDto } from '../shared/dto.js';
+import { authorize } from './api/auth';
+import { createRouter, subscribeEvents, type HandlerInput } from './api/routes';
+import { serveAsset } from './assets';
+import { normalizeBase, readBody, toHeaders } from './request';
+import type { DashboardOptions } from './types';
+import type { DashboardConfigDto } from '../shared/dto';
 
 const SSE_KEEP_ALIVE_MS = 25000;
 

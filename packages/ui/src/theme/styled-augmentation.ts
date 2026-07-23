@@ -4,7 +4,7 @@
  * imported module (not a stray `.d.ts`) so it lands in each consumer's TS program; `index.ts`
  * imports it for its declarations.
  */
-import type { Theme } from './theme.js';
+import type { Theme } from './theme';
 
 declare module 'styled-components' {
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type

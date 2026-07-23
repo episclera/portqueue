@@ -1,5 +1,5 @@
-import { success } from '../output.js';
-import { CommandGroup, type Command } from './types.js';
+import { success } from '../output';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue migrate [--mode auto|validate-only]` */
 export const migrateCommand: Command = {

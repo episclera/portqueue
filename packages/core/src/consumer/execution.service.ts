@@ -1,12 +1,12 @@
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import type { Job, JobHandler, StepController, StepOutcome, WorkflowStep } from '../jobs/job.js';
-import type { JobRecord } from '../jobs/job-record.js';
-import type { ErrorClass } from '../options/worker-options.js';
-import type { QueueOptions } from '../options/queue-options.js';
-import type { Runtime } from '../client/runtime.js';
-import type { CompletionService } from './completion.service.js';
-import type { WorkflowService } from './workflow.service.js';
-import { UnsupportedForWorkerTypeError } from '../errors/errors.js';
+import { PortQueueEvent } from '../events/event-name.enum';
+import type { Job, JobHandler, StepController, StepOutcome, WorkflowStep } from '../jobs/job';
+import type { JobRecord } from '../jobs/job-record';
+import type { ErrorClass } from '../options/worker-options';
+import type { QueueOptions } from '../options/queue-options';
+import type { Runtime } from '../client/runtime';
+import type { CompletionService } from './completion.service';
+import type { WorkflowService } from './workflow.service';
+import { UnsupportedForWorkerTypeError } from '../errors/errors';
 
 export interface ExecutionConfig {
   queueName: string;
@@ -76,7 +76,7 @@ export class ExecutionService {
   private async runStep(
     record: JobRecord,
     job: Job,
-  ): Promise<import('../events/hooks.js').ProcessOutcome> {
+  ): Promise<import('../events/hooks').ProcessOutcome> {
     const steps = this.config.steps!;
     const step = steps.find((s) => s.key === record.workflowStepKey);
     if (!step) {

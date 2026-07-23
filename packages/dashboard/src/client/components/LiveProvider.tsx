@@ -4,7 +4,7 @@
  * root; every polling page reads it through the hooks in `use-poll.ts`.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { eventsUrl } from '../queries/api.js';
+import { eventsUrl } from '../queries/api';
 
 /** Single shared refetch cadence; exposed here for future configurability. */
 export const REFETCH_INTERVAL_MS = 30_000;

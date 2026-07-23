@@ -3,13 +3,13 @@ import {
   type BeforeAddResult,
   type HookRegistration,
   type ProcessOutcome,
-} from './hooks.js';
-import type { AddJobOptions } from '../options/job-options.js';
-import type { Job } from '../jobs/job.js';
-import type { AddJobResult } from '../producer/results.js';
-import type { Logger } from '../logging/logger.interface.js';
-import type { EventBusService } from './event-bus.service.js';
-import { PortQueueEvent } from './event-name.enum.js';
+} from './hooks';
+import type { AddJobOptions } from '../options/job-options';
+import type { Job } from '../jobs/job';
+import type { AddJobResult } from '../producer/results';
+import type { Logger } from '../logging/logger.interface';
+import type { EventBusService } from './event-bus.service';
+import { PortQueueEvent } from './event-name.enum';
 
 /**
  * Runs participation hooks. Hooks are awaited, in registration order.

@@ -1,7 +1,7 @@
 import { JobStatus } from '@portqueue/core';
-import { flagString } from '../args.js';
-import { CliError } from '../errors.js';
-import type { Flags } from './types.js';
+import { flagString } from '../args';
+import { CliError } from '../errors';
+import type { Flags } from './types';
 
 /** Read a required string flag, or throw an actionable error naming it. */
 export function requireFlag(flags: Flags, name: string): string {

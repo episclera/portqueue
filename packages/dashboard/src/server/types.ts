@@ -1,7 +1,7 @@
 /** Public option, handler, and framework-shape types for the dashboard middleware. */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { PortQueue } from '@portqueue/core';
-import type { DashboardAuth } from './api/auth.js';
+import type { DashboardAuth } from './api/auth';
 
 export interface DashboardOptions {
   /** The developer's running PortQueue instance. The dashboard rides on it. */

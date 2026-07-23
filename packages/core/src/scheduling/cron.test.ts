@@ -1,5 +1,5 @@
-import { CronExpression } from './cron.js';
-import { InvalidOptionsError } from '../errors/errors.js';
+import { CronExpression } from './cron';
+import { InvalidOptionsError } from '../errors/errors';
 
 // A fixed reference instant: 2026-01-01T00:00:00Z (a Thursday).
 const REF = Date.UTC(2026, 0, 1, 0, 0, 0);

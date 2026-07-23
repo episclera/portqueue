@@ -5,7 +5,7 @@
  * clearing the previous view.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { REFETCH_INTERVAL_MS, useLive } from '../components/LiveProvider.js';
+import { REFETCH_INTERVAL_MS, useLive } from '../components/LiveProvider';
 
 export interface QueryState<T> {
   data: T | undefined;

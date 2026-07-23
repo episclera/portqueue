@@ -1,8 +1,8 @@
 import { PauseMode } from '@portqueue/core';
-import { flagString } from '../args.js';
-import { success } from '../output.js';
-import { requireFlag } from './helpers.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagString } from '../args';
+import { success } from '../output';
+import { requireFlag } from './helpers';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue pause --queue [--mode processing|all]` */
 export const pauseCommand: Command = {

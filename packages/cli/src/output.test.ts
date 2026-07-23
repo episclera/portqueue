@@ -9,8 +9,8 @@ import {
   success,
   table,
   warn,
-} from './output.js';
-import { captureOutput } from './test-support/capture.js';
+} from './output';
+import { captureOutput } from './test-support/capture';
 
 beforeEach(() => setColorEnabled(false));
 

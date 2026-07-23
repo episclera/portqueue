@@ -1,4 +1,4 @@
-import { BackoffStrategy } from '../options/enums.js';
+import { BackoffStrategy } from '../options/enums';
 
 export interface BackoffInput {
   strategy: BackoffStrategy;

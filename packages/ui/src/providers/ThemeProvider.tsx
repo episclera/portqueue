@@ -1,6 +1,6 @@
 import React from 'react';
 import { ThemeProvider as StyledThemeProvider, createGlobalStyle } from 'styled-components';
-import { darkTheme, lightTheme } from '../theme/theme.js';
+import { darkTheme, lightTheme } from '../theme/theme';
 
 export interface ThemeProviderProps {
   mode?: 'light' | 'dark';

@@ -3,19 +3,19 @@ import {
   DeduplicationReason,
   RetentionMode,
   BackoffStrategy,
-} from '../../options/enums.js';
-import { JobStatus } from '../../jobs/job-state.enum.js';
+} from '../../options/enums';
+import { JobStatus } from '../../jobs/job-state.enum';
 import {
   capabilities,
   DriverCapability,
   type DriverCapabilitySet,
-} from '../driver-capabilities.js';
+} from '../driver-capabilities';
 import {
   DriverConnectionError,
   DriverQueryError,
   MissingPeerDependencyError,
   UnsupportedCapabilityError,
-} from '../../errors/errors.js';
+} from '../../errors/errors';
 import {
   TableName,
   validateIdentifier,
@@ -24,11 +24,11 @@ import {
   ScheduleColumn,
   InstanceColumn,
   MigrationColumn,
-} from '../table-names.js';
-import { matchesInstance } from '../../jobs/instance-affinity.js';
-import { uuid } from '../../util/uuid.js';
-import { toMigrationSteps } from '../shared/migration.js';
-import { ORACLE_MIGRATIONS } from './migrations.js';
+} from '../table-names';
+import { matchesInstance } from '../../jobs/instance-affinity';
+import { uuid } from '../../util/uuid';
+import { toMigrationSteps } from '../shared/migration';
+import { ORACLE_MIGRATIONS } from './migrations';
 import type {
   Driver,
   DriverProbe,
@@ -36,8 +36,8 @@ import type {
   RequeueFrom,
   Subscription,
   WorkflowNext,
-} from '../driver.interface.js';
-import type { DriverContext } from '../driver-context.js';
+} from '../driver.interface';
+import type { DriverContext } from '../driver-context';
 import type {
   InsertedJobRow,
   InstanceRow,
@@ -47,9 +47,9 @@ import type {
   QueueRow,
   ScheduleRow,
   ThroughputPoint,
-} from '../../jobs/job-record.js';
-import type { QueueOptions } from '../../options/queue-options.js';
-import type { TransactionHandle, TxQueryResult } from '../../tx/transaction-handle.js';
+} from '../../jobs/job-record';
+import type { QueueOptions } from '../../options/queue-options';
+import type { TransactionHandle, TxQueryResult } from '../../tx/transaction-handle';
 
 export interface OracleDriverOptions {
   user?: string;

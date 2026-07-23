@@ -1,2 +1,2 @@
-export { SqliteDriver } from './sqlite-driver.js';
-export type { SqliteDriverOptions } from './sqlite-driver.js';
+export { SqliteDriver } from './sqlite-driver';
+export type { SqliteDriverOptions } from './sqlite-driver';

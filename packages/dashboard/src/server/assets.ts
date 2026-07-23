@@ -7,7 +7,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
-import type { DashboardConfigDto } from '../shared/dto.js';
+import type { DashboardConfigDto } from '../shared/dto';
 
 const HTML_MIME = 'text/html; charset=utf-8';
 

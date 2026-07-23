@@ -1,5 +1,5 @@
 /** Queue overview + aggregate stats wire DTOs. */
-import type { CountsDto } from './job.js';
+import type { CountsDto } from './job';
 
 /** Queue overview (mirrors core `QueueInfo`). */
 export interface QueueDto {

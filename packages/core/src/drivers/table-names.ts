@@ -1,4 +1,4 @@
-import { InvalidOptionsError } from '../errors/errors.js';
+import { InvalidOptionsError } from '../errors/errors';
 
 /** Logical table names. Never a string literal at a query site. */
 export enum TableName {

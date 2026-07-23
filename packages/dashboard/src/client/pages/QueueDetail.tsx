@@ -16,15 +16,15 @@ import {
   Tag,
 } from '@portqueue/ui';
 import type { DropdownItem } from '@portqueue/ui';
-import { JobStatus, PauseMode } from '../queries/enums.js';
-import type { JobPageDto, QueueDto, StatsDto } from '../../shared/dto.js';
-import { api, config } from '../queries/api.js';
-import { usePoll, useQuery } from '../queries/use-poll.js';
-import { useAction } from '../queries/use-action.js';
-import { KpiCards } from '../components/KpiCards.js';
-import { JobsTable } from '../components/JobsTable.js';
-import { AddJobForm } from '../components/AddJobForm.js';
-import { SchedulesPanel } from '../components/SchedulesPanel.js';
+import { JobStatus, PauseMode } from '../queries/enums';
+import type { JobPageDto, QueueDto, StatsDto } from '../../shared/dto';
+import { api, config } from '../queries/api';
+import { usePoll, useQuery } from '../queries/use-poll';
+import { useAction } from '../queries/use-action';
+import { KpiCards } from '../components/KpiCards';
+import { JobsTable } from '../components/JobsTable';
+import { AddJobForm } from '../components/AddJobForm';
+import { SchedulesPanel } from '../components/SchedulesPanel';
 
 export function QueueDetailPage(): React.ReactElement {
   const { name } = useParams<{ name: string }>();

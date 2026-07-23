@@ -1,22 +1,22 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addCommand } from './add.js';
-import { cancelCommand } from './cancel.js';
-import { doctorCommand } from './doctor.js';
-import { jobCommand, jobsCommand } from './jobs.js';
-import { migrateCommand } from './migrate.js';
-import { pauseCommand, resumeCommand } from './pause.js';
-import { purgeCommand } from './purge.js';
-import { queuesCommand } from './queues.js';
-import { removeCommand } from './remove.js';
-import { retryCommand } from './retry.js';
-import { schedulesCommand } from './schedules.js';
-import { statsCommand } from './stats.js';
-import { setColorEnabled } from '../output.js';
-import { captureOutput } from '../test-support/capture.js';
-import { makeFakePq } from '../test-support/fake-pq.js';
-import type { Flags } from './types.js';
+import { addCommand } from './add';
+import { cancelCommand } from './cancel';
+import { doctorCommand } from './doctor';
+import { jobCommand, jobsCommand } from './jobs';
+import { migrateCommand } from './migrate';
+import { pauseCommand, resumeCommand } from './pause';
+import { purgeCommand } from './purge';
+import { queuesCommand } from './queues';
+import { removeCommand } from './remove';
+import { retryCommand } from './retry';
+import { schedulesCommand } from './schedules';
+import { statsCommand } from './stats';
+import { setColorEnabled } from '../output';
+import { captureOutput } from '../test-support/capture';
+import { makeFakePq } from '../test-support/fake-pq';
+import type { Flags } from './types';
 
 beforeEach(() => setColorEnabled(false));
 

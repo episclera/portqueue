@@ -1,10 +1,10 @@
 /** Schedules page: all recurring definitions across queues. Polls every 30s. */
 import React from 'react';
 import { Card, Stack, Title } from '@portqueue/ui';
-import type { ScheduleDto } from '../../shared/dto.js';
-import { api } from '../queries/api.js';
-import { usePoll } from '../queries/use-poll.js';
-import { SchedulesPanel } from '../components/SchedulesPanel.js';
+import type { ScheduleDto } from '../../shared/dto';
+import { api } from '../queries/api';
+import { usePoll } from '../queries/use-poll';
+import { SchedulesPanel } from '../components/SchedulesPanel';
 
 export function SchedulesPage(): React.ReactElement {
   const schedules = usePoll<ScheduleDto[]>(() => api.getSchedules(), []);

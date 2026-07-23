@@ -5,7 +5,7 @@ import {
   fromOracle,
   fromKnex,
   isTransactionHandle,
-} from './index.js';
+} from './index';
 
 describe('transaction adapters', () => {
   it('fromPg forwards to client.query and normalizes rows/rowCount', async () => {

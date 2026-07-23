@@ -2,8 +2,8 @@
 import React from 'react';
 import styled from 'styled-components';
 import { Card, Col, Row, SkeletonText, Statistic, tokens } from '@portqueue/ui';
-import { JobStatus } from '../queries/enums.js';
-import type { StatsDto } from '../../shared/dto.js';
+import { JobStatus } from '../queries/enums';
+import type { StatsDto } from '../../shared/dto';
 
 export interface KpiCardsProps {
   stats: StatsDto | undefined;

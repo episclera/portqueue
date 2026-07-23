@@ -1,9 +1,9 @@
 import { RetryMode } from '@portqueue/core';
-import { flagString } from '../args.js';
-import { CliError } from '../errors.js';
-import { success } from '../output.js';
-import { requireFlag } from './helpers.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagString } from '../args';
+import { CliError } from '../errors';
+import { success } from '../output';
+import { requireFlag } from './helpers';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue retry --id [--from failed|start]` */
 export const retryCommand: Command = {

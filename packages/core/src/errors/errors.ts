@@ -1,4 +1,4 @@
-import { PortQueueErrorCode } from './error-codes.enum.js';
+import { PortQueueErrorCode } from './error-codes.enum';
 
 /** Typed details attached to an error. */
 export interface ErrorContext {

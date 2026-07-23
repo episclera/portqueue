@@ -1,6 +1,6 @@
-import { success, warn } from '../output.js';
-import { requireFlag } from './helpers.js';
-import { CommandGroup, type Command } from './types.js';
+import { success, warn } from '../output';
+import { requireFlag } from './helpers';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue remove-instance --instance-key <key>` */
 export const removeInstanceCommand: Command = {

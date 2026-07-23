@@ -1,5 +1,5 @@
-import type { JobHandler, WorkflowStep } from '../jobs/job.js';
-import type { RateLimiterOptions } from './common.js';
+import type { JobHandler, WorkflowStep } from '../jobs/job';
+import type { RateLimiterOptions } from './common';
 
 /** An error constructor for `dontAutoretryFor` matching. */
 export type ErrorClass = new (...args: never[]) => Error;

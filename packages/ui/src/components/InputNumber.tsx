@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { fieldBaseStyles, INPUT_SIZES, type InputSize } from './Input.js';
+import { fieldBaseStyles, INPUT_SIZES, type InputSize } from './Input';
 
 export interface InputNumberProps {
   value?: number | null;

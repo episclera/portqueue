@@ -1,8 +1,8 @@
-import type { JobStatus } from '../jobs/job-state.enum.js';
-import type { DeduplicationReason } from '../options/enums.js';
-import type { JobMetadata } from '../options/common.js';
+import type { JobStatus } from '../jobs/job-state.enum';
+import type { DeduplicationReason } from '../options/enums';
+import type { JobMetadata } from '../options/common';
 
-export type { Page } from '../options/common.js';
+export type { Page } from '../options/common';
 
 /**
  * The structured result of producing a job. One shape for both the

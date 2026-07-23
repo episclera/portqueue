@@ -1,9 +1,9 @@
 // @portqueue/core — the developer-facing barrel.
 
 // Client, handles, and the Job context type
-export { PortQueue } from './port-queue.js';
-export { Queue } from './producer/queue.js';
-export { Worker } from './consumer/worker.js';
+export { PortQueue } from './port-queue';
+export { Queue } from './producer/queue';
+export { Worker } from './consumer/worker';
 export type {
   Job,
   JobHandler,
@@ -11,10 +11,10 @@ export type {
   StepController,
   StepOutcome,
   WorkflowStep,
-} from './jobs/job.js';
+} from './jobs/job';
 
 // Enums (no magic strings)
-export { JobStatus } from './jobs/job-state.enum.js';
+export { JobStatus } from './jobs/job-state.enum';
 export {
   BackoffStrategy,
   RetryMode,
@@ -23,12 +23,12 @@ export {
   RetentionMode,
   MigrationMode,
   DatabaseEngine,
-} from './options/enums.js';
-export { PortQueueEvent } from './events/event-name.enum.js';
-export { HookPhase } from './events/hooks.js';
-export { LogLevel } from './logging/log-level.enum.js';
-export { PortQueueErrorCode } from './errors/error-codes.enum.js';
-export { DriverCapability } from './drivers/driver-capabilities.js';
+} from './options/enums';
+export { PortQueueEvent } from './events/event-name.enum';
+export { HookPhase } from './events/hooks';
+export { LogLevel } from './logging/log-level.enum';
+export { PortQueueErrorCode } from './errors/error-codes.enum';
+export { DriverCapability } from './drivers/driver-capabilities';
 // Schema identifiers — reusable by driver authors and dashboard/reporting code.
 export {
   TableName,
@@ -37,13 +37,13 @@ export {
   ScheduleColumn,
   InstanceColumn,
   MigrationColumn,
-} from './drivers/table-names.js';
+} from './drivers/table-names';
 
 // Option types (the disjoint bags)
-export type { PortQueueOptions, ShutdownOptions } from './options/client-options.js';
-export type { QueueOptions } from './options/queue-options.js';
-export type { WorkerOptions, ErrorClass } from './options/worker-options.js';
-export type { JobOptions, AddJobOptions, CronSpec } from './options/job-options.js';
+export type { PortQueueOptions, ShutdownOptions } from './options/client-options';
+export type { QueueOptions } from './options/queue-options';
+export type { WorkerOptions, ErrorClass } from './options/worker-options';
+export type { JobOptions, AddJobOptions, CronSpec } from './options/job-options';
 export type {
   BackoffOptions,
   RetentionOptions,
@@ -52,9 +52,9 @@ export type {
   InstanceIdentityOptions,
   SystemMonitorOptions,
   Page,
-} from './options/common.js';
-export type { Duration } from './util/duration.js';
-export { duration } from './util/duration.js';
+} from './options/common';
+export type { Duration } from './util/duration';
+export { duration } from './util/duration';
 
 // Result & snapshot types
 export type {
@@ -66,7 +66,7 @@ export type {
   InstanceInfo,
   QueueStats,
   GetJobsQuery,
-} from './producer/results.js';
+} from './producer/results';
 
 // Events & hooks types
 export type {
@@ -74,13 +74,13 @@ export type {
   EventListener,
   Unsubscribe,
   ErrorSource,
-} from './events/event-name.enum.js';
+} from './events/event-name.enum';
 export type {
   HookRegistration,
   HookHandler,
   BeforeAddResult,
   ProcessOutcome,
-} from './events/hooks.js';
+} from './events/hooks';
 
 // Driver contract (for custom drivers) + transactions
 export type {
@@ -88,15 +88,15 @@ export type {
   DriverProbe,
   Subscription,
   MigrationStep,
-} from './drivers/driver.interface.js';
-export type { DriverCapabilitySet } from './drivers/driver-capabilities.js';
-export { capabilities } from './drivers/driver-capabilities.js';
-export { DriverContext } from './drivers/driver-context.js';
-export type { TransactionHandle, TxQueryResult } from './tx/transaction-handle.js';
+} from './drivers/driver.interface';
+export type { DriverCapabilitySet } from './drivers/driver-capabilities';
+export { capabilities } from './drivers/driver-capabilities';
+export { DriverContext } from './drivers/driver-context';
+export type { TransactionHandle, TxQueryResult } from './tx/transaction-handle';
 
 // Logging
-export type { Logger, LogContext, LoggerOptions } from './logging/logger.interface.js';
-export { ConsoleLogger, NoopLogger } from './logging/console-logger.js';
+export type { Logger, LogContext, LoggerOptions } from './logging/logger.interface';
+export { ConsoleLogger, NoopLogger } from './logging/console-logger';
 
 // Errors
 export {
@@ -114,4 +114,4 @@ export {
   PayloadTooLargeError,
   ShutdownTimeoutError,
   MissingPeerDependencyError,
-} from './errors/errors.js';
+} from './errors/errors';

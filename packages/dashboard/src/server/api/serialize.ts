@@ -20,7 +20,7 @@ import type {
   WorkflowDto,
   InstanceDto,
   CountsDto,
-} from '../../shared/dto.js';
+} from '../../shared/dto';
 
 function iso(d: Date | null | undefined): string | null | undefined {
   if (d === null) return null;

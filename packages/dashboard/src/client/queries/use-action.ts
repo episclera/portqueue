@@ -4,9 +4,9 @@
  */
 import { useToast } from '@portqueue/ui';
 import { useCallback } from 'react';
-import { api } from '../queries/api.js';
-import { useLive } from '../components/LiveProvider.js';
-import type { ActionRequestDto } from '../../shared/dto.js';
+import { api } from '../queries/api';
+import { useLive } from '../components/LiveProvider';
+import type { ActionRequestDto } from '../../shared/dto';
 
 export function useAction(): {
   run: (body: ActionRequestDto, successMessage?: string) => Promise<boolean>;

@@ -3,9 +3,9 @@ import {
   TEST_ENGINES,
   waitFor,
   type TestQueueHandle,
-} from '../test-utils/create-test-queue.js';
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { RetentionMode } from '../options/enums.js';
+} from '../test-utils/create-test-queue';
+import { JobStatus } from '../jobs/job-state.enum';
+import { RetentionMode } from '../options/enums';
 
 describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   let h: TestQueueHandle;

@@ -7,9 +7,9 @@
 import React from 'react';
 import { Collapse, Inline, Paragraph, Stack, StatusTag, Text, Timeline, tokens } from '@portqueue/ui';
 import type { TimelineItem } from '@portqueue/ui';
-import { JobStatus } from '../queries/enums.js';
-import type { JobDto, WorkflowDto } from '../../shared/dto.js';
-import { duration, formatDate } from './format.js';
+import { JobStatus } from '../queries/enums';
+import type { JobDto, WorkflowDto } from '../../shared/dto';
+import { duration, formatDate } from './format';
 
 function stepEnd(step: JobDto): string | null | undefined {
   return step.completedAt ?? step.failedAt ?? step.cancelledAt ?? step.expiredAt;

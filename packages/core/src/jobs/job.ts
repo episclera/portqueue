@@ -1,4 +1,4 @@
-import type { JobMetadata } from '../options/common.js';
+import type { JobMetadata } from '../options/common';
 
 /**
  * The runtime view of a job handed to a handler. Read-only fields

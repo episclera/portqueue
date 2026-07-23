@@ -1,4 +1,4 @@
-import { InvalidOptionsError } from '../errors/errors.js';
+import { InvalidOptionsError } from '../errors/errors';
 
 /**
  * A duration expressed either as milliseconds (number) or a human string

@@ -5,7 +5,7 @@ import {
   serializeJob,
   serializeSchedule,
   serializeStats,
-} from './serialize.js';
+} from './serialize';
 
 const baseJob = (over: Partial<JobSnapshot> = {}): JobSnapshot =>
   ({

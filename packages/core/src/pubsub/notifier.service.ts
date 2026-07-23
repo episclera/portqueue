@@ -1,6 +1,6 @@
-import type { Driver } from '../drivers/driver.interface.js';
-import type { Logger } from '../logging/logger.interface.js';
-import { PubSubChannel } from './channels.js';
+import type { Driver } from '../drivers/driver.interface';
+import type { Logger } from '../logging/logger.interface';
+import { PubSubChannel } from './channels';
 
 /**
  * Emits DB notifications on new/changed jobs. Notifications carry only

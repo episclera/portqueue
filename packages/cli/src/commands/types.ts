@@ -1,5 +1,5 @@
 import type { PortQueue } from '@portqueue/core';
-import type { ParsedArgs } from '../args.js';
+import type { ParsedArgs } from '../args';
 
 export type Flags = ParsedArgs['flags'];
 

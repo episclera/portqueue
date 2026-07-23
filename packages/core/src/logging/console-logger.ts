@@ -1,5 +1,5 @@
-import { LOG_LEVEL_SEVERITY, LogLevel } from './log-level.enum.js';
-import type { Logger, LogContext, LoggerOptions } from './logger.interface.js';
+import { LOG_LEVEL_SEVERITY, LogLevel } from './log-level.enum';
+import type { Logger, LogContext, LoggerOptions } from './logger.interface';
 
 /**
  * Zero-dependency default logger. Writes structured lines to

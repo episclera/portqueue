@@ -1,2 +1,2 @@
-export { YugabyteDriver } from './yugabyte-driver.js';
-export type { YugabyteDriverOptions } from './yugabyte-driver.js';
+export { YugabyteDriver } from './yugabyte-driver';
+export type { YugabyteDriverOptions } from './yugabyte-driver';

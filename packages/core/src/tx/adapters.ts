@@ -1,4 +1,4 @@
-import type { TransactionHandle, TxQueryResult } from './transaction-handle.js';
+import type { TransactionHandle, TxQueryResult } from './transaction-handle';
 
 /** Build a {@link TransactionHandle} from a raw executor. */
 function makeHandle(

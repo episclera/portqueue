@@ -1,4 +1,4 @@
-import { flagBool, flagNumber, flagString, parseArgs } from './args.js';
+import { flagBool, flagNumber, flagString, parseArgs } from './args';
 
 describe('parseArgs', () => {
   it('collects the leading tokens as the command path', () => {

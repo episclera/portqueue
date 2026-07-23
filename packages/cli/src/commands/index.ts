@@ -1,20 +1,20 @@
-import { addCommand } from './add.js';
-import { cancelCommand } from './cancel.js';
-import { dashboardCommand } from './dashboard.js';
-import { doctorCommand } from './doctor.js';
-import { jobCommand, jobsCommand } from './jobs.js';
-import { listenCommand } from './listen.js';
-import { migrateCommand } from './migrate.js';
-import { pauseCommand, resumeCommand } from './pause.js';
-import { purgeCommand } from './purge.js';
-import { queuesCommand } from './queues.js';
-import { removeCommand } from './remove.js';
-import { removeInstanceCommand } from './remove-instance.js';
-import { removeQueueCommand } from './remove-queue.js';
-import { retryCommand } from './retry.js';
-import { schedulesCommand } from './schedules.js';
-import { statsCommand } from './stats.js';
-import type { Command } from './types.js';
+import { addCommand } from './add';
+import { cancelCommand } from './cancel';
+import { dashboardCommand } from './dashboard';
+import { doctorCommand } from './doctor';
+import { jobCommand, jobsCommand } from './jobs';
+import { listenCommand } from './listen';
+import { migrateCommand } from './migrate';
+import { pauseCommand, resumeCommand } from './pause';
+import { purgeCommand } from './purge';
+import { queuesCommand } from './queues';
+import { removeCommand } from './remove';
+import { removeInstanceCommand } from './remove-instance';
+import { removeQueueCommand } from './remove-queue';
+import { retryCommand } from './retry';
+import { schedulesCommand } from './schedules';
+import { statsCommand } from './stats';
+import type { Command } from './types';
 
 /**
  * The command registry. Both dispatch (`COMMANDS_BY_NAME`) and the generated help
@@ -48,4 +48,4 @@ export const COMMANDS_BY_NAME: ReadonlyMap<string, Command> = new Map(
   COMMANDS.map((command) => [command.name, command]),
 );
 
-export { CommandGroup, type Command, type CommandContext } from './types.js';
+export { CommandGroup, type Command, type CommandContext } from './types';

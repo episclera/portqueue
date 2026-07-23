@@ -1,6 +1,6 @@
 /** @jest-environment node */
-import { serveAsset } from './assets.js';
-import type { DashboardConfigDto } from '../shared/dto.js';
+import { serveAsset } from './assets';
+import type { DashboardConfigDto } from '../shared/dto';
 
 const config: DashboardConfigDto = {
   basePath: '/portqueue',

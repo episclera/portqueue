@@ -1,8 +1,8 @@
-import { flagBool } from '../args.js';
-import { CliError } from '../errors.js';
-import { success } from '../output.js';
-import { parseStatus, requireFlag } from './helpers.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagBool } from '../args';
+import { CliError } from '../errors';
+import { success } from '../output';
+import { parseStatus, requireFlag } from './helpers';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue purge --queue --status --yes` */
 export const purgeCommand: Command = {

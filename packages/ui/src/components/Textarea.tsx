@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { fieldBaseStyles } from './Input.js';
+import { fieldBaseStyles } from './Input';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   invalid?: boolean;

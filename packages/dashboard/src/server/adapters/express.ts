@@ -2,8 +2,8 @@
  * Express adapter. `app.use(basePath, expressAdapter(dashboard))` or
  * `app.use(dashboard.express())`.
  */
-import type { DashboardEngine } from '../engine.js';
-import type { Dashboard, ExpressMiddleware } from '../types.js';
+import type { DashboardEngine } from '../engine';
+import type { Dashboard, ExpressMiddleware } from '../types';
 
 export function createExpressMiddleware(engine: DashboardEngine): ExpressMiddleware {
   return (req, res, next) => {

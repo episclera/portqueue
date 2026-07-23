@@ -1,6 +1,6 @@
-import { flagBool } from '../args.js';
-import { color, heading, printJson, table } from '../output.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagBool } from '../args';
+import { color, heading, printJson, table } from '../output';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue queues` */
 export const queuesCommand: Command = {

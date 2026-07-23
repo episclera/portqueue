@@ -1,7 +1,7 @@
-import { flagBool, flagNumber, flagString } from '../args.js';
-import { printJson, relativeTime, success } from '../output.js';
-import { requireFlag } from './helpers.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagBool, flagNumber, flagString } from '../args';
+import { printJson, relativeTime, success } from '../output';
+import { requireFlag } from './helpers';
+import { CommandGroup, type Command } from './types';
 
 /** Parse `--data` which is either inline JSON or `@path/to/file.json`. */
 async function parseData(raw: string): Promise<unknown> {

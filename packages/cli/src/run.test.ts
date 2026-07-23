@@ -1,9 +1,9 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { run } from './run.js';
-import { setColorEnabled } from './output.js';
-import { captureOutput } from './test-support/capture.js';
+import { run } from './run';
+import { setColorEnabled } from './output';
+import { captureOutput } from './test-support/capture';
 
 beforeEach(() => setColorEnabled(false));
 

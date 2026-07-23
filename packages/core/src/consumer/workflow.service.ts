@@ -1,11 +1,11 @@
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import type { JobRecord, NewJobRecord } from '../jobs/job-record.js';
-import type { StepOutcome, WorkflowStep } from '../jobs/job.js';
-import type { QueueOptions } from '../options/queue-options.js';
-import type { Runtime } from '../client/runtime.js';
-import type { ProcessOutcome } from '../events/hooks.js';
-import { UnsupportedForWorkerTypeError } from '../errors/errors.js';
+import { JobStatus } from '../jobs/job-state.enum';
+import { PortQueueEvent } from '../events/event-name.enum';
+import type { JobRecord, NewJobRecord } from '../jobs/job-record';
+import type { StepOutcome, WorkflowStep } from '../jobs/job';
+import type { QueueOptions } from '../options/queue-options';
+import type { Runtime } from '../client/runtime';
+import type { ProcessOutcome } from '../events/hooks';
+import { UnsupportedForWorkerTypeError } from '../errors/errors';
 
 /**
  * Workflow (multi-step) dispatch + atomic step advance/spawn. Completing

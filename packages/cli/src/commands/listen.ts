@@ -2,9 +2,9 @@ import {
   PortQueueEvent,
   type PortQueueEventPayloads,
 } from '@portqueue/core';
-import { flagBool, flagString } from '../args.js';
-import { color, heading, printJson } from '../output.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagBool, flagString } from '../args';
+import { color, heading, printJson } from '../output';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue listen [--queue] [--events ...]` — runs infinitely, streaming events. */
 export const listenCommand: Command = {

@@ -1,6 +1,6 @@
-import type { JobStatus } from './job-state.enum.js';
-import { BackoffStrategy, DeduplicationReason, RetentionMode } from '../options/enums.js';
-import type { JobMetadata } from '../options/common.js';
+import type { JobStatus } from './job-state.enum';
+import { BackoffStrategy, DeduplicationReason, RetentionMode } from '../options/enums';
+import type { JobMetadata } from '../options/common';
 
 /**
  * The normalized in-memory shape of a `job` row. Drivers own the

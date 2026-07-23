@@ -1,9 +1,9 @@
-import type { Driver, Subscription } from '../drivers/driver.interface.js';
-import { DriverCapability } from '../drivers/driver-capabilities.js';
-import { matchesInstance } from '../jobs/instance-affinity.js';
-import type { Logger } from '../logging/logger.interface.js';
-import type { Wakeup } from './wakeup.js';
-import { PubSubChannel } from './channels.js';
+import type { Driver, Subscription } from '../drivers/driver.interface';
+import { DriverCapability } from '../drivers/driver-capabilities';
+import { matchesInstance } from '../jobs/instance-affinity';
+import type { Logger } from '../logging/logger.interface';
+import type { Wakeup } from './wakeup';
+import { PubSubChannel } from './channels';
 
 /**
  * Listens for DB notifications and wakes claim loops. When LISTEN/NOTIFY

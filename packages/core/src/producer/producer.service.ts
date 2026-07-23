@@ -1,15 +1,15 @@
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import { DeduplicationReason } from '../options/enums.js';
-import { InvalidOptionsError, PayloadTooLargeError, QueuePausedError } from '../errors/errors.js';
-import { toMs } from '../util/duration.js';
-import { uuid } from '../util/uuid.js';
-import { CronExpression } from '../scheduling/cron.js';
-import type { AddJobOptions, CronSpec } from '../options/job-options.js';
-import type { AddJobResult, ScheduleInfo } from './results.js';
-import type { NewJobRecord, NewScheduleRow } from '../jobs/job-record.js';
-import type { Runtime } from '../client/runtime.js';
-import type { NotifierService } from '../pubsub/notifier.service.js';
+import { JobStatus } from '../jobs/job-state.enum';
+import { PortQueueEvent } from '../events/event-name.enum';
+import { DeduplicationReason } from '../options/enums';
+import { InvalidOptionsError, PayloadTooLargeError, QueuePausedError } from '../errors/errors';
+import { toMs } from '../util/duration';
+import { uuid } from '../util/uuid';
+import { CronExpression } from '../scheduling/cron';
+import type { AddJobOptions, CronSpec } from '../options/job-options';
+import type { AddJobResult, ScheduleInfo } from './results';
+import type { NewJobRecord, NewScheduleRow } from '../jobs/job-record';
+import type { Runtime } from '../client/runtime';
+import type { NotifierService } from '../pubsub/notifier.service';
 
 /**
  * Insert/dedup/schedule logic behind the Queue handle.

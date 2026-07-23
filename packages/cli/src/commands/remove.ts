@@ -1,8 +1,8 @@
-import { flagString } from '../args.js';
-import { CliError } from '../errors.js';
-import { success, warn } from '../output.js';
-import { requireFlag } from './helpers.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagString } from '../args';
+import { CliError } from '../errors';
+import { success, warn } from '../output';
+import { requireFlag } from './helpers';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue remove (--id <jobId> | --schedule-id <id> --queue <name>)` */
 export const removeCommand: Command = {

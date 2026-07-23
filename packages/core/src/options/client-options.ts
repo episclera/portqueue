@@ -1,8 +1,8 @@
-import type { Driver } from '../drivers/driver.interface.js';
-import type { Logger, LoggerOptions } from '../logging/logger.interface.js';
-import type { MigrationMode } from './enums.js';
-import type { JobOptions } from './job-options.js';
-import type { InstanceIdentityOptions, RetentionOptions, SystemMonitorOptions } from './common.js';
+import type { Driver } from '../drivers/driver.interface';
+import type { Logger, LoggerOptions } from '../logging/logger.interface';
+import type { MigrationMode } from './enums';
+import type { JobOptions } from './job-options';
+import type { InstanceIdentityOptions, RetentionOptions, SystemMonitorOptions } from './common';
 
 /** Top-level client options. Construction wires DI only — no I/O. */
 export interface PortQueueOptions<TInstanceKey extends string = string> {
@@ -38,7 +38,7 @@ export interface PortQueueOptions<TInstanceKey extends string = string> {
   /** Interval for scheduler/retention/monitor ticks (ms). Default 5000. */
   tickIntervalMs?: number;
   /** @internal Inject a clock for deterministic tests. */
-  clock?: import('../util/clock.js').Clock;
+  clock?: import('../util/clock').Clock;
 }
 
 /** Options for `pq.shutdown`. */

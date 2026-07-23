@@ -6,9 +6,9 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { ThemeProvider, ToastProvider, useThemeMode } from '@portqueue/ui';
-import { App } from './App.js';
-import { LiveProvider } from './components/LiveProvider.js';
-import { config } from './queries/api.js';
+import { App } from './App';
+import { LiveProvider } from './components/LiveProvider';
+import { config } from './queries/api';
 
 function Root(): React.ReactElement {
   const { mode, effective, setMode } = useThemeMode();

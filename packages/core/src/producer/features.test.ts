@@ -3,12 +3,12 @@ import {
   TEST_ENGINES,
   waitFor,
   type TestQueueHandle,
-} from '../test-utils/create-test-queue.js';
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import { HookPhase } from '../events/hooks.js';
-import { BackoffStrategy, RetryMode } from '../options/enums.js';
-import type { WorkflowStep } from '../jobs/job.js';
+} from '../test-utils/create-test-queue';
+import { JobStatus } from '../jobs/job-state.enum';
+import { PortQueueEvent } from '../events/event-name.enum';
+import { HookPhase } from '../events/hooks';
+import { BackoffStrategy, RetryMode } from '../options/enums';
+import type { WorkflowStep } from '../jobs/job';
 
 class NonRetryableError extends Error {
   constructor() {

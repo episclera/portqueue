@@ -1,5 +1,5 @@
-import type { MigrationStep } from '../driver.interface.js';
-import type { TableName } from '../table-names.js';
+import type { MigrationStep } from '../driver.interface';
+import type { TableName } from '../table-names';
 
 /** Resolves a logical {@link TableName} to its physical, prefixed name (e.g. `pq_job`). */
 export type PhysicalName = (t: TableName) => string;

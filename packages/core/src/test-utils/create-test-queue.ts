@@ -1,10 +1,10 @@
-import { PortQueue } from '../port-queue.js';
-import { PgliteDriver } from '../drivers/pglite/index.js';
-import { SqliteDriver } from '../drivers/sqlite/index.js';
-import { NoopLogger } from '../logging/console-logger.js';
-import { FakeClock } from '../util/clock.js';
-import type { Driver } from '../drivers/driver.interface.js';
-import type { PortQueueOptions } from '../options/client-options.js';
+import { PortQueue } from '../port-queue';
+import { PgliteDriver } from '../drivers/pglite/index';
+import { SqliteDriver } from '../drivers/sqlite/index';
+import { NoopLogger } from '../logging/console-logger';
+import { FakeClock } from '../util/clock';
+import type { Driver } from '../drivers/driver.interface';
+import type { PortQueueOptions } from '../options/client-options';
 
 export type TestEngine = 'pglite' | 'sqlite';
 

@@ -1,6 +1,6 @@
-import type { JobRecord } from './job-record.js';
-import type { JobSnapshot } from '../producer/results.js';
-import { JobStatus } from './job-state.enum.js';
+import type { JobRecord } from './job-record';
+import type { JobSnapshot } from '../producer/results';
+import { JobStatus } from './job-state.enum';
 
 const d = (ms: number | null | undefined): Date | null => (ms == null ? null : new Date(ms));
 

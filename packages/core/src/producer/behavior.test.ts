@@ -3,11 +3,11 @@ import {
   TEST_ENGINES,
   waitFor,
   type TestQueueHandle,
-} from '../test-utils/create-test-queue.js';
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import { PauseMode } from '../options/enums.js';
-import type { WorkflowStep } from '../jobs/job.js';
+} from '../test-utils/create-test-queue';
+import { JobStatus } from '../jobs/job-state.enum';
+import { PortQueueEvent } from '../events/event-name.enum';
+import { PauseMode } from '../options/enums';
+import type { WorkflowStep } from '../jobs/job';
 
 describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   let h: TestQueueHandle;

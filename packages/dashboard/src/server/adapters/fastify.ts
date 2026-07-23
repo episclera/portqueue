@@ -2,8 +2,8 @@
  * Fastify adapter. `app.register(fastifyAdapter(dashboard))` or
  * `app.register(dashboard.fastify())`.
  */
-import type { DashboardEngine } from '../engine.js';
-import type { Dashboard, FastifyPlugin } from '../types.js';
+import type { DashboardEngine } from '../engine';
+import type { Dashboard, FastifyPlugin } from '../types';
 
 export function createFastifyPlugin(engine: DashboardEngine): FastifyPlugin {
   return (fastify, _opts, done) => {

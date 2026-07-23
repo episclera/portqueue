@@ -1,6 +1,6 @@
-import { createTestQueue, waitFor, type TestQueueHandle } from '../test-utils/create-test-queue.js';
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { PauseMode, RetryMode } from '../options/enums.js';
+import { createTestQueue, waitFor, type TestQueueHandle } from '../test-utils/create-test-queue';
+import { JobStatus } from '../jobs/job-state.enum';
+import { PauseMode, RetryMode } from '../options/enums';
 
 // Single-engine (sqlite) coverage of client-wide reads + admin paths.
 describe('client reads & admin (sqlite)', () => {

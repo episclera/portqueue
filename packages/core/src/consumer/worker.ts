@@ -1,13 +1,13 @@
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import { RateLimiterService } from '../monitoring/rate-limiter.service.js';
-import { ExecutionService, type ExecutionConfig } from './execution.service.js';
-import type { CompletionService } from './completion.service.js';
-import type { WorkflowService } from './workflow.service.js';
-import type { JobHandler, WorkflowStep } from '../jobs/job.js';
-import type { ErrorClass } from '../options/worker-options.js';
-import type { QueueOptions } from '../options/queue-options.js';
-import type { Runtime } from '../client/runtime.js';
-import type { RateLimiterOptions } from '../options/common.js';
+import { PortQueueEvent } from '../events/event-name.enum';
+import { RateLimiterService } from '../monitoring/rate-limiter.service';
+import { ExecutionService, type ExecutionConfig } from './execution.service';
+import type { CompletionService } from './completion.service';
+import type { WorkflowService } from './workflow.service';
+import type { JobHandler, WorkflowStep } from '../jobs/job';
+import type { ErrorClass } from '../options/worker-options';
+import type { QueueOptions } from '../options/queue-options';
+import type { Runtime } from '../client/runtime';
+import type { RateLimiterOptions } from '../options/common';
 
 export interface WorkerConfig {
   queue: string;

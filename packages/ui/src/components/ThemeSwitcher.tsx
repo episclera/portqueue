@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Segmented } from './Segmented.js';
+import { Segmented } from './Segmented';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 

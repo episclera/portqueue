@@ -1,10 +1,10 @@
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import { computeBackoffMs } from '../util/backoff.js';
-import type { ErrorClass } from '../options/worker-options.js';
-import type { JobRecord } from '../jobs/job-record.js';
-import type { Runtime } from '../client/runtime.js';
-import type { ProcessOutcome } from '../events/hooks.js';
+import { JobStatus } from '../jobs/job-state.enum';
+import { PortQueueEvent } from '../events/event-name.enum';
+import { computeBackoffMs } from '../util/backoff';
+import type { ErrorClass } from '../options/worker-options';
+import type { JobRecord } from '../jobs/job-record';
+import type { Runtime } from '../client/runtime';
+import type { ProcessOutcome } from '../events/hooks';
 
 /** Marks complete/failed/retry atomically and emits the matching event. */
 export class CompletionService {

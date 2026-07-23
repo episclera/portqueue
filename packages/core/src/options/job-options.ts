@@ -1,6 +1,6 @@
-import type { Duration } from '../util/duration.js';
-import type { BackoffOptions, JobMetadata, RetentionOptions } from './common.js';
-import type { TransactionHandle } from '../tx/transaction-handle.js';
+import type { Duration } from '../util/duration';
+import type { BackoffOptions, JobMetadata, RetentionOptions } from './common';
+import type { TransactionHandle } from '../tx/transaction-handle';
 
 /**
  * Per-job producer options — highest precedence in the

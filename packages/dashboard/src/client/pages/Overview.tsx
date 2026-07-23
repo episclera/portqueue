@@ -23,14 +23,14 @@ import {
   tokens,
 } from '@portqueue/ui';
 import type { TableColumn } from '@portqueue/ui';
-import { JobStatus } from '../queries/enums.js';
-import type { InstanceDto, QueueDto, StatsDto } from '../../shared/dto.js';
-import { api, config } from '../queries/api.js';
-import { usePoll } from '../queries/use-poll.js';
-import { useAction } from '../queries/use-action.js';
-import { KpiCards } from '../components/KpiCards.js';
-import { Sparkline } from '../components/Sparkline.js';
-import { totalCount } from '../components/format.js';
+import { JobStatus } from '../queries/enums';
+import type { InstanceDto, QueueDto, StatsDto } from '../../shared/dto';
+import { api, config } from '../queries/api';
+import { usePoll } from '../queries/use-poll';
+import { useAction } from '../queries/use-action';
+import { KpiCards } from '../components/KpiCards';
+import { Sparkline } from '../components/Sparkline';
+import { totalCount } from '../components/format';
 
 const Hero = styled.div`
   display: flex;

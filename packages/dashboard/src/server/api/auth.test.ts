@@ -1,6 +1,6 @@
 /** @jest-environment node */
-import { authorize, type DashboardAuth } from './auth.js';
-import { basicAuth } from '../../test-support/http-mocks.js';
+import { authorize, type DashboardAuth } from './auth';
+import { basicAuth } from '../../test-support/http-mocks';
 
 const req = (headers: Record<string, string> = {}) => ({ method: 'GET', url: '/portqueue', headers });
 

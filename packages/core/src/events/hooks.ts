@@ -1,6 +1,6 @@
-import type { AddJobOptions, JobOptions } from '../options/job-options.js';
-import type { Job } from '../jobs/job.js';
-import type { AddJobResult } from '../producer/results.js';
+import type { AddJobOptions, JobOptions } from '../options/job-options';
+import type { Job } from '../jobs/job';
+import type { AddJobResult } from '../producer/results';
 
 /** Hook lifecycle phases. */
 export enum HookPhase {

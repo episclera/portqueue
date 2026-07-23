@@ -20,12 +20,12 @@ import {
   Tooltip,
 } from '@portqueue/ui';
 import type { TableColumn } from '@portqueue/ui';
-import { JobStatus } from '../queries/enums.js';
-import type { InstanceDto } from '../../shared/dto.js';
-import { api, config } from '../queries/api.js';
-import { usePoll } from '../queries/use-poll.js';
-import { useAction } from '../queries/use-action.js';
-import { totalCount, formatDate } from '../components/format.js';
+import { JobStatus } from '../queries/enums';
+import type { InstanceDto } from '../../shared/dto';
+import { api, config } from '../queries/api';
+import { usePoll } from '../queries/use-poll';
+import { useAction } from '../queries/use-action';
+import { totalCount, formatDate } from '../components/format';
 
 const Hero = styled.div`
   display: flex;

@@ -6,8 +6,8 @@
  * Access it inside styled templates via `props.theme` (typed through the `DefaultTheme`
  * augmentation in `src/theme/styled-augmentation.ts`).
  */
-import { tokens } from './tokens.js';
-import { typography } from './typography.js';
+import { tokens } from './tokens';
+import { typography } from './typography';
 
 export interface ThemeColor {
   brand: string;

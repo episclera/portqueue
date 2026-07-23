@@ -1,5 +1,5 @@
-import { COMMANDS, COMMANDS_BY_NAME } from './index.js';
-import { CommandGroup } from './types.js';
+import { COMMANDS, COMMANDS_BY_NAME } from './index';
+import { CommandGroup } from './types';
 
 describe('command registry', () => {
   it('exposes a lookup entry for every command', () => {

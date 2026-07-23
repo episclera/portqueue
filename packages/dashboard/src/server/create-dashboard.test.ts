@@ -1,8 +1,8 @@
 /** @jest-environment node */
 import type { PortQueue } from '@portqueue/core';
-import { createDashboard } from './create-dashboard.js';
-import { createEngine } from './engine.js';
-import { makeReq, makeRes } from '../test-support/http-mocks.js';
+import { createDashboard } from './create-dashboard';
+import { createEngine } from './engine';
+import { makeReq, makeRes } from '../test-support/http-mocks';
 
 // The engine only touches the PortQueue on API/SSE paths; asset + auth paths do not.
 const fakePq = { getQueues: async () => [], on: () => {} } as unknown as PortQueue;

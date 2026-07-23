@@ -20,15 +20,15 @@ import {
   Title,
 } from '@portqueue/ui';
 import styled from 'styled-components';
-import { JobStatus, RetryMode } from '../queries/enums.js';
-import type { JobDto, WorkflowDto } from '../../shared/dto.js';
-import { api, config } from '../queries/api.js';
-import { useQuery } from '../queries/use-poll.js';
-import { useAction } from '../queries/use-action.js';
-import { LifecycleTimeline } from '../components/LifecycleTimeline.js';
-import { WorkflowView } from '../components/WorkflowView.js';
-import { AddJobForm } from '../components/AddJobForm.js';
-import { formatDate } from '../components/format.js';
+import { JobStatus, RetryMode } from '../queries/enums';
+import type { JobDto, WorkflowDto } from '../../shared/dto';
+import { api, config } from '../queries/api';
+import { useQuery } from '../queries/use-poll';
+import { useAction } from '../queries/use-action';
+import { LifecycleTimeline } from '../components/LifecycleTimeline';
+import { WorkflowView } from '../components/WorkflowView';
+import { AddJobForm } from '../components/AddJobForm';
+import { formatDate } from '../components/format';
 
 const MonoTitle = styled(Title)`
   font-family: ui-monospace, monospace;

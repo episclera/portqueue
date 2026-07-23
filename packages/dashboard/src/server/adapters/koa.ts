@@ -2,8 +2,8 @@
  * Koa adapter. `app.use(koaAdapter(dashboard))` or
  * `app.use(dashboard.koa())`.
  */
-import type { DashboardEngine } from '../engine.js';
-import type { Dashboard, KoaMiddleware } from '../types.js';
+import type { DashboardEngine } from '../engine';
+import type { Dashboard, KoaMiddleware } from '../types';
 
 export function createKoaMiddleware(engine: DashboardEngine): KoaMiddleware {
   return async (ctx, next) => {

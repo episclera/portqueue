@@ -1,6 +1,6 @@
-import { JobStatus } from '../jobs/job-state.enum.js';
-import { toSnapshot } from '../jobs/snapshot.js';
-import type { Runtime } from '../client/runtime.js';
+import { JobStatus } from '../jobs/job-state.enum';
+import { toSnapshot } from '../jobs/snapshot';
+import type { Runtime } from '../client/runtime';
 import type {
   GetJobsQuery,
   InstanceInfo,
@@ -9,7 +9,7 @@ import type {
   QueueInfo,
   QueueStats,
   WorkflowSnapshot,
-} from '../producer/results.js';
+} from '../producer/results';
 
 /**
  * Read-side aggregations for the API, dashboard, and CLI. A job carries its

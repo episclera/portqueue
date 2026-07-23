@@ -1,3 +1,3 @@
-export { run } from './run.js';
-export { parseArgs } from './args.js';
-export { loadPortQueue } from './config-loader.js';
+export { run } from './run';
+export { parseArgs } from './args';
+export { loadPortQueue } from './config-loader';

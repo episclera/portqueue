@@ -1,7 +1,7 @@
-import { flagBool, flagString } from '../args.js';
-import { CliError } from '../errors.js';
-import { heading, printJson, relativeTime, table } from '../output.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagBool, flagString } from '../args';
+import { CliError } from '../errors';
+import { heading, printJson, relativeTime, table } from '../output';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue schedules --queue <name>` */
 export const schedulesCommand: Command = {

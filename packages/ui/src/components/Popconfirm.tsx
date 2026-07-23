@@ -1,6 +1,6 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
-import { Button } from './Button.js';
+import { Button } from './Button';
 
 export interface PopconfirmProps {
   title: React.ReactNode;

@@ -1,4 +1,4 @@
-import type { Runtime } from './runtime.js';
+import type { Runtime } from './runtime';
 
 /**
  * Multi-instance liveness + per-instance pause. Active only when the

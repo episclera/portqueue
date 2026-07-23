@@ -1,7 +1,7 @@
-import { BackoffStrategy, RetentionMode } from './enums.js';
-import type { JobOptions } from './job-options.js';
-import type { RetentionOptions } from './common.js';
-import { toMs } from '../util/duration.js';
+import { BackoffStrategy, RetentionMode } from './enums';
+import type { JobOptions } from './job-options';
+import type { RetentionOptions } from './common';
+import { toMs } from '../util/duration';
 
 /** The fully-resolved per-job settings frozen onto a `job` row. */
 export interface ResolvedJobOptions {

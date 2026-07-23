@@ -1,14 +1,14 @@
-import type { Driver } from '../drivers/driver.interface.js';
-import type { DriverContext } from '../drivers/driver-context.js';
-import type { Logger } from '../logging/logger.interface.js';
-import type { Clock } from '../util/clock.js';
-import type { EventBusService } from '../events/event-bus.service.js';
-import type { HookRunner } from '../events/hook-runner.js';
-import type { InstanceService } from './instance.service.js';
-import type { OptionResolver } from '../options/option-resolver.js';
-import type { PortQueueOptions } from '../options/client-options.js';
-import type { QueueRegistry } from '../producer/queue-registry.js';
-import type { Wakeup } from '../pubsub/wakeup.js';
+import type { Driver } from '../drivers/driver.interface';
+import type { DriverContext } from '../drivers/driver-context';
+import type { Logger } from '../logging/logger.interface';
+import type { Clock } from '../util/clock';
+import type { EventBusService } from '../events/event-bus.service';
+import type { HookRunner } from '../events/hook-runner';
+import type { InstanceService } from './instance.service';
+import type { OptionResolver } from '../options/option-resolver';
+import type { PortQueueOptions } from '../options/client-options';
+import type { QueueRegistry } from '../producer/queue-registry';
+import type { Wakeup } from '../pubsub/wakeup';
 
 /**
  * Per-instance shared singletons (DI is per PortQueue instance, never

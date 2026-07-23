@@ -1,33 +1,33 @@
-import { PauseMode } from './options/enums.js';
-import { PortQueueEvent } from './events/event-name.enum.js';
-import { DriverCapability } from './drivers/driver-capabilities.js';
-import { DriverContext } from './drivers/driver-context.js';
-import { ConsoleLogger } from './logging/console-logger.js';
-import { EventBusService } from './events/event-bus.service.js';
-import { HookRunner } from './events/hook-runner.js';
-import { OptionResolver } from './options/option-resolver.js';
-import { Wakeup } from './pubsub/wakeup.js';
-import { QueueRegistry } from './producer/queue-registry.js';
-import { NotifierService } from './pubsub/notifier.service.js';
-import { ProducerService } from './producer/producer.service.js';
-import { ReadService } from './monitoring/stats.service.js';
-import { CompletionService } from './consumer/completion.service.js';
-import { WorkflowService } from './consumer/workflow.service.js';
-import { ClientRegistryService } from './client/client-registry.service.js';
-import { ClientLifecycleService } from './client/client-lifecycle.service.js';
-import { Queue } from './producer/queue.js';
-import { Worker, type WorkerConfig } from './consumer/worker.js';
-import { InstanceActiveError, InvalidOptionsError, QueueInUseError } from './errors/errors.js';
-import { SystemClock } from './util/clock.js';
-import { uuid } from './util/uuid.js';
-import type { PortQueueOptions, ShutdownOptions } from './options/client-options.js';
-import type { QueueOptions } from './options/queue-options.js';
-import type { WorkerOptions } from './options/worker-options.js';
-import type { JobHandler, WorkflowStep } from './jobs/job.js';
-import type { Logger } from './logging/logger.interface.js';
-import type { Runtime } from './client/runtime.js';
-import type { HookRegistration } from './events/hooks.js';
-import type { EventListener, Unsubscribe } from './events/event-name.enum.js';
+import { PauseMode } from './options/enums';
+import { PortQueueEvent } from './events/event-name.enum';
+import { DriverCapability } from './drivers/driver-capabilities';
+import { DriverContext } from './drivers/driver-context';
+import { ConsoleLogger } from './logging/console-logger';
+import { EventBusService } from './events/event-bus.service';
+import { HookRunner } from './events/hook-runner';
+import { OptionResolver } from './options/option-resolver';
+import { Wakeup } from './pubsub/wakeup';
+import { QueueRegistry } from './producer/queue-registry';
+import { NotifierService } from './pubsub/notifier.service';
+import { ProducerService } from './producer/producer.service';
+import { ReadService } from './monitoring/stats.service';
+import { CompletionService } from './consumer/completion.service';
+import { WorkflowService } from './consumer/workflow.service';
+import { ClientRegistryService } from './client/client-registry.service';
+import { ClientLifecycleService } from './client/client-lifecycle.service';
+import { Queue } from './producer/queue';
+import { Worker, type WorkerConfig } from './consumer/worker';
+import { InstanceActiveError, InvalidOptionsError, QueueInUseError } from './errors/errors';
+import { SystemClock } from './util/clock';
+import { uuid } from './util/uuid';
+import type { PortQueueOptions, ShutdownOptions } from './options/client-options';
+import type { QueueOptions } from './options/queue-options';
+import type { WorkerOptions } from './options/worker-options';
+import type { JobHandler, WorkflowStep } from './jobs/job';
+import type { Logger } from './logging/logger.interface';
+import type { Runtime } from './client/runtime';
+import type { HookRegistration } from './events/hooks';
+import type { EventListener, Unsubscribe } from './events/event-name.enum';
 import type {
   GetJobsQuery,
   InstanceInfo,
@@ -36,7 +36,7 @@ import type {
   QueueInfo,
   QueueStats,
   WorkflowSnapshot,
-} from './producer/results.js';
+} from './producer/results';
 
 /** An instance must be unseen for at least this long before it can be manually removed. */
 const INSTANCE_REMOVAL_STALE_MS = 30 * 60_000;

@@ -1,6 +1,6 @@
-import { toMs } from '../util/duration.js';
-import type { RateLimiterOptions } from '../options/common.js';
-import type { Clock } from '../util/clock.js';
+import { toMs } from '../util/duration';
+import type { RateLimiterOptions } from '../options/common';
+import type { Clock } from '../util/clock';
 
 /**
  * A worker-local token-bucket limiter. Exact and in-process; limits how

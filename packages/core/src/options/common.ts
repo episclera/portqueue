@@ -1,6 +1,6 @@
-import type { Duration } from '../util/duration.js';
-import { BackoffStrategy, RetentionMode } from './enums.js';
-import type { JobStatus } from '../jobs/job-state.enum.js';
+import type { Duration } from '../util/duration';
+import { BackoffStrategy, RetentionMode } from './enums';
+import type { JobStatus } from '../jobs/job-state.enum';
 
 /** Exponential/fixed backoff configuration. */
 export interface BackoffOptions {

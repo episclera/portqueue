@@ -1,5 +1,5 @@
-import { COMMANDS } from './commands/index.js';
-import { CommandGroup } from './commands/types.js';
+import { COMMANDS } from './commands/index';
+import { CommandGroup } from './commands/types';
 
 const INTRO = `
 portqueue — operate and monitor a PortQueue instance.

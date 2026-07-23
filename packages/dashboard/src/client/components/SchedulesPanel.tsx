@@ -3,10 +3,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button, Code, Popconfirm, SkeletonText, Tag, Text, Table } from '@portqueue/ui';
 import type { TableColumn } from '@portqueue/ui';
-import type { ScheduleDto } from '../../shared/dto.js';
-import { config } from '../queries/api.js';
-import { useAction } from '../queries/use-action.js';
-import { formatDate, relativeTime } from './format.js';
+import type { ScheduleDto } from '../../shared/dto';
+import { config } from '../queries/api';
+import { useAction } from '../queries/use-action';
+import { formatDate, relativeTime } from './format';
 
 export interface SchedulesPanelProps {
   rows: ScheduleDto[];

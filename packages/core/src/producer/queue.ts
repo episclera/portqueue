@@ -1,7 +1,7 @@
-import { PauseMode, RetryMode } from '../options/enums.js';
-import { PortQueueEvent } from '../events/event-name.enum.js';
-import { JobNotFoundError } from '../errors/errors.js';
-import type { AddJobOptions } from '../options/job-options.js';
+import { PauseMode, RetryMode } from '../options/enums';
+import { PortQueueEvent } from '../events/event-name.enum';
+import { JobNotFoundError } from '../errors/errors';
+import type { AddJobOptions } from '../options/job-options';
 import type {
   AddJobResult,
   GetJobsQuery,
@@ -9,12 +9,12 @@ import type {
   Page,
   QueueStats,
   ScheduleInfo,
-} from './results.js';
-import type { JobStatus } from '../jobs/job-state.enum.js';
-import type { ProducerService } from './producer.service.js';
-import type { ReadService } from '../monitoring/stats.service.js';
-import type { Runtime } from '../client/runtime.js';
-import type { TransactionHandle } from '../tx/transaction-handle.js';
+} from './results';
+import type { JobStatus } from '../jobs/job-state.enum';
+import type { ProducerService } from './producer.service';
+import type { ReadService } from '../monitoring/stats.service';
+import type { Runtime } from '../client/runtime';
+import type { TransactionHandle } from '../tx/transaction-handle';
 
 /**
  * The producer handle for one queue. Add/schedule/inspect/control jobs.

@@ -2,8 +2,8 @@
  * Raw-Node adapter. The `(req, res) => boolean` handler: returns true when
  * it served the request, so you can fall through to your own routing otherwise.
  */
-import type { DashboardEngine } from '../engine.js';
-import type { Dashboard, NodeHandler } from '../types.js';
+import type { DashboardEngine } from '../engine';
+import type { Dashboard, NodeHandler } from '../types';
 
 export function createNodeHandler(engine: DashboardEngine): NodeHandler {
   return (req, res) => {

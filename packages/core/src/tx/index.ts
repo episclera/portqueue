@@ -1,5 +1,5 @@
-export type { TransactionHandle, TxQueryResult } from './transaction-handle.js';
-export { isTransactionHandle } from './transaction-handle.js';
+export type { TransactionHandle, TxQueryResult } from './transaction-handle';
+export { isTransactionHandle } from './transaction-handle';
 export {
   fromPg,
   fromBetterSqlite3,
@@ -12,4 +12,4 @@ export {
   fromTypeorm,
   fromSequelize,
   fromMikroOrm,
-} from './adapters.js';
+} from './adapters';

@@ -1,8 +1,8 @@
-import { flagBool, flagNumber, flagString } from '../args.js';
-import { CliError } from '../errors.js';
-import { color, colorStatus, heading, printJson, relativeTime, table } from '../output.js';
-import { parseStatus, requireFlag } from './helpers.js';
-import { CommandGroup, type Command } from './types.js';
+import { flagBool, flagNumber, flagString } from '../args';
+import { CliError } from '../errors';
+import { color, colorStatus, heading, printJson, relativeTime, table } from '../output';
+import { parseStatus, requireFlag } from './helpers';
+import { CommandGroup, type Command } from './types';
 
 /** `portqueue jobs [--queue] [--status] [--schedule-id] [--limit --cursor]` */
 export const jobsCommand: Command = {
