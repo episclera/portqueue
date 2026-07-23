@@ -129,9 +129,11 @@ function buildAddOptions(add: NonNullable<ActionRequestDto['add']>): AddJobOptio
   if (add.idempotencyKey) opts.idempotencyKey = add.idempotencyKey;
   if (add.singletonKey) opts.singletonKey = add.singletonKey;
   if (add.metadata) opts.metadata = add.metadata;
-  if (add.startAfter != null) opts.startAfter = add.startAfter as never;
-  if (add.cron != null) opts.cron = add.cron;
-  else if (add.startEvery != null) opts.startEvery = add.startEvery as never;
+  const schedule: NonNullable<AddJobOptions<unknown>['schedule']> = {};
+  if (add.startAfter != null) schedule.startAfter = add.startAfter as never;
+  if (add.cron != null) schedule.cron = add.cron;
+  else if (add.startEvery != null) schedule.startEvery = add.startEvery as never;
+  if (Object.keys(schedule).length > 0) opts.schedule = schedule;
   return opts;
 }
 

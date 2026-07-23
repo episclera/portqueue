@@ -109,7 +109,7 @@ export class ReadService {
   async getInstances(): Promise<InstanceInfo[]> {
     const rows = await this.runtime.driver.listInstances();
     const now = this.runtime.clock.now();
-    const staleAfter = (this.runtime.options.instanceHeartbeatIntervalMs ?? 15000) * 3;
+    const staleAfter = (this.runtime.options.instance?.heartbeatIntervalMs ?? 15000) * 3;
     const out: InstanceInfo[] = [];
     for (const row of rows) {
       const counts = await this.runtime.driver.countJobsByStatus({

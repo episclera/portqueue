@@ -38,7 +38,7 @@ Assume [at-least-once](./guides/consuming-jobs.md#at-least-once--idempotency): m
 
 ## Retries & backoff
 
-Set sane `retryMaxAttempts`, exponential backoff **with jitter** and a cap, and
+Set a sane `retry.maxAttempts`, exponential backoff **with jitter** and a cap, and
 `dontAutoretryFor` for non-retryable errors. Failed jobs stay in `job` (status `FAILED`)
 for triage and manual `retryJob` — there is **no dead-letter queue**.
 
@@ -54,18 +54,18 @@ Enable the `SystemMonitor` and set a worker-local
 
 ## Execution locality
 
-For most deployments, leave `instanceKey` unset — anonymous, interchangeable workers are simplest
+For most deployments, leave `instance.key` unset — anonymous, interchangeable workers are simplest
 and most resilient. Give a server an [instance key](./scale-horizontally.md#choosing-a-preferred-server-with-patterns) only when work needs
 locality (warm cache, local data, region, specialized hardware):
 
-- Give each process a **stable `instanceKey`** (e.g. from your orchestrator's pod/host id, plus the
+- Give each process a **stable `instance.key`** (e.g. from your orchestrator's pod/host id, plus the
   capabilities you target — `…:ram-8gb:cpu-4cor`). Reuse the same key across restarts of the *same*
   logical instance so affinity and liveness stay meaningful.
 - Target work with a **capability pattern** (`preferredInstanceKeyPattern`, e.g. `ram-(4|8)gb`)
   rather than pinning a host. A pattern spans many servers, so a job is never stranded when one dies
   — any matching instance takes it, and replacing hardware needs no code change. If nothing matches,
   the job waits.
-- Tune `instanceHeartbeatIntervalMs` (default 15s) to your failover appetite: an instance is
+- Tune `instance.heartbeatIntervalMs` (default 15s) to your failover appetite: an instance is
   "dead" after ~3 missed beats.
 - Use the dashboard **Instances** page (or `pauseInstance`/`resumeInstance`) to drain one node for
   a deploy without touching the rest; remove a decommissioned instance once it's been unseen for
@@ -87,8 +87,9 @@ Structured logging with correlation via `metadata`; **subscribe to
 
 ## Security
 
-Protect the [dashboard](./dashboard.mdx)/CLI with auth, set `maxPayloadBytes`, and rely on
-parameterized queries (never string-built SQL).
+Protect the [dashboard](./dashboard.mdx)/CLI with auth, and rely on
+parameterized queries (never string-built SQL). PortQueue does not cap payload size — the client
+accepts any `data`, so keep payloads small yourself (store large blobs elsewhere and pass a reference).
 
 ## Health checks & readiness
 
@@ -104,7 +105,7 @@ until `init()` resolved.
 - [ ] Retries with jitter + cap; `dontAutoretryFor` for non-retryable errors.
 - [ ] Retention on; failed kept longer than completed.
 - [ ] `SystemMonitor` on; worker-local rate limiter set for third-party APIs.
-- [ ] Multi-instance (if used): stable `instanceKey` per process; jobs targeted by capability pattern; heartbeat interval tuned.
+- [ ] Multi-instance (if used): stable `instance.key` per process; jobs targeted by capability pattern; heartbeat interval tuned.
 - [ ] `PortQueueEvent.ERROR` subscribed; metrics/tracing via hooks.
-- [ ] Dashboard/CLI behind auth; `maxPayloadBytes` set.
+- [ ] Dashboard/CLI behind auth; payloads kept small (no built-in size cap).
 - [ ] Readiness gated on `pq.isRunning` + driver ping.

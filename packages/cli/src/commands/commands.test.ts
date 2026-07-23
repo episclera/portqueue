@@ -116,7 +116,7 @@ describe('addCommand', () => {
       { addResult: { scheduleId: 'sch-1', nextRunAt: null } },
     );
     expect(stdout).toContain('Schedule sch-1 created');
-    expect(calls.addJob[0]).toMatchObject({ cron: '0 0 * * *' });
+    expect(calls.addJob[0]).toMatchObject({ schedule: { cron: '0 0 * * *' } });
   });
 
   it('creates a cron schedule with a timezone object when --timezone is given', async () => {
@@ -126,7 +126,7 @@ describe('addCommand', () => {
       { addResult: { scheduleId: 'sch-2', nextRunAt: null } },
     );
     expect(calls.addJob[0]).toMatchObject({
-      cron: { pattern: '0 8 * * *', tz: 'America/New_York' },
+      schedule: { cron: { pattern: '0 8 * * *', tz: 'America/New_York' } },
     });
   });
 
@@ -136,7 +136,7 @@ describe('addCommand', () => {
       { queue: 'emails', data: '{"x":1}', every: '30000' },
       { addResult: { scheduleId: 'sch-3', nextRunAt: null } },
     );
-    expect(calls.addJob[0]).toMatchObject({ startEvery: 30000 });
+    expect(calls.addJob[0]).toMatchObject({ schedule: { startEvery: 30000 } });
   });
 });
 

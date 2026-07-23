@@ -27,7 +27,6 @@ export interface Runtime {
   options: PortQueueOptions;
   registry: QueueRegistry;
   wakeup: Wakeup;
-  maxPayloadBytes: number;
   namespace: string;
   /** The multi-instance key for this process, or null in single-instance mode. */
   instanceKey: string | null;

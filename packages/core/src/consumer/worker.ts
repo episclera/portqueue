@@ -7,7 +7,7 @@ import type { JobHandler, WorkflowStep } from '../jobs/job';
 import type { ErrorClass } from '../options/worker-options';
 import type { QueueOptions } from '../options/queue-options';
 import type { Runtime } from '../client/runtime';
-import type { RateLimiterOptions } from '../options/common';
+import type { Duration } from '../util/duration';
 
 export interface WorkerConfig {
   queue: string;
@@ -17,7 +17,7 @@ export interface WorkerConfig {
   batchSize: number;
   lockDurationMs: number;
   pollIntervalMs: number;
-  limiter?: RateLimiterOptions;
+  limiter?: { max: number; duration: Duration };
   respectSystemPressure: boolean;
   dontAutoretryFor: Array<ErrorClass | string>;
   queueOptions: QueueOptions;

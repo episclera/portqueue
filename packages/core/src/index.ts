@@ -40,16 +40,21 @@ export {
 } from './drivers/table-names';
 
 // Option types (the disjoint bags)
-export type { PortQueueOptions, ShutdownOptions } from './options/client-options';
+export type {
+  PortQueueOptions,
+  ShutdownOptions,
+  StorageOptions,
+  InstanceOptions,
+} from './options/client-options';
 export type { QueueOptions } from './options/queue-options';
 export type { WorkerOptions, ErrorClass } from './options/worker-options';
-export type { JobOptions, AddJobOptions, CronSpec } from './options/job-options';
+export type { JobOptions, AddJobOptions, ScheduleOptions, CronSpec } from './options/job-options';
 export type {
   BackoffOptions,
   RetentionOptions,
-  RateLimiterOptions,
+  RetryOptions,
+  LimiterOptions,
   JobMetadata,
-  InstanceIdentityOptions,
   SystemMonitorOptions,
   Page,
 } from './options/common';
@@ -111,7 +116,6 @@ export {
   DriverQueryError,
   JobNotFoundError,
   QueuePausedError,
-  PayloadTooLargeError,
   ShutdownTimeoutError,
   MissingPeerDependencyError,
 } from './errors/errors';

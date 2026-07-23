@@ -80,7 +80,7 @@ export class ClientLifecycleService {
       const instances = new InstanceService(
         this.runtime,
         this.runtime.instanceKey,
-        options.instanceHeartbeatIntervalMs ?? 15000,
+        options.instance?.heartbeatIntervalMs ?? 15000,
       );
       this.runtime.instances = instances;
       await instances.start();

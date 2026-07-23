@@ -7,55 +7,57 @@ sidebar_label: Delayed & recurring jobs
 # Delayed & recurring jobs
 
 Scheduling lives on `addJob` itself — there is **no separate `schedule()` method**. One
-method covers one-off and recurring production, selected by which timing prop you pass:
+method covers one-off and recurring production, selected by which prop you set under the
+`schedule` group:
 
-| Prop | Mode |
+| `schedule` prop | Mode |
 |---|---|
-| _(none)_ | one-off, runs immediately |
-| `startAfter` | one-off, delayed |
-| `startEvery` | recurring, fixed interval |
-| `cron` | recurring, cron expression |
+| _(none / omit `schedule`)_ | one-off, runs immediately |
+| `schedule.startAfter` | one-off, delayed |
+| `schedule.startEvery` | recurring, fixed interval |
+| `schedule.cron` | recurring, cron expression |
 
-The three timing props are **mutually exclusive**.
+The three timing props are **mutually exclusive** (and `startAfter` never combines with a
+recurring mode).
 
 ## Delayed (one-off)
 
-`startAfter` takes a `Duration` (relative to now) or an absolute `Date`:
+`schedule.startAfter` takes a `Duration` (relative to now) or an absolute `Date`:
 
 ```ts
 const emails = pq.createQueue('emails');
-await emails.addJob({ data, startAfter: '24h' });
-await emails.addJob({ data, startAfter: new Date('2026-08-01T09:00:00Z') });
+await emails.addJob({ data, schedule: { startAfter: '24h' } });
+await emails.addJob({ data, schedule: { startAfter: new Date('2026-08-01T09:00:00Z') } });
 ```
 
 ## Recurring — cron with timezone
 
 A recurring add creates/updates a **recurring producer**; `data` + the job options become
-the **template** for every produced run. `cron` is either a bare expression string
+the **template** for every produced run. `schedule.cron` is either a bare expression string
 (evaluated in UTC) or `{ pattern, tz }` for a timezone:
 
 ```ts
 const reports = pq.createQueue('reports');
-const r = await reports.addJob({
+const result = await reports.addJob({
   data: { kind: 'sales' },       // template for each run
   priority: 5,                   // job options apply to each run
-  cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' },
+  schedule: { cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' } },
 });
-// Bare UTC form: cron: '0 8 * * 1-5'
-// r.jobId is absent (no concrete job yet); r.scheduleId is stamped on every produced job;
-// r.nextRunAt is the first run time.
+// Bare UTC form: schedule: { cron: '0 8 * * 1-5' }
+// result.jobId is absent (no concrete job yet); result.scheduleId is stamped on every produced job;
+// result.nextRunAt is the first run time.
 ```
 
-**Identical schedules are allowed.** Re-adding the same `cron`/`startEvery` on a queue creates a
-**new, independent schedule** — PortQueue does not deduplicate by recurrence pattern. If you want a
-queue to fire the same pattern twice (say, two different payload templates on the same cron), just
-add it twice. To keep exactly one, opt in with an `idempotencyKey` (next section).
+**Identical schedules are allowed.** Re-adding the same `schedule.cron`/`schedule.startEvery` on a
+queue creates a **new, independent schedule** — PortQueue does not deduplicate by recurrence pattern.
+If you want a queue to fire the same pattern twice (say, two different payload templates on the same
+cron), just add it twice. To keep exactly one, opt in with an `idempotencyKey` (next section).
 
 ## Recurring — fixed interval
 
 ```ts
 const healthchecks = pq.createQueue('healthchecks');
-await healthchecks.addJob({ data: {}, startEvery: '30s' });
+await healthchecks.addJob({ data: {}, schedule: { startEvery: '30s' } });
 ```
 
 ## Deduplicating with `idempotencyKey`
@@ -65,9 +67,9 @@ Because identical recurrences coexist, the way to guarantee **only one** produce
 
 ```ts
 const reports = pq.createQueue('reports');
-const a = await reports.addJob({ data: { kind: 'sales' }, cron: '0 8 * * *', idempotencyKey: 'daily-sales' });
-const b = await reports.addJob({ data: { kind: 'sales' }, cron: '0 8 * * *', idempotencyKey: 'daily-sales' });
-// b.deduplicated === true; b.scheduleId === a.scheduleId.
+const first = await reports.addJob({ data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
+const second = await reports.addJob({ data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
+// second.deduplicated === true; second.scheduleId === first.scheduleId.
 // The existing schedule is kept **unchanged** — a re-add never mutates it.
 ```
 
@@ -87,12 +89,18 @@ schedule. `getSchedules()` surfaces each schedule's `idempotencyKey` for inspect
 
 ## Inspecting & unscheduling
 
+Unschedule a **recurring** definition by its `scheduleId`:
+
 ```ts
 const reports = pq.createQueue('reports');
-await reports.getSchedules();               // list recurring definitions
-await reports.removeSchedule({ scheduleId: r.scheduleId });
+await reports.getSchedules();               // list recurring definitions (each has a scheduleId)
+await reports.removeSchedule({ scheduleId: result.scheduleId });
 ```
 
-`removeSchedule` stops future production but does **not** delete jobs already produced —
-remove those by id or status if you want. Unscheduling is its own method (not
-`removeJob`) per the entity-naming rule: a method names the one entity it acts on.
+`removeSchedule` applies **only to recurring schedules** — it stops future production but does
+**not** delete jobs already produced (remove those by id or status if you want). It is its own
+method (not `removeJob`) per the entity-naming rule: a method names the one entity it acts on.
+
+For a **one-off** job there is no schedule to remove — use the job-level methods instead:
+`queue.cancelJob({ jobId })` to cancel a not-yet-active job, or `queue.removeJob({ jobId })` to
+delete the row outright. See [Controlling produced jobs](./producing-jobs.md#controlling-produced-jobs).

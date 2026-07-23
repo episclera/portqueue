@@ -49,10 +49,7 @@ const INSTANCE_REMOVAL_STALE_MS = 30 * 60_000;
  * @typeParam TQueues - an optional string enum/union of this app's queue names, threaded
  * through every queue-name argument for compile-time safety (defaults to `string`).
  */
-export class PortQueue<
-  TQueues extends string = string,
-  TInstanceKey extends string = string,
-> {
+export class PortQueue<TQueues extends string = string> {
   private readonly runtime: Runtime;
   private readonly producer: ProducerService;
   private readonly reads: ReadService;
@@ -65,7 +62,7 @@ export class PortQueue<
   private readonly state = { running: false };
   private readonly hookedQueues = new Set<string>();
 
-  constructor(options: PortQueueOptions<TInstanceKey>) {
+  constructor(options: PortQueueOptions) {
     if (!options.driver) {
       throw new InvalidOptionsError(
         'PortQueue requires a `driver`. Pass a driver instance, e.g. `new SqliteDriver(...)`.',
@@ -74,17 +71,21 @@ export class PortQueue<
     const logger = resolveLogger(options.logger);
     const clock = options.clock ?? new SystemClock();
     const context = new DriverContext({
-      ...(options.tablePrefix !== undefined ? { tablePrefix: options.tablePrefix } : {}),
-      ...(options.schema !== undefined ? { schema: options.schema } : {}),
-      ...(options.namespace !== undefined ? { namespace: options.namespace } : {}),
+      ...(options.storage?.tablePrefix !== undefined
+        ? { tablePrefix: options.storage.tablePrefix }
+        : {}),
+      ...(options.storage?.schema !== undefined ? { schema: options.storage.schema } : {}),
+      ...(options.storage?.namespace !== undefined
+        ? { namespace: options.storage.namespace }
+        : {}),
     });
     this.events = new EventBusService(logger);
     this.hooks = new HookRunner(logger, this.events);
     // Lock-owner attribution id. Use the constructor-provided id if given; otherwise a random,
     // ephemeral per-process token. Never derived from the environment (no container/host/IP
-    // sniffing). Multi-instance mode is opt-in solely via `options.instanceKey`.
+    // sniffing). An instance is named solely via `options.instance.key`.
     const identity = { id: options.instance?.id ?? uuid() };
-    const resolver = new OptionResolver(options.defaultJobOptions, options.retention);
+    const resolver = new OptionResolver();
     const wakeup = new Wakeup();
     const registry = new QueueRegistry(options.driver, clock);
     this.clientRegistry = new ClientRegistryService();
@@ -101,9 +102,8 @@ export class PortQueue<
       options,
       registry,
       wakeup,
-      maxPayloadBytes: options.maxPayloadBytes ?? 1024 * 1024,
       namespace: context.namespace,
-      instanceKey: options.instanceKey ?? null,
+      instanceKey: options.instance?.key ?? null,
       instances: null,
       isRunning: () => this.state.running,
       cancelRunning: (jobId: string) => this.clientRegistry.cancelRunning(jobId),
@@ -191,18 +191,23 @@ export class PortQueue<
       this.runtime.registry.getOptions(options.queue),
       steps,
     );
-    const concurrency = options.concurrency ?? 1;
+    const limiter = options.limiter ?? {};
+    const concurrency = limiter.concurrency ?? 1;
     const notifyCapable = this.runtime.driver.capabilities[DriverCapability.LISTEN_NOTIFY];
+    const rate =
+      limiter.rateMax != null && limiter.rateDuration != null
+        ? { max: limiter.rateMax, duration: limiter.rateDuration }
+        : null;
     const config: WorkerConfig = {
       queue: options.queue,
       ...(handler ? { handler } : {}),
       ...(steps ? { steps } : {}),
       concurrency,
-      batchSize: options.batchSize ?? concurrency,
-      lockDurationMs: options.lockDurationMs ?? 30000,
-      pollIntervalMs: options.pollIntervalMs ?? (notifyCapable ? 5000 : 1000),
-      ...(options.limiter ? { limiter: options.limiter } : {}),
-      respectSystemPressure: options.respectSystemPressure ?? true,
+      batchSize: limiter.batchSize ?? concurrency,
+      lockDurationMs: limiter.lockDurationMs ?? 30000,
+      pollIntervalMs: limiter.pollIntervalMs ?? (notifyCapable ? 5000 : 1000),
+      ...(rate ? { limiter: rate } : {}),
+      respectSystemPressure: limiter.respectSystemPressure ?? false,
       dontAutoretryFor: options.dontAutoretryFor ?? [],
       queueOptions: this.runtime.registry.getOptions(options.queue),
     };
@@ -296,7 +301,7 @@ export class PortQueue<
   }
 
   /** Stop the named instance from claiming jobs (persisted; the target picks it up on heartbeat). */
-  async pauseInstance(options: { instanceKey: TInstanceKey | string }): Promise<void> {
+  async pauseInstance(options: { instanceKey: string }): Promise<void> {
     await this.runtime.driver.setInstancePaused({
       instanceKey: options.instanceKey,
       processingPaused: true,
@@ -310,7 +315,7 @@ export class PortQueue<
   }
 
   /** Resume the named instance's job claiming. */
-  async resumeInstance(options: { instanceKey: TInstanceKey | string }): Promise<void> {
+  async resumeInstance(options: { instanceKey: string }): Promise<void> {
     await this.runtime.driver.setInstancePaused({
       instanceKey: options.instanceKey,
       processingPaused: false,
@@ -329,7 +334,7 @@ export class PortQueue<
    * its next beat). Jobs record the processing instance key as a plain string (no FK), so removal
    * never touches job rows — it only tidies the instances list. The tool never does this itself.
    */
-  async removeInstance(options: { instanceKey: TInstanceKey | string }): Promise<boolean> {
+  async removeInstance(options: { instanceKey: string }): Promise<boolean> {
     const row = await this.runtime.driver.getInstance({ instanceKey: options.instanceKey });
     if (!row) return false;
     const now = this.runtime.clock.now();

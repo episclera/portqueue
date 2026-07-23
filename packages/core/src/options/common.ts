@@ -13,6 +13,16 @@ export interface BackoffOptions {
   jitter?: boolean;
 }
 
+/** How a job retries after a failed attempt. Omit to run once with no retry. */
+export interface RetryOptions {
+  /** Max attempts including the first (default 1 — no retry). */
+  maxAttempts?: number;
+  /** Delay before a retry. */
+  delay?: Duration;
+  /** Exponential/fixed backoff applied to `delay`. */
+  backoff?: BackoffOptions;
+}
+
 /** Retention policy. Default is keep-forever. */
 export interface RetentionOptions {
   mode: RetentionMode;
@@ -22,23 +32,36 @@ export interface RetentionOptions {
   statuses?: JobStatus[];
 }
 
-/** Token-bucket rate limiter config. */
-export interface RateLimiterOptions {
-  max: number;
-  duration: Duration;
+/**
+ * Everything that tunes a worker's throughput, grouped in one place: how many jobs run and are
+ * claimed at once, how often it polls, the lock window, the rate cap, and system-pressure
+ * backpressure. Omit the whole group to run with sensible defaults (unbounded rate, concurrency 1).
+ */
+export interface LimiterOptions {
+  /** Max handlers running concurrently in this worker (default 1). */
+  concurrency?: number;
+  /**
+   * Worker-local (exact, in-process) token-bucket rate cap: at most `rateMax` jobs started per
+   * `rateDuration` window. Both are required together to enable rate limiting.
+   */
+  rateMax?: number;
+  /** The window for `rateMax`, e.g. `'1m'`. */
+  rateDuration?: Duration;
+  /**
+   * Pause claiming while system pressure (CPU/memory/event-loop) is high. Default `false` —
+   * the worker consumes as much as it can; opt in to trade throughput for stability.
+   */
+  respectSystemPressure?: boolean;
+  /** Max jobs claimed per fetch (defaults to `concurrency`). */
+  batchSize?: number;
+  /** Poll cadence when LISTEN/NOTIFY is unavailable (ms). */
+  pollIntervalMs?: number;
+  /** Visibility timeout / heartbeat window for a claimed job (ms, default 30000). */
+  lockDurationMs?: number;
 }
 
 /** Opaque developer metadata for correlation/tracing. */
 export type JobMetadata = Record<string, unknown>;
-
-/**
- * Instance identity. Provide a stable `id` to attribute lock ownership to this process; if omitted,
- * a random per-process id is used. Never auto-detected from the environment. Multi-instance mode is
- * opt-in separately via `instanceKey` on the client options.
- */
-export interface InstanceIdentityOptions {
-  id?: string;
-}
 
 /** System-pressure backpressure config. */
 export interface SystemMonitorOptions {

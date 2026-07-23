@@ -11,10 +11,6 @@ export interface QueueOptions {
   defaultJobOptions?: JobOptions;
   /** Queue default retention; resolved per-job and frozen onto each row. */
   retention?: RetentionOptions;
-  /** Whether priority ordering is honored (default true). */
-  priorityEnabled?: boolean;
-  /** Reject jobs whose serialized payload exceeds this many bytes. */
-  maxPayloadBytes?: number;
   /** Queue-scoped participation hooks. */
   hooks?: HookRegistration[];
 }

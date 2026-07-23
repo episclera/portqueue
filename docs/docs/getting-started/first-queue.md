@@ -61,7 +61,7 @@ events of its own**.
 ```ts
 pq.createWorker({
   queue: QueueName.Emails,
-  concurrency: 10,
+  limiter: { concurrency: 10 },
   handler: async (job) => {
     await sendEmail(job.data); // job.data is typed to the queue's payload
   },

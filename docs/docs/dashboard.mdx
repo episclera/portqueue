@@ -50,8 +50,7 @@ app.use('/portqueue', dash.express()); // Express — Koa/Fastify/raw Node adapt
 
 - **Basic auth** via the `auth` option (shown above).
 - **Custom auth** — provide your own middleware/guard for SSO or session checks.
-- Always mount it behind your platform's auth in production; set `maxPayloadBytes` on the
-  client and rely on parameterized queries.
+- Always mount it behind your platform's auth in production, and rely on parameterized queries.
 
 ## Docker
 

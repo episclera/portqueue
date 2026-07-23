@@ -13,19 +13,19 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 
 | Export | Purpose |
 |---|---|
-| `PortQueue<TQueues, TInstanceKey>` | The client. One per database. Owns connection, migration, services; produces handles. `TInstanceKey` (optional) types the multi-instance keys. |
-| `Queue<TData, TInstanceKey>` | Producer handle for one queue. |
+| `PortQueue<TQueues>` | The client. One per database. Owns connection, migration, services; produces handles. |
+| `Queue<TData>` | Producer handle for one queue. |
 | `Worker<TData, TResult>` | Consumer registration for one queue (simple handler or workflow steps). |
 | `duration()` | Parse a `Duration` string like `"30s"`. |
 | `ConsoleLogger`, `NoopLogger` | Built-in loggers. |
 
 ## `PortQueue`
 
-- `new PortQueue<TQueues, TInstanceKey>(options: PortQueueOptions<TInstanceKey>)` — DI only, no I/O.
+- `new PortQueue<TQueues>(options: PortQueueOptions)` — DI only, no I/O.
 - `init(): Promise<void>` — connect, migrate, start services (idempotent).
 - `shutdown(options?: ShutdownOptions): Promise<void>` — `{ graceful?, timeoutMs?, drain? }`.
 - `get isRunning(): boolean`.
-- `createQueue<TData>(name, options?): Queue<TData, TInstanceKey>`.
+- `createQueue<TData>(name, options?): Queue<TData>`.
 - `createWorker<TData, TResult>(options: WorkerOptions): Worker`.
 - `getQueues()`, `getQueueStats({ queue? })`, `getJob({ jobId })`, `getJobs(query)`, `getWorkflow({ workflowId })`.
 - `on(event, listener, filter?)` / `off(...)` / `once(...)`; `useHook(hook)`.
@@ -34,7 +34,7 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 
 ## `Queue<TData>`
 
-- `addJob(options: AddJobOptions<TData>): Promise<AddJobResult>` — pass `startEvery`/`cron` to make it recurring; pass `preferredInstanceKeyPattern` for [instance affinity](./scale-horizontally.md#attach-a-pattern-to-the-job).
+- `addJob(options: AddJobOptions<TData>): Promise<AddJobResult>` — pass `schedule: { startEvery }`/`schedule: { cron }` to make it recurring; pass `preferredInstanceKeyPattern` for [instance affinity](./scale-horizontally.md#attach-a-pattern-to-the-job).
 - `addJobs({ jobs })`.
 - `getSchedules()`, `getJob`, `getJobs`, `getQueueStats`.
 - `retryJob({ jobId, from? })`, `cancelJob({ jobId })`, `cancelRunningJob({ jobId })`.
@@ -45,9 +45,11 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 ## `Worker` — `WorkerOptions`
 
 `queue` (required); `handler` (required) — either a single function (simple job) or an
-ordered array of `{ key, handler }` steps (workflow); `concurrency?`, `limiter?`,
-`batchSize?`, `pollIntervalMs?`, `lockDurationMs?`, `respectSystemPressure?`,
-`dontAutoretryFor?`. **No lifecycle methods** — control via `Queue`, observe via `pq.on`.
+ordered array of `{ key, handler }` steps (workflow); `limiter?: LimiterOptions` — one group
+holding all throughput/claim throttles: `concurrency?` (default 1), `rateMax?` + `rateDuration?`
+(token bucket, both required together), `respectSystemPressure?` (defaults to `false`),
+`batchSize?`, `pollIntervalMs?`, `lockDurationMs?`; and `dontAutoretryFor?`. **No lifecycle
+methods** — control via `Queue`, observe via `pq.on`.
 
 ## `Job<TData>` (handler context)
 
@@ -58,17 +60,23 @@ transitions are on the `step` controller (`next` / `repeat` / `done`), not on `J
 
 ## Option types (four disjoint bags)
 
-- `JobOptions` — per-job (highest precedence): `priority`, `startAfter` (one-off delay),
-  `retryMaxAttempts`, `retryDelay`, `retryBackoff`, `expireIn`, `retention`,
-  `idempotencyKey`, `singletonKey`, `metadata`, `tx`. Recurring adds use `startEvery` or
-  `cron` (a `CronSpec`: string, or `{ pattern, tz }`) on `AddJobOptions`.
-- `QueueOptions` — `defaultJobOptions`, `retention`, `priorityEnabled`, `maxPayloadBytes`, `hooks`.
-- `WorkerOptions` — consumer-only (above).
-- `PortQueueOptions` — `driver` (required), `logger`, `schema`, `tablePrefix`,
-  `migration`, `defaultJobOptions`, `monitor`, `retention`, `maxPayloadBytes`,
-  `instance`, `instanceKey`, `instanceHeartbeatIntervalMs`, `namespace`.
+- `JobOptions` — per-job (highest precedence): `priority`, `retry` (a `RetryOptions`:
+  `{ maxAttempts?, delay?, backoff? }`), `expireIn`, `retention`, `idempotencyKey`,
+  `singletonKey`, `metadata`, `tx`. On `AddJobOptions` also: `data`, `schedule` (a
+  `ScheduleOptions`: `{ startAfter?, startEvery?, cron? }`, where `cron` is a `CronSpec` — a string
+  or `{ pattern, tz }`), `startStep`, `preferredInstanceKeyPattern`.
+- `QueueOptions` — `defaultJobOptions`, `retention`, `hooks`.
+- `WorkerOptions` — consumer-only (above): `queue`, `handler`, `limiter` (a `LimiterOptions`),
+  `dontAutoretryFor`.
+- `PortQueueOptions` — `driver` (required), `logger`, `migration`, `storage` (a `StorageOptions`:
+  `{ schema?, tablePrefix?, namespace? }`), `instance` (an `InstanceOptions`:
+  `{ key?, id?, heartbeatIntervalMs? }`), `monitor`, `tickIntervalMs`. Job defaults and retention
+  are **not** set here — they live on the queue so nothing is silently inherited client-wide.
 
-**Precedence (low → high):** client `defaultJobOptions` → queue `defaultJobOptions` → job.
+Grouped option types: `RetryOptions`, `ScheduleOptions`, `LimiterOptions`, `RetentionOptions`,
+`BackoffOptions`, `StorageOptions`, `InstanceOptions`.
+
+**Precedence (low → high):** queue `defaultJobOptions` → job.
 
 ## Result & snapshot types
 
@@ -100,5 +108,5 @@ Schema identifiers (for driver authors / reporting): `TableName`, and the per-ta
 `PortQueueError` (base) plus `NotStartedError`, `InvalidOptionsError`,
 `UnsupportedCapabilityError`, `UnsupportedForWorkerTypeError`,
 `SchemaVersionMismatchError`, `MigrationFailedError`, `DriverConnectionError`,
-`DriverQueryError`, `JobNotFoundError`, `QueuePausedError`, `PayloadTooLargeError`,
+`DriverQueryError`, `JobNotFoundError`, `QueuePausedError`,
 `ShutdownTimeoutError`, `MissingPeerDependencyError`. See [Troubleshooting](./troubleshooting.md).

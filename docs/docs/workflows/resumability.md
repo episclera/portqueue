@@ -16,8 +16,8 @@ must be [idempotent](../guides/consuming-jobs.md#at-least-once--idempotency).
 
 ## Per-step retries & backoff
 
-Retry policy applies per step's job — the same `retryMaxAttempts` / `retryDelay` /
-`retryBackoff` options as any job. A step that keeps failing exhausts its attempts and
+Retry policy applies per step's job — the same `retry` options
+(`{ maxAttempts, delay, backoff }`) as any job. A step that keeps failing exhausts its attempts and
 the run halts at that step (a `FAILED` row you can inspect and retry).
 
 ## What carries over vs resets

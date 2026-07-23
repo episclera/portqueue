@@ -1,5 +1,5 @@
 import { toMs } from '../util/duration';
-import type { RateLimiterOptions } from '../options/common';
+import type { Duration } from '../util/duration';
 import type { Clock } from '../util/clock';
 
 /**
@@ -13,7 +13,7 @@ export class RateLimiterService {
   private readonly windowMs: number;
 
   constructor(
-    options: RateLimiterOptions,
+    options: { max: number; duration: Duration },
     private readonly clock: Clock,
   ) {
     this.max = options.max;

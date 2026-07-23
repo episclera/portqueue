@@ -1,11 +1,11 @@
 import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { DeduplicationReason } from '../options/enums';
-import { InvalidOptionsError, PayloadTooLargeError, QueuePausedError } from '../errors/errors';
+import { InvalidOptionsError, QueuePausedError } from '../errors/errors';
 import { toMs } from '../util/duration';
 import { uuid } from '../util/uuid';
 import { CronExpression } from '../scheduling/cron';
-import type { AddJobOptions, CronSpec } from '../options/job-options';
+import type { AddJobOptions, CronSpec, ScheduleOptions } from '../options/job-options';
 import type { AddJobResult, ScheduleInfo } from './results';
 import type { NewJobRecord, NewScheduleRow } from '../jobs/job-record';
 import type { Runtime } from '../client/runtime';
@@ -25,21 +25,16 @@ export class ProducerService {
     const merged = await hooks.runBeforeAdd(queue, options as AddJobOptions<unknown>);
     const opts = merged as AddJobOptions<TData>;
 
-    const isRecurring = opts.startEvery != null || opts.cron != null;
-    if (isRecurring && opts.startAfter != null) {
+    const isRecurring = opts.schedule?.startEvery != null || opts.schedule?.cron != null;
+    if (isRecurring && opts.schedule?.startAfter != null) {
       throw new InvalidOptionsError(
-        `Cannot combine 'startAfter' with a recurring 'startEvery'/'cron' on queue '${queue}'. ` +
+        `Cannot combine 'schedule.startAfter' with a recurring 'schedule.startEvery'/'schedule.cron' on queue '${queue}'. ` +
           `'startAfter' delays a one-off job; recurring modes schedule repeated runs.`,
         { queue },
       );
     }
 
-    // Payload size guard.
     const queueOptions = registry.getOptions(queue);
-    const maxBytes = queueOptions.maxPayloadBytes ?? this.runtime.maxPayloadBytes;
-    const serialized = opts.data === undefined ? 'null' : JSON.stringify(opts.data);
-    const size = Buffer.byteLength(serialized, 'utf8');
-    if (size > maxBytes) throw new PayloadTooLargeError(queue, size, maxBytes);
 
     // Idempotency dedup spans BOTH the job and schedule tables, is queue-scoped, and applies to
     // one-off and recurring adds alike — but only when a key is given. First writer wins: a later
@@ -74,6 +69,7 @@ export class ProducerService {
       job: opts,
       ...(queueOptions.defaultJobOptions ? { queueDefaults: queueOptions.defaultJobOptions } : {}),
       ...(queueOptions.retention ? { queueRetention: queueOptions.retention } : {}),
+      ...(opts.schedule?.startAfter != null ? { startAfter: opts.schedule.startAfter } : {}),
       now,
     });
 
@@ -170,8 +166,8 @@ export class ProducerService {
     const { preferredInstanceKeyPattern } = opts;
     if (preferredInstanceKeyPattern != null && !this.runtime.instanceKey) {
       throw new InvalidOptionsError(
-        `Job on queue '${queue}' sets 'preferredInstanceKeyPattern', but this PortQueue is not in ` +
-          `multi-instance mode. Pass an \`instanceKey\` to the PortQueue constructor to enable it.`,
+        `Job on queue '${queue}' sets 'preferredInstanceKeyPattern', but this process has no ` +
+          `instance key. Pass \`instance: { key }\` to the PortQueue constructor to name it.`,
         { queue },
       );
     }
@@ -241,12 +237,12 @@ export class ProducerService {
     await registry.ensure(queue);
     const now = clock.now();
     const resolved = resolver.resolve({ job: opts, now });
-    const cron = opts.cron != null ? normalizeCron(opts.cron) : null;
-    const everyMs = opts.startEvery != null ? toMs(opts.startEvery) : null;
+    const cron = opts.schedule?.cron != null ? normalizeCron(opts.schedule.cron) : null;
+    const everyMs = opts.schedule?.startEvery != null ? toMs(opts.schedule.startEvery) : null;
     // No pattern-based dedup: identical recurrences on a queue are allowed to coexist. When the
     // caller wants exactly one, they pass an idempotencyKey — that dedup ran in addJob() above, so
     // reaching here means the key was free (or absent) and we always insert a fresh schedule.
-    const nextRunAt = this.computeNextRun(opts, now);
+    const nextRunAt = this.computeNextRun(opts.schedule!, now);
 
     const newSchedule: NewScheduleRow = {
       queueName: queue,
@@ -280,20 +276,20 @@ export class ProducerService {
   }
 
   private validateSchedule(queue: string, opts: AddJobOptions<unknown>): void {
-    if (opts.cron != null && opts.startEvery != null) {
+    if (opts.schedule?.cron != null && opts.schedule?.startEvery != null) {
       throw new InvalidOptionsError(
-        `A recurring job on queue '${queue}' must set exactly one of 'cron' or 'startEvery' — not both.`,
+        `A recurring job on queue '${queue}' must set exactly one of 'schedule.cron' or 'schedule.startEvery' — not both.`,
         { queue },
       );
     }
   }
 
-  computeNextRun(opts: Pick<AddJobOptions<unknown>, 'cron' | 'startEvery'>, now: number): number {
-    if (opts.cron != null) {
-      const { pattern, tz } = normalizeCron(opts.cron);
+  computeNextRun(schedule: ScheduleOptions, now: number): number {
+    if (schedule.cron != null) {
+      const { pattern, tz } = normalizeCron(schedule.cron);
       return new CronExpression(pattern, tz).next(now);
     }
-    return now + toMs(opts.startEvery!);
+    return now + toMs(schedule.startEvery!);
   }
 
   async getSchedules(queue: string): Promise<ScheduleInfo[]> {

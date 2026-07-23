@@ -157,16 +157,6 @@ export class InstanceActiveError extends PortQueueError {
   }
 }
 
-export class PayloadTooLargeError extends PortQueueError {
-  constructor(queue: string, size: number, max: number) {
-    super(
-      `Job payload for queue '${queue}' is ${size} bytes, exceeding maxPayloadBytes (${max}). ` +
-        `Reduce the payload or raise maxPayloadBytes on the client/queue options.`,
-      { code: PortQueueErrorCode.PAYLOAD_TOO_LARGE, context: { queue } },
-    );
-  }
-}
-
 export class ShutdownTimeoutError extends PortQueueError {
   constructor(timeoutMs: number) {
     super(

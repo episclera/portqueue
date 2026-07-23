@@ -48,7 +48,7 @@ describe('client reads & admin (sqlite)', () => {
 
   it('requeues a finished single-function job FROM_START as a fresh run', async () => {
     const q = h.pq.createQueue('re');
-    h.pq.createWorker({ queue: 're', pollIntervalMs: 20, handler: async () => 'ok' });
+    h.pq.createWorker({ queue: 're', limiter: { pollIntervalMs: 20 }, handler: async () => 'ok' });
     const res = await q.addJob({ data: { v: 1 } });
     await waitFor(
       async () => (await q.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,

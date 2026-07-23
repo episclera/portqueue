@@ -1,5 +1,5 @@
 import type { Duration } from '../util/duration';
-import type { BackoffOptions, JobMetadata, RetentionOptions } from './common';
+import type { JobMetadata, RetentionOptions, RetryOptions } from './common';
 import type { TransactionHandle } from '../tx/transaction-handle';
 
 /**
@@ -8,11 +8,8 @@ import type { TransactionHandle } from '../tx/transaction-handle';
  */
 export interface JobOptions {
   priority?: number;
-  /** Delay a one-off job — run not before this time. A `Date`, or a `Duration` from now. */
-  startAfter?: Date | Duration;
-  retryMaxAttempts?: number;
-  retryDelay?: Duration;
-  retryBackoff?: BackoffOptions;
+  /** How the job retries on failure ({@link RetryOptions}). Omit to run once. */
+  retry?: RetryOptions;
   /** Expire the job if it hasn't started within this window. */
   expireIn?: Duration;
   retention?: RetentionOptions;
@@ -30,22 +27,36 @@ export interface JobOptions {
 export type CronSpec = string | { pattern: string; tz?: string };
 
 /**
- * The full add-a-job options. `data` is a named key, never positional.
- *
- * Timing is one of three mutually-exclusive modes:
+ * When a job runs. Exactly one timing mode may be set:
  * - **one-off** (default) — runs immediately, or at `startAfter` if given;
  * - **recurring interval** — `startEvery` (a `Duration` between runs);
  * - **recurring cron** — `cron` (a {@link CronSpec}).
+ *
+ * `startAfter` is mutually exclusive with the recurring modes.
+ */
+export interface ScheduleOptions {
+  /** Delay a one-off job — run not before this time. A `Date`, or a `Duration` from now. */
+  startAfter?: Date | Duration;
+  /** Recurring: a fixed interval between runs, e.g. `'30s'`. */
+  startEvery?: Duration;
+  /** Recurring: a cron expression, optionally with a timezone. */
+  cron?: CronSpec;
+}
+
+/**
+ * The full add-a-job options. `data` is a named key, never positional.
+ *
+ * Timing lives under the `schedule` group ({@link ScheduleOptions}) — a one-off delay
+ * (`startAfter`), a fixed interval (`startEvery`), or a `cron` expression. Omit `schedule`
+ * to run immediately.
  *
  * Identical recurrences may coexist; pass an `idempotencyKey` to guarantee a single one (it dedups
  * across both the job and schedule tables, queue-scoped, first-writer-wins).
  */
 export type AddJobOptions<TData> = JobOptions & {
   data: TData;
-  /** Recurring: a fixed interval between runs, e.g. `'30s'`. */
-  startEvery?: Duration;
-  /** Recurring: a cron expression, optionally with a timezone. */
-  cron?: CronSpec;
+  /** When the job runs: a one-off delay, a fixed interval, or a cron expression. */
+  schedule?: ScheduleOptions;
   /** For a workflow queue: begin at a non-entry step (rare; defaults to the entry step). */
   startStep?: string;
   /**

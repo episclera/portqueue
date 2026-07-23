@@ -48,7 +48,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
         return 'ok';
       },
     });
-    const res = await queue.addJob({ data: {}, retryMaxAttempts: 3, retryDelay: 0 });
+    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 3, delay: 0 } });
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
     );
@@ -63,7 +63,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
         throw new Error('always');
       },
     });
-    const res = await queue.addJob({ data: {}, retryMaxAttempts: 2, retryDelay: 0 });
+    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 2, delay: 0 } });
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED,
     );
@@ -79,7 +79,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
     await queue.addJob({ data: { n: 2 }, priority: 10 });
     h.pq.createWorker<{ n: number }>({
       queue: 'prio',
-      concurrency: 1,
+      limiter: { concurrency: 1 },
       handler: async (job) => {
         order.push(job.data.n);
       },
@@ -94,13 +94,6 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
     const b = await queue.addJob({ data: { x: 2 }, idempotencyKey: 'once' });
     expect(b.deduplicated).toBe(true);
     expect(b.jobId).toBe(a.jobId);
-  });
-
-  it('rejects an oversized payload', async () => {
-    const queue = h.pq.createQueue('big', { maxPayloadBytes: 32 });
-    await expect(queue.addJob({ data: { blob: 'x'.repeat(1000) } })).rejects.toThrow(
-      /exceeding maxPayloadBytes/,
-    );
   });
 
   it('pauses and resumes processing cluster-wide', async () => {

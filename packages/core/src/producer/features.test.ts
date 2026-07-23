@@ -37,7 +37,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
         throw new NonRetryableError();
       },
     });
-    const res = await queue.addJob({ data: {}, retryMaxAttempts: 5, retryDelay: 0 });
+    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 5, delay: 0 } });
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED,
     );
@@ -57,7 +57,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
         throw e;
       },
     });
-    const res = await queue.addJob({ data: {}, retryMaxAttempts: 5, retryDelay: 0 });
+    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 5, delay: 0 } });
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED,
     );
@@ -68,9 +68,11 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     const queue = h.pq.createQueue('bk');
     const res = await queue.addJob({
       data: {},
-      retryMaxAttempts: 3,
-      retryDelay: 1000,
-      retryBackoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2 },
+      retry: {
+        maxAttempts: 3,
+        delay: 1000,
+        backoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2 },
+      },
     });
     // Claim + fail once at the driver level to observe the RETRY scheduling.
     const row = await h.pq.createQueue('bk').ensure();
@@ -103,10 +105,10 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     const done: string[] = [];
     h.pq.createWorker({
       queue: 'delayed',
-      pollIntervalMs: 20,
+      limiter: { pollIntervalMs: 20 },
       handler: async (job) => void done.push(job.id),
     });
-    const res = await queue.addJob({ data: {}, startAfter: 60_000 });
+    const res = await queue.addJob({ data: {}, schedule: { startAfter: 60_000 } });
     await new Promise((r) => setTimeout(r, 120));
     expect(done).toHaveLength(0);
     h.clock.advance(61_000);
@@ -125,7 +127,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
 
   it('cancels a not-yet-active job', async () => {
     const queue = h.pq.createQueue('cancel');
-    const res = await queue.addJob({ data: {}, startAfter: 60_000 });
+    const res = await queue.addJob({ data: {}, schedule: { startAfter: 60_000 } });
     const ok = await queue.cancelJob({ jobId: res.jobId! });
     expect(ok).toBe(true);
     expect((await queue.getJob({ jobId: res.jobId! }))?.status).toBe(JobStatus.CANCELLED);
@@ -136,7 +138,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     let aborted = false;
     h.pq.createWorker({
       queue: 'coop',
-      pollIntervalMs: 20,
+      limiter: { pollIntervalMs: 20 },
       handler: async (job) => {
         await new Promise<void>((resolve) => {
           job.signal.addEventListener('abort', () => {
@@ -228,9 +230,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     const started: string[] = [];
     h.pq.createWorker({
       queue: 'rate',
-      concurrency: 5,
-      pollIntervalMs: 20,
-      limiter: { max: 2, duration: 10_000 },
+      limiter: { concurrency: 5, pollIntervalMs: 20, rateMax: 2, rateDuration: 10_000 },
       handler: async (job) => {
         started.push(job.id);
         await new Promise((r) => setTimeout(r, 50));
@@ -284,7 +284,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     ];
     const queue = h.pq.createQueue<{ v: number }>('retrywf');
     h.pq.createWorker<{ v: number }>({ queue: 'retrywf', handler: steps });
-    const res = await queue.addJob({ data: { v: 0 }, retryMaxAttempts: 1 });
+    const res = await queue.addJob({ data: { v: 0 }, retry: { maxAttempts: 1 } });
     // Step b fails terminally (1 attempt) → find its FAILED job.
     let failedJobId = '';
     await waitFor(async () => {

@@ -1,39 +1,39 @@
 import { OptionResolver } from './option-resolver';
 import { BackoffStrategy, RetentionMode } from './enums';
 
-describe('OptionResolver precedence (client < queue < job)', () => {
+describe('OptionResolver precedence (queue < job)', () => {
   const now = 1_000_000;
 
-  it('applies client defaults, overridden by queue, overridden by job', () => {
-    const resolver = new OptionResolver({ priority: 1, retryMaxAttempts: 1 }, undefined);
+  it('applies queue defaults, overridden by job', () => {
+    const resolver = new OptionResolver();
     const resolved = resolver.resolve({
       job: { priority: 9 },
-      queueDefaults: { priority: 5, retryMaxAttempts: 3 },
+      queueDefaults: { priority: 5, retry: { maxAttempts: 3 } },
       now,
     });
     expect(resolved.priority).toBe(9); // job wins
-    expect(resolved.retryMaxAttempts).toBe(3); // queue over client
+    expect(resolved.retryMaxAttempts).toBe(3); // queue default applies when job omits it
   });
 
   it('resolves a relative startAfter Duration into a future start_after', () => {
-    const resolver = new OptionResolver(undefined, undefined);
-    expect(resolver.resolve({ job: { startAfter: 5000 }, now }).startAfter).toBe(now + 5000);
+    const resolver = new OptionResolver();
+    expect(resolver.resolve({ job: {}, startAfter: 5000, now }).startAfter).toBe(now + 5000);
   });
 
   it('resolves an absolute startAfter Date', () => {
-    const resolver = new OptionResolver(undefined, undefined);
+    const resolver = new OptionResolver();
     const at = new Date(now + 9999);
-    expect(resolver.resolve({ job: { startAfter: at }, now }).startAfter).toBe(at.getTime());
+    expect(resolver.resolve({ job: {}, startAfter: at, now }).startAfter).toBe(at.getTime());
   });
 
   it('computes expireAt from expireIn relative to start_after', () => {
-    const resolver = new OptionResolver(undefined, undefined);
-    const r = resolver.resolve({ job: { startAfter: 1000, expireIn: 2000 }, now });
+    const resolver = new OptionResolver();
+    const r = resolver.resolve({ job: { expireIn: 2000 }, startAfter: 1000, now });
     expect(r.expireAt).toBe(now + 1000 + 2000);
   });
 
-  it('resolves retention from job over queue over client', () => {
-    const resolver = new OptionResolver(undefined, { mode: RetentionMode.KEEP_FOREVER });
+  it('resolves retention from job over queue', () => {
+    const resolver = new OptionResolver();
     const r = resolver.resolve({
       job: { retention: { mode: RetentionMode.DELETE_AFTER, ttl: 3000 } },
       queueRetention: { mode: RetentionMode.KEEP_FOREVER },
@@ -44,14 +44,16 @@ describe('OptionResolver precedence (client < queue < job)', () => {
   });
 
   it('carries backoff strategy/factor/cap/jitter', () => {
-    const resolver = new OptionResolver(undefined, undefined);
+    const resolver = new OptionResolver();
     const r = resolver.resolve({
       job: {
-        retryBackoff: {
-          strategy: BackoffStrategy.EXPONENTIAL,
-          factor: 3,
-          maxDelay: 10_000,
-          jitter: true,
+        retry: {
+          backoff: {
+            strategy: BackoffStrategy.EXPONENTIAL,
+            factor: 3,
+            maxDelay: 10_000,
+            jitter: true,
+          },
         },
       },
       now,

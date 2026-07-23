@@ -13,13 +13,19 @@ stops on shutdown. It has no lifecycle methods. All consumer concerns live on
 ```ts
 pq.createWorker({
   queue: 'emails',
-  concurrency: 10,          // max in-flight handlers (default 1)
-  batchSize: 20,            // max jobs claimed per fetch
-  pollIntervalMs: 1000,     // poll cadence when LISTEN/NOTIFY is unavailable
-  lockDurationMs: 30_000,   // visibility timeout / heartbeat window
+  limiter: {
+    concurrency: 10,        // max in-flight handlers on this instance (default 1)
+    batchSize: 20,          // max jobs claimed per fetch
+    pollIntervalMs: 1000,   // poll cadence when LISTEN/NOTIFY is unavailable
+    lockDurationMs: 30_000, // visibility timeout / heartbeat window
+  },
   handler: async (job) => { await send(job.data); },
 });
 ```
+
+Every throughput and claim knob lives under one `limiter` group: `concurrency`, `rateMax` +
+`rateDuration`, `respectSystemPressure`, `batchSize`, `pollIntervalMs`, and `lockDurationMs`.
+Omit the group for sensible defaults.
 
 ## The Job context
 
@@ -83,11 +89,12 @@ keeps at most one active job per key — see
 
 ## Concurrency & parallelism
 
-`concurrency` sets how many handlers run **in parallel** within one worker. Because each
-job is an independently claimed row, there is **no head-of-line blocking** inside a
+`limiter.concurrency` sets how many handlers run **in parallel** within one worker. It is
+**worker-local** — it caps parallelism on *that one running instance*, not across the fleet.
+Because each job is an independently claimed row, there is **no head-of-line blocking** inside a
 queue — a slow job never stalls the others. Queues are also independent: a job never
 waits on another queue (per-queue claim loops, `queue_name`-scoped claiming). Scale out by
-raising `concurrency` and by running more instances.
+raising `limiter.concurrency` and by running more instances.
 
 ## Error handling & retries
 
@@ -98,9 +105,11 @@ The retry *schedule* is a producer/job concern:
 const webhooks = pq.createQueue('webhooks');
 await webhooks.addJob({
   data,
-  retryMaxAttempts: 5,
-  retryDelay: '2s',
-  retryBackoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2, maxDelay: '5m', jitter: true },
+  retry: {
+    maxAttempts: 5,
+    delay: '2s',
+    backoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2, maxDelay: '5m', jitter: true },
+  },
 });
 ```
 
@@ -126,11 +135,15 @@ dead-letter queue** — failed jobs stay in `job` (status `FAILED`) for triage a
 A worker-local, in-process limiter (exact for this worker):
 
 ```ts
-pq.createWorker({ queue: 'third-party', concurrency: 10, limiter: { max: 50, duration: '1m' } });
+pq.createWorker({
+  queue: 'third-party',
+  limiter: { concurrency: 10, rateMax: 50, rateDuration: '1m' },
+});
 ```
 
-The `limiter` is worker-local (in-process) — see [Rate limiting](./rate-limiting.md). There is no
-cluster-wide job-rate cap: scale throughput by adding or removing workers/instances.
+The worker's rate cap (`rateMax` + `rateDuration`, both required together) is worker-local
+(in-process) — see [Rate limiting](./rate-limiting.md).
+There is no cluster-wide job-rate cap: scale throughput by adding or removing workers/instances.
 
 ## Observing
 

@@ -25,11 +25,12 @@ export const addCommand: Command = {
     const data = await parseData(requireFlag(flags, 'data'));
 
     const options: Record<string, unknown> = { data };
+    const schedule: Record<string, unknown> = {};
     if (flagNumber(flags, 'priority') !== undefined) options.priority = flagNumber(flags, 'priority');
     const startAfter = flagString(flags, 'start-after');
-    if (startAfter) options.startAfter = /^\d+$/.test(startAfter) ? Number(startAfter) : startAfter;
+    if (startAfter) schedule.startAfter = /^\d+$/.test(startAfter) ? Number(startAfter) : startAfter;
     if (flagNumber(flags, 'retry-max-attempts') !== undefined) {
-      options.retryMaxAttempts = flagNumber(flags, 'retry-max-attempts');
+      options.retry = { maxAttempts: flagNumber(flags, 'retry-max-attempts') };
     }
     if (flagString(flags, 'idempotency-key')) {
       options.idempotencyKey = flagString(flags, 'idempotency-key');
@@ -40,8 +41,9 @@ export const addCommand: Command = {
     const cron = flagString(flags, 'cron');
     const timezone = flagString(flags, 'timezone');
     const every = flagNumber(flags, 'every');
-    if (cron) options.cron = timezone ? { pattern: cron, tz: timezone } : cron;
-    else if (every !== undefined) options.startEvery = every;
+    if (cron) schedule.cron = timezone ? { pattern: cron, tz: timezone } : cron;
+    else if (every !== undefined) schedule.startEvery = every;
+    if (Object.keys(schedule).length > 0) options.schedule = schedule;
 
     const result = await pq.createQueue(queue).addJob(options as never);
     if (flagBool(flags, 'json')) return printJson(result);

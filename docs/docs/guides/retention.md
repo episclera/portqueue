@@ -9,17 +9,12 @@ sidebar_label: Retention
 By default PortQueue **keeps jobs forever**. For any real workload you should turn on
 retention (or your own pruning) so the `job` table doesn't grow unbounded.
 
-Retention resolves per-job (client → queue → job precedence) and is frozen onto each
-`job` row when it finishes.
+Retention resolves per-job (queue → job precedence) and is frozen onto each
+`job` row when it finishes. Set it at the **queue** level (there is no client-wide default —
+nothing is silently inherited) and override per job when a specific job needs to live longer.
 
 ```ts
 import { RetentionMode } from '@portqueue/core';
-
-// client-wide default
-const pq = new PortQueue({
-  driver,
-  retention: { mode: RetentionMode.DELETE_AFTER, ttl: '7d' },
-});
 
 // per-queue default
 const emails = pq.createQueue('emails', {

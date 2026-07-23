@@ -21,7 +21,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     const queue = h.pq.createQueue('reports');
     const res = await queue.addJob({
       data: { report: 'daily' },
-      startEvery: 1000,
+      schedule: { startEvery: 1000 },
     });
     expect(res.scheduleId).toBeTruthy();
     expect(res.nextRunAt).toBeInstanceOf(Date);
@@ -38,7 +38,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
 
   it('lists schedules and removes them', async () => {
     const queue = h.pq.createQueue('sched');
-    const res = await queue.addJob({ data: {}, cron: '0 0 * * *' });
+    const res = await queue.addJob({ data: {}, schedule: { cron: '0 0 * * *' } });
     let schedules = await queue.getSchedules();
     expect(schedules).toHaveLength(1);
     expect(schedules[0]!.cron).toBe('0 0 * * *');
@@ -51,8 +51,8 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
 
   it('allows identical recurrences on a queue to coexist (no dedup without a key)', async () => {
     const queue = h.pq.createQueue('sched-dup');
-    const a = await queue.addJob({ data: { n: 1 }, cron: '0 0 * * *' });
-    const b = await queue.addJob({ data: { n: 2 }, cron: '0 0 * * *' });
+    const a = await queue.addJob({ data: { n: 1 }, schedule: { cron: '0 0 * * *' } });
+    const b = await queue.addJob({ data: { n: 2 }, schedule: { cron: '0 0 * * *' } });
     expect(b.scheduleId).not.toBe(a.scheduleId);
     expect(b.deduplicated).toBe(false);
     expect(await queue.getSchedules()).toHaveLength(2);
@@ -60,8 +60,8 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
 
   it('deduplicates schedules by idempotency key (keeps the first, unchanged)', async () => {
     const queue = h.pq.createQueue('sched-idem');
-    const a = await queue.addJob({ data: { n: 1 }, cron: '0 0 * * *', idempotencyKey: 'daily' });
-    const b = await queue.addJob({ data: { n: 2 }, cron: '0 0 * * *', idempotencyKey: 'daily' });
+    const a = await queue.addJob({ data: { n: 1 }, schedule: { cron: '0 0 * * *' }, idempotencyKey: 'daily' });
+    const b = await queue.addJob({ data: { n: 2 }, schedule: { cron: '0 0 * * *' }, idempotencyKey: 'daily' });
     expect(b.deduplicated).toBe(true);
     expect(b.scheduleId).toBe(a.scheduleId);
     const schedules = await queue.getSchedules();
@@ -74,7 +74,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     // A one-off job claims the key first.
     const job = await queue.addJob({ data: {}, idempotencyKey: 'shared' });
     // A later recurring add with the same key is deduped against the existing job, not created.
-    const sched = await queue.addJob({ data: {}, cron: '0 0 * * *', idempotencyKey: 'shared' });
+    const sched = await queue.addJob({ data: {}, schedule: { cron: '0 0 * * *' }, idempotencyKey: 'shared' });
     expect(sched.deduplicated).toBe(true);
     expect(sched.jobId).toBe(job.jobId);
     expect(sched.scheduleId).toBeUndefined();
@@ -82,7 +82,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
 
     // And the reverse: a schedule's key blocks a plain one-off add carrying the same key.
     const other = h.pq.createQueue('sched-cross-2');
-    const s = await other.addJob({ data: {}, startEvery: 1000, idempotencyKey: 'k2' });
+    const s = await other.addJob({ data: {}, schedule: { startEvery: 1000 }, idempotencyKey: 'k2' });
     const dupJob = await other.addJob({ data: {}, idempotencyKey: 'k2' });
     expect(dupJob.deduplicated).toBe(true);
     expect(dupJob.scheduleId).toBe(s.scheduleId);

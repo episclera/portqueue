@@ -1,5 +1,5 @@
 import type { JobHandler, WorkflowStep } from '../jobs/job';
-import type { RateLimiterOptions } from './common';
+import type { LimiterOptions } from './common';
 
 /** An error constructor for `dontAutoretryFor` matching. */
 export type ErrorClass = new (...args: never[]) => Error;
@@ -24,13 +24,11 @@ export interface WorkerOptions<
    * (workflow mode). The array order is the canonical step sequence.
    */
   handler: JobHandler<TData, TResult> | ReadonlyArray<WorkflowStep<TData>>;
-  concurrency?: number;
-  /** Worker-local (exact, in-process) token-bucket limiter. */
-  limiter?: RateLimiterOptions;
-  batchSize?: number;
-  pollIntervalMs?: number;
-  lockDurationMs?: number;
-  respectSystemPressure?: boolean;
+  /**
+   * Worker throughput & claim tuning in one group: `concurrency`, `rate`, `respectSystemPressure`,
+   * `batchSize`, `pollIntervalMs`, and `lockDurationMs`. Omit it for sensible defaults.
+   */
+  limiter?: LimiterOptions;
   /** Celery-style non-retryable errors — matched by `instanceof` or `error.name`. */
   dontAutoretryFor?: Array<ErrorClass | string>;
 }
