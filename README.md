@@ -2,6 +2,15 @@
 
 **The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.**
 
+## Documentation
+
+📚 **[Read the full documentation →](https://episclera.github.io/portqueue/docs/introduction)**
+
+- **Getting started** — [Introduction](https://episclera.github.io/portqueue/docs/introduction) · [Installation](https://episclera.github.io/portqueue/docs/getting-started/installation) · [Your first queue](https://episclera.github.io/portqueue/docs/getting-started/first-queue)
+- **Guides** — [Producing jobs](https://episclera.github.io/portqueue/docs/guides/producing-jobs) · [Consuming jobs](https://episclera.github.io/portqueue/docs/guides/consuming-jobs) · [Transactional enqueue](https://episclera.github.io/portqueue/docs/guides/transactions) · [Scheduling & cron](https://episclera.github.io/portqueue/docs/guides/scheduling) · [Workflows](https://episclera.github.io/portqueue/docs/workflows/what-is-a-workflow)
+- **Operate** — [Scaling horizontally](https://episclera.github.io/portqueue/docs/scale-horizontally) · [Dashboard](https://episclera.github.io/portqueue/docs/dashboard) · [CLI](https://episclera.github.io/portqueue/docs/cli)
+- **Reference** — [API reference](https://episclera.github.io/portqueue/docs/api-reference)
+
 PortQueue treats your relational database as the single source of truth for background jobs — no Redis, no broker. Write your queue code once and run it on **Postgres, Oracle, PGLite, or SQLite** (or plug in a custom driver for any engine).
 
 > **Free and open source. Commercial use permitted. No license fee, no obligations.** (MIT)
