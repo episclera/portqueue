@@ -67,8 +67,6 @@ await emails.addJob({ data: { to: 'a@b.com' } });
 - Commits follow **Conventional Commits** (enforced by commitlint) — the changelog is derived from them.
 - Tests use **PGLite + SQLite only** (no external DB server needed). If you need a real Postgres, MySQL or Oracle (e.g. for manual driver testing), start one in Docker with `npm run db:pg:up`, `npm run db:mysql:up` or `npm run db:oracle:up` (stop with `db:pg:down` / `db:mysql:down` / `db:oracle:down`).
 
-See [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
-
 ## License
 
 MIT — see [LICENSE](./LICENSE). Free and open source, commercial use permitted, no obligations.

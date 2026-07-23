@@ -9,6 +9,35 @@ sidebar_label: CLI
 `@portqueue/cli` operates a PortQueue from the terminal. It auto-discovers your config
 module (`./portqueue.config.ts`) so it connects to the same database as your app.
 
+## The config module
+
+The CLI never builds its own instance from a connection string — it imports **exactly the
+`PortQueue` your app configures**, so the CLI, dashboard, and app always agree on driver,
+schema, and queues. Create a `portqueue.config.{ts,js,mjs,cjs}` that **default-exports** a
+`PortQueue` (or a factory that returns one):
+
+```ts title="portqueue.config.ts"
+import { PortQueue } from '@portqueue/core';
+import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+
+// Default-export a configured PortQueue instance…
+export default new PortQueue({
+  driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }),
+});
+
+// …or export a factory (sync or async) — the CLI will call it:
+//   export default () => new PortQueue({ driver: new PostgresDriver({ ... }) });
+```
+
+The CLI discovers this file by walking up from the current directory; override the location
+with `--config <path>` and the export name with `--export <name>` (defaults to `default`).
+
+:::note
+The CLI ships no TypeScript compiler, so point it at a prebuilt `.js`/`.mjs` module. To load
+a `.ts` config directly, run the CLI under a loader instead — e.g.
+`node --import tsx node_modules/@portqueue/cli/dist/cli.mjs …`.
+:::
+
 ## Common commands
 
 ```bash
@@ -38,49 +67,8 @@ portqueue migrate --config ./portqueue.config.ts
 ## Config discovery
 
 Most commands load your configured client from `./portqueue.config.ts` (auto-discovered)
-or an explicit `--config` path. The config module exports the same `PortQueue` options
-your app uses, so the CLI, dashboard, and app all agree on driver, schema, and queues.
-
-## Docker
-
-Run the CLI in a container for one-off ops or to host the dashboard: mount your config
-module, pass `--config`, and expose the dashboard `--port`. Because everything is driven
-by the shared config, no app changes are needed.
-
-```dockerfile title="Dockerfile"
-FROM node:20-alpine
-WORKDIR /app
-
-# Install the CLI plus the client for your driver — it's an optional peer dependency,
-# so pick the one you use: pg (Postgres), mysql2, oracledb, …
-RUN npm install -g @portqueue/cli pg
-
-# The config module is mounted at runtime (see `docker run` below), so nothing
-# app-specific is baked into the image.
-EXPOSE 9000
-ENTRYPOINT ["portqueue"]
-# Default to serving the dashboard; override the command for one-off ops.
-CMD ["dashboard", "--config", "/config/portqueue.config.mjs", "--port", "9000"]
-```
-
-```bash
-# Build the image once.
-docker build -t portqueue-cli .
-
-# Host the dashboard: mount your config, publish the port.
-docker run --rm -p 9000:9000 \
-  -v "$(pwd)/portqueue.config.mjs:/config/portqueue.config.mjs:ro" \
-  portqueue-cli
-
-# One-off op: override the default command (the ENTRYPOINT stays `portqueue`).
-docker run --rm \
-  -v "$(pwd)/portqueue.config.mjs:/config/portqueue.config.mjs:ro" \
-  portqueue-cli migrate --config /config/portqueue.config.mjs
-```
-
-:::note
-The CLI ships no TypeScript compiler, so point `--config` at a prebuilt `.js`/`.mjs`
-module (as above). To load a `.ts` config directly, run it under a loader instead — e.g.
-`node --import tsx node_modules/@portqueue/cli/dist/cli.mjs …`.
-:::
+or an explicit `--config` path — the same `PortQueue` your app uses, so the CLI, dashboard,
+and app all agree on driver, schema, and queues. See
+[The config module](#the-config-module) above. To run the CLI-hosted dashboard in a
+container, see [Dashboard → Docker](./dashboard.mdx#docker).
 

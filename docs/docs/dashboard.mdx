@@ -4,35 +4,28 @@ title: Dashboard
 sidebar_label: Dashboard
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Dashboard
 
 `@portqueue/dashboard` is a pluggable React ops dashboard — queues, jobs, workflow runs,
 schedules, instances, and live stats — served from the CLI or mounted on your existing HTTP
-server. It shares the `@portqueue/ui` theme, so it looks identical to these docs.
+server.
 
 ## Pages
 
 - **Overview** — KPI cards, per-queue table with pause/resume, throughput trend, and an
   instances summary.
 - **Instances** — every registered instance with liveness, per-instance job counts, and
-  per-instance pause/resume (only populated for servers that set an [instance key](./scale-horizontally.md#choosing-a-preferred-server-with-regex-patterns)).
+  per-instance pause/resume (only populated for servers that set an [instance key](./scale-horizontally.md#give-each-server-an-identity-key)).
 - **Schedules** — recurring definitions across queues.
 - **Queue / Job detail** — drill into a queue's jobs or a single job/workflow run.
 
-## Serve it from the CLI (no app changes)
-
-The quickest way — point the CLI at your config module:
-
-```bash
-portqueue dashboard --config ./portqueue.config.ts --port 9000 \
-  --root-user admin --root-password ****
-```
-
 ## Mount on an existing app
 
-<div style={{border: '2px dashed var(--ifm-color-primary)', borderRadius: 12, padding: '2rem', textAlign: 'center', margin: '1.5rem 0', opacity: 0.85}}>
-  🖼️ <strong>Placeholder</strong> — screenshot: <em>"PortQueue dashboard — queues overview with per-state job counts and throughput chart"</em>
-</div>
+Create the dashboard once from your running PortQueue, then mount it with the adapter for
+your framework — Express, Koa, Fastify, NestJS, or raw Node all ship in the box:
 
 ```ts
 import { createDashboard } from '@portqueue/dashboard';
@@ -42,8 +35,67 @@ const dash = createDashboard({
   basePath: '/portqueue',
   auth: { mode: 'basic', username, password },
 });
+```
 
-app.use('/portqueue', dash.express()); // Express — Koa/Fastify/raw Node adapters also ship
+<Tabs groupId="http-framework">
+  <TabItem value="express" label="Express" default>
+
+```ts
+// basePath from the options above sets the mount point.
+app.use(dash.express());
+```
+
+  </TabItem>
+  <TabItem value="koa" label="Koa">
+
+```ts
+app.use(dash.koa());
+```
+
+  </TabItem>
+  <TabItem value="fastify" label="Fastify">
+
+```ts
+await app.register(dash.fastify());
+```
+
+  </TabItem>
+  <TabItem value="nestjs" label="NestJS">
+
+```ts
+// Nest's default platform is Express, so mount it as functional middleware.
+// No @nestjs/* dependency is required.
+export class DashboardModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(dash.nest()).forRoutes('/portqueue');
+  }
+}
+```
+
+  </TabItem>
+  <TabItem value="node" label="Raw Node">
+
+```ts
+import { createServer } from 'node:http';
+
+const handler = dash.node();
+createServer((req, res) => {
+  if (handler(req, res)) return; // the dashboard served this request
+  // …fall through to your own routing
+}).listen(3000);
+```
+
+  </TabItem>
+</Tabs>
+
+## Serve it from the CLI (no app changes)
+
+If you'd rather not touch your app, the CLI hosts the dashboard as a standalone process —
+it imports your [config module](./cli.md#the-config-module) and serves the same UI:
+
+```bash
+portqueue dashboard --config ./portqueue.config.ts --port 9000 \
+  --root-user admin --root-password ****
 ```
 
 ## Securing
@@ -54,9 +106,43 @@ app.use('/portqueue', dash.express()); // Express — Koa/Fastify/raw Node adapt
 
 ## Docker
 
-Run the CLI-served dashboard in a container, pointing `--config` at a mounted config
-module and exposing the chosen `--port`. See the [CLI](./cli.md) page for flags.
+You don't need to containerise your app to run the dashboard — the CLI image can host it
+as its own service. Mount your [config module](./cli.md#the-config-module), pass `--config`,
+and expose the dashboard `--port`. Because everything is driven by the shared config, no app
+changes are needed and the same image doubles for one-off ops (migrations, purges, …).
 
-<div style={{border: '2px dashed var(--ifm-color-primary)', borderRadius: 12, padding: '2rem', textAlign: 'center', margin: '1.5rem 0', opacity: 0.85}}>
-  🖼️ <strong>Placeholder</strong> — screenshot: <em>"PortQueue dashboard — workflow run view: ordered steps with per-step status and timings"</em>
-</div>
+```dockerfile title="Dockerfile"
+FROM node:34-alpine
+WORKDIR /app
+
+# Install the CLI plus the client for your driver — it's an optional peer dependency,
+# so pick the one you use: pg (Postgres), mysql2, oracledb, …
+RUN npm install -g @portqueue/cli pg
+
+# The config module is mounted at runtime (see `docker run` below), so nothing
+# app-specific is baked into the image.
+EXPOSE 9000
+ENTRYPOINT ["portqueue"]
+# Default to serving the dashboard; override the command for one-off ops.
+CMD ["dashboard", "--config", "/config/portqueue.config.mjs", "--port", "9000"]
+```
+
+```bash
+# Build the image once.
+docker build -t portqueue-cli .
+
+# Host the dashboard: mount your config, publish the port.
+docker run --rm -p 9000:9000 \
+  -v "$(pwd)/portqueue.config.mjs:/config/portqueue.config.mjs:ro" \
+  portqueue-cli
+
+# One-off op: override the default command (the ENTRYPOINT stays `portqueue`).
+docker run --rm \
+  -v "$(pwd)/portqueue.config.mjs:/config/portqueue.config.mjs:ro" \
+  portqueue-cli migrate --config /config/portqueue.config.mjs
+```
+
+:::note
+Point `--config` at a prebuilt `.js`/`.mjs` module — see
+[The config module](./cli.md#the-config-module) for loading a `.ts` config under a loader.
+:::
