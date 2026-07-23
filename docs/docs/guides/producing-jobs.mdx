@@ -4,6 +4,8 @@ title: Producing jobs
 sidebar_label: Producing jobs
 ---
 
+import TxTabs from '@site/src/components/TxTabs';
+
 # Producing jobs
 
 All producing goes through a `Queue` handle. Every method takes **one options object**
@@ -77,21 +79,6 @@ const reindex = pq.createQueue('reindex');
 await reindex.addJob({ data, singletonKey: `reindex:${tenantId}` }); // one live reindex per tenant
 ```
 
-## Transactional enqueue
-
-Pass a `tx` adapter so the insert joins **your** transaction — the job exists only if
-your business write commits. See [Transactions](./transactions.mdx).
-
-```ts
-import { fromKnex } from '@portqueue/core/tx';
-
-await knex.transaction(async (trx) => {
-  await trx('order').insert(order);
-  const fulfillment = pq.createQueue('fulfillment');
-  await fulfillment.addJob({ data: { orderId }, tx: fromKnex(trx) });
-});
-```
-
 ## Controlling produced jobs
 
 The `Queue` handle exposes the full control surface. Every method takes one options object.
@@ -124,8 +111,7 @@ await emails.cancelRunningJob({ jobId });
 ```ts
 await emails.removeJob({ jobId });                       // one job (accepts tx)
 await emails.removeJobs({ jobIds: [a, b] });             // by id
-await emails.removeJobs({ statuses: [JobStatus.COMPLETED] }); // by status
-await emails.purgeJobs({ statuses: [JobStatus.FAILED] });     // bulk delete by status
+await emails.removeJobs({ statuses: [JobStatus.COMPLETED] }); // bulk delete by status
 await emails.removeSchedule({ scheduleId });             // stop a recurring definition
 ```
 
@@ -139,3 +125,21 @@ await emails.pause({ mode: PauseMode.PROCESSING }); // stop claiming; still acce
 await emails.pause({ mode: PauseMode.ALL });        // also refuse new adds (drain)
 await emails.resume();
 ```
+
+## Transactional enqueue
+
+Pass a `tx` adapter so the insert joins **your own** transaction — the job exists **iff**
+your business write commits, closing the classic dual-write gap where a crash between the
+write and the enqueue leaves one without the other. PortQueue never opens or commits the
+transaction; your code stays the single owner of commit/rollback, and the `NOTIFY` that
+wakes workers fires only **after** commit.
+
+An adapter ships from `@portqueue/core/tx` for every supported client — query builders,
+ORMs, and raw drivers alike. Pick your tab:
+
+<TxTabs />
+
+Every producing method (`addJob`, `addJobs`, `removeJob`, `removeSchedule`, …) accepts
+`tx`; omit it and the method runs autonomously in its own short transaction. See
+[Transactions](./transactions.mdx) for the full list of adapters and the reasoning behind
+the design.

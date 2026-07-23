@@ -26,7 +26,7 @@ deployment shape:
 - **`PortQueue`** — the client. One per database; owns the connection, migrations, and
   shared services. Construction is DI-only (no I/O); `init()` connects and migrates.
 - **`Queue`** — the **producer** handle for one named queue: add, schedule, inspect, and
-  control jobs. See [Producing jobs](./guides/producing-jobs.md).
+  control jobs. See [Producing jobs](./guides/producing-jobs.mdx).
 - **`Worker`** — the **consumer** for one queue: claims jobs and runs handlers. Created
   separately, so producing and consuming can live on different servers. See
   [Consuming jobs](./guides/consuming-jobs.md).

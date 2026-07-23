@@ -85,7 +85,7 @@ model: never *lose* work, at the cost of possibly *repeating* it).
 run with the same input produces the same result and no duplicate side effects. On the
 producer side, `idempotencyKey` prevents inserting a duplicate job and `singletonKey`
 keeps at most one active job per key — see
-[Producing jobs](./producing-jobs.md#idempotency--singleton).
+[Producing jobs](./producing-jobs.mdx#idempotency--singleton).
 
 ## Concurrency & parallelism
 

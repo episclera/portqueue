@@ -48,7 +48,7 @@ const res = await emails.addJob({ data: { to: 'a@b.com', template: 'welcome' } }
 Unlike BullMQ's `add(name, data)`, PortQueue jobs carry **no per-job name**. Routing is
 the queue's role (one worker per queue), so a job's *kind* is just which queue it's on.
 Labels and correlation live in `metadata` or `idempotencyKey`. See
-[Producing Jobs](../guides/producing-jobs.md).
+[Producing Jobs](../guides/producing-jobs.mdx).
 :::
 
 ## Register a worker

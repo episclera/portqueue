@@ -103,4 +103,4 @@ method (not `removeJob`) per the entity-naming rule: a method names the one enti
 
 For a **one-off** job there is no schedule to remove — use the job-level methods instead:
 `queue.cancelJob({ jobId })` to cancel a not-yet-active job, or `queue.removeJob({ jobId })` to
-delete the row outright. See [Controlling produced jobs](./producing-jobs.md#controlling-produced-jobs).
+delete the row outright. See [Controlling produced jobs](./producing-jobs.mdx#controlling-produced-jobs).
