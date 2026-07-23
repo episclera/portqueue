@@ -56,6 +56,7 @@ export class ClientLifecycleService {
       logger,
       this.runtime.wakeup,
       Math.max(tickInterval, 5000),
+      this.runtime.instanceKey ?? null,
     );
     await this.subscriber.start();
 

@@ -52,10 +52,7 @@ export interface JobSnapshot<TData = unknown> {
   retriedAt?: Date | null;
   stalledAt?: Date | null;
   lockedUntil?: Date | null;
-  preferredInstanceKey?: string | null;
   preferredInstanceKeyPattern?: string | null;
-  fallbackInstanceKey?: string | null;
-  fallbackInstanceKeyPattern?: string | null;
   processedOnInstanceKey?: string | null;
   failureMessage?: string | null;
   idempotencyKey?: string | null;
@@ -92,6 +89,8 @@ export interface QueueInfo {
   processingPaused: boolean;
   acceptingPaused: boolean;
   counts: Record<JobStatus, number>;
+  /** True when this queue is declared (in use) in the process that produced this info. */
+  inUse: boolean;
 }
 
 /** Instance overview info for the dashboard/CLI. */

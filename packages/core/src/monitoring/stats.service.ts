@@ -99,6 +99,7 @@ export class ReadService {
         processingPaused: row.processingPaused,
         acceptingPaused: row.acceptingPaused,
         counts,
+        inUse: this.runtime.registry.isRegistered(row.name),
       });
     }
     return out;

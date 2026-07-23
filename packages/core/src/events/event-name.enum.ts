@@ -31,8 +31,10 @@ export enum PortQueueEvent {
 
   QUEUE_PAUSED = 'QUEUE_PAUSED',
   QUEUE_RESUMED = 'QUEUE_RESUMED',
+  QUEUE_REMOVED = 'QUEUE_REMOVED',
   INSTANCE_PAUSED = 'INSTANCE_PAUSED',
   INSTANCE_RESUMED = 'INSTANCE_RESUMED',
+  INSTANCE_REMOVED = 'INSTANCE_REMOVED',
   WORKER_STARTED = 'WORKER_STARTED',
   WORKER_STOPPED = 'WORKER_STOPPED',
   SYSTEM_PRESSURE_HIGH = 'SYSTEM_PRESSURE_HIGH',
@@ -119,8 +121,10 @@ export interface PortQueueEventPayloads {
 
   [PortQueueEvent.QUEUE_PAUSED]: { queue: string; mode: string };
   [PortQueueEvent.QUEUE_RESUMED]: { queue: string };
+  [PortQueueEvent.QUEUE_REMOVED]: { queue: string };
   [PortQueueEvent.INSTANCE_PAUSED]: { instanceKey: string };
   [PortQueueEvent.INSTANCE_RESUMED]: { instanceKey: string };
+  [PortQueueEvent.INSTANCE_REMOVED]: { instanceKey: string };
   [PortQueueEvent.WORKER_STARTED]: { queue: string };
   [PortQueueEvent.WORKER_STOPPED]: { queue: string };
   [PortQueueEvent.SYSTEM_PRESSURE_HIGH]: { metric: string; value: number; threshold: number };

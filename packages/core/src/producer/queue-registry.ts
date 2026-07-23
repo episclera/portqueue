@@ -92,4 +92,13 @@ export class QueueRegistry {
   cachedRow(name: string): QueueRow | undefined {
     return this.entries.get(name)?.row;
   }
+
+  /**
+   * Whether this queue was declared in *this* process (via createQueue/createWorker), whether or
+   * not its row has been ensured yet. Used to block manual queue removal of an in-use queue: a
+   * running process that still references the queue must not have it deleted from under it.
+   */
+  isRegistered(name: string): boolean {
+    return this.entries.has(name) || this.pendingOptions.has(name) || this.ensuring.has(name);
+  }
 }

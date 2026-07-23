@@ -135,6 +135,28 @@ export class QueuePausedError extends PortQueueError {
   }
 }
 
+export class QueueInUseError extends PortQueueError {
+  constructor(queue: string) {
+    super(
+      `Queue '${queue}' is still registered in this process (createQueue/createWorker) and cannot ` +
+        `be removed. Removal is a manual admin action for queues no longer used by any running ` +
+        `code — stop referencing it everywhere first. The tool never removes queues on its own.`,
+      { code: PortQueueErrorCode.QUEUE_IN_USE, context: { queue } },
+    );
+  }
+}
+
+export class InstanceActiveError extends PortQueueError {
+  constructor(instanceKey: string) {
+    super(
+      `Instance '${instanceKey}' is still active (heartbeat within the last 30 minutes) and cannot ` +
+        `be removed. Only long-inactive instances can be removed from monitoring; wait until it ` +
+        `has not been seen for 30 minutes.`,
+      { code: PortQueueErrorCode.INSTANCE_ACTIVE, context: { instanceKey } },
+    );
+  }
+}
+
 export class PayloadTooLargeError extends PortQueueError {
   constructor(queue: string, size: number, max: number) {
     super(

@@ -113,10 +113,7 @@ export class ProducerService {
       singletonKey: resolved.singletonKey,
       workflowId,
       workflowStepKey,
-      preferredInstanceKey: affinity.preferredInstanceKey,
       preferredInstanceKeyPattern: affinity.preferredInstanceKeyPattern,
-      fallbackInstanceKey: affinity.fallbackInstanceKey,
-      fallbackInstanceKeyPattern: affinity.fallbackInstanceKeyPattern,
       createdAt: now,
     };
 
@@ -139,11 +136,11 @@ export class ProducerService {
       if (opts.tx?.onCommit) {
         opts.tx.onCommit(() => {
           this.runtime.wakeup.signal(queue);
-          void this.notifier.notifyJobAdded(queue);
+          void this.notifier.notifyJobAdded(queue, job.preferredInstanceKeyPattern);
         });
       } else if (!opts.tx) {
         this.runtime.wakeup.signal(queue);
-        void this.notifier.notifyJobAdded(queue);
+        void this.notifier.notifyJobAdded(queue, job.preferredInstanceKeyPattern);
       }
       events.emit(PortQueueEvent.JOB_ADDED, { jobId: inserted.id, queue, deduplicated: false });
     } else {
@@ -161,67 +158,34 @@ export class ProducerService {
   }
 
   /**
-   * Validate and normalize the multi-instance affinity options. Affinity is only meaningful when
-   * this PortQueue declared an `instanceKey`; a job may target instances by exact key or by regex
-   * pattern, but never both for the same role.
+   * Validate and normalize the multi-instance affinity option. Affinity is only meaningful when
+   * this PortQueue declared an `instanceKey`; a job targets instances by a single regex pattern.
    */
   private resolveAffinity(
     queue: string,
     opts: AddJobOptions<unknown>,
   ): {
-    preferredInstanceKey: string | null;
     preferredInstanceKeyPattern: string | null;
-    fallbackInstanceKey: string | null;
-    fallbackInstanceKeyPattern: string | null;
   } {
-    const { preferredInstanceKey, preferredInstanceKeyPattern } = opts;
-    const { fallbackInstanceKey, fallbackInstanceKeyPattern } = opts;
-    const any =
-      preferredInstanceKey != null ||
-      preferredInstanceKeyPattern != null ||
-      fallbackInstanceKey != null ||
-      fallbackInstanceKeyPattern != null;
-    if (any && !this.runtime.instanceKey) {
+    const { preferredInstanceKeyPattern } = opts;
+    if (preferredInstanceKeyPattern != null && !this.runtime.instanceKey) {
       throw new InvalidOptionsError(
-        `Job on queue '${queue}' sets instance affinity (preferred/fallbackInstanceKey), but this ` +
-          `PortQueue is not in multi-instance mode. Pass an \`instanceKey\` to the PortQueue ` +
-          `constructor to enable it.`,
+        `Job on queue '${queue}' sets 'preferredInstanceKeyPattern', but this PortQueue is not in ` +
+          `multi-instance mode. Pass an \`instanceKey\` to the PortQueue constructor to enable it.`,
         { queue },
       );
     }
-    this.validateAffinityRole(queue, 'preferred', preferredInstanceKey, preferredInstanceKeyPattern);
-    this.validateAffinityRole(queue, 'fallback', fallbackInstanceKey, fallbackInstanceKeyPattern);
-    return {
-      preferredInstanceKey: preferredInstanceKey ?? null,
-      preferredInstanceKeyPattern: preferredInstanceKeyPattern ?? null,
-      fallbackInstanceKey: fallbackInstanceKey ?? null,
-      fallbackInstanceKeyPattern: fallbackInstanceKeyPattern ?? null,
-    };
-  }
-
-  /** A role (preferred/fallback) takes an exact key XOR a valid regex pattern, not both. */
-  private validateAffinityRole(
-    queue: string,
-    role: 'preferred' | 'fallback',
-    key: string | undefined,
-    pattern: string | undefined,
-  ): void {
-    if (key != null && pattern != null) {
-      throw new InvalidOptionsError(
-        `Job on queue '${queue}' sets both '${role}InstanceKey' and '${role}InstanceKeyPattern' — provide exactly one.`,
-        { queue },
-      );
-    }
-    if (pattern != null) {
+    if (preferredInstanceKeyPattern != null) {
       try {
-        new RegExp(pattern);
+        new RegExp(preferredInstanceKeyPattern);
       } catch (err) {
         throw new InvalidOptionsError(
-          `Job on queue '${queue}' has an invalid '${role}InstanceKeyPattern' regular expression: ${String(err)}`,
+          `Job on queue '${queue}' has an invalid 'preferredInstanceKeyPattern' regular expression: ${String(err)}`,
           { queue },
         );
       }
     }
+    return { preferredInstanceKeyPattern: preferredInstanceKeyPattern ?? null };
   }
 
   /**

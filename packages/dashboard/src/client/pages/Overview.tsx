@@ -45,6 +45,7 @@ export function OverviewPage(): React.ReactElement {
       render: (name: string, row) => (
         <Space>
           <Link to={`/queues/${encodeURIComponent(name)}`}>{name}</Link>
+          <Tag color={row.inUse ? 'green' : 'default'}>{row.inUse ? 'in use' : 'unused'}</Tag>
           {row.processingPaused && (
             <Tag color="warning">{row.acceptingPaused ? 'Paused (all)' : 'Paused'}</Tag>
           )}

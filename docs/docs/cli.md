@@ -21,6 +21,12 @@ portqueue listen --queue orders
 # retry a failed job
 portqueue retry --id <jobId> --yes
 
+# remove a long-inactive instance (refused unless unseen for 30+ min)
+portqueue remove-instance --instance-key 10.0.9.9:ram-2gb:cpu-1cor
+
+# remove an unused queue (refused if this process still declares it)
+portqueue remove-queue --queue legacy-emails
+
 # serve the dashboard (see the Dashboard page)
 portqueue dashboard --config ./portqueue.config.ts --port 9000 \
   --root-user admin --root-password ****

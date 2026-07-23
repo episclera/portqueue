@@ -129,11 +129,8 @@ export class WorkflowService {
       singletonKey: null,
       workflowId: record.workflowId,
       workflowStepKey: nextKey,
-      // Carry affinity forward so a pinned workflow stays on its instance across steps.
-      preferredInstanceKey: record.preferredInstanceKey,
+      // Carry affinity forward so a targeted workflow stays on matching instances across steps.
       preferredInstanceKeyPattern: record.preferredInstanceKeyPattern,
-      fallbackInstanceKey: record.fallbackInstanceKey,
-      fallbackInstanceKeyPattern: record.fallbackInstanceKeyPattern,
       createdAt: now,
     };
 

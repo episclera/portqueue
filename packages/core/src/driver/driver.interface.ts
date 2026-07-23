@@ -95,8 +95,6 @@ export interface Driver {
     lockedByInstanceId: string;
     /** This instance's multi-instance key, or null in single-instance mode. */
     instanceKey?: string | null;
-    /** Keys of instances whose heartbeat is fresh (for liveness-aware affinity). */
-    aliveInstanceKeys?: readonly string[];
   }): Promise<JobRecord[]>;
   extendLock(options: { jobId: string; lockDurationMs: number; now: number }): Promise<boolean>;
   completeJob(options: {
@@ -187,6 +185,8 @@ export interface Driver {
     tx?: TransactionHandle;
   }): Promise<QueueRow>;
   getQueueByName(options: { name: string }): Promise<QueueRow | null>;
+  /** Delete a queue row by name (manual admin removal; the tool never calls this on its own). */
+  deleteQueue(options: { name: string; tx?: TransactionHandle }): Promise<boolean>;
 
   // Instance liveness & per-instance pause
   upsertInstance(options: {
@@ -200,6 +200,8 @@ export interface Driver {
     processingPaused: boolean;
     now: number;
   }): Promise<void>;
+  /** Delete an instance row by key (manual admin removal of a long-inactive instance). */
+  deleteInstance(options: { instanceKey: string; tx?: TransactionHandle }): Promise<boolean>;
 
   // Retention
   deleteFinishedJobs(options: {

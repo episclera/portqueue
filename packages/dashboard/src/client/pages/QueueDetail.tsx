@@ -5,7 +5,7 @@
 import React, { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button, Card, Dropdown, Popconfirm, Select, Space, Tag, Typography } from 'antd';
-import { DownOutlined, PauseOutlined, PlayCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { DownOutlined, PauseOutlined, PlayCircleOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { JobStatus, PauseMode } from '../queries/enums.js';
 import type { JobPageDto, QueueDto, StatsDto } from '../../shared/dto.js';
 import { api, config } from '../queries/api.js';
@@ -62,6 +62,7 @@ export function QueueDetailPage(): React.ReactElement {
           <Typography.Title level={3} style={{ margin: 0 }}>
             {queue}
           </Typography.Title>
+          {info && <Tag color={info.inUse ? 'green' : 'default'}>{info.inUse ? 'in use' : 'unused'}</Tag>}
           {info?.processingPaused && (
             <Tag color="warning">{info.acceptingPaused ? 'Paused (all)' : 'Paused'}</Tag>
           )}
@@ -85,6 +86,17 @@ export function QueueDetailPage(): React.ReactElement {
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>
               Add job
             </Button>
+            {info && !info.inUse && (
+              <Popconfirm
+                title="Remove this queue from the database?"
+                description="Only allowed because no running process declares it. Job rows are untouched."
+                onConfirm={() => void run({ kind: 'removeQueue', queue }, 'Queue removed')}
+              >
+                <Button danger icon={<DeleteOutlined />}>
+                  Remove queue
+                </Button>
+              </Popconfirm>
+            )}
           </Space>
         )}
       </Space>

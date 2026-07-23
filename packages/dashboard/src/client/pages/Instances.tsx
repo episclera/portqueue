@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import { Button, Card, Popconfirm, Space, Table, Tag, Tooltip, Typography } from 'antd';
-import { PauseOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PauseOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { JobStatus } from '../queries/enums.js';
 import { StatusTag } from '@portqueue/ui';
 import type { ColumnsType } from 'antd/es/table';
@@ -60,27 +60,50 @@ export function InstancesPage(): React.ReactElement {
       title: 'Actions',
       key: 'actions',
       fixed: 'right',
-      render: (_: unknown, r) =>
-        config.readOnly ? null : r.processingPaused ? (
-          <Button
-            size="small"
-            icon={<PlayCircleOutlined />}
-            onClick={() => void run({ kind: 'resumeInstance', instanceKey: r.instanceKey }, 'Resumed')}
-          >
-            Resume
-          </Button>
-        ) : (
-          <Popconfirm
-            title="Pause job processing on this instance?"
-            onConfirm={() =>
-              void run({ kind: 'pauseInstance', instanceKey: r.instanceKey }, 'Paused')
-            }
-          >
-            <Button size="small" icon={<PauseOutlined />}>
-              Pause
-            </Button>
-          </Popconfirm>
-        ),
+      render: (_: unknown, r) => {
+        if (config.readOnly) return null;
+        // Match the core rule: an instance may only be removed after 30 minutes unseen.
+        const removable = Date.now() - new Date(r.lastSeenAt).getTime() > 30 * 60 * 1000;
+        return (
+          <Space>
+            {r.processingPaused ? (
+              <Button
+                size="small"
+                icon={<PlayCircleOutlined />}
+                onClick={() =>
+                  void run({ kind: 'resumeInstance', instanceKey: r.instanceKey }, 'Resumed')
+                }
+              >
+                Resume
+              </Button>
+            ) : (
+              <Popconfirm
+                title="Pause job processing on this instance?"
+                onConfirm={() =>
+                  void run({ kind: 'pauseInstance', instanceKey: r.instanceKey }, 'Paused')
+                }
+              >
+                <Button size="small" icon={<PauseOutlined />}>
+                  Pause
+                </Button>
+              </Popconfirm>
+            )}
+            {removable && (
+              <Popconfirm
+                title="Remove this inactive instance from monitoring?"
+                description="Only tidies the instances list; job history is untouched."
+                onConfirm={() =>
+                  void run({ kind: 'removeInstance', instanceKey: r.instanceKey }, 'Instance removed')
+                }
+              >
+                <Button size="small" danger icon={<DeleteOutlined />}>
+                  Remove
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
+        );
+      },
     },
   ];
 

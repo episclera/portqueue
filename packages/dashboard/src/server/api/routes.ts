@@ -248,6 +248,30 @@ async function runAction(portQueue: PortQueue, action: ActionRequestDto): Promis
     else await portQueue.resumeInstance({ instanceKey: action.instanceKey });
     return json(200, { ok: true } satisfies ActionResultDto);
   }
+  if (action?.kind === 'removeInstance') {
+    if (typeof action.instanceKey !== 'string' || !action.instanceKey) {
+      return json(400, { error: 'Missing instanceKey' });
+    }
+    try {
+      const ok = await portQueue.removeInstance({ instanceKey: action.instanceKey });
+      return json(200, { ok } satisfies ActionResultDto);
+    } catch (err) {
+      // e.g. still-active instance — surface the actionable message as a conflict.
+      return json(409, { error: err instanceof Error ? err.message : 'Cannot remove instance' });
+    }
+  }
+  if (action?.kind === 'removeQueue') {
+    if (typeof action.queue !== 'string' || !action.queue) {
+      return json(400, { error: 'Missing queue' });
+    }
+    // Deliberately not createQueue() — that would register it in this process and trip the guard.
+    try {
+      const ok = await portQueue.removeQueue({ name: action.queue });
+      return json(200, { ok } satisfies ActionResultDto);
+    } catch (err) {
+      return json(409, { error: err instanceof Error ? err.message : 'Cannot remove queue' });
+    }
+  }
 
   if (!action || typeof action.queue !== 'string' || !action.queue) {
     return json(400, { error: 'Missing queue' });
@@ -329,8 +353,10 @@ export const STREAMED_EVENTS: readonly PortQueueEvent[] = [
   PortQueueEvent.WORKFLOW_FAILED,
   PortQueueEvent.QUEUE_PAUSED,
   PortQueueEvent.QUEUE_RESUMED,
+  PortQueueEvent.QUEUE_REMOVED,
   PortQueueEvent.INSTANCE_PAUSED,
   PortQueueEvent.INSTANCE_RESUMED,
+  PortQueueEvent.INSTANCE_REMOVED,
   PortQueueEvent.SCHEDULE_CREATED,
   PortQueueEvent.SCHEDULE_UPDATED,
   PortQueueEvent.SCHEDULE_REMOVED,

@@ -7,6 +7,8 @@ export interface QueueDto {
   processingPaused: boolean;
   acceptingPaused: boolean;
   counts: CountsDto;
+  /** True when the dashboard's own process still declares this queue (createQueue/createWorker). */
+  inUse: boolean;
 }
 
 /** Aggregated stats (mirrors core `QueueStats`). */

@@ -18,7 +18,7 @@ import { ClientRegistryService } from './client/client-registry.service.js';
 import { ClientLifecycleService } from './client/client-lifecycle.service.js';
 import { Queue } from './producer/queue.js';
 import { Worker, type WorkerConfig } from './consumer/worker.js';
-import { InvalidOptionsError } from './errors/errors.js';
+import { InstanceActiveError, InvalidOptionsError, QueueInUseError } from './errors/errors.js';
 import { SystemClock } from './util/clock.js';
 import type { PortQueueOptions, ShutdownOptions } from './options/client-options.js';
 import type { QueueOptions } from './options/queue-options.js';
@@ -37,6 +37,9 @@ import type {
   QueueStats,
   WorkflowSnapshot,
 } from './producer/results.js';
+
+/** An instance must be unseen for at least this long before it can be manually removed. */
+const INSTANCE_REMOVAL_STALE_MS = 30 * 60_000;
 
 /**
  * The top-level client. One per database. Owns connection, migration,
@@ -145,7 +148,7 @@ export class PortQueue<
   createQueue<TData = unknown>(
     name: TQueues,
     options: QueueOptions = {},
-  ): Queue<TData, TInstanceKey> {
+  ): Queue<TData> {
     this.runtime.registry.define(name, options);
     // Register queue-scoped hooks once (QueueOptions.hooks).
     if (options.hooks && !this.hookedQueues.has(name)) {
@@ -154,9 +157,9 @@ export class PortQueue<
         this.hooks.register(hook.queue ? hook : { ...hook, queue: name });
       }
     }
-    const existing = this.clientRegistry.getQueue(name) as Queue<TData, TInstanceKey> | undefined;
+    const existing = this.clientRegistry.getQueue(name) as Queue<TData> | undefined;
     if (existing) return existing;
-    const queue = new Queue<TData, TInstanceKey>(name, this.producer, this.reads, this.runtime);
+    const queue = new Queue<TData>(name, this.producer, this.reads, this.runtime);
     this.clientRegistry.addQueue(name, queue as Queue<unknown>);
     return queue;
   }
@@ -268,6 +271,21 @@ export class PortQueue<
     await this.createQueue(options.queue).resume();
   }
 
+  /**
+   * Manually remove a queue's row from the database. Refuses if the queue is still declared in
+   * *this* process (via createQueue/createWorker) — a running process must not have its queue
+   * deleted from under it. The tool never removes queues automatically; this is an admin action
+   * for queues no longer used by any running code. Job rows link by name (no FK) and are untouched.
+   */
+  async removeQueue(options: { name: TQueues | string }): Promise<boolean> {
+    if (this.runtime.registry.isRegistered(options.name)) {
+      throw new QueueInUseError(options.name);
+    }
+    const ok = await this.runtime.driver.deleteQueue({ name: options.name });
+    if (ok) this.events.emit(PortQueueEvent.QUEUE_REMOVED, { queue: options.name });
+    return ok;
+  }
+
   // --- Instances (multi-instance mode) ---
   /** All known instances with liveness + per-instance job attribution (for the dashboard/CLI). */
   getInstances(): Promise<InstanceInfo[]> {
@@ -300,6 +318,24 @@ export class PortQueue<
     }
     this.runtime.wakeup.signalAll();
     this.events.emit(PortQueueEvent.INSTANCE_RESUMED, { instanceKey: options.instanceKey });
+  }
+
+  /**
+   * Manually remove a long-inactive instance's monitoring row. Refuses unless the instance has not
+   * heartbeat for at least 30 minutes (a live or recently-seen instance would just re-register on
+   * its next beat). Jobs record the processing instance key as a plain string (no FK), so removal
+   * never touches job rows — it only tidies the instances list. The tool never does this itself.
+   */
+  async removeInstance(options: { instanceKey: TInstanceKey | string }): Promise<boolean> {
+    const row = await this.runtime.driver.getInstance({ instanceKey: options.instanceKey });
+    if (!row) return false;
+    const now = this.runtime.clock.now();
+    if (row.lastSeenAt >= now - INSTANCE_REMOVAL_STALE_MS) {
+      throw new InstanceActiveError(options.instanceKey);
+    }
+    const ok = await this.runtime.driver.deleteInstance({ instanceKey: options.instanceKey });
+    if (ok) this.events.emit(PortQueueEvent.INSTANCE_REMOVED, { instanceKey: options.instanceKey });
+    return ok;
   }
 }
 

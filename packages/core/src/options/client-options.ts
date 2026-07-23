@@ -26,9 +26,9 @@ export interface PortQueueOptions<TInstanceKey extends string = string> {
   instance?: InstanceIdentityOptions;
   /**
    * Opt into **multi-instance mode**. A stable, human-meaningful key for
-   * this instance (e.g. `'worker-eu-1'`). When set, this instance registers a heartbeat row,
-   * honours job affinity (`preferredInstanceKey` / `...Pattern`), and can be paused
-   * independently from the dashboard. Leave unset to run in single-instance mode.
+   * this instance (e.g. `'worker-eu-1'` or `'host-3:ram-8gb:cpu-4'`). When set, this instance
+   * registers a heartbeat row, honours job affinity (`preferredInstanceKeyPattern`), and can be
+   * paused independently from the dashboard. Leave unset to run in single-instance mode.
    */
   instanceKey?: TInstanceKey;
   /** Heartbeat cadence for the instance row's `last_seen_at` (ms). Default 15000. */

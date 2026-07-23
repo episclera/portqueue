@@ -74,10 +74,7 @@ export class SchedulerService {
       singletonKey: null,
       workflowId: null,
       workflowStepKey: null,
-      preferredInstanceKey: null,
       preferredInstanceKeyPattern: null,
-      fallbackInstanceKey: null,
-      fallbackInstanceKeyPattern: null,
       createdAt: now,
     };
     const inserted = await this.runtime.driver.insertJob({ job });

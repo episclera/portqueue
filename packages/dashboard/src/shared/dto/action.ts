@@ -12,11 +12,13 @@ export interface ActionRequestDto {
     | 'purge'
     | 'add'
     | 'removeSchedule'
+    | 'removeQueue'
     | 'pauseInstance'
-    | 'resumeInstance';
+    | 'resumeInstance'
+    | 'removeInstance';
   /** Target queue name — required for all queue/job actions; omitted for instance actions. */
   queue?: string;
-  /** Target instance key — required for `pauseInstance` / `resumeInstance`. */
+  /** Target instance key — required for `pauseInstance` / `resumeInstance` / `removeInstance`. */
   instanceKey?: string;
   jobId?: string;
   jobIds?: string[];

@@ -54,10 +54,7 @@ export function serializeJob(job: JobSnapshot): JobDto {
     retriedAt: iso(job.retriedAt),
     stalledAt: iso(job.stalledAt),
     lockedUntil: iso(job.lockedUntil),
-    preferredInstanceKey: job.preferredInstanceKey,
     preferredInstanceKeyPattern: job.preferredInstanceKeyPattern,
-    fallbackInstanceKey: job.fallbackInstanceKey,
-    fallbackInstanceKeyPattern: job.fallbackInstanceKeyPattern,
     processedOnInstanceKey: job.processedOnInstanceKey,
     failureMessage: job.failureMessage,
     idempotencyKey: job.idempotencyKey,
@@ -74,6 +71,7 @@ export function serializeQueue(q: QueueInfo): QueueDto {
     processingPaused: q.processingPaused,
     acceptingPaused: q.acceptingPaused,
     counts: counts(q.counts),
+    inUse: q.inUse,
   };
 }
 

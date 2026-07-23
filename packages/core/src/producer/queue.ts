@@ -20,7 +20,7 @@ import type { TransactionHandle } from '../tx/transaction-handle.js';
  * The producer handle for one queue. Add/schedule/inspect/control jobs.
  * Getting a Queue does no I/O beyond lazily ensuring the queue is registered.
  */
-export class Queue<TData = unknown, TInstanceKey extends string = string> {
+export class Queue<TData = unknown> {
   constructor(
     readonly name: string,
     private readonly producer: ProducerService,
@@ -29,11 +29,11 @@ export class Queue<TData = unknown, TInstanceKey extends string = string> {
   ) {}
 
   // --- Adding jobs (one-off and recurring) ---
-  addJob(options: AddJobOptions<TData, TInstanceKey>): Promise<AddJobResult> {
+  addJob(options: AddJobOptions<TData>): Promise<AddJobResult> {
     return this.producer.addJob(this.name, options);
   }
 
-  addJobs(options: { jobs: AddJobOptions<TData, TInstanceKey>[] }): Promise<AddJobResult[]> {
+  addJobs(options: { jobs: AddJobOptions<TData>[] }): Promise<AddJobResult[]> {
     return this.producer.addJobs(this.name, options.jobs);
   }
 

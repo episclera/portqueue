@@ -9,6 +9,8 @@ import { pauseCommand, resumeCommand } from './pause.js';
 import { purgeCommand } from './purge.js';
 import { queuesCommand } from './queues.js';
 import { removeCommand } from './remove.js';
+import { removeInstanceCommand } from './remove-instance.js';
+import { removeQueueCommand } from './remove-queue.js';
 import { retryCommand } from './retry.js';
 import { schedulesCommand } from './schedules.js';
 import { statsCommand } from './stats.js';
@@ -30,6 +32,8 @@ export const COMMANDS: readonly Command[] = [
   retryCommand,
   cancelCommand,
   removeCommand,
+  removeQueueCommand,
+  removeInstanceCommand,
   purgeCommand,
   pauseCommand,
   resumeCommand,

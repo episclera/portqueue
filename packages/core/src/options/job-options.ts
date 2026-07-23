@@ -37,10 +37,10 @@ export type CronSpec = string | { pattern: string; tz?: string };
  * - **recurring interval** — `startEvery` (a `Duration` between runs);
  * - **recurring cron** — `cron` (a {@link CronSpec}).
  *
- * A recurring add creates/updates a schedule keyed by its own pattern: re-adding the same
- * `startEvery`/`cron` on a queue updates that schedule; a different pattern makes a new one.
+ * Identical recurrences may coexist; pass an `idempotencyKey` to guarantee a single one (it dedups
+ * across both the job and schedule tables, queue-scoped, first-writer-wins).
  */
-export type AddJobOptions<TData, TInstanceKey extends string = string> = JobOptions & {
+export type AddJobOptions<TData> = JobOptions & {
   data: TData;
   /** Recurring: a fixed interval between runs, e.g. `'30s'`. */
   startEvery?: Duration;
@@ -49,25 +49,10 @@ export type AddJobOptions<TData, TInstanceKey extends string = string> = JobOpti
   /** For a workflow queue: begin at a non-entry step (rare; defaults to the entry step). */
   startStep?: string;
   /**
-   * Multi-instance affinity: prefer to run this job on the instance with this exact key.
-   * Requires `instanceKey` on the PortQueue. Mutually exclusive with `preferredInstanceKeyPattern`.
-   */
-  preferredInstanceKey?: TInstanceKey;
-  /**
-   * Multi-instance affinity: prefer to run this job on any live instance whose key matches
-   * this regular expression (source string, e.g. `'^worker-eu-'`). Requires `instanceKey`.
-   * Mutually exclusive with `preferredInstanceKey`.
+   * Multi-instance affinity: run this job only on instances whose key matches this regular
+   * expression (source string, e.g. `'ram-(4|8)gb'`). Requires an `instanceKey` on the PortQueue.
+   * A pattern spans many instances by design — prefer it to pinning one server. If no live
+   * instance matches, the job waits until one does. Omit to run on any instance.
    */
   preferredInstanceKeyPattern?: string;
-  /**
-   * If no preferred instance is alive, fall back to the instance with this exact key.
-   * Requires `instanceKey`. Mutually exclusive with `fallbackInstanceKeyPattern`.
-   */
-  fallbackInstanceKey?: TInstanceKey;
-  /**
-   * If no preferred instance is alive, fall back to any live instance whose key matches this
-   * regular expression (source string). Requires `instanceKey`. Mutually exclusive with
-   * `fallbackInstanceKey`.
-   */
-  fallbackInstanceKeyPattern?: string;
 };

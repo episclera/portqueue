@@ -26,10 +26,7 @@ export interface JobDto {
   retriedAt?: string | null;
   stalledAt?: string | null;
   lockedUntil?: string | null;
-  preferredInstanceKey?: string | null;
   preferredInstanceKeyPattern?: string | null;
-  fallbackInstanceKey?: string | null;
-  fallbackInstanceKeyPattern?: string | null;
   processedOnInstanceKey?: string | null;
   failureMessage?: string | null;
   idempotencyKey?: string | null;

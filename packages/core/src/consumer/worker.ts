@@ -115,9 +115,6 @@ export class Worker {
           now: this.runtime.clock.now(),
           lockedByInstanceId: this.runtime.identity.id,
           instanceKey: this.runtime.instanceKey,
-          ...(this.runtime.instances
-            ? { aliveInstanceKeys: this.runtime.instances.aliveKeys }
-            : {}),
         });
         if (jobs.length === 0) break;
 

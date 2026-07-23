@@ -29,14 +29,8 @@ export interface JobRecord {
   lockedUntil: number | null;
   /** The auto-detected identity of the process currently holding the lock (stall attribution). */
   lockedByInstanceId: string | null;
-  /** The instance key this job prefers to run on (affinity), or null for any instance. */
-  preferredInstanceKey: string | null;
-  /** A regex (source string) matching the instance keys this job prefers to run on. */
+  /** A regex (source string) matching the instance keys this job may run on, or null for any. */
   preferredInstanceKeyPattern: string | null;
-  /** The instance key to fall back to if no preferred instance is alive. */
-  fallbackInstanceKey: string | null;
-  /** A regex (source string) matching the fallback instance keys, used when preferred is dead. */
-  fallbackInstanceKeyPattern: string | null;
   /** The instance key that actually claimed/processed this job (set at claim time). */
   processedOnInstanceKey: string | null;
   retryAttempt: number;
@@ -80,10 +74,7 @@ export interface NewJobRecord {
   singletonKey: string | null;
   workflowId: string | null;
   workflowStepKey: string | null;
-  preferredInstanceKey: string | null;
   preferredInstanceKeyPattern: string | null;
-  fallbackInstanceKey: string | null;
-  fallbackInstanceKeyPattern: string | null;
   createdAt: number;
 }
 

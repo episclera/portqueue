@@ -57,10 +57,7 @@ function newJob(
     singletonKey: null,
     workflowId: null,
     workflowStepKey: null,
-    preferredInstanceKey: null,
     preferredInstanceKeyPattern: null,
-    fallbackInstanceKey: null,
-    fallbackInstanceKeyPattern: null,
     createdAt: now,
     ...overrides,
   };
@@ -293,57 +290,14 @@ export function runConformance(options: ConformanceOptions): void {
       expect((await driver.getInstance({ instanceKey: 'inst-b' }))?.processingPaused).toBe(false);
     });
 
-    it('honours preferred-instance affinity when the preferred instance is alive', async () => {
+    it('only lets a matching instance claim a job with a preferred pattern', async () => {
       await driver.insertJob({
-        job: newJob(queueName, now, { data: { pin: 'a' }, preferredInstanceKey: 'inst-a' }),
+        job: newJob(queueName, now, {
+          data: { pin: 'eu' },
+          preferredInstanceKeyPattern: '^worker-eu-',
+        }),
       });
-      // inst-b must not claim a job preferred to (still-alive) inst-a.
-      const bClaim = await driver.claimJobs({
-        queueName,
-        limit: 10,
-        lockDurationMs: 30000,
-        now: now + 1,
-        lockedByInstanceId: 'b',
-        instanceKey: 'inst-b',
-        aliveInstanceKeys: ['inst-a', 'inst-b'],
-      });
-      expect(bClaim).toHaveLength(0);
-      // inst-a claims it and is recorded as the processor.
-      const aClaim = await driver.claimJobs({
-        queueName,
-        limit: 10,
-        lockDurationMs: 30000,
-        now: now + 2,
-        lockedByInstanceId: 'a',
-        instanceKey: 'inst-a',
-        aliveInstanceKeys: ['inst-a', 'inst-b'],
-      });
-      expect(aClaim).toHaveLength(1);
-      expect(aClaim[0]!.processedOnInstanceKey).toBe('inst-a');
-    });
-
-    it('falls back to another instance when the preferred instance is dead', async () => {
-      await driver.insertJob({
-        job: newJob(queueName, now, { preferredInstanceKey: 'inst-dead' }),
-      });
-      // inst-dead is absent from the alive set → inst-b may rescue the job.
-      const claim = await driver.claimJobs({
-        queueName,
-        limit: 10,
-        lockDurationMs: 30000,
-        now: now + 1,
-        lockedByInstanceId: 'b',
-        instanceKey: 'inst-b',
-        aliveInstanceKeys: ['inst-b'],
-      });
-      expect(claim).toHaveLength(1);
-    });
-
-    it('matches a preferred-instance-key regex pattern', async () => {
-      await driver.insertJob({
-        job: newJob(queueName, now, { preferredInstanceKeyPattern: '^worker-eu-' }),
-      });
-      // A non-matching instance leaves it for a matching one.
+      // A non-matching instance must leave it alone.
       const us = await driver.claimJobs({
         queueName,
         limit: 10,
@@ -351,9 +305,9 @@ export function runConformance(options: ConformanceOptions): void {
         now: now + 1,
         lockedByInstanceId: 'us',
         instanceKey: 'worker-us-1',
-        aliveInstanceKeys: ['worker-us-1', 'worker-eu-1'],
       });
       expect(us).toHaveLength(0);
+      // A matching instance claims it and is recorded as the processor.
       const eu = await driver.claimJobs({
         queueName,
         limit: 10,
@@ -361,9 +315,44 @@ export function runConformance(options: ConformanceOptions): void {
         now: now + 2,
         lockedByInstanceId: 'eu',
         instanceKey: 'worker-eu-1',
-        aliveInstanceKeys: ['worker-us-1', 'worker-eu-1'],
       });
       expect(eu).toHaveLength(1);
+      expect(eu[0]!.processedOnInstanceKey).toBe('worker-eu-1');
+    });
+
+    it('lets any instance claim a job with no preferred pattern', async () => {
+      await driver.insertJob({ job: newJob(queueName, now) });
+      const claim = await driver.claimJobs({
+        queueName,
+        limit: 10,
+        lockDurationMs: 30000,
+        now: now + 1,
+        lockedByInstanceId: 'b',
+        instanceKey: 'worker-any-1',
+      });
+      expect(claim).toHaveLength(1);
+    });
+
+    it('pages past non-matching jobs to find ones this instance can claim', async () => {
+      // A block of jobs targeted elsewhere, then one this instance matches, deep in the backlog.
+      for (let i = 0; i < 30; i += 1) {
+        await driver.insertJob({
+          job: newJob(queueName, now, { data: { i }, preferredInstanceKeyPattern: '^worker-eu-' }),
+        });
+      }
+      await driver.insertJob({
+        job: newJob(queueName, now, { data: { mine: true }, preferredInstanceKeyPattern: '^worker-us-' }),
+      });
+      const claim = await driver.claimJobs({
+        queueName,
+        limit: 5,
+        lockDurationMs: 30000,
+        now: now + 1,
+        lockedByInstanceId: 'us',
+        instanceKey: 'worker-us-1',
+      });
+      expect(claim).toHaveLength(1);
+      expect((claim[0]!.data as { mine?: boolean }).mine).toBe(true);
     });
   });
 }

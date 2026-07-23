@@ -29,12 +29,12 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 - `createWorker<TData, TResult>(options: WorkerOptions): Worker`.
 - `getQueues()`, `getQueueStats({ queue? })`, `getJob({ jobId })`, `getJobs(query)`, `getWorkflow({ workflowId })`.
 - `on(event, listener, filter?)` / `off(...)` / `once(...)`; `useHook(hook)`.
-- `pauseQueue({ queue, mode? })` / `resumeQueue({ queue })`.
-- **Multi-instance:** `getInstances()` → `InstanceInfo[]`; `pauseInstance({ instanceKey })` / `resumeInstance({ instanceKey })`. See [Multi-instance](./guides/multi-instance.md).
+- `pauseQueue({ queue, mode? })` / `resumeQueue({ queue })`; `removeQueue({ name })` — manual, refused while the queue is still declared in this process.
+- **Multi-instance:** `getInstances()` → `InstanceInfo[]`; `pauseInstance({ instanceKey })` / `resumeInstance({ instanceKey })`; `removeInstance({ instanceKey })` — refused until the instance has been unseen 30 min. See [Multi-instance](./guides/multi-instance.md).
 
-## `Queue<TData, TInstanceKey>`
+## `Queue<TData>`
 
-- `addJob(options: AddJobOptions<TData, TInstanceKey>): Promise<AddJobResult>` — pass `startEvery`/`cron` to make it recurring; pass `preferredInstanceKey`/`preferredInstanceKeyPattern`/`fallbackInstanceKey`/`fallbackInstanceKeyPattern` for [instance affinity](./guides/multi-instance.md).
+- `addJob(options: AddJobOptions<TData>): Promise<AddJobResult>` — pass `startEvery`/`cron` to make it recurring; pass `preferredInstanceKeyPattern` for [instance affinity](./guides/multi-instance.md).
 - `addJobs({ jobs })`.
 - `getSchedules()`, `getJob`, `getJobs`, `getQueueStats`.
 - `retryJob({ jobId, from? })`, `cancelJob({ jobId })`, `cancelRunningJob({ jobId })`.

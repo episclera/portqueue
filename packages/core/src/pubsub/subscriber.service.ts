@@ -1,5 +1,6 @@
 import type { Driver, Subscription } from '../driver/driver.interface.js';
 import { DriverCapability } from '../driver/driver-capabilities.js';
+import { matchesInstance } from '../jobs/instance-affinity.js';
 import type { Logger } from '../logging/logger.interface.js';
 import type { Wakeup } from './wakeup.js';
 import { PubSubChannel } from './channels.js';
@@ -18,6 +19,7 @@ export class SubscriberService {
     private readonly logger: Logger,
     private readonly wakeup: Wakeup,
     private readonly safetyPollMs: number,
+    private readonly instanceKey: string | null,
   ) {}
 
   async start(): Promise<void> {
@@ -27,9 +29,21 @@ export class SubscriberService {
           channel: PubSubChannel.JOBS,
           onNotification: (payload) => {
             try {
-              const { queue } = JSON.parse(payload) as { queue?: string };
-              if (queue) this.wakeup.signal(queue);
-              else this.wakeup.signalAll();
+              const { queue, pattern } = JSON.parse(payload) as {
+                queue?: string;
+                pattern?: string | null;
+              };
+              if (!queue) {
+                this.wakeup.signalAll();
+                return;
+              }
+              // Skip the wakeup when the added job targets a pattern this instance can't match —
+              // claiming it would find nothing. Jobs meant for us fire their own notify, and the
+              // safety poll backstops anything missed. Null pattern (or single-instance) → wake.
+              if (pattern != null && this.instanceKey != null) {
+                if (!matchesInstance(pattern, this.instanceKey)) return;
+              }
+              this.wakeup.signal(queue);
             } catch {
               this.wakeup.signalAll();
             }

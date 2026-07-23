@@ -58,16 +58,18 @@ For most deployments, leave `instanceKey` unset — interchangeable workers are 
 resilient. Turn on [multi-instance mode](./guides/multi-instance.md) only when work needs
 locality (warm cache, local data, region, specialized hardware):
 
-- Give each process a **stable `instanceKey`** (e.g. from your orchestrator's pod/host id). Reuse
-  the same key across restarts of the *same* logical instance so affinity and liveness stay
-  meaningful.
-- Pin with `preferredInstanceKey`/`preferredInstanceKeyPattern`, and **always set a fallback**
-  (`fallbackInstanceKey`/`...Pattern`) for jobs that must not stall if a node dies — a dead
-  preferred instance hands off to the fallback, then to the cluster.
+- Give each process a **stable `instanceKey`** (e.g. from your orchestrator's pod/host id, plus the
+  capabilities you target — `…:ram-8gb:cpu-4cor`). Reuse the same key across restarts of the *same*
+  logical instance so affinity and liveness stay meaningful.
+- Target work with a **capability pattern** (`preferredInstanceKeyPattern`, e.g. `ram-(4|8)gb`)
+  rather than pinning a host. A pattern spans many servers, so a job is never stranded when one dies
+  — any matching instance takes it, and replacing hardware needs no code change. If nothing matches,
+  the job waits.
 - Tune `instanceHeartbeatIntervalMs` (default 15s) to your failover appetite: an instance is
-  "dead" after ~3 missed beats, which is how long a pinned job waits before a fallback rescues it.
+  "dead" after ~3 missed beats.
 - Use the dashboard **Instances** page (or `pauseInstance`/`resumeInstance`) to drain one node for
-  a deploy without touching the rest.
+  a deploy without touching the rest; remove a decommissioned instance once it's been unseen for
+  30 minutes (`removeInstance` / dashboard / `portqueue remove-instance`).
 
 :::caution Dedup is tool-managed
 The schema is deliberately **index-free and constraint-free** for sharded/distributed databases.
@@ -102,7 +104,7 @@ until `init()` resolved.
 - [ ] Retries with jitter + cap; `dontAutoretryFor` for non-retryable errors.
 - [ ] Retention on; failed kept longer than completed.
 - [ ] `SystemMonitor` on; worker-local rate limiter set for third-party APIs.
-- [ ] Multi-instance (if used): stable `instanceKey` per process; fallbacks set on pinned jobs; heartbeat interval tuned.
+- [ ] Multi-instance (if used): stable `instanceKey` per process; jobs targeted by capability pattern; heartbeat interval tuned.
 - [ ] `PortQueueEvent.ERROR` subscribed; metrics/tracing via hooks.
 - [ ] Dashboard/CLI behind auth; `maxPayloadBytes` set.
 - [ ] Readiness gated on `pq.isRunning` + driver ping.

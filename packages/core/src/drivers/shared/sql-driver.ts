@@ -23,7 +23,7 @@ import type {
   ScheduleRow,
   ThroughputPoint,
 } from '../../jobs/job-record.js';
-import { canClaim, type JobAffinity } from '../../jobs/instance-affinity.js';
+import { matchesInstance } from '../../jobs/instance-affinity.js';
 import type { QueueOptions } from '../../options/queue-options.js';
 import type { TransactionHandle, TxQueryResult } from '../../tx/transaction-handle.js';
 import { DriverQueryError, UnsupportedCapabilityError } from '../../errors/errors.js';
@@ -61,10 +61,7 @@ const JOB_COLUMNS = [
   'expired_at',
   'locked_until',
   'locked_by_instance_id',
-  'preferred_instance_key',
   'preferred_instance_key_pattern',
-  'fallback_instance_key',
-  'fallback_instance_key_pattern',
   'processed_on_instance_key',
   'retry_attempt',
   'retry_max_attempts',
@@ -193,16 +190,6 @@ export abstract class SqlDriver implements Driver {
     return value == null ? null : String(value);
   }
 
-  /** The affinity columns of a raw job row, cheaply — used by the claim path before mapping. */
-  private rowAffinity(row: Row): JobAffinity {
-    return {
-      preferredInstanceKey: this.strOrNull(row.preferred_instance_key),
-      preferredInstanceKeyPattern: this.strOrNull(row.preferred_instance_key_pattern),
-      fallbackInstanceKey: this.strOrNull(row.fallback_instance_key),
-      fallbackInstanceKeyPattern: this.strOrNull(row.fallback_instance_key_pattern),
-    };
-  }
-
   /** Map + dedupe rows by a key, keeping the first occurrence (no unique index exists). */
   private mapUnique<T>(rows: Row[], map: (row: Row) => T, key: (item: T) => string): T[] {
     const seen = new Set<string>();
@@ -239,10 +226,7 @@ export abstract class SqlDriver implements Driver {
       expiredAt: this.numOrNull(row.expired_at),
       lockedUntil: this.numOrNull(row.locked_until),
       lockedByInstanceId: this.strOrNull(row.locked_by_instance_id),
-      preferredInstanceKey: this.strOrNull(row.preferred_instance_key),
       preferredInstanceKeyPattern: this.strOrNull(row.preferred_instance_key_pattern),
-      fallbackInstanceKey: this.strOrNull(row.fallback_instance_key),
-      fallbackInstanceKeyPattern: this.strOrNull(row.fallback_instance_key_pattern),
       processedOnInstanceKey: this.strOrNull(row.processed_on_instance_key),
       retryAttempt: Number(row.retry_attempt),
       retryMaxAttempts: Number(row.retry_max_attempts),
@@ -330,10 +314,7 @@ export abstract class SqlDriver implements Driver {
       null, // expired_at
       null, // locked_until
       null, // locked_by_instance_id
-      job.preferredInstanceKey,
       job.preferredInstanceKeyPattern,
-      job.fallbackInstanceKey,
-      job.fallbackInstanceKeyPattern,
       null, // processed_on_instance_key (set at claim time)
       job.retryAttempt,
       job.retryMaxAttempts,
@@ -544,7 +525,6 @@ export abstract class SqlDriver implements Driver {
     now: number;
     lockedByInstanceId: string;
     instanceKey?: string | null;
-    aliveInstanceKeys?: readonly string[];
   }): Promise<JobRecord[]> {
     const { queueName, limit, lockDurationMs, now, lockedByInstanceId, instanceKey } = options;
     const lockedUntil = now + lockDurationMs;
@@ -573,28 +553,38 @@ export abstract class SqlDriver implements Driver {
         .sort((a, b) => b.priority - a.priority || a.startAfter - b.startAfter);
     }
 
-    // Multi-instance mode: portable affinity cannot be expressed in SQL (regex + liveness),
-    // so select a candidate window, decide claimability in-tool, then lock the chosen ids.
-    const alive = options.aliveInstanceKeys?.length ? options.aliveInstanceKeys : [instanceKey];
-    const candidateLimit = Math.min(Math.max(limit * 5, limit + 20), 500);
-    return this.transaction(async (session) => {
+    // Multi-instance mode: affinity (a preferred key pattern) can't be expressed in portable SQL,
+    // so page through candidates highest-priority-first, keep only those this instance's key
+    // matches, and stop as soon as the batch is full or a page comes back short (no more work).
+    // Paging — rather than one capped window — prevents starvation: when the top rows all target
+    // other instances, the jobs this instance *can* run may sit past the first page. Scanning
+    // holds no locks (candidates are PENDING/RETRY, never locked), so a shifting result set only
+    // costs a missed row this tick (the poll/NOTIFY retries); the guarded UPDATE below is the
+    // atomic claim, and a lost race just returns fewer rows.
+    const pageSize = Math.min(Math.max(limit * 5, limit + 20), 500);
+    // Bound the scan so a backlog of exclusively-non-matching jobs can't turn one tick into a
+    // full-table sweep; the next tick resumes from the top.
+    const maxScan = Math.max(pageSize * 20, 2000);
+    const idSet = new Set<string>();
+    for (let offset = 0; idSet.size < limit && offset < maxScan; offset += pageSize) {
       const sel = await this.execute(
-        `SELECT ${cols} FROM ${this.t(TableName.JOB)} WHERE queue_name = ${this.ph(0)} AND status IN ('PENDING','RETRY') ` +
+        `SELECT id, preferred_instance_key_pattern FROM ${this.t(TableName.JOB)} WHERE queue_name = ${this.ph(0)} AND status IN ('PENDING','RETRY') ` +
           `AND start_after <= ${this.ph(1)} AND (expire_at IS NULL OR expire_at > ${this.ph(2)}) ` +
-          `ORDER BY priority DESC, start_after ASC LIMIT ${this.ph(3)}${skipLocked}`,
-        [queueName, now, now, candidateLimit],
-        session,
+          `ORDER BY priority DESC, start_after ASC LIMIT ${this.ph(3)} OFFSET ${this.ph(4)}`,
+        [queueName, now, now, pageSize, offset],
       );
-      // Only the affinity columns + id are needed to decide; the full rows come back from
-      // the RETURNING below, so don't pay for mapJob() on candidates we won't claim.
-      const ids: string[] = [];
+      if (sel.rows.length === 0) break; // exhausted — nothing more to scan
       for (const row of sel.rows) {
-        if (canClaim(this.rowAffinity(row), instanceKey, alive)) {
-          ids.push(String(row.id));
-          if (ids.length >= limit) break;
+        if (matchesInstance(this.strOrNull(row.preferred_instance_key_pattern), instanceKey)) {
+          idSet.add(String(row.id));
+          if (idSet.size >= limit) break;
         }
       }
-      if (ids.length === 0) return [];
+      if (sel.rows.length < pageSize) break; // last (partial) page
+    }
+    if (idSet.size === 0) return [];
+    const ids = [...idSet];
+    return this.transaction(async (session) => {
       const setParams = [now, lockedUntil, lockedByInstanceId, instanceKey, now];
       const idPh = ids.map((_, i) => this.ph(setParams.length + i)).join(', ');
       const upd = await this.execute(
@@ -783,10 +773,7 @@ export abstract class SqlDriver implements Driver {
       singletonKey: null,
       workflowId: newWorkflowId,
       workflowStepKey: newWorkflowId ? seed.workflowStepKey : null,
-      preferredInstanceKey: seed.preferredInstanceKey,
       preferredInstanceKeyPattern: seed.preferredInstanceKeyPattern,
-      fallbackInstanceKey: seed.fallbackInstanceKey,
-      fallbackInstanceKeyPattern: seed.fallbackInstanceKeyPattern,
       createdAt: options.now,
     };
     return this.insertJob({ job: fresh });
@@ -1054,6 +1041,17 @@ export abstract class SqlDriver implements Driver {
     return res.rows[0] ? this.mapQueue(res.rows[0]) : null;
   }
 
+  async deleteQueue(options: { name: string; tx?: TransactionHandle }): Promise<boolean> {
+    // Only removes the queue row. Jobs link by queue_name (no FK/PK), so this never cascades —
+    // any leftover job rows keep their name and are unaffected; the caller guards "not in use".
+    const res = await this.runMaybeTx(
+      `DELETE FROM ${this.t(TableName.QUEUE)} WHERE name = ${this.ph(0)}`,
+      [options.name],
+      options.tx,
+    );
+    return res.rowCount > 0;
+  }
+
   // --- Instance liveness & per-instance pause ---
   async upsertInstance(options: { instanceKey: string; now: number }): Promise<InstanceRow> {
     // Update-first, then insert if absent — NOT a database UPSERT (`ON CONFLICT`/`MERGE`), which
@@ -1098,6 +1096,17 @@ export abstract class SqlDriver implements Driver {
       `UPDATE ${this.t(TableName.INSTANCE)} SET processing_paused = ${this.ph(0)}, updated_at = ${this.ph(1)} WHERE instance_key = ${this.ph(2)}`,
       [this.boolIn(options.processingPaused), options.now, options.instanceKey],
     );
+  }
+
+  async deleteInstance(options: { instanceKey: string; tx?: TransactionHandle }): Promise<boolean> {
+    // Only removes the instance (monitoring) row. Jobs record processed_on_instance_key as a plain
+    // string (no FK/PK), so removing an instance never touches or orphans any job rows.
+    const res = await this.runMaybeTx(
+      `DELETE FROM ${this.t(TableName.INSTANCE)} WHERE instance_key = ${this.ph(0)}`,
+      [options.instanceKey],
+      options.tx,
+    );
+    return res.rowCount > 0;
   }
 
   // --- Retention ---

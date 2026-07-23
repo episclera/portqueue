@@ -72,4 +72,28 @@ describe('client reads & admin (sqlite)', () => {
     const stats = await q.getQueueStats();
     expect(stats.throughputPerMinute).toBeGreaterThanOrEqual(0);
   });
+
+  it('removes only a long-inactive instance', async () => {
+    await h.driver.upsertInstance({ instanceKey: 'w1', now: h.clock.now() });
+    // Freshly seen → refused.
+    await expect(h.pq.removeInstance({ instanceKey: 'w1' })).rejects.toThrow(/still active/);
+    // Past the 30-minute window → allowed, and the row is gone.
+    h.clock.advance(31 * 60_000);
+    expect(await h.pq.removeInstance({ instanceKey: 'w1' })).toBe(true);
+    expect(await h.driver.getInstance({ instanceKey: 'w1' })).toBeNull();
+    // Unknown instance → false (nothing to remove).
+    expect(await h.pq.removeInstance({ instanceKey: 'ghost' })).toBe(false);
+  });
+
+  it('removes a queue only when it is not registered in this process', async () => {
+    // A queue row that exists in the DB but was never declared on this client (e.g. left by a
+    // process that has since stopped) can be removed.
+    await h.driver.ensureQueue({ name: 'orphan', now: h.clock.now() });
+    expect(await h.pq.removeQueue({ name: 'orphan' })).toBe(true);
+    expect(await h.driver.getQueueByName({ name: 'orphan' })).toBeNull();
+
+    // A queue still declared on this client is refused.
+    h.pq.createQueue('live');
+    await expect(h.pq.removeQueue({ name: 'live' })).rejects.toThrow(/still registered/);
+  });
 });
