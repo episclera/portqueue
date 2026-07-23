@@ -1,4 +1,0 @@
------
-- Work more on table column names, keep them focused and descriptive.
-- Work more on public api, on options parameters names, maybe use objects more and group options, for example all retry* options under retry: {...}, all retention* under retention: {...}, all schedule* related under schedule: {cron, startAfter, startEvery}, all instance* options under instance: {preferred_instance_key, fallback_instance_key}, all deduplication keys under, deduplicate: {idempotency_key, singleton_key}, and so on and on (Ai should come with more similar things and propose)
-----
