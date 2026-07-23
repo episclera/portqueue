@@ -3,7 +3,8 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import CodeBlock from '@theme/CodeBlock';
-import styles from './index.module.css';
+import styled from 'styled-components';
+import { DRIVERS } from '@site/src/constants/drivers';
 
 const FEATURES: { icon: string; title: string; body: string }[] = [
   {
@@ -14,7 +15,7 @@ const FEATURES: { icon: string; title: string; body: string }[] = [
   {
     icon: '🗄️',
     title: 'Plugs into your database',
-    body: 'Point it at the database you already run — Postgres, Oracle, PGLite, or SQLite (or a custom driver). Enqueue inside your own transaction, and if your query rolls back, the job never existed.',
+    body: 'Point it at the database you already run — Postgres, MySQL, Oracle, Citus, Yugabyte, PGLite, or SQLite (or a custom driver). Enqueue inside your own transaction, and if your query rolls back, the job never existed.',
   },
   {
     icon: '🖥️',
@@ -38,7 +39,7 @@ const FEATURES: { icon: string; title: string; body: string }[] = [
   },
 ];
 
-const DRIVERS = ['Postgres', 'Oracle', 'PGLite', 'SQLite', 'Custom driver'];
+const DRIVER_PILLS = [...DRIVERS.map((d) => d.label), 'Custom driver'];
 
 const QUICK_START = `import { PortQueue } from '@portqueue/core';
 import { PostgresDriver } from '@portqueue/core/drivers/postgres';
@@ -61,91 +62,232 @@ pq.createWorker({
   handler: async (job) => { await sendEmail(job.data); },
 });`;
 
+const Hero = styled.header`
+  position: relative;
+  overflow: hidden;
+  padding: 6rem 1rem 5rem;
+  text-align: center;
+  background:
+    radial-gradient(1200px 500px at 50% -10%, rgba(169, 216, 184, 0.3), transparent 70%),
+    radial-gradient(900px 400px at 85% 10%, rgba(143, 184, 216, 0.22), transparent 65%);
+`;
+
+const HeroBrand = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+`;
+
+const HeroLogo = styled.img`
+  width: 88px;
+  height: 88px;
+  filter: drop-shadow(0 8px 24px rgba(111, 161, 132, 0.3));
+`;
+
+const HeroTitle = styled.h1`
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0;
+  background: linear-gradient(120deg, var(--primary-dark), var(--info));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+`;
+
+const HeroTagline = styled.p`
+  font-size: clamp(1.05rem, 2.5vw, 1.4rem);
+  max-width: 42rem;
+  margin: 0 auto 1rem;
+  opacity: 0.85;
+`;
+
+const Ctas = styled.div`
+  display: flex;
+  gap: 0.9rem;
+  justify-content: center;
+  flex-wrap: wrap;
+`;
+
+const CtaButton = styled(Link)<{ $variant?: 'primary' | 'secondary' }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+  padding: 0 1.4rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+  border: 1px solid
+    ${(p) => (p.$variant === 'primary' ? 'var(--primary)' : 'var(--secondary)')};
+  background: ${(p) => (p.$variant === 'primary' ? 'var(--primary)' : 'var(--surface)')};
+  color: var(--text);
+  &:hover {
+    text-decoration: none;
+    color: var(--text);
+    transform: translateY(-1px);
+    background: ${(p) => (p.$variant === 'primary' ? 'var(--primary-dark)' : 'var(--surface)')};
+    border-color: var(--primary);
+  }
+`;
+
+const Section = styled.section<{ $tight?: boolean }>`
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: ${(p) => (p.$tight ? '1.5rem 1.25rem 4rem' : '4rem 1.25rem')};
+`;
+
+const SectionTitle = styled.h2`
+  text-align: center;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+`;
+
+const SectionLead = styled.p`
+  text-align: center;
+  opacity: 0.75;
+  max-width: 40rem;
+  margin: 0 auto 2.5rem;
+`;
+
+const FeatureGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+`;
+
+const Feature = styled.div`
+  padding: 1.6rem;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--secondary);
+  box-shadow: var(--ifm-global-shadow-md);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--ifm-global-shadow-tl);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &,
+    &:hover {
+      transform: none;
+    }
+  }
+`;
+
+const FeatureIcon = styled.span`
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+  display: block;
+`;
+
+const FeatureTitle = styled.div`
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+`;
+
+const FeatureBody = styled.p`
+  font-size: 0.95rem;
+  opacity: 0.8;
+  margin: 0;
+`;
+
+const Drivers = styled.div`
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+`;
+
+const DriverPill = styled.span`
+  padding: 0.55rem 1.2rem;
+  border-radius: 999px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--secondary);
+`;
+
+const ScaleStrip = styled.div`
+  text-align: center;
+  border-radius: 24px;
+  padding: 3rem 1.5rem;
+  background: linear-gradient(120deg, rgba(169, 216, 184, 0.28), rgba(143, 184, 216, 0.18));
+`;
+
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
   return (
     <Layout title="PortQueue" description={siteConfig.tagline}>
-      <header className={styles.hero}>
-        <img src="/portqueue/img/logo.svg" alt="PortQueue logo" className={styles.heroLogo} />
-        <h1 className={styles.heroTitle}>PortQueue</h1>
-        <p className={styles.heroTagline}>{siteConfig.tagline}</p>
-        <div className={styles.ctas}>
-          <Link
-            className="button button--primary button--lg"
-            to="/docs/getting-started/installation"
-          >
+      <Hero>
+        <HeroBrand>
+          <HeroLogo src="/portqueue/img/logo.svg" alt="PortQueue logo" />
+          <HeroTitle>PortQueue</HeroTitle>
+        </HeroBrand>
+        <HeroTagline>{siteConfig.tagline}</HeroTagline>
+        <Ctas>
+          <CtaButton $variant="primary" to="/docs/getting-started/installation">
             Get Started
-          </Link>
-          <Link
-            className="button button--secondary button--lg"
+          </CtaButton>
+          <CtaButton
+            $variant="secondary"
             to="https://github.com/episclera/portqueue"
             target="_blank"
             rel="noopener noreferrer"
           >
             GitHub
-          </Link>
-        </div>
-        <p className={styles.license}>
-          Free and open source. Commercial use permitted. No license fee, no obligations.
-        </p>
-      </header>
+          </CtaButton>
+        </Ctas>
+      </Hero>
 
       <main>
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Everything a real workload needs</h2>
-          <p className={styles.sectionLead}>
-            The best ergonomics of pg-boss and BullMQ with the operational maturity of Celery — on
-            the database you already run.
-          </p>
-          <div className={styles.featureGrid}>
+        <Section $tight>
+          <FeatureGrid>
             {FEATURES.map((f) => (
-              <div key={f.title} className={styles.feature}>
-                <span className={styles.featureIcon} aria-hidden>
-                  {f.icon}
-                </span>
-                <div className={styles.featureTitle}>{f.title}</div>
-                <p className={styles.featureBody}>{f.body}</p>
-              </div>
+              <Feature key={f.title}>
+                <FeatureIcon aria-hidden>{f.icon}</FeatureIcon>
+                <FeatureTitle>{f.title}</FeatureTitle>
+                <FeatureBody>{f.body}</FeatureBody>
+              </Feature>
             ))}
-          </div>
-        </section>
+          </FeatureGrid>
+        </Section>
 
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>At a glance</h2>
-          <p className={styles.sectionLead}>
-            Add a job, process it on a worker. Same code on any driver.
-          </p>
+        <Section>
+          <SectionTitle>At a glance</SectionTitle>
+          <SectionLead>Add a job, process it on a worker. Same code on any driver.</SectionLead>
           <CodeBlock language="ts" title="app.ts">
             {QUICK_START}
           </CodeBlock>
-        </section>
+        </Section>
 
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Runs on your database</h2>
-          <p className={styles.sectionLead}>
-            Swap the driver import — your app code stays identical.
-          </p>
-          <div className={styles.drivers}>
-            {DRIVERS.map((d) => (
-              <span key={d} className={styles.driverPill}>
-                {d}
-              </span>
+        <Section>
+          <SectionTitle>Runs on your database</SectionTitle>
+          <SectionLead>Swap the driver import — your app code stays identical.</SectionLead>
+          <Drivers>
+            {DRIVER_PILLS.map((d) => (
+              <DriverPill key={d}>{d}</DriverPill>
             ))}
-          </div>
-        </section>
+          </Drivers>
+        </Section>
 
-        <section className={styles.section}>
-          <div className={styles.scaleStrip}>
-            <h2 className={styles.sectionTitle}>Built to scale horizontally</h2>
-            <p className={styles.sectionLead}>
+        <Section>
+          <ScaleStrip>
+            <SectionTitle>Built to scale horizontally</SectionTitle>
+            <SectionLead>
               Per-queue claim loops, SKIP LOCKED, and visibility timeouts let N instances cooperate
               on one queue with no leader election and no cross-queue blocking.
-            </p>
-            <Link className="button button--primary button--lg" to="/docs/scalability">
+            </SectionLead>
+            <CtaButton $variant="primary" to="/docs/scalability">
               How it scales
-            </Link>
-          </div>
-        </section>
+            </CtaButton>
+          </ScaleStrip>
+        </Section>
       </main>
     </Layout>
   );

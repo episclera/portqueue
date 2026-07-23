@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Segmented } from 'antd';
+import { Segmented } from './Segmented.js';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -13,10 +13,10 @@ const STORAGE_KEY = 'portqueue-theme';
 /** Light/dark/system switcher. */
 export function ThemeSwitcher({ value, onChange }: ThemeSwitcherProps): React.ReactElement {
   return (
-    <Segmented
-      size="small"
+    <Segmented<ThemeMode>
+      size="sm"
       value={value}
-      onChange={(v) => onChange(v as ThemeMode)}
+      onChange={onChange}
       options={[
         { label: 'Light', value: 'light' },
         { label: 'Dark', value: 'dark' },

@@ -12,7 +12,7 @@ Each step is a separate `job` row sharing a `workflowId`. When `VALIDATE` finish
 **spawns** the `CHARGE` job. If the process dies while `CHARGE` runs, that job's lock
 lapses and it is **reclaimed and re-run on any instance** — no re-validate, no lost
 progress (completed steps are already their own `COMPLETED` rows). This is why each step
-must be [idempotent](../core-concepts/at-least-once.md).
+must be [idempotent](../guides/consuming-jobs.md#at-least-once--idempotency).
 
 ## Per-step retries & backoff
 

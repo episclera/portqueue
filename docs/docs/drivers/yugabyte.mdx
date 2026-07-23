@@ -1,0 +1,55 @@
+---
+id: yugabyte
+title: Yugabyte driver
+sidebar_label: Yugabyte
+---
+
+import PackageManagerTabs from '@site/src/components/PackageManagerTabs';
+
+# Yugabyte driver
+
+YugabyteDB's YSQL API — distributed Postgres over the `pg` wire protocol, for
+geo-distributed and horizontally scaled deployments. It has `SKIP LOCKED` claiming,
+`RETURNING`, and advisory locks, but YSQL has **no `LISTEN/NOTIFY`**, so workers wake via
+polling.
+
+## Install
+
+<PackageManagerTabs pkg="@portqueue/core pg" />
+
+## Connect
+
+The same `pg` connection options as the Postgres driver, pointed at a YSQL endpoint:
+
+```ts
+import { PortQueue } from '@portqueue/core';
+import { YugabyteDriver } from '@portqueue/core/drivers/yugabyte';
+
+const pq = new PortQueue({
+  driver: new YugabyteDriver({
+    connectionString: process.env.DATABASE_URL, // a YSQL endpoint
+    // or share an existing pg.Pool: { pool }
+    // or pass raw pg config: { config: { host, user, password, database } }
+  }),
+});
+await pq.init();
+```
+
+## Capabilities & notes
+
+- **`SKIP LOCKED`** — yes. Contention-free claiming across many instances.
+- **`RETURNING`** — yes. Single-round-trip claims and inserts.
+- **Advisory locks** — yes.
+- **`LISTEN/NOTIFY`** — no. YSQL does not implement it, so core relies on interval
+  polling; tune `pollIntervalMs` to your latency budget.
+- **Distributed by default** — the schema stays index-free and constraint-free;
+  name-uniqueness and idempotency/singleton dedup are enforced in code, identically to
+  every other engine.
+- **Transactional enqueue** — use `fromPg(client)` or your ORM adapter, exactly as with
+  Postgres. See [Transactions](../guides/transactions.mdx).
+
+:::tip Optimization
+Because wake-ups are poll-driven, set `pollIntervalMs` to balance latency against load.
+Size the pool for the sum of worker concurrencies and turn on
+[retention](../guides/retention.md) to keep the `job` table lean.
+:::

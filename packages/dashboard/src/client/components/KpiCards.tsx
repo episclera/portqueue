@@ -1,10 +1,9 @@
 /** KPI stat cards row for the Overview / Queue-detail pages. */
 import React from 'react';
-import { Card, Col, Row, Skeleton, Statistic } from 'antd';
+import styled from 'styled-components';
+import { Card, Col, Row, SkeletonText, Statistic, tokens } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums.js';
-import { tokens } from '@portqueue/ui';
 import type { StatsDto } from '../../shared/dto.js';
-import { useStyles } from './styles.js';
 
 export interface KpiCardsProps {
   stats: StatsDto | undefined;
@@ -18,8 +17,12 @@ const KPI_STATUSES: JobStatus[] = [
   JobStatus.COMPLETED,
 ];
 
+/** Colours a Statistic's value with an arbitrary status colour (tone can't carry a hex). */
+const ColoredStat = styled.div<{ $color?: string }>`
+  ${(p) => (p.$color ? `& > div > div:last-child { color: ${p.$color}; }` : '')}
+`;
+
 export function KpiCards({ stats, loading }: KpiCardsProps): React.ReactElement {
-  const { styles } = useStyles();
   const counts = stats?.counts ?? {};
 
   const items: { label: string; value: React.ReactNode; color?: string }[] = [
@@ -44,18 +47,16 @@ export function KpiCards({ stats, loading }: KpiCardsProps): React.ReactElement 
   ];
 
   return (
-    <Row gutter={[16, 16]}>
+    <Row gutter={16}>
       {items.map((item) => (
-        <Col key={item.label} xs={12} sm={8} md={6} xl={3} flex="auto">
-          <Card className={styles.card} styles={{ body: { padding: 18 } }}>
+        <Col key={item.label} span={3} flex="auto">
+          <Card>
             {loading && !stats ? (
-              <Skeleton active paragraph={false} title={{ width: '60%' }} />
+              <SkeletonText rows={2} width="60%" />
             ) : (
-              <Statistic
-                title={<span className={styles.kpiLabel}>{item.label}</span>}
-                value={item.value as string | number}
-                valueStyle={{ color: item.color, fontWeight: 700, fontSize: 26 }}
-              />
+              <ColoredStat $color={item.color}>
+                <Statistic label={item.label} value={item.value} />
+              </ColoredStat>
             )}
           </Card>
         </Col>

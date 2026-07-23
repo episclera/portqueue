@@ -4,8 +4,8 @@
  * transitions. Renders for every job (single-function or multi-step).
  */
 import React from 'react';
-import { Tag, Timeline, Typography } from 'antd';
-import { tokens } from '@portqueue/ui';
+import { Tag, Text, Timeline, tokens } from '@portqueue/ui';
+import type { TimelineItem } from '@portqueue/ui';
 import type { JobDto } from '../../shared/dto.js';
 import { duration, formatDate } from './format.js';
 
@@ -32,19 +32,20 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
     (a, b) => new Date(a.at as string).getTime() - new Date(b.at as string).getTime(),
   );
 
-  const items = milestones.map((m, i) => {
+  const items: TimelineItem[] = milestones.map((m, i) => {
     const prev = i > 0 ? milestones[i - 1] : undefined;
     return {
+      key: `${m.label}-${m.at as string}`,
       color: m.color,
+      label: formatDate(m.at),
       children: (
         <div>
-          <Typography.Text strong>{m.label}</Typography.Text>{' '}
-          <Typography.Text type="secondary">{formatDate(m.at)}</Typography.Text>
+          <Text $strong>{m.label}</Text>
           {prev && (
             <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Text $tone="muted" $small>
                 +{duration(prev.at, m.at)} since {prev.label.toLowerCase()}
-              </Typography.Text>
+              </Text>
             </div>
           )}
         </div>
@@ -55,16 +56,12 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
   return (
     <div>
       <div style={{ marginBottom: 12 }}>
-        <Tag color="processing">Now: {job.status}</Tag>
-        <Typography.Text type="secondary">
+        <Tag tone="info">Now: {job.status}</Tag>{' '}
+        <Text $tone="muted">
           Attempt {job.retryAttempt} / {job.retryMaxAttempts}
-        </Typography.Text>
+        </Text>
       </div>
-      {items.length ? (
-        <Timeline items={items} />
-      ) : (
-        <Typography.Text type="secondary">No lifecycle events yet.</Typography.Text>
-      )}
+      {items.length ? <Timeline items={items} /> : <Text $tone="muted">No lifecycle events yet.</Text>}
     </div>
   );
 }

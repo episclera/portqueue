@@ -9,14 +9,31 @@ sidebar_position: 1
 
 **PortQueue is a database-backed job queue for Node.js.** It treats your relational
 database as the single source of truth and works across multiple engines through a
-driver abstraction — with first-class drivers for **Postgres, Oracle, PGLite, and
-SQLite**, plus a custom-driver interface for anything else.
+driver abstraction — with first-class drivers for **Postgres, MySQL, Oracle, Citus,
+Yugabyte, PGLite, and SQLite**, plus a custom-driver interface for anything else.
 
 It is for teams who already run a relational database and don't want to add Redis (or
 any other broker) just to get a reliable queue. It takes the best ergonomics from
 [pg-boss](https://github.com/timgit/pg-boss) and [BullMQ](https://docs.bullmq.io) and
 the operational maturity of [Celery](https://docs.celeryq.dev), and improves on all
 three.
+
+## The model
+
+PortQueue has exactly three objects, so "produce here, process there" is a first-class
+deployment shape:
+
+- **`PortQueue`** — the client. One per database; owns the connection, migrations, and
+  shared services. Construction is DI-only (no I/O); `init()` connects and migrates.
+- **`Queue`** — the **producer** handle for one named queue: add, schedule, inspect, and
+  control jobs. See [Producing jobs](./guides/producing-jobs.md).
+- **`Worker`** — the **consumer** for one queue: claims jobs and runs handlers. Created
+  separately, so producing and consuming can live on different servers. See
+  [Consuming jobs](./guides/consuming-jobs.md).
+
+The only difference between a simple queue and a **workflow** queue is the consumer: a
+simple worker has one `handler`; a [workflow](./workflows/what-is-a-workflow.md) worker
+has many `steps`. Producing is the same `addJob({ data })` in both.
 
 ## License {#license}
 

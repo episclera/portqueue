@@ -1,14 +1,22 @@
 /**
  * Reusable jobs table with cursor paging, status filter, row selection + bulk actions.
- * Responsive: on narrow viewports the table horizontally scrolls with a sticky id column.
  */
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Popconfirm, Select, Space, Table, Tooltip, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import styled from 'styled-components';
+import {
+  Button,
+  Inline,
+  Popconfirm,
+  SkeletonText,
+  Stack,
+  StatusTag,
+  Text,
+  Table,
+  Tooltip,
+} from '@portqueue/ui';
+import type { TableColumn } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums.js';
-import { StatusTag } from '@portqueue/ui';
-import type { ColumnsType } from 'antd/es/table';
 import type { JobDto } from '../../shared/dto.js';
 import { config } from '../queries/api.js';
 import { relativeTime, truncate } from './format.js';
@@ -18,7 +26,6 @@ export interface JobsTableProps {
   queue: string;
   jobs: JobDto[];
   loading: boolean;
-  refetching: boolean;
   statuses: JobStatus[];
   onStatusesChange: (s: JobStatus[]) => void;
   hasMore: boolean;
@@ -28,47 +35,70 @@ export interface JobsTableProps {
   onRefresh: () => void;
 }
 
+const MonoLink = styled(Link)`
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+`;
+
+const TableScroll = styled.div`
+  width: 100%;
+  overflow-x: auto;
+`;
+
 export function JobsTable(props: JobsTableProps): React.ReactElement {
   const { run } = useAction();
-  const [selected, setSelected] = useState<React.Key[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const readOnly = config.readOnly;
 
-  const columns: ColumnsType<JobDto> = [
+  const toggleRow = (id: string): void => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const columns: TableColumn<JobDto>[] = [
+    ...(readOnly
+      ? []
+      : [
+          {
+            title: '',
+            key: 'select',
+            width: 40,
+            render: (r: JobDto) => (
+              <input
+                type="checkbox"
+                checked={selected.includes(r.id)}
+                onChange={() => toggleRow(r.id)}
+                aria-label={`Select job ${r.id}`}
+              />
+            ),
+          } satisfies TableColumn<JobDto>,
+        ]),
     {
       title: 'Job',
       dataIndex: 'id',
       key: 'id',
-      fixed: 'left',
-      render: (id: string) => (
-        <Link to={`/jobs/${encodeURIComponent(id)}`}>
-          <Typography.Text style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
-            {truncate(id)}
-          </Typography.Text>
-        </Link>
+      render: (r) => (
+        <MonoLink to={`/jobs/${encodeURIComponent(r.id)}`}>{truncate(r.id)}</MonoLink>
       ),
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (s: string) => <StatusTag status={s} />,
+      render: (r) => <StatusTag status={r.status} />,
     },
     {
       title: 'Attempt',
-      dataIndex: 'retryAttempt',
       key: 'attempt',
-      responsive: ['md'],
-      render: (a: number, r) => `${a}/${r.retryMaxAttempts}`,
+      render: (r) => `${r.retryAttempt}/${r.retryMaxAttempts}`,
     },
-    { title: 'Priority', dataIndex: 'priority', key: 'priority', responsive: ['lg'] },
+    { title: 'Priority', dataIndex: 'priority', key: 'priority' },
     {
       title: 'Instance',
       key: 'instance',
-      responsive: ['lg'],
-      render: (_: unknown, r) =>
+      render: (r) =>
         r.processedOnInstanceKey ? (
           <Tooltip title={r.processedOnInstanceKey}>
-            {truncate(r.processedOnInstanceKey, 6, 4)}
+            <span>{truncate(r.processedOnInstanceKey, 6, 4)}</span>
           </Tooltip>
         ) : (
           '—'
@@ -78,13 +108,12 @@ export function JobsTable(props: JobsTableProps): React.ReactElement {
       title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      responsive: ['sm'],
-      render: (v: string) => relativeTime(v),
+      render: (r) => relativeTime(r.createdAt),
     },
   ];
 
   const doBulk = async (kind: 'retry' | 'remove' | 'cancel'): Promise<void> => {
-    const jobIds = selected.map(String);
+    const jobIds = [...selected];
     if (kind === 'remove') {
       await run({ kind: 'remove', queue: props.queue, jobIds }, `Removed ${jobIds.length} job(s)`);
     } else {
@@ -94,64 +123,71 @@ export function JobsTable(props: JobsTableProps): React.ReactElement {
     setSelected([]);
   };
 
+  const toggleStatus = (s: JobStatus): void => {
+    props.onStatusesChange(
+      props.statuses.includes(s)
+        ? props.statuses.filter((x) => x !== s)
+        : [...props.statuses, s],
+    );
+  };
+
   return (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
-        <Space wrap>
-          <Select<JobStatus[]>
-            mode="multiple"
-            allowClear
-            placeholder="Filter by status"
-            style={{ minWidth: 220 }}
-            value={props.statuses}
-            onChange={props.onStatusesChange}
-            options={Object.values(JobStatus).map((s) => ({ label: s, value: s }))}
-          />
-          <Button icon={<ReloadOutlined spin={props.refetching} />} onClick={props.onRefresh}>
+    <Stack gap={3}>
+      <Inline wrap justify="space-between" align="center">
+        <Inline wrap gap={2} align="center">
+          {Object.values(JobStatus).map((s) => (
+            <Button
+              key={s}
+              size="sm"
+              variant={props.statuses.includes(s) ? 'primary' : 'default'}
+              onClick={() => toggleStatus(s)}
+            >
+              {s}
+            </Button>
+          ))}
+          <Button icon="🔄" onClick={props.onRefresh}>
             Refresh
           </Button>
-        </Space>
+        </Inline>
         {!readOnly && selected.length > 0 && (
-          <Space wrap>
-            <Typography.Text type="secondary">{selected.length} selected</Typography.Text>
-            <Button size="small" onClick={() => void doBulk('retry')}>
+          <Inline wrap gap={2} align="center">
+            <Text $tone="muted">{selected.length} selected</Text>
+            <Button size="sm" onClick={() => void doBulk('retry')}>
               Retry
             </Button>
-            <Button size="small" onClick={() => void doBulk('cancel')}>
+            <Button size="sm" onClick={() => void doBulk('cancel')}>
               Cancel
             </Button>
-            <Popconfirm title="Remove selected jobs?" onConfirm={() => void doBulk('remove')}>
-              <Button size="small" danger>
+            <Popconfirm
+              title="Remove selected jobs?"
+              okText="Remove"
+              okDanger
+              onConfirm={() => void doBulk('remove')}
+            >
+              <Button size="sm" variant="danger">
                 Remove
               </Button>
             </Popconfirm>
-          </Space>
+          </Inline>
         )}
-      </Space>
+      </Inline>
 
-      <Table<JobDto>
-        rowKey="id"
-        size="middle"
-        columns={columns}
-        dataSource={props.jobs}
-        loading={props.loading}
-        pagination={false}
-        scroll={{ x: 'max-content' }}
-        rowSelection={
-          readOnly
-            ? undefined
-            : { selectedRowKeys: selected, onChange: setSelected, preserveSelectedRowKeys: true }
-        }
-      />
+      {props.loading ? (
+        <SkeletonText rows={6} />
+      ) : (
+        <TableScroll>
+          <Table<JobDto> rowKey={(r) => r.id} size="md" columns={columns} data={props.jobs} />
+        </TableScroll>
+      )}
 
-      <Space style={{ justifyContent: 'flex-end', width: '100%' }}>
+      <Inline justify="flex-end" gap={2}>
         <Button disabled={!props.canPrev} onClick={props.onPrev}>
           Previous
         </Button>
         <Button disabled={!props.hasMore} onClick={props.onNext}>
           Next
         </Button>
-      </Space>
-    </Space>
+      </Inline>
+    </Stack>
   );
 }

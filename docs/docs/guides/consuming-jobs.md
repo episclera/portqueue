@@ -21,6 +21,66 @@ pq.createWorker({
 });
 ```
 
+## The Job context
+
+The object passed to a handler is a read-only view of the job row plus a few control
+methods:
+
+```ts
+pq.createWorker({
+  queue: 'emails',
+  handler: async (job) => {
+    job.id;              // string
+    job.queue;           // string
+    job.data;            // TData — the payload, typed to the queue
+    job.retryAttempt;    // number
+    job.metadata;        // opaque JSON (traceId, tenantId, …)
+    job.signal;          // AbortSignal — fires on graceful-shutdown timeout
+    await job.extendLock({ byMs: 30_000 }); // override the automatic heartbeat
+  },
+});
+```
+
+**Returning** resolves the job (its return value is stored); **throwing** triggers
+retry/fail per policy — a throw never crashes the worker loop. Long-running handlers
+should observe `job.signal` so they can bail when a graceful shutdown times out (v1 runs
+handlers on the main event loop, so a job can't be force-killed).
+
+## Job states
+
+Every job is a row in the `job` table that moves through the `JobStatus` enum:
+
+| Status | Meaning |
+|---|---|
+| `PENDING` | Waiting to be claimed (may be delayed via `startAfter`). |
+| `ACTIVE` | Claimed by an instance and running in a handler. |
+| `COMPLETED` | Handler returned successfully; `return_value` stored. |
+| `FAILED` | Terminal after retries are exhausted (or a non-retryable error). |
+| `RETRY` | Failed but scheduled for another attempt (backoff applied). |
+| `STALLED` | Lock expired without completion — reclaimable by another instance. |
+| `CANCELLED` | Cancelled before/while running. |
+| `EXPIRED` | Not started before its `expireIn` window. |
+
+## Claiming & visibility timeout
+
+Jobs are claimed with row-level locking (`SKIP LOCKED` where the engine supports it) so N
+instances never double-process. A claim is invisible to other instances for a **visibility
+timeout** (`lockDurationMs`, default ~30s), refreshed by an automatic heartbeat. If a
+process dies mid-job the lock lapses, the job becomes `STALLED`, and another instance
+reclaims it. This is the *acks-late* model: a job isn't "done" until its handler confirms.
+
+## At-least-once & idempotency
+
+PortQueue guarantees **at-least-once** delivery — a job runs at least once, and under
+crash/retry conditions may run more than once (the same trade-off as Celery's *acks-late*
+model: never *lose* work, at the cost of possibly *repeating* it).
+
+**The rule:** assume any handler can run twice. Make handlers **idempotent** — a second
+run with the same input produces the same result and no duplicate side effects. On the
+producer side, `idempotencyKey` prevents inserting a duplicate job and `singletonKey`
+keeps at most one active job per key — see
+[Producing jobs](./producing-jobs.md#idempotency--singleton).
+
 ## Concurrency & parallelism
 
 `concurrency` sets how many handlers run **in parallel** within one worker. Because each

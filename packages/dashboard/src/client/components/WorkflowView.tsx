@@ -5,9 +5,9 @@
  * failure message on failure. Repeats/retries show as repeated rows; a header shows progress.
  */
 import React from 'react';
-import { Collapse, Space, Timeline, Typography } from 'antd';
+import { Collapse, Inline, Paragraph, Stack, StatusTag, Text, Timeline, tokens } from '@portqueue/ui';
+import type { TimelineItem } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums.js';
-import { StatusTag, tokens } from '@portqueue/ui';
 import type { JobDto, WorkflowDto } from '../../shared/dto.js';
 import { duration, formatDate } from './format.js';
 
@@ -23,12 +23,10 @@ function Json({ label, value }: { label: string; value: unknown }): React.ReactE
   if (value === undefined || value === null) return null;
   return (
     <Collapse
-      ghost
-      size="small"
       items={[
         {
           key: label,
-          label,
+          header: label,
           children: (
             <pre
               style={{ margin: 0, fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
@@ -47,37 +45,38 @@ export function WorkflowView({ workflow }: { workflow: WorkflowDto }): React.Rea
   const completed = steps.filter((s) => s.status === JobStatus.COMPLETED).length;
   const distinctKeys = new Set(steps.map((s) => s.workflowStepKey ?? s.id));
 
-  const items = steps.map((step) => ({
+  const items: TimelineItem[] = steps.map((step, i) => ({
+    key: `${step.id}-${i}`,
     color: stepColor(step),
     children: (
-      <Space direction="vertical" size={2} style={{ width: '100%' }}>
-        <Space wrap>
-          <Typography.Text strong>{step.workflowStepKey ?? '(step)'}</Typography.Text>
+      <Stack gap={1} style={{ width: '100%' }}>
+        <Inline gap={2} wrap align="center">
+          <Text $strong>{step.workflowStepKey ?? '(step)'}</Text>
           <StatusTag status={step.status} />
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Text $tone="muted" $small>
             {duration(step.startedAt, stepEnd(step))}
-          </Typography.Text>
-        </Space>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          </Text>
+        </Inline>
+        <Text $tone="muted" $small>
           {formatDate(step.startedAt)} → {formatDate(stepEnd(step))}
-        </Typography.Text>
+        </Text>
         {step.failureMessage && (
-          <Typography.Text type="danger" style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>
+          <Text $tone="danger" $small style={{ whiteSpace: 'pre-wrap' }}>
             {step.failureMessage}
-          </Typography.Text>
+          </Text>
         )}
         <Json label="Input (data)" value={step.data} />
         <Json label="Output (return value)" value={step.returnValue} />
-      </Space>
+      </Stack>
     ),
   }));
 
   return (
     <div>
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+      <Paragraph $tone="muted" style={{ marginBottom: 12 }}>
         {completed} / {distinctKeys.size} distinct steps completed · {steps.length} total job rows
         (repeats &amp; retries shown)
-      </Typography.Paragraph>
+      </Paragraph>
       <Timeline items={items} />
     </div>
   );

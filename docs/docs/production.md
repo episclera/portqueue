@@ -33,7 +33,7 @@ traffic. Keep handler transactions short so one queue can't starve the shared po
 
 ## Reliability & idempotency
 
-Assume [at-least-once](./core-concepts/at-least-once.md): make handlers idempotent, use
+Assume [at-least-once](./guides/consuming-jobs.md#at-least-once--idempotency): make handlers idempotent, use
 `idempotencyKey` / `singletonKey`, and design workflow steps as idempotent units.
 
 ## Retries & backoff

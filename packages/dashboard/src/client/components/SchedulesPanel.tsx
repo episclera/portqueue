@@ -1,8 +1,8 @@
 /** Reusable schedules table with next-run, timezone, and remove (unschedule) action. */
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Popconfirm, Table, Tag, Typography } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Button, Code, Popconfirm, SkeletonText, Tag, Text, Table } from '@portqueue/ui';
+import type { TableColumn } from '@portqueue/ui';
 import type { ScheduleDto } from '../../shared/dto.js';
 import { config } from '../queries/api.js';
 import { useAction } from '../queries/use-action.js';
@@ -23,50 +23,49 @@ export function SchedulesPanel({
 }: SchedulesPanelProps): React.ReactElement {
   const { run } = useAction();
 
-  const columns: ColumnsType<ScheduleDto> = [
+  const columns: TableColumn<ScheduleDto>[] = [
     ...(showQueueColumn
       ? [
           {
             title: 'Queue',
             dataIndex: 'queue',
             key: 'queue',
-            fixed: 'left',
-            render: (q: string) => <Link to={`/queues/${encodeURIComponent(q)}`}>{q}</Link>,
-          } as ColumnsType<ScheduleDto>[number],
+            render: (r: ScheduleDto) => (
+              <Link to={`/queues/${encodeURIComponent(r.queue)}`}>{r.queue}</Link>
+            ),
+          } satisfies TableColumn<ScheduleDto>,
         ]
       : []),
     {
       title: 'Cadence',
       key: 'cadence',
-      render: (_: unknown, r) =>
-        r.cron ? <code>{r.cron}</code> : r.every ? `every ${Math.round(r.every / 1000)}s` : '—',
+      render: (r) =>
+        r.cron ? <Code>{r.cron}</Code> : r.every ? `every ${Math.round(r.every / 1000)}s` : '—',
     },
     {
       title: 'Timezone',
       dataIndex: 'timezone',
       key: 'timezone',
-      responsive: ['md'],
-      render: (v?: string | null) => v ?? 'UTC',
+      render: (r) => r.timezone ?? 'UTC',
     },
     {
       title: 'Next run',
       dataIndex: 'nextRunAt',
       key: 'nextRunAt',
-      render: (v?: string | null) => (v ? relativeTime(v) : '—'),
+      render: (r) => (r.nextRunAt ? relativeTime(r.nextRunAt) : '—'),
     },
     {
       title: 'Last run',
       dataIndex: 'lastRunAt',
       key: 'lastRunAt',
-      responsive: ['lg'],
-      render: (v?: string | null) => formatDate(v),
+      render: (r) => formatDate(r.lastRunAt),
     },
     {
       title: 'State',
       dataIndex: 'enabled',
       key: 'enabled',
-      render: (enabled: boolean) => (
-        <Tag color={enabled ? 'green' : 'default'}>{enabled ? 'Enabled' : 'Disabled'}</Tag>
+      render: (r) => (
+        <Tag tone={r.enabled ? 'success' : 'neutral'}>{r.enabled ? 'Enabled' : 'Disabled'}</Tag>
       ),
     },
     ...(config.readOnly
@@ -75,40 +74,45 @@ export function SchedulesPanel({
           {
             title: '',
             key: 'actions',
-            fixed: 'right',
-            render: (_: unknown, r: ScheduleDto) => (
+            align: 'right',
+            render: (r: ScheduleDto) => (
               <Popconfirm
                 title="Remove this schedule?"
-                onConfirm={async () => {
-                  await run(
-                    { kind: 'removeSchedule', queue: r.queue, scheduleId: r.scheduleId },
-                    'Schedule removed',
-                  );
-                  onChanged();
+                okText="Remove"
+                okDanger
+                onConfirm={() => {
+                  void (async (): Promise<void> => {
+                    await run(
+                      { kind: 'removeSchedule', queue: r.queue, scheduleId: r.scheduleId },
+                      'Schedule removed',
+                    );
+                    onChanged();
+                  })();
                 }}
               >
-                <Button size="small" danger>
+                <Button size="sm" variant="danger">
                   Remove
                 </Button>
               </Popconfirm>
             ),
-          } as ColumnsType<ScheduleDto>[number],
+          } satisfies TableColumn<ScheduleDto>,
         ]),
   ];
 
-  if (!loading && rows.length === 0) {
-    return <Typography.Text type="secondary">No recurring schedules.</Typography.Text>;
+  if (loading) {
+    return <SkeletonText rows={4} />;
+  }
+
+  if (rows.length === 0) {
+    return <Text $tone="muted">No recurring schedules.</Text>;
   }
 
   return (
     <Table<ScheduleDto>
-      rowKey="scheduleId"
-      size="middle"
-      loading={loading}
-      pagination={false}
-      scroll={{ x: 'max-content' }}
+      rowKey={(r) => r.scheduleId}
+      size="md"
       columns={columns}
-      dataSource={rows}
+      data={rows}
     />
   );
 }

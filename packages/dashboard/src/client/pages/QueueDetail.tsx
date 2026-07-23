@@ -4,8 +4,18 @@
  */
 import React, { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Button, Card, Dropdown, Popconfirm, Select, Space, Tag, Typography } from 'antd';
-import { DownOutlined, PauseOutlined, PlayCircleOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import {
+  Button,
+  Card,
+  Dropdown,
+  Inline,
+  PageHeader,
+  Popconfirm,
+  Select,
+  Stack,
+  Tag,
+} from '@portqueue/ui';
+import type { DropdownItem } from '@portqueue/ui';
 import { JobStatus, PauseMode } from '../queries/enums.js';
 import type { JobPageDto, QueueDto, StatsDto } from '../../shared/dto.js';
 import { api, config } from '../queries/api.js';
@@ -14,13 +24,11 @@ import { useAction } from '../queries/use-action.js';
 import { KpiCards } from '../components/KpiCards.js';
 import { JobsTable } from '../components/JobsTable.js';
 import { AddJobForm } from '../components/AddJobForm.js';
-import { useStyles } from '../components/styles.js';
 import { SchedulesPanel } from '../components/SchedulesPanel.js';
 
 export function QueueDetailPage(): React.ReactElement {
   const { name } = useParams<{ name: string }>();
   const queue = decodeURIComponent(name);
-  const { styles } = useStyles();
   const { run } = useAction();
 
   const stats = usePoll<StatsDto>(() => api.getStats(queue), [queue]);
@@ -45,128 +53,146 @@ export function QueueDetailPage(): React.ReactElement {
 
   const [addOpen, setAddOpen] = useState(false);
   const [purgeStatuses, setPurgeStatuses] = useState<JobStatus[]>([JobStatus.COMPLETED]);
+  const [purgePick, setPurgePick] = useState<JobStatus | undefined>(undefined);
 
-  const pauseMenu = {
-    items: [
-      { key: PauseMode.PROCESSING, label: 'Pause processing (still accepts jobs)' },
-      { key: PauseMode.ALL, label: 'Pause all (also refuse new jobs)' },
-    ],
-    onClick: ({ key }: { key: string }) =>
-      void run({ kind: 'pause', queue, mode: key as PauseMode }, 'Paused'),
-  };
+  const pauseItems: DropdownItem[] = [
+    {
+      key: PauseMode.PROCESSING,
+      label: 'Pause processing (still accepts jobs)',
+      onClick: () => void run({ kind: 'pause', queue, mode: PauseMode.PROCESSING }, 'Paused'),
+    },
+    {
+      key: PauseMode.ALL,
+      label: 'Pause all (also refuse new jobs)',
+      onClick: () => void run({ kind: 'pause', queue, mode: PauseMode.ALL }, 'Paused'),
+    },
+  ];
+
+  const titleTags = (
+    <Inline gap={2} align="center">
+      {info && <Tag tone={info.inUse ? 'success' : 'neutral'}>{info.inUse ? 'in use' : 'unused'}</Tag>}
+      {info?.processingPaused && (
+        <Tag tone="warning">{info.acceptingPaused ? 'Paused (all)' : 'Paused'}</Tag>
+      )}
+    </Inline>
+  );
+
+  const actions = !config.readOnly ? (
+    <Inline gap={2} align="center" wrap>
+      {info?.processingPaused ? (
+        <Button icon="▶️" onClick={() => void run({ kind: 'resume', queue }, 'Resumed')}>
+          Resume
+        </Button>
+      ) : (
+        <Dropdown items={pauseItems}>
+          <Button icon="⏸️">
+            Pause <span aria-hidden>▾</span>
+          </Button>
+        </Dropdown>
+      )}
+      <Button variant="primary" icon="➕" onClick={() => setAddOpen(true)}>
+        Add job
+      </Button>
+      {info && !info.inUse && (
+        <Popconfirm
+          title="Remove this queue from the database?"
+          description="Only allowed because no running process declares it. Job rows are untouched."
+          okDanger
+          onConfirm={() => void run({ kind: 'removeQueue', queue }, 'Queue removed')}
+        >
+          <Button variant="danger" icon="🗑️">
+            Remove queue
+          </Button>
+        </Popconfirm>
+      )}
+    </Inline>
+  ) : undefined;
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Space style={{ justifyContent: 'space-between', width: '100%' }} wrap>
-        <Space align="center">
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            {queue}
-          </Typography.Title>
-          {info && <Tag color={info.inUse ? 'green' : 'default'}>{info.inUse ? 'in use' : 'unused'}</Tag>}
-          {info?.processingPaused && (
-            <Tag color="warning">{info.acceptingPaused ? 'Paused (all)' : 'Paused'}</Tag>
-          )}
-        </Space>
-        {!config.readOnly && (
-          <Space wrap>
-            {info?.processingPaused ? (
-              <Button
-                icon={<PlayCircleOutlined />}
-                onClick={() => void run({ kind: 'resume', queue }, 'Resumed')}
-              >
-                Resume
-              </Button>
-            ) : (
-              <Dropdown menu={pauseMenu}>
-                <Button icon={<PauseOutlined />}>
-                  Pause <DownOutlined />
-                </Button>
-              </Dropdown>
-            )}
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>
-              Add job
-            </Button>
-            {info && !info.inUse && (
-              <Popconfirm
-                title="Remove this queue from the database?"
-                description="Only allowed because no running process declares it. Job rows are untouched."
-                onConfirm={() => void run({ kind: 'removeQueue', queue }, 'Queue removed')}
-              >
-                <Button danger icon={<DeleteOutlined />}>
-                  Remove queue
-                </Button>
-              </Popconfirm>
-            )}
-          </Space>
-        )}
-      </Space>
+    <Stack gap={4}>
+      <PageHeader title={<Inline gap={2} align="center">{queue}{titleTags}</Inline>} extra={actions} />
 
       <KpiCards stats={stats.data} loading={stats.loading} />
 
-      <Card className={styles.card} title="Jobs">
-        <JobsTable
-          queue={queue}
-          jobs={jobs.data?.items ?? []}
-          loading={jobs.loading}
-          refetching={jobs.refetching}
-          statuses={statuses}
-          onStatusesChange={(s) => {
-            setStatuses(s);
-            setCursorStack([]);
-          }}
-          hasMore={jobs.data?.hasMore ?? false}
-          onNext={() =>
-            jobs.data?.cursor && setCursorStack((s) => [...s, jobs.data!.cursor as string])
-          }
-          onPrev={() => setCursorStack((s) => s.slice(0, -1))}
-          canPrev={cursorStack.length > 0}
-          onRefresh={jobs.refetch}
-        />
+      <Card title="Jobs" bodyPadding={false}>
+        <div style={{ padding: 16 }}>
+          <JobsTable
+            queue={queue}
+            jobs={jobs.data?.items ?? []}
+            loading={jobs.loading}
+            statuses={statuses}
+            onStatusesChange={(s) => {
+              setStatuses(s);
+              setCursorStack([]);
+            }}
+            hasMore={jobs.data?.hasMore ?? false}
+            onNext={() =>
+              jobs.data?.cursor && setCursorStack((s) => [...s, jobs.data!.cursor as string])
+            }
+            onPrev={() => setCursorStack((s) => s.slice(0, -1))}
+            canPrev={cursorStack.length > 0}
+            onRefresh={jobs.refetch}
+          />
+        </div>
       </Card>
 
       {!config.readOnly && (
-        <Card className={styles.card} title="Purge by state" size="small">
-          <Space wrap>
-            <Select<JobStatus[]>
-              mode="multiple"
-              style={{ minWidth: 260 }}
-              value={purgeStatuses}
-              onChange={setPurgeStatuses}
+        <Card title="Purge by state">
+          <Inline gap={2} align="center" wrap>
+            <Select<JobStatus>
+              placeholder="Add a state to purge…"
+              value={purgePick}
+              onChange={(s) => {
+                setPurgeStatuses((prev) => (prev.includes(s) ? prev : [...prev, s]));
+                setPurgePick(undefined);
+              }}
               options={Object.values(JobStatus).map((s) => ({ label: s, value: s }))}
             />
+            <Inline gap={1} align="center" wrap>
+              {purgeStatuses.map((s) => (
+                <Tag
+                  key={s}
+                  tone="info"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setPurgeStatuses((prev) => prev.filter((x) => x !== s))}
+                >
+                  {s} ✕
+                </Tag>
+              ))}
+            </Inline>
             <Popconfirm
               title={`Permanently delete all jobs in ${purgeStatuses.join(', ') || '—'}?`}
-              onConfirm={() =>
-                void run({ kind: 'purge', queue, statuses: purgeStatuses }, 'Purged')
-              }
+              okDanger
+              onConfirm={() => void run({ kind: 'purge', queue, statuses: purgeStatuses }, 'Purged')}
             >
-              <Button danger disabled={!purgeStatuses.length}>
+              <Button variant="danger" disabled={!purgeStatuses.length}>
                 Purge
               </Button>
             </Popconfirm>
-          </Space>
+          </Inline>
         </Card>
       )}
 
       <SchedulesQueuePanel queue={queue} />
 
       <AddJobForm open={addOpen} queue={queue} onClose={() => setAddOpen(false)} />
-    </Space>
+    </Stack>
   );
 }
 
 /** Schedules scoped to this queue. */
 function SchedulesQueuePanel({ queue }: { queue: string }): React.ReactElement {
-  const { styles } = useStyles();
   const schedules = useQuery(() => api.getSchedules(queue), [queue]);
   return (
-    <Card className={styles.card} title="Schedules">
-      <SchedulesPanel
-        rows={schedules.data ?? []}
-        loading={schedules.loading}
-        onChanged={schedules.refetch}
-        showQueueColumn={false}
-      />
+    <Card title="Schedules" bodyPadding={false}>
+      <div style={{ padding: 16 }}>
+        <SchedulesPanel
+          rows={schedules.data ?? []}
+          loading={schedules.loading}
+          onChanged={schedules.refetch}
+          showQueueColumn={false}
+        />
+      </div>
     </Card>
   );
 }

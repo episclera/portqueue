@@ -1,24 +1,28 @@
 /**
- * App shell + routing. Header carries the Logo, global search, the
- * live-updates toggle, and the ThemeSwitcher. Uses react-router v5. AntD theming is driven by
- * the shared `@portqueue/ui` themes through ConfigProvider (wired in main.tsx).
+ * App shell + routing. Header carries the Logo, global search, the live-updates toggle,
+ * and the ThemeSwitcher. Uses react-router v5. Layout + primitives come from `@portqueue/ui`
+ * (styled-components); theming is provided by the ThemeProvider wired in main.tsx.
  */
 import React, { useState } from 'react';
-import { HashRouter, Link, Route, Switch, useHistory } from 'react-router-dom';
+import { HashRouter, Link, Route, Switch as RouteSwitch, useHistory } from 'react-router-dom';
+import styled from 'styled-components';
 import {
-  AutoComplete,
+  AppShell,
   Button,
-  Layout,
-  Space,
-  Switch as AntSwitch,
+  Content,
+  Header,
+  Inline,
+  Input,
+  Logo,
+  Switch,
+  Text,
+  ThemeSwitcher,
+  Title,
   Tooltip,
-  Typography,
-} from 'antd';
-import { PauseCircleOutlined, PlayCircleOutlined, SearchOutlined } from '@ant-design/icons';
-import { Logo, ThemeSwitcher, type ThemeMode } from '@portqueue/ui';
+  type ThemeMode,
+} from '@portqueue/ui';
 import { config } from './queries/api.js';
 import { useLive } from './components/LiveProvider.js';
-import { useStyles } from './components/styles.js';
 import { OverviewPage } from './pages/Overview.js';
 import { QueueDetailPage } from './pages/QueueDetail.js';
 import { JobDetailPage } from './pages/JobDetail.js';
@@ -30,6 +34,21 @@ export interface AppProps {
   onThemeChange: (m: ThemeMode) => void;
 }
 
+const NavLink = styled(Link)`
+  color: ${(p) => p.theme.color.textMuted};
+  font-weight: 600;
+  text-decoration: none;
+  &:hover {
+    color: ${(p) => p.theme.color.text};
+  }
+`;
+
+const ReadOnlyBanner = styled.div`
+  text-align: center;
+  padding: 6px 0;
+  background: ${(p) => p.theme.color.warning}22;
+`;
+
 function GlobalSearch(): React.ReactElement {
   const history = useHistory();
   const [value, setValue] = useState('');
@@ -37,106 +56,88 @@ function GlobalSearch(): React.ReactElement {
     if (id.trim()) history.push(`/jobs/${encodeURIComponent(id.trim())}`);
   };
   return (
-    <AutoComplete
+    <Input
       value={value}
-      onChange={setValue}
+      placeholder="Jump to job id…"
+      inputSize="sm"
       style={{ width: 'clamp(140px, 24vw, 320px)' }}
-      onSelect={go}
-    >
-      <Space.Compact style={{ width: '100%' }}>
-        <input
-          placeholder="Jump to job id…"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') go(value);
-          }}
-          style={{
-            width: '100%',
-            border: 'none',
-            outline: 'none',
-            background: 'transparent',
-            padding: '6px 10px',
-            borderRadius: 8,
-          }}
-          aria-label="Search job by id"
-        />
-      </Space.Compact>
-    </AutoComplete>
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') go(value);
+      }}
+      aria-label="Search job by id"
+    />
   );
 }
 
 function LiveToggle(): React.ReactElement {
   const { live, setLive, refreshNow } = useLive();
   return (
-    <Space size="small">
+    <Inline gap={2} align="center">
       <Tooltip title={live ? 'Auto-updates on (30s)' : 'Auto-updates paused — data is frozen'}>
-        <Space size={4}>
-          {live ? <PlayCircleOutlined /> : <PauseCircleOutlined style={{ color: '#f59e0b' }} />}
-          <AntSwitch
-            size="small"
-            checked={live}
-            onChange={setLive}
-            aria-label="Toggle live updates"
-          />
-        </Space>
+        <Inline gap={1} align="center">
+          <span aria-hidden>{live ? '▶️' : '⏸️'}</span>
+          <Switch size="sm" checked={live} onChange={setLive} aria-label="Toggle live updates" />
+        </Inline>
       </Tooltip>
       {!live && (
-        <Button size="small" onClick={refreshNow}>
+        <Button size="sm" onClick={refreshNow}>
           Refresh now
         </Button>
       )}
-    </Space>
+    </Inline>
   );
 }
 
 export function App({ themeMode, onThemeChange }: AppProps): React.ReactElement {
-  const { styles } = useStyles();
   return (
     <HashRouter>
-      <Layout className={styles.appShell}>
-        <header className={styles.header}>
-          <Link to="/" aria-label="Home" style={{ display: 'inline-flex' }}>
-            <Logo variant="full" size={30} />
-          </Link>
-          <Space size="middle" style={{ marginLeft: 16 }}>
-            <Link to="/">Overview</Link>
-            <Link to="/instances">Instances</Link>
-            <Link to="/schedules">Schedules</Link>
-          </Space>
-          <div className={styles.headerSpacer} />
-          <Space size="middle" wrap>
-            <SearchOutlined style={{ opacity: 0.6 }} />
-            <GlobalSearch />
-            <LiveToggle />
-            <ThemeSwitcher value={themeMode} onChange={onThemeChange} />
-          </Space>
-        </header>
+      <AppShell>
+        <Header
+          left={
+            <Inline gap={4} align="center">
+              <Link to="/" aria-label="Home" style={{ display: 'inline-flex' }}>
+                <Logo variant="full" size={30} />
+              </Link>
+              <Inline gap={3} align="center">
+                <NavLink to="/">Overview</NavLink>
+                <NavLink to="/instances">Instances</NavLink>
+                <NavLink to="/schedules">Schedules</NavLink>
+              </Inline>
+            </Inline>
+          }
+          right={
+            <Inline gap={3} align="center" wrap>
+              <span aria-hidden style={{ opacity: 0.6 }}>
+                🔍
+              </span>
+              <GlobalSearch />
+              <LiveToggle />
+              <ThemeSwitcher value={themeMode} onChange={onThemeChange} />
+            </Inline>
+          }
+        />
 
-        {!config.readOnly ? null : (
-          <div style={{ textAlign: 'center', padding: '6px 0', background: '#94a3b822' }}>
-            <Typography.Text type="secondary">
-              Read-only mode — mutating actions are disabled.
-            </Typography.Text>
-          </div>
-        )}
+        {config.readOnly ? (
+          <ReadOnlyBanner>
+            <Text $tone="muted">Read-only mode — mutating actions are disabled.</Text>
+          </ReadOnlyBanner>
+        ) : null}
 
-        <Layout.Content>
-          <div className={styles.content}>
-            <Switch>
-              <Route exact path="/" component={OverviewPage} />
-              <Route exact path="/instances" component={InstancesPage} />
-              <Route exact path="/queues/:name" component={QueueDetailPage} />
-              <Route exact path="/jobs/:id" component={JobDetailPage} />
-              <Route exact path="/schedules" component={SchedulesPage} />
-              <Route>
-                <Typography.Title level={3}>Not found</Typography.Title>
-                <Link to="/">Back to overview</Link>
-              </Route>
-            </Switch>
-          </div>
-        </Layout.Content>
-      </Layout>
+        <Content>
+          <RouteSwitch>
+            <Route exact path="/" component={OverviewPage} />
+            <Route exact path="/instances" component={InstancesPage} />
+            <Route exact path="/queues/:name" component={QueueDetailPage} />
+            <Route exact path="/jobs/:id" component={JobDetailPage} />
+            <Route exact path="/schedules" component={SchedulesPage} />
+            <Route>
+              <Title level={3}>Not found</Title>
+              <Link to="/">Back to overview</Link>
+            </Route>
+          </RouteSwitch>
+        </Content>
+      </AppShell>
     </HashRouter>
   );
 }

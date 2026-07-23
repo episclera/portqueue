@@ -23,7 +23,7 @@ The array order **is** the sequence. `steps[0]` is where a run starts and where 
 
 ## 3. Keep every handler idempotent
 
-Because delivery is [at-least-once](../core-concepts/at-least-once.md), any step can run
+Because delivery is [at-least-once](../guides/consuming-jobs.md#at-least-once--idempotency), any step can run
 twice. Design each step as **one crash-safe unit of external side effect** — e.g.
 "charge the card" is a single step, guarded by an idempotency key against your payment
 provider.

@@ -75,7 +75,6 @@ const config: Config = {
       },
       items: [
         { type: 'docSidebar', sidebarId: 'docsSidebar', position: 'left', label: 'Docs' },
-        { to: '/docs/api-reference', label: 'API', position: 'left' },
         { to: '/blog', label: 'Blog', position: 'left' },
         {
           href: REPO_URL,
@@ -94,7 +93,7 @@ const config: Config = {
           title: 'Docs',
           items: [
             { label: 'Getting Started', to: '/docs/getting-started/installation' },
-            { label: 'Core Concepts', to: '/docs/core-concepts/model' },
+            { label: 'Job Lifecycle', to: '/docs/guides/consuming-jobs#job-states' },
             { label: 'Production Best Practices', to: '/docs/production' },
             { label: 'API Reference', to: '/docs/api-reference' },
             { label: 'Dashboard', to: '/docs/dashboard' },
@@ -104,16 +103,18 @@ const config: Config = {
         {
           title: 'Resources',
           items: [
-            { label: 'Blog', to: '/blog' },
             { label: 'Events reference', to: '/docs/events-hooks/events' },
             { label: 'Troubleshooting', to: '/docs/troubleshooting' },
             { label: 'Drivers', to: '/docs/drivers/overview' },
             { label: 'Workflows', to: '/docs/workflows/what-is-a-workflow' },
+            { label: 'Brandbook', to: '/docs/brandbook' },
           ],
         },
         {
           title: 'Project',
           items: [
+            { label: 'Blog', to: '/blog' },
+            { label: 'Team', to: '/docs/team' },
             { label: 'GitHub', href: REPO_URL, target: '_blank', rel: 'noopener noreferrer' },
             {
               label: 'Changelog',
@@ -122,7 +123,6 @@ const config: Config = {
               rel: 'noopener noreferrer',
             },
             { label: 'Contributing', to: '/docs/contributing' },
-            { label: 'Team', to: '/docs/team' },
             { label: 'License', to: '/docs/introduction#license' },
           ],
         },

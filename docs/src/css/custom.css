@@ -1,33 +1,57 @@
 /**
- * PortQueue docs theme — maps Docusaurus Infima variables to the shared
- * `@portqueue/ui` brand tokens (build_plan/14 tokens.ts).
- * Modern, spacious, rounded, soft-shadow; prefers-reduced-motion aware.
- * No third-party font CDN calls — system font stack only.
+ * PortQueue docs theme — maps Docusaurus Infima variables to the shared PortQueue design
+ * tokens (mirrors `@portqueue/ui` src/theme/tokens.ts — the single source of truth for the
+ * palette). Calm, muted system: dominant light grey, desaturated green primary, near-black
+ * text, low-contrast semantic colours always paired with dark text. Reduced-motion aware.
  */
 
 :root {
-  /* Brand accent (indigo) from tokens.color.brand #4f46e5. */
-  --ifm-color-primary: #4f46e5;
-  --ifm-color-primary-dark: #3f36e0;
-  --ifm-color-primary-darker: #3730d4;
-  --ifm-color-primary-darkest: #2d28ae;
-  --ifm-color-primary-light: #6366f1;
-  --ifm-color-primary-lighter: #7c7ff3;
-  --ifm-color-primary-lightest: #a5a8f7;
+  /* Shared design tokens, exposed as CSS variables (same names the dashboard uses). */
+  --bg: #f2f3f1;
+  --surface: #ffffff;
+  --primary: #a9d8b8;
+  --primary-dark: #6fa184;
+  --secondary: #dde3de;
+  --text: #1b1f1d;
+  --text-muted: rgba(27, 31, 29, 0.68);
+  --danger: #d98a8a;
+  --danger-dark: #b5645f;
+  --warning: #e0ae72;
+  --warning-dark: #c68a4e;
+  --info: #8fb8d8;
+
+  /* Interactive/text green uses the darker tone for AA contrast; fills use --primary. */
+  --ifm-color-primary: #6fa184;
+  --ifm-color-primary-dark: #5c8a70;
+  --ifm-color-primary-darker: #547e66;
+  --ifm-color-primary-darkest: #456a55;
+  --ifm-color-primary-light: #a9d8b8;
+  --ifm-color-primary-lighter: #bbe1c7;
+  --ifm-color-primary-lightest: #d6eedd;
+  /* Dark text on the muted green/semantic fills (never white) — WCAG AA. */
+  --ifm-button-color: #1b1f1d;
+
+  /* Muted semantic colours (admonitions, badges). */
+  --ifm-color-success: #6fa184;
+  --ifm-color-warning: #c68a4e;
+  --ifm-color-danger: #b5645f;
+  --ifm-color-info: #8fb8d8;
 
   /* Neutral fields. */
-  --ifm-background-color: #f7f8fa;
+  --ifm-background-color: #f2f3f1;
   --ifm-background-surface-color: #ffffff;
-  --ifm-font-color-base: #1a1d23;
+  --ifm-font-color-base: #1b1f1d;
+  --ifm-code-background: #dde3de;
+  --ifm-color-emphasis-300: #dde3de;
 
   /* Rounded surfaces + soft depth over hard borders. */
   --ifm-global-radius: 10px;
   --ifm-card-border-radius: 16px;
   --ifm-button-border-radius: 10px;
   --ifm-code-border-radius: 8px;
-  --ifm-global-shadow-lw: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
-  --ifm-global-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.06);
-  --ifm-global-shadow-tl: 0 12px 32px rgba(16, 24, 40, 0.12), 0 6px 16px rgba(16, 24, 40, 0.08);
+  --ifm-global-shadow-lw: 0 1px 2px rgba(27, 31, 29, 0.05), 0 1px 3px rgba(27, 31, 29, 0.08);
+  --ifm-global-shadow-md: 0 4px 12px rgba(27, 31, 29, 0.07), 0 2px 6px rgba(27, 31, 29, 0.05);
+  --ifm-global-shadow-tl: 0 12px 32px rgba(27, 31, 29, 0.1), 0 6px 16px rgba(27, 31, 29, 0.07);
 
   /* Spacious typography (4px base scale). */
   --ifm-font-family-base:
@@ -41,7 +65,7 @@
   --ifm-navbar-height: 4rem;
 
   --ifm-code-font-size: 92%;
-  --docusaurus-highlighted-code-line-bg: rgba(79, 70, 229, 0.1);
+  --docusaurus-highlighted-code-line-bg: rgba(111, 161, 132, 0.14);
 
   /* Motion tokens mirrored from tokens.motion. */
   --ifm-transition-fast: 120ms;
@@ -49,30 +73,57 @@
 }
 
 [data-theme='dark'] {
-  --ifm-color-primary: #818cf8;
-  --ifm-color-primary-dark: #6366f1;
-  --ifm-color-primary-darker: #4f46e5;
-  --ifm-color-primary-darkest: #4338ca;
-  --ifm-color-primary-light: #a5b4fc;
-  --ifm-color-primary-lighter: #c7d2fe;
-  --ifm-color-primary-lightest: #e0e7ff;
+  --bg: #171a19;
+  --surface: #1f2422;
+  --secondary: #2c332f;
+  --text: #edefec;
+  --text-muted: rgba(237, 239, 236, 0.68);
 
-  --ifm-background-color: #0b0e14;
-  --ifm-background-surface-color: #131722;
-  --ifm-font-color-base: #e6e8ec;
+  /* On dark surfaces the lighter green reads well as interactive text. */
+  --ifm-color-primary: #a9d8b8;
+  --ifm-color-primary-dark: #8ec9a1;
+  --ifm-color-primary-darker: #6fa184;
+  --ifm-color-primary-darkest: #5c8a70;
+  --ifm-color-primary-light: #bbe1c7;
+  --ifm-color-primary-lighter: #cfead8;
+  --ifm-color-primary-lightest: #e4f4e9;
 
-  --docusaurus-highlighted-code-line-bg: rgba(129, 140, 248, 0.15);
+  --ifm-background-color: #171a19;
+  --ifm-background-surface-color: #1f2422;
+  --ifm-font-color-base: #edefec;
+  --ifm-code-background: #272d2a;
+  --ifm-color-emphasis-300: #2c332f;
+
+  --docusaurus-highlighted-code-line-bg: rgba(169, 216, 184, 0.15);
 }
 
 /* Sticky navbar with subtle glass — soft shadow, no hard border. */
 .navbar {
   box-shadow: var(--ifm-global-shadow-lw);
   border-bottom: none;
-  backdrop-filter: saturate(180%) blur(10px);
   background-color: rgba(255, 255, 255, 0.82);
 }
 [data-theme='dark'] .navbar {
   background-color: rgba(19, 23, 34, 0.82);
+}
+
+/*
+ * Only apply the blur on desktop. `backdrop-filter` on `.navbar` creates a
+ * containing block for its descendants, which breaks the `position: fixed`
+ * mobile sidebar (it lives inside `.navbar`) so the menu won't open. The mobile
+ * menu only exists below the navbar breakpoint, so scope the blur above it.
+ */
+@media (min-width: 997px) {
+  .navbar {
+    backdrop-filter: saturate(180%) blur(10px);
+  }
+
+  /* Divider between the brand and the nav links (desktop only). */
+  .navbar__brand {
+    margin-right: 1rem;
+    padding-right: 1rem;
+    border-right: 1px solid var(--ifm-color-emphasis-300);
+  }
 }
 
 .navbar__title {

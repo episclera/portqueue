@@ -4,8 +4,7 @@ title: PGLite driver
 sidebar_label: PGLite
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
+import PackageManagerTabs from '@site/src/components/PackageManagerTabs';
 
 # PGLite driver
 
@@ -14,36 +13,7 @@ for local development, tests, and single-process apps that want Postgres behavio
 
 ## Install
 
-<Tabs groupId="pm">
-  <TabItem value="npm" label="npm" default>
-
-```bash
-npm install @portqueue/core @electric-sql/pglite
-```
-
-  </TabItem>
-  <TabItem value="pnpm" label="pnpm">
-
-```bash
-pnpm add @portqueue/core @electric-sql/pglite
-```
-
-  </TabItem>
-  <TabItem value="yarn" label="yarn">
-
-```bash
-yarn add @portqueue/core @electric-sql/pglite
-```
-
-  </TabItem>
-  <TabItem value="bun" label="bun">
-
-```bash
-bun add @portqueue/core @electric-sql/pglite
-```
-
-  </TabItem>
-</Tabs>
+<PackageManagerTabs pkg="@portqueue/core @electric-sql/pglite" />
 
 ## Connect
 

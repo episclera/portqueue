@@ -4,22 +4,60 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Card, Col, Popconfirm, Row, Skeleton, Space, Table, Tag, Typography } from 'antd';
-import { PauseOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import styled from 'styled-components';
+import {
+  Button,
+  Card,
+  Code,
+  Col,
+  Inline,
+  Popconfirm,
+  Row,
+  SkeletonText,
+  Stack,
+  StatusTag,
+  Table,
+  Tag,
+  Text,
+  Title,
+  tokens,
+} from '@portqueue/ui';
+import type { TableColumn } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums.js';
-import { StatusTag, tokens } from '@portqueue/ui';
-import type { ColumnsType } from 'antd/es/table';
 import type { InstanceDto, QueueDto, StatsDto } from '../../shared/dto.js';
 import { api, config } from '../queries/api.js';
 import { usePoll } from '../queries/use-poll.js';
 import { useAction } from '../queries/use-action.js';
 import { KpiCards } from '../components/KpiCards.js';
 import { Sparkline } from '../components/Sparkline.js';
-import { useStyles } from '../components/styles.js';
 import { totalCount } from '../components/format.js';
 
+const Hero = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+const Mono = styled.span`
+  font-family: ${(p) => p.theme.font.mono};
+  font-size: 12px;
+`;
+
+const Bar = styled.div`
+  height: 4px;
+  border-radius: 4px;
+  margin-top: 4px;
+  background: ${tokens.color.accent}22;
+`;
+
+const BarFill = styled.div<{ $pct: number }>`
+  height: 4px;
+  border-radius: 4px;
+  width: ${(p) => p.$pct}%;
+  background: ${tokens.color.accent};
+`;
+
 export function OverviewPage(): React.ReactElement {
-  const { styles } = useStyles();
   const { run } = useAction();
 
   const stats = usePoll<StatsDto>(() => api.getStats(), []);
@@ -36,47 +74,42 @@ export function OverviewPage(): React.ReactElement {
     }
   }, [stats.data]);
 
-  const columns: ColumnsType<QueueDto> = [
+  const columns: TableColumn<QueueDto>[] = [
     {
       title: 'Queue',
-      dataIndex: 'name',
       key: 'name',
-      fixed: 'left',
-      render: (name: string, row) => (
-        <Space>
-          <Link to={`/queues/${encodeURIComponent(name)}`}>{name}</Link>
-          <Tag color={row.inUse ? 'green' : 'default'}>{row.inUse ? 'in use' : 'unused'}</Tag>
+      render: (row) => (
+        <Inline gap={2} align="center">
+          <Link to={`/queues/${encodeURIComponent(row.name)}`}>{row.name}</Link>
+          <Tag tone={row.inUse ? 'success' : 'neutral'}>{row.inUse ? 'in use' : 'unused'}</Tag>
           {row.processingPaused && (
-            <Tag color="warning">{row.acceptingPaused ? 'Paused (all)' : 'Paused'}</Tag>
+            <Tag tone="warning">{row.acceptingPaused ? 'Paused (all)' : 'Paused'}</Tag>
           )}
-        </Space>
+        </Inline>
       ),
     },
     {
       title: 'Total',
       key: 'total',
-      responsive: ['sm'],
-      render: (_: unknown, r) => totalCount(r.counts),
+      render: (r) => totalCount(r.counts),
     },
-    ...(
-      [JobStatus.ACTIVE, JobStatus.RETRY, JobStatus.FAILED, JobStatus.COMPLETED] as JobStatus[]
-    ).map((s): ColumnsType<QueueDto>[number] => ({
-      title: <StatusTag status={s} />,
-      key: s,
-      responsive: ['md'],
-      render: (_: unknown, r) => r.counts[s] ?? 0,
-    })),
+    ...([JobStatus.ACTIVE, JobStatus.RETRY, JobStatus.FAILED, JobStatus.COMPLETED] as JobStatus[]).map(
+      (s): TableColumn<QueueDto> => ({
+        title: <StatusTag status={s} />,
+        key: s,
+        render: (r) => r.counts[s] ?? 0,
+      }),
+    ),
     {
       title: 'Actions',
       key: 'actions',
-      fixed: 'right',
-      render: (_: unknown, r) =>
+      render: (r) =>
         config.readOnly ? (
           <Link to={`/queues/${encodeURIComponent(r.name)}`}>Open</Link>
         ) : r.processingPaused ? (
           <Button
-            size="small"
-            icon={<PlayCircleOutlined />}
+            size="sm"
+            icon="▶️"
             onClick={() => void run({ kind: 'resume', queue: r.name }, 'Resumed')}
           >
             Resume
@@ -86,7 +119,7 @@ export function OverviewPage(): React.ReactElement {
             title="Pause processing on this queue?"
             onConfirm={() => void run({ kind: 'pause', queue: r.name }, 'Paused')}
           >
-            <Button size="small" icon={<PauseOutlined />}>
+            <Button size="sm" icon="⏸️">
               Pause
             </Button>
           </Popconfirm>
@@ -95,108 +128,92 @@ export function OverviewPage(): React.ReactElement {
   ];
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <div className={styles.hero}>
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          At a glance
-        </Typography.Title>
-        <Typography.Text type="secondary">Live queue health across all queues.</Typography.Text>
-      </div>
+    <Stack gap={4}>
+      <Hero>
+        <Title level={3}>At a glance</Title>
+        <Text $tone="muted">Live queue health across all queues.</Text>
+      </Hero>
 
       <KpiCards stats={stats.data} loading={stats.loading} />
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={16}>
-          <Card className={styles.card} title="Queues">
-            <Table<QueueDto>
-              rowKey="name"
-              size="middle"
-              loading={queues.loading}
-              pagination={false}
-              scroll={{ x: 'max-content' }}
-              columns={columns}
-              dataSource={queues.data ?? []}
-            />
+      <Row gutter={16}>
+        <Col span={16}>
+          <Card title="Queues" bodyPadding={false}>
+            {queues.loading && !queues.data ? (
+              <div style={{ padding: 16 }}>
+                <SkeletonText rows={4} />
+              </div>
+            ) : (
+              <Table<QueueDto>
+                rowKey={(r) => r.name}
+                size="md"
+                columns={columns}
+                data={queues.data ?? []}
+              />
+            )}
           </Card>
         </Col>
-        <Col xs={24} lg={8}>
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
-            <Card className={styles.card} title="Throughput (jobs/min)">
+        <Col span={8}>
+          <Stack gap={4}>
+            <Card title="Throughput (jobs/min)">
               {stats.loading && !stats.data ? (
-                <Skeleton active />
+                <SkeletonText rows={3} />
               ) : (
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <Typography.Title level={2} style={{ margin: 0, color: tokens.color.accent }}>
+                <Stack gap={3}>
+                  <Title level={2} style={{ color: tokens.color.accent }}>
                     {stats.data ? Math.round(stats.data.throughputPerMinute * 10) / 10 : 0}
-                  </Typography.Title>
+                  </Title>
                   <Sparkline
                     values={history.length > 1 ? history : [0, 0]}
                     width={260}
                     height={48}
                   />
-                </Space>
+                </Stack>
               )}
             </Card>
-            <Card
-              className={styles.card}
-              title="Instances"
-              extra={<Link to="/instances">Manage</Link>}
-            >
+            <Card title="Instances" extra={<Link to="/instances">Manage</Link>}>
               {instances.loading && !instances.data ? (
-                <Skeleton active />
+                <SkeletonText rows={3} />
               ) : (
                 <InstanceList rows={instances.data ?? []} />
               )}
             </Card>
-          </Space>
+          </Stack>
         </Col>
       </Row>
-    </Space>
+    </Stack>
   );
 }
 
 function InstanceList({ rows }: { rows: InstanceDto[] }): React.ReactElement {
   if (!rows.length)
     return (
-      <Typography.Text type="secondary">
-        No instances registered. Set an <code>instanceKey</code> to enable multi-instance mode.
-      </Typography.Text>
+      <Text $tone="muted">
+        No instances registered. Set an <Code>instanceKey</Code> to enable multi-instance mode.
+      </Text>
     );
   const totals = rows.map((r) => totalCount(r.counts));
   const max = Math.max(...totals, 1);
   return (
-    <Space direction="vertical" size="small" style={{ width: '100%' }}>
-      {rows.slice(0, 8).map((r, i) => (
-        <div key={r.instanceKey}>
-          <Space style={{ justifyContent: 'space-between', width: '100%' }}>
-            <Space size={6}>
-              <Tag color={r.alive ? 'green' : 'default'}>{r.alive ? 'alive' : 'stale'}</Tag>
-              {r.processingPaused && <Tag color="warning">paused</Tag>}
-              <Typography.Text style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
-                {r.instanceKey}
-              </Typography.Text>
-            </Space>
-            <Typography.Text strong>{totals[i]}</Typography.Text>
-          </Space>
-          <div
-            style={{
-              height: 4,
-              background: `${tokens.color.accent}22`,
-              borderRadius: 4,
-              marginTop: 4,
-            }}
-          >
-            <div
-              style={{
-                height: 4,
-                width: `${(totals[i]! / max) * 100}%`,
-                background: tokens.color.accent,
-                borderRadius: 4,
-              }}
-            />
+    <Stack gap={2}>
+      {rows.slice(0, 8).map((r, i) => {
+        const total = totals[i] ?? 0;
+        return (
+          <div key={r.instanceKey}>
+            <Inline justify="space-between" align="center">
+              <Inline gap={2} align="center">
+                <Tag tone={r.alive ? 'success' : 'neutral'}>{r.alive ? 'alive' : 'stale'}</Tag>
+                {r.processingPaused && <Tag tone="warning">paused</Tag>}
+                <Mono>{r.instanceKey}</Mono>
+              </Inline>
+              <Text $strong>{total}</Text>
+            </Inline>
+            <Bar>
+              <BarFill $pct={(total / max) * 100} />
+            </Bar>
           </div>
-        </div>
-      ))}
-    </Space>
+        );
+      })}
+    </Stack>
   );
 }

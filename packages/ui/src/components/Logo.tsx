@@ -10,9 +10,9 @@ export interface LogoProps {
 }
 
 /**
- * The PortQueue brand mark — an AI-authored, hand-editable SVG. A rounded
- * gateway (the "port") with an ordered set of queued units flowing through it. Theme-aware
- * via `currentColor`; the accent stripe uses the brand color unless `mono`.
+ * The PortQueue brand mark — an abstract cargo ship seen head-on, sitting on the water:
+ * a trapezoid hull with stacked deck containers above calm waves. Theme-aware via
+ * `currentColor`; containers use the brand/accent colours unless `mono`.
  */
 export function Logo({ variant = 'full', size = 32, color }: LogoProps): React.ReactElement {
   const accent = variant === 'mono' ? 'currentColor' : tokens.color.accent;
@@ -27,21 +27,32 @@ export function Logo({ variant = 'full', size = 32, color }: LogoProps): React.R
       aria-label="PortQueue"
       style={{ color: color ?? 'currentColor', flex: '0 0 auto' }}
     >
-      {/* The port: a rounded gateway. */}
-      <rect
-        x="4"
-        y="6"
-        width="40"
-        height="36"
-        rx="11"
+      {/* Water: calm waves the ship sits on. */}
+      <path
+        d="M6 37 q3.6 -2.4 7.2 0 t7.2 0 t7.2 0 t7.2 0"
+        fill="none"
         stroke="currentColor"
-        strokeWidth="3"
-        opacity="0.9"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        opacity={0.55}
       />
-      {/* Ordered queued units flowing in, decreasing to suggest draining. */}
-      <rect x="12" y="15" width="24" height="4.5" rx="2.25" fill={brand} />
-      <rect x="12" y="22" width="18" height="4.5" rx="2.25" fill={accent} />
-      <rect x="12" y="29" width="12" height="4.5" rx="2.25" fill={brand} opacity="0.7" />
+      <path
+        d="M5 41 q3.6 -2.4 7.2 0 t7.2 0 t7.2 0 t7.2 0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        opacity={0.32}
+      />
+      {/* Cargo ship, front view: trapezoid hull. */}
+      <path d="M11 28 L37 28 L32 36 L16 36 Z" fill="currentColor" opacity={0.9} />
+      {/* Stacked deck containers. */}
+      <rect x="14" y="16" width="6" height="5" rx="1.2" fill={brand} />
+      <rect x="21" y="16" width="6" height="5" rx="1.2" fill={accent} />
+      <rect x="28" y="16" width="6" height="5" rx="1.2" fill={brand} />
+      <rect x="14" y="22" width="6" height="5" rx="1.2" fill={accent} />
+      <rect x="21" y="22" width="6" height="5" rx="1.2" fill={brand} />
+      <rect x="28" y="22" width="6" height="5" rx="1.2" fill={accent} />
     </svg>
   );
 

@@ -21,7 +21,7 @@ pq.createWorker({
 });
 ```
 
-The handler receives a [`Job`](../core-concepts/job-lifecycle.md) context. **Returning**
+The handler receives a [`Job`](../guides/consuming-jobs.md#the-job-context) context. **Returning**
 resolves the job (its return value is stored); **throwing** triggers retry/fail per
 policy — a throw never crashes the worker loop.
 

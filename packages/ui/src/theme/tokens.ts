@@ -1,39 +1,56 @@
 /**
- * Design tokens shared by the docs site and dashboard. Encodes the
- * modern design language: spacious spacing scale, soft elevation over hard borders,
- * rounded surfaces, a restrained accent palette, and motion tokens.
+ * Design tokens — the single source of truth for the PortQueue visual system, shared by the
+ * dashboard and the docs site. Encodes the calm, muted palette: a dominant light grey, a
+ * desaturated green primary, and low-contrast semantic colours that always pair with the one
+ * near-black text colour (never white). Exposed to CSS as variables by the ThemeProvider.
  */
 export const tokens = {
   color: {
-    // Brand accent — a calm indigo/teal blend suggesting flow through a port.
-    brand: '#4f46e5',
-    brandHover: '#6366f1',
-    accent: '#0ea5e9',
-    // Neutral fields (content-first, large flat neutrals).
-    bgLight: '#f7f8fa',
+    // Primary accent — desaturated green. Never used as a large background fill.
+    brand: '#A9D8B8',
+    brandHover: '#6FA184',
+    // Optional informational tone (tooltips, neutral notices).
+    accent: '#8FB8D8',
+
+    // Dominant neutral surfaces (light grey covers most of the screen).
+    bgLight: '#F2F3F1',
     surfaceLight: '#ffffff',
-    bgDark: '#0b0e14',
-    surfaceDark: '#131722',
-    textLight: '#1a1d23',
-    textDark: '#e6e8ec',
-    // Semantic job-status colors (single source of truth; mirrored by the CLI).
+    bgDark: '#171A19',
+    surfaceDark: '#1F2422',
+
+    // The only text colour (near-black, cool). Opacity is applied for muted variants.
+    textLight: '#1B1F1D',
+    textDark: '#EDEFEC',
+
+    // Borders, dividers, inputs, code blocks, disabled states.
+    secondary: '#DDE3DE',
+
+    // Semantic — muted, low-contrast; only used where meaning genuinely calls for it.
+    danger: '#D98A8A',
+    dangerHover: '#B5645F',
+    warning: '#E0AE72',
+    warningHover: '#C68A4E',
+    info: '#8FB8D8',
+
+    // Semantic job-status colours (single source of truth; mirrored by the CLI). Tuned to the
+    // muted palette and darkened enough to stay legible as outline-tag text on light surfaces.
     status: {
-      PENDING: '#94a3b8',
-      ACTIVE: '#06b6d4',
-      COMPLETED: '#22c55e',
-      FAILED: '#ef4444',
-      RETRY: '#f59e0b',
-      CANCELLED: '#9ca3af',
-      EXPIRED: '#9ca3af',
-      STALLED: '#d946ef',
+      PENDING: '#8A908C',
+      ACTIVE: '#5B87A8',
+      COMPLETED: '#6FA184',
+      FAILED: '#B5645F',
+      RETRY: '#C68A4E',
+      CANCELLED: '#9AA09C',
+      EXPIRED: '#9AA09C',
+      STALLED: '#9A7AA0',
     },
   },
   radii: { sm: 6, md: 10, lg: 16, pill: 999 },
   spacing: (n: number): number => n * 4, // 4px base scale
   shadow: {
-    sm: '0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.10)',
-    md: '0 4px 12px rgba(16,24,40,0.08), 0 2px 6px rgba(16,24,40,0.06)',
-    lg: '0 12px 32px rgba(16,24,40,0.12), 0 6px 16px rgba(16,24,40,0.08)',
+    sm: '0 1px 2px rgba(27,31,29,0.05), 0 1px 3px rgba(27,31,29,0.08)',
+    md: '0 4px 12px rgba(27,31,29,0.07), 0 2px 6px rgba(27,31,29,0.05)',
+    lg: '0 12px 32px rgba(27,31,29,0.10), 0 6px 16px rgba(27,31,29,0.07)',
   },
   zIndex: { header: 100, drawer: 200, modal: 300, toast: 400 },
   breakpoints: { xs: 480, sm: 640, md: 768, lg: 1024, xl: 1280 },
