@@ -6,8 +6,8 @@ import type { FlavourMigration, PhysicalName } from '../shared/migration';
 
 
 /**
- * Predefined Postgres DDL, version by version. Standalone: every PG-wire flavour (PGLite,
- * Yugabyte, Citus) authors its own copy under its own folder rather than sharing this one, so a
+ * Predefined Postgres DDL, version by version. Standalone: every PG-wire flavour (e.g. PGLite)
+ * authors its own copy under its own folder rather than sharing this one, so a
  * future engine-specific tweak never leaks across flavours. Authored by hand for this engine; not generated at runtime.
  */
 

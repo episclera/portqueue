@@ -95,7 +95,7 @@ Schema identifiers (for driver authors / reporting): `TableName`, and the per-ta
 
 ## Drivers & transactions
 
-- Drivers: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite,mysql,citus,yugabyte}` — one self-contained subpath export per engine.
+- Drivers: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite,mysql}` — one self-contained subpath export per engine.
 - Driver contract: `Driver`, `DriverProbe`, `Subscription`, `MigrationStep`,
   `DriverCapabilitySet`, `capabilities`, `DriverContext`; conformance kit at
   `@portqueue/core/conformance`.

@@ -5,15 +5,11 @@ import { PgliteDriver } from './pglite/pglite-driver';
 import { SqliteDriver } from './sqlite/sqlite-driver';
 import { OracleDriver } from './oracle/oracle-driver';
 import { MysqlDriver } from './mysql/mysql-driver';
-import { CitusDriver } from './citus/citus-driver';
-import { YugabyteDriver } from './yugabyte/yugabyte-driver';
 import { POSTGRES_MIGRATIONS } from './postgres/migrations';
 import { PGLITE_MIGRATIONS } from './pglite/migrations';
 import { SQLITE_MIGRATIONS } from './sqlite/migrations';
 import { ORACLE_MIGRATIONS } from './oracle/migrations';
 import { MYSQL_MIGRATIONS } from './mysql/migrations';
-import { CITUS_MIGRATIONS } from './citus/migrations';
-import { YUGABYTE_MIGRATIONS } from './yugabyte/migrations';
 import type { FlavourMigration } from './shared/migration';
 
 const bare = (t: TableName): string => `pq_${t}`;
@@ -27,8 +23,6 @@ describe('per-engine migrations (authored alongside each driver)', () => {
       SQLITE_MIGRATIONS,
       ORACLE_MIGRATIONS,
       MYSQL_MIGRATIONS,
-      CITUS_MIGRATIONS,
-      YUGABYTE_MIGRATIONS,
     ];
     // No two engines share the same array object — a change to one never leaks into another.
     expect(new Set(sets).size).toBe(sets.length);
@@ -49,8 +43,6 @@ describe('per-engine migrations (authored alongside each driver)', () => {
       [new SqliteDriver(), DatabaseEngine.SQLITE],
       [new OracleDriver(), DatabaseEngine.ORACLE],
       [new MysqlDriver(), DatabaseEngine.MYSQL],
-      [new CitusDriver(), DatabaseEngine.CITUS],
-      [new YugabyteDriver(), DatabaseEngine.YUGABYTE],
     ] as const;
     for (const [driver, engine] of drivers) {
       expect(driver.engine).toBe(engine);
@@ -94,17 +86,8 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     expect(v2).toContain('ADD (idempotency_key VARCHAR2(4000))');
   });
 
-  it('Citus authors the base tables plus create_distributed_table shard declarations', () => {
-    const statements = v1(CITUS_MIGRATIONS);
-    expect(statements.filter((s) => s.startsWith('CREATE TABLE IF NOT EXISTS'))).toHaveLength(5);
-    expect(statements).toContain("SELECT create_distributed_table('pq_queue', 'name')");
-    expect(statements).toContain("SELECT create_reference_table('pq_migration')");
-  });
-
-  it('PGLite and Yugabyte match Postgres statement text (PG-wire) but from their own arrays', () => {
-    for (const set of [PGLITE_MIGRATIONS, YUGABYTE_MIGRATIONS]) {
-      expect(set).not.toBe(POSTGRES_MIGRATIONS);
-      expect(v1(set)).toEqual(v1(POSTGRES_MIGRATIONS));
-    }
+  it('PGLite matches Postgres statement text (PG-wire) but from its own array', () => {
+    expect(PGLITE_MIGRATIONS).not.toBe(POSTGRES_MIGRATIONS);
+    expect(v1(PGLITE_MIGRATIONS)).toEqual(v1(POSTGRES_MIGRATIONS));
   });
 });

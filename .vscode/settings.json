@@ -6,7 +6,6 @@
   "js/ts.tsdk.path": "./node_modules/typescript/lib",
   "cSpell.words": [
     "backoff",
-    "citus",
     "clob",
     "colocate",
     "dedup",
@@ -15,7 +14,6 @@
     "pglite",
     "portqueue",
     "sqlcode",
-    "upsert",
-    "yugabyte"
+    "upsert"
   ]
 }

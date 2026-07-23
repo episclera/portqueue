@@ -73,34 +73,6 @@ const pq = new PortQueue({
 await pq.init();`,
   },
   {
-    value: 'citus',
-    label: 'Citus',
-    peerDep: 'pg',
-    className: 'CitusDriver',
-    module: `${CORE}/drivers/citus`,
-    connect: `import { PortQueue } from '@portqueue/core';
-import { CitusDriver } from '@portqueue/core/drivers/citus';
-
-const pq = new PortQueue({
-  driver: new CitusDriver({ connectionString: process.env.DATABASE_URL }),
-});
-await pq.init();`,
-  },
-  {
-    value: 'yugabyte',
-    label: 'Yugabyte',
-    peerDep: 'pg',
-    className: 'YugabyteDriver',
-    module: `${CORE}/drivers/yugabyte`,
-    connect: `import { PortQueue } from '@portqueue/core';
-import { YugabyteDriver } from '@portqueue/core/drivers/yugabyte';
-
-const pq = new PortQueue({
-  driver: new YugabyteDriver({ connectionString: process.env.DATABASE_URL }),
-});
-await pq.init();`,
-  },
-  {
     value: 'pglite',
     label: 'PGLite',
     peerDep: '@electric-sql/pglite',

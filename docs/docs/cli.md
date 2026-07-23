@@ -52,7 +52,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install the CLI plus the client for your driver — it's an optional peer dependency,
-# so pick the one you use: pg (Postgres/Citus/Yugabyte), mysql2, oracledb, …
+# so pick the one you use: pg (Postgres), mysql2, oracledb, …
 RUN npm install -g @portqueue/cli pg
 
 # The config module is mounted at runtime (see `docker run` below), so nothing

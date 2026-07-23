@@ -28,7 +28,7 @@ distributed-by-design, transactional approach matters.
   claim from the same queue with `SKIP LOCKED` and never double-process. Multi-instance
   mode is a one-line opt-in.
 - **Truly multi-driver — same code, different engines.** The same application code runs
-  unchanged on Postgres, MySQL, Oracle, Citus, Yugabyte, PGLite, and SQLite. You swap the
+  unchanged on Postgres, MySQL, Oracle, PGLite, and SQLite. You swap the
   driver, not your code.
 - **Easy to test.** Run your entire suite in-process against PGLite or SQLite — no Redis,
   no broker, no external database to stand up.

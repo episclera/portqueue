@@ -1,7 +1,7 @@
 {
   "name": "@portqueue/core",
   "version": "0.1.0",
-  "description": "Database-backed job queue for Node.js — the core engine and first-party drivers.",
+  "description": "The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -41,16 +41,6 @@
       "types": "./dist/drivers/mysql/index.d.ts",
       "import": "./dist/drivers/mysql/index.mjs",
       "require": "./dist/drivers/mysql/index.cjs"
-    },
-    "./drivers/citus": {
-      "types": "./dist/drivers/citus/index.d.ts",
-      "import": "./dist/drivers/citus/index.mjs",
-      "require": "./dist/drivers/citus/index.cjs"
-    },
-    "./drivers/yugabyte": {
-      "types": "./dist/drivers/yugabyte/index.d.ts",
-      "import": "./dist/drivers/yugabyte/index.mjs",
-      "require": "./dist/drivers/yugabyte/index.cjs"
     },
     "./tx": {
       "types": "./dist/tx/index.d.ts",

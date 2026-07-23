@@ -46,7 +46,5 @@ export enum DatabaseEngine {
   SQLITE = 'SQLITE',
   ORACLE = 'ORACLE',
   MYSQL = 'MYSQL',
-  CITUS = 'CITUS',
-  YUGABYTE = 'YUGABYTE',
   CUSTOM = 'CUSTOM',
 }

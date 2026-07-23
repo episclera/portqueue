@@ -11,8 +11,6 @@ const entries = {
   'drivers/sqlite/index': resolve(__dirname, 'src/drivers/sqlite/index.ts'),
   'drivers/oracle/index': resolve(__dirname, 'src/drivers/oracle/index.ts'),
   'drivers/mysql/index': resolve(__dirname, 'src/drivers/mysql/index.ts'),
-  'drivers/citus/index': resolve(__dirname, 'src/drivers/citus/index.ts'),
-  'drivers/yugabyte/index': resolve(__dirname, 'src/drivers/yugabyte/index.ts'),
   'tx/index': resolve(__dirname, 'src/tx/index.ts'),
   'conformance/index': resolve(__dirname, 'src/conformance/index.ts'),
 };
