@@ -29,6 +29,15 @@ export { HookPhase } from './events/hooks.js';
 export { LogLevel } from './logging/log-level.enum.js';
 export { PortQueueErrorCode } from './errors/error-codes.enum.js';
 export { DriverCapability } from './drivers/driver-capabilities.js';
+// Schema identifiers — reusable by driver authors and dashboard/reporting code.
+export {
+  TableName,
+  QueueColumn,
+  JobColumn,
+  ScheduleColumn,
+  InstanceColumn,
+  MigrationColumn,
+} from './drivers/table-names.js';
 
 // Option types (the disjoint bags)
 export type { PortQueueOptions, ShutdownOptions } from './options/client-options.js';

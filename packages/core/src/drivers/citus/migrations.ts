@@ -1,5 +1,9 @@
 import { TableName } from '../table-names.js';
 import type { FlavourMigration, PhysicalName } from '../shared/migration.js';
+// NOTE: column names here are intentionally raw string literals, NOT the `*Column` enums used
+// by the drivers. A migration is a frozen record of a schema that has already been applied;
+// renaming an enum member must never retroactively rewrite a past migration's DDL.
+
 
 /**
  * Predefined Citus DDL, version by version. Citus extends Postgres, so the column types match the

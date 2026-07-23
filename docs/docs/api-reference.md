@@ -82,6 +82,9 @@ transitions are on the `step` controller (`next` / `repeat` / `done`), not on `J
 `RetentionMode`, `MigrationMode`, `DatabaseEngine`, `PortQueueEvent`,
 `HookPhase`, `LogLevel`, [`PortQueueErrorCode`](./troubleshooting.md), `DriverCapability`.
 
+Schema identifiers (for driver authors / reporting): `TableName`, and the per-table column enums
+`QueueColumn`, `JobColumn`, `ScheduleColumn`, `InstanceColumn`, `MigrationColumn`.
+
 ## Drivers & transactions
 
 - Drivers: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite,mysql,citus,yugabyte}` — see [Drivers](./drivers/overview.md).

@@ -16,7 +16,14 @@ import {
   MissingPeerDependencyError,
   UnsupportedCapabilityError,
 } from '../../errors/errors.js';
-import { TableName } from '../table-names.js';
+import {
+  TableName,
+  QueueColumn,
+  JobColumn,
+  ScheduleColumn,
+  InstanceColumn,
+  MigrationColumn,
+} from '../table-names.js';
 import { matchesInstance } from '../../jobs/instance-affinity.js';
 import { uuid } from '../../util/uuid.js';
 import { toMigrationSteps } from '../shared/migration.js';
@@ -68,43 +75,43 @@ type Session = unknown;
 type Row = Record<string, unknown>;
 
 const JOB_COLUMNS = [
-  'id',
-  'queue_name',
-  'status',
-  'priority',
-  'data',
-  'return_value',
-  'metadata',
-  'created_at',
-  'updated_at',
-  'start_after',
-  'expire_at',
-  'started_at',
-  'completed_at',
-  'failed_at',
-  'retried_at',
-  'stalled_at',
-  'cancelled_at',
-  'expired_at',
-  'locked_until',
-  'locked_by_instance_id',
-  'preferred_instance_key_pattern',
-  'processed_on_instance_key',
-  'retry_attempt',
-  'retry_max_attempts',
-  'retry_delay_ms',
-  'retry_backoff',
-  'retry_backoff_factor',
-  'retry_max_delay_ms',
-  'retry_jitter',
-  'failure_message',
-  'retention_mode',
-  'retention_ttl_ms',
-  'idempotency_key',
-  'schedule_id',
-  'singleton_key',
-  'workflow_id',
-  'workflow_step_key',
+  JobColumn.ID,
+  JobColumn.QUEUE_NAME,
+  JobColumn.STATUS,
+  JobColumn.PRIORITY,
+  JobColumn.DATA,
+  JobColumn.RETURN_VALUE,
+  JobColumn.METADATA,
+  JobColumn.CREATED_AT,
+  JobColumn.UPDATED_AT,
+  JobColumn.START_AFTER,
+  JobColumn.EXPIRE_AT,
+  JobColumn.STARTED_AT,
+  JobColumn.COMPLETED_AT,
+  JobColumn.FAILED_AT,
+  JobColumn.RETRIED_AT,
+  JobColumn.STALLED_AT,
+  JobColumn.CANCELLED_AT,
+  JobColumn.EXPIRED_AT,
+  JobColumn.LOCKED_UNTIL,
+  JobColumn.LOCKED_BY_INSTANCE_ID,
+  JobColumn.PREFERRED_INSTANCE_KEY_PATTERN,
+  JobColumn.PROCESSED_ON_INSTANCE_KEY,
+  JobColumn.RETRY_ATTEMPT,
+  JobColumn.RETRY_MAX_ATTEMPTS,
+  JobColumn.RETRY_DELAY_MS,
+  JobColumn.RETRY_BACKOFF,
+  JobColumn.RETRY_BACKOFF_FACTOR,
+  JobColumn.RETRY_MAX_DELAY_MS,
+  JobColumn.RETRY_JITTER,
+  JobColumn.FAILURE_MESSAGE,
+  JobColumn.RETENTION_MODE,
+  JobColumn.RETENTION_TTL_MS,
+  JobColumn.IDEMPOTENCY_KEY,
+  JobColumn.SCHEDULE_ID,
+  JobColumn.SINGLETON_KEY,
+  JobColumn.WORKFLOW_ID,
+  JobColumn.WORKFLOW_STEP_KEY,
 ] as const;
 
 /**
@@ -239,7 +246,7 @@ export class SqliteDriver implements Driver {
   async getSchemaVersion(): Promise<number | null> {
     try {
       const res = await this.execute(
-        `SELECT MAX(version) AS v FROM ${this.t(TableName.MIGRATION)}`,
+        `SELECT MAX(${MigrationColumn.VERSION}) AS v FROM ${this.t(TableName.MIGRATION)}`,
         [],
       );
       const v = res.rows[0]?.v;
@@ -255,7 +262,7 @@ export class SqliteDriver implements Driver {
     await migration.up(this, this.context);
     const now = Date.now();
     await this.execute(
-      `INSERT INTO ${this.t(TableName.MIGRATION)} (version, applied_at, checksum, created_at, updated_at) VALUES (${this.ph(0)}, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)})`,
+      `INSERT INTO ${this.t(TableName.MIGRATION)} (${MigrationColumn.VERSION}, ${MigrationColumn.APPLIED_AT}, ${MigrationColumn.CHECKSUM}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) VALUES (${this.ph(0)}, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)})`,
       [migration.version, now, migration.checksum, now, now],
     );
   }
@@ -309,85 +316,85 @@ export class SqliteDriver implements Driver {
 
   private mapJob(row: Row): JobRecord {
     return {
-      id: String(row.id),
-      queueName: String(row.queue_name),
-      status: row.status as JobStatus,
-      priority: Number(row.priority),
-      data: this.fromJson(row.data),
-      returnValue: this.fromJson(row.return_value),
-      metadata: (this.fromJson(row.metadata) as Record<string, unknown>) ?? {},
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at),
-      startAfter: Number(row.start_after),
-      expireAt: this.numOrNull(row.expire_at),
-      startedAt: this.numOrNull(row.started_at),
-      completedAt: this.numOrNull(row.completed_at),
-      failedAt: this.numOrNull(row.failed_at),
-      retriedAt: this.numOrNull(row.retried_at),
-      stalledAt: this.numOrNull(row.stalled_at),
-      cancelledAt: this.numOrNull(row.cancelled_at),
-      expiredAt: this.numOrNull(row.expired_at),
-      lockedUntil: this.numOrNull(row.locked_until),
-      lockedByInstanceId: this.strOrNull(row.locked_by_instance_id),
-      preferredInstanceKeyPattern: this.strOrNull(row.preferred_instance_key_pattern),
-      processedOnInstanceKey: this.strOrNull(row.processed_on_instance_key),
-      retryAttempt: Number(row.retry_attempt),
-      retryMaxAttempts: Number(row.retry_max_attempts),
-      retryDelayMs: Number(row.retry_delay_ms),
-      retryBackoff: row.retry_backoff as BackoffStrategy,
-      retryBackoffFactor: this.numOrNull(row.retry_backoff_factor),
-      retryMaxDelayMs: this.numOrNull(row.retry_max_delay_ms),
-      retryJitter: this.boolOut(row.retry_jitter),
-      failureMessage: this.strOrNull(row.failure_message),
-      retentionMode: row.retention_mode as RetentionMode,
-      retentionTtlMs: this.numOrNull(row.retention_ttl_ms),
-      idempotencyKey: this.strOrNull(row.idempotency_key),
-      scheduleId: this.strOrNull(row.schedule_id),
-      singletonKey: this.strOrNull(row.singleton_key),
-      workflowId: this.strOrNull(row.workflow_id),
-      workflowStepKey: this.strOrNull(row.workflow_step_key),
+      id: String(row[JobColumn.ID]),
+      queueName: String(row[JobColumn.QUEUE_NAME]),
+      status: row[JobColumn.STATUS] as JobStatus,
+      priority: Number(row[JobColumn.PRIORITY]),
+      data: this.fromJson(row[JobColumn.DATA]),
+      returnValue: this.fromJson(row[JobColumn.RETURN_VALUE]),
+      metadata: (this.fromJson(row[JobColumn.METADATA]) as Record<string, unknown>) ?? {},
+      createdAt: Number(row[JobColumn.CREATED_AT]),
+      updatedAt: Number(row[JobColumn.UPDATED_AT]),
+      startAfter: Number(row[JobColumn.START_AFTER]),
+      expireAt: this.numOrNull(row[JobColumn.EXPIRE_AT]),
+      startedAt: this.numOrNull(row[JobColumn.STARTED_AT]),
+      completedAt: this.numOrNull(row[JobColumn.COMPLETED_AT]),
+      failedAt: this.numOrNull(row[JobColumn.FAILED_AT]),
+      retriedAt: this.numOrNull(row[JobColumn.RETRIED_AT]),
+      stalledAt: this.numOrNull(row[JobColumn.STALLED_AT]),
+      cancelledAt: this.numOrNull(row[JobColumn.CANCELLED_AT]),
+      expiredAt: this.numOrNull(row[JobColumn.EXPIRED_AT]),
+      lockedUntil: this.numOrNull(row[JobColumn.LOCKED_UNTIL]),
+      lockedByInstanceId: this.strOrNull(row[JobColumn.LOCKED_BY_INSTANCE_ID]),
+      preferredInstanceKeyPattern: this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]),
+      processedOnInstanceKey: this.strOrNull(row[JobColumn.PROCESSED_ON_INSTANCE_KEY]),
+      retryAttempt: Number(row[JobColumn.RETRY_ATTEMPT]),
+      retryMaxAttempts: Number(row[JobColumn.RETRY_MAX_ATTEMPTS]),
+      retryDelayMs: Number(row[JobColumn.RETRY_DELAY_MS]),
+      retryBackoff: row[JobColumn.RETRY_BACKOFF] as BackoffStrategy,
+      retryBackoffFactor: this.numOrNull(row[JobColumn.RETRY_BACKOFF_FACTOR]),
+      retryMaxDelayMs: this.numOrNull(row[JobColumn.RETRY_MAX_DELAY_MS]),
+      retryJitter: this.boolOut(row[JobColumn.RETRY_JITTER]),
+      failureMessage: this.strOrNull(row[JobColumn.FAILURE_MESSAGE]),
+      retentionMode: row[JobColumn.RETENTION_MODE] as RetentionMode,
+      retentionTtlMs: this.numOrNull(row[JobColumn.RETENTION_TTL_MS]),
+      idempotencyKey: this.strOrNull(row[JobColumn.IDEMPOTENCY_KEY]),
+      scheduleId: this.strOrNull(row[JobColumn.SCHEDULE_ID]),
+      singletonKey: this.strOrNull(row[JobColumn.SINGLETON_KEY]),
+      workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
+      workflowStepKey: this.strOrNull(row[JobColumn.WORKFLOW_STEP_KEY]),
     };
   }
 
   private mapQueue(row: Row): QueueRow {
     return {
-      name: String(row.name),
-      processingPaused: this.boolOut(row.processing_paused),
-      acceptingPaused: this.boolOut(row.accepting_paused),
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at),
+      name: String(row[QueueColumn.NAME]),
+      processingPaused: this.boolOut(row[QueueColumn.PROCESSING_PAUSED]),
+      acceptingPaused: this.boolOut(row[QueueColumn.ACCEPTING_PAUSED]),
+      createdAt: Number(row[QueueColumn.CREATED_AT]),
+      updatedAt: Number(row[QueueColumn.UPDATED_AT]),
     };
   }
 
   private mapInstance(row: Row): InstanceRow {
     return {
-      instanceKey: String(row.instance_key),
-      processingPaused: this.boolOut(row.processing_paused),
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at),
-      lastSeenAt: Number(row.last_seen_at),
+      instanceKey: String(row[InstanceColumn.INSTANCE_KEY]),
+      processingPaused: this.boolOut(row[InstanceColumn.PROCESSING_PAUSED]),
+      createdAt: Number(row[InstanceColumn.CREATED_AT]),
+      updatedAt: Number(row[InstanceColumn.UPDATED_AT]),
+      lastSeenAt: Number(row[InstanceColumn.LAST_SEEN_AT]),
     };
   }
 
   private mapSchedule(row: Row): ScheduleRow {
     return {
-      id: String(row.id),
-      queueName: String(row.queue_name),
-      cron: this.strOrNull(row.cron),
-      everyMs: this.numOrNull(row.every_ms),
-      timezone: this.strOrNull(row.timezone),
-      data: this.fromJson(row.data),
-      priority: this.numOrNull(row.priority),
-      retryMaxAttempts: this.numOrNull(row.retry_max_attempts),
-      retryDelayMs: this.numOrNull(row.retry_delay_ms),
-      nextRunAt: this.numOrNull(row.next_run_at),
-      lastRunAt: this.numOrNull(row.last_run_at),
-      enabled: this.boolOut(row.enabled),
-      startAt: this.numOrNull(row.start_at),
-      endAt: this.numOrNull(row.end_at),
-      idempotencyKey: this.strOrNull(row.idempotency_key),
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at),
+      id: String(row[ScheduleColumn.ID]),
+      queueName: String(row[ScheduleColumn.QUEUE_NAME]),
+      cron: this.strOrNull(row[ScheduleColumn.CRON]),
+      everyMs: this.numOrNull(row[ScheduleColumn.EVERY_MS]),
+      timezone: this.strOrNull(row[ScheduleColumn.TIMEZONE]),
+      data: this.fromJson(row[ScheduleColumn.DATA]),
+      priority: this.numOrNull(row[ScheduleColumn.PRIORITY]),
+      retryMaxAttempts: this.numOrNull(row[ScheduleColumn.RETRY_MAX_ATTEMPTS]),
+      retryDelayMs: this.numOrNull(row[ScheduleColumn.RETRY_DELAY_MS]),
+      nextRunAt: this.numOrNull(row[ScheduleColumn.NEXT_RUN_AT]),
+      lastRunAt: this.numOrNull(row[ScheduleColumn.LAST_RUN_AT]),
+      enabled: this.boolOut(row[ScheduleColumn.ENABLED]),
+      startAt: this.numOrNull(row[ScheduleColumn.START_AT]),
+      endAt: this.numOrNull(row[ScheduleColumn.END_AT]),
+      idempotencyKey: this.strOrNull(row[ScheduleColumn.IDEMPOTENCY_KEY]),
+      createdAt: Number(row[ScheduleColumn.CREATED_AT]),
+      updatedAt: Number(row[ScheduleColumn.UPDATED_AT]),
     };
   }
 
@@ -460,15 +467,15 @@ export class SqliteDriver implements Driver {
     }
     const { columns, values } = this.jobInsertValues(job);
     const placeholders = values.map((_, i) => this.ph(i)).join(', ');
-    const sql = `INSERT INTO ${this.t(TableName.JOB)} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id, status, start_after, workflow_id`;
+    const sql = `INSERT INTO ${this.t(TableName.JOB)} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}, ${JobColumn.WORKFLOW_ID}`;
     try {
       const res = await this.runMaybeTx(sql, values, tx);
       const row = res.rows[0]!;
       return {
-        id: String(row.id),
-        status: row.status as JobStatus,
-        startAfter: Number(row.start_after),
-        workflowId: this.strOrNull(row.workflow_id),
+        id: String(row[JobColumn.ID]),
+        status: row[JobColumn.STATUS] as JobStatus,
+        startAfter: Number(row[JobColumn.START_AFTER]),
+        workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
         deduplicated: false,
       };
     } catch (err) {
@@ -491,17 +498,17 @@ export class SqliteDriver implements Driver {
     }
     if (job.singletonKey != null) {
       const res = await this.runMaybeTx(
-        `SELECT id, status, start_after, workflow_id FROM ${this.t(TableName.JOB)} WHERE queue_name = ${this.ph(0)} AND singleton_key = ${this.ph(1)} AND status IN ('PENDING','ACTIVE','RETRY')`,
+        `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}, ${JobColumn.WORKFLOW_ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} = ${this.ph(1)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.ACTIVE}','${JobStatus.RETRY}')`,
         [job.queueName, job.singletonKey],
         tx,
       );
       if (res.rows[0]) {
         const row = res.rows[0];
         return {
-          id: String(row.id),
-          status: row.status as JobStatus,
-          startAfter: Number(row.start_after),
-          workflowId: this.strOrNull(row.workflow_id),
+          id: String(row[JobColumn.ID]),
+          status: row[JobColumn.STATUS] as JobStatus,
+          startAfter: Number(row[JobColumn.START_AFTER]),
+          workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
           deduplicated: true,
           deduplicationReason: DeduplicationReason.SINGLETON,
         };
@@ -516,17 +523,17 @@ export class SqliteDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<InsertedJobRow | null> {
     const res = await this.runMaybeTx(
-      `SELECT id, status, start_after, workflow_id FROM ${this.t(TableName.JOB)} WHERE queue_name = ${this.ph(0)} AND idempotency_key = ${this.ph(1)}`,
+      `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}, ${JobColumn.WORKFLOW_ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} = ${this.ph(1)}`,
       [options.queueName, options.idempotencyKey],
       options.tx,
     );
     if (!res.rows[0]) return null;
     const row = res.rows[0];
     return {
-      id: String(row.id),
-      status: row.status as JobStatus,
-      startAfter: Number(row.start_after),
-      workflowId: this.strOrNull(row.workflow_id),
+      id: String(row[JobColumn.ID]),
+      status: row[JobColumn.STATUS] as JobStatus,
+      startAfter: Number(row[JobColumn.START_AFTER]),
+      workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
       deduplicated: true,
       deduplicationReason: DeduplicationReason.IDEMPOTENCY,
     };
@@ -538,7 +545,7 @@ export class SqliteDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<ScheduleRow | null> {
     const res = await this.runMaybeTx(
-      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE queue_name = ${this.ph(0)} AND idempotency_key = ${this.ph(1)}`,
+      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.QUEUE_NAME} = ${this.ph(0)} AND ${ScheduleColumn.IDEMPOTENCY_KEY} = ${this.ph(1)}`,
       [options.queueName, options.idempotencyKey],
       options.tx,
     );
@@ -567,22 +574,22 @@ export class SqliteDriver implements Driver {
     // (see ProducerService), so nothing here needs a conflict target that sharded engines reject.
     const id = schedule.id ?? uuid();
     const cols = [
-      'id',
-      'queue_name',
-      'cron',
-      'every_ms',
-      'timezone',
-      'data',
-      'priority',
-      'retry_max_attempts',
-      'retry_delay_ms',
-      'next_run_at',
-      'enabled',
-      'start_at',
-      'end_at',
-      'idempotency_key',
-      'created_at',
-      'updated_at',
+      ScheduleColumn.ID,
+      ScheduleColumn.QUEUE_NAME,
+      ScheduleColumn.CRON,
+      ScheduleColumn.EVERY_MS,
+      ScheduleColumn.TIMEZONE,
+      ScheduleColumn.DATA,
+      ScheduleColumn.PRIORITY,
+      ScheduleColumn.RETRY_MAX_ATTEMPTS,
+      ScheduleColumn.RETRY_DELAY_MS,
+      ScheduleColumn.NEXT_RUN_AT,
+      ScheduleColumn.ENABLED,
+      ScheduleColumn.START_AT,
+      ScheduleColumn.END_AT,
+      ScheduleColumn.IDEMPOTENCY_KEY,
+      ScheduleColumn.CREATED_AT,
+      ScheduleColumn.UPDATED_AT,
     ];
     const vals: unknown[] = [
       id,
@@ -613,7 +620,7 @@ export class SqliteDriver implements Driver {
 
   async deleteSchedule(options: { scheduleId: string; tx?: TransactionHandle }): Promise<boolean> {
     const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE id = ${this.ph(0)}`,
+      `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
       [options.scheduleId],
       options.tx,
     );
@@ -640,11 +647,11 @@ export class SqliteDriver implements Driver {
     if (!instanceKey) {
       const build = (session?: Session) =>
         this.execute(
-          `UPDATE ${this.t(TableName.JOB)} SET status = 'ACTIVE', started_at = ${this.ph(0)}, locked_until = ${this.ph(1)}, ` +
-            `locked_by_instance_id = ${this.ph(2)}, updated_at = ${this.ph(3)} ` +
-            `WHERE id IN (SELECT id FROM ${this.t(TableName.JOB)} WHERE queue_name = ${this.ph(4)} AND status IN ('PENDING','RETRY') ` +
-            `AND start_after <= ${this.ph(5)} AND (expire_at IS NULL OR expire_at > ${this.ph(6)}) ` +
-            `ORDER BY priority DESC, start_after ASC LIMIT ${this.ph(7)}${skipLocked}) RETURNING ${cols}`,
+          `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.ACTIVE}', ${JobColumn.STARTED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = ${this.ph(1)}, ` +
+            `${JobColumn.LOCKED_BY_INSTANCE_ID} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)} ` +
+            `WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(4)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') ` +
+            `AND ${JobColumn.START_AFTER} <= ${this.ph(5)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(6)}) ` +
+            `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(7)}${skipLocked}) RETURNING ${cols}`,
           [now, lockedUntil, lockedByInstanceId, now, queueName, now, now, limit],
           session,
         );
@@ -671,15 +678,15 @@ export class SqliteDriver implements Driver {
     const idSet = new Set<string>();
     for (let offset = 0; idSet.size < limit && offset < maxScan; offset += pageSize) {
       const sel = await this.execute(
-        `SELECT id, preferred_instance_key_pattern FROM ${this.t(TableName.JOB)} WHERE queue_name = ${this.ph(0)} AND status IN ('PENDING','RETRY') ` +
-          `AND start_after <= ${this.ph(1)} AND (expire_at IS NULL OR expire_at > ${this.ph(2)}) ` +
-          `ORDER BY priority DESC, start_after ASC LIMIT ${this.ph(3)} OFFSET ${this.ph(4)}`,
+        `SELECT ${JobColumn.ID}, ${JobColumn.PREFERRED_INSTANCE_KEY_PATTERN} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') ` +
+          `AND ${JobColumn.START_AFTER} <= ${this.ph(1)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(2)}) ` +
+          `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(3)} OFFSET ${this.ph(4)}`,
         [queueName, now, now, pageSize, offset],
       );
       if (sel.rows.length === 0) break; // exhausted — nothing more to scan
       for (const row of sel.rows) {
-        if (matchesInstance(this.strOrNull(row.preferred_instance_key_pattern), instanceKey)) {
-          idSet.add(String(row.id));
+        if (matchesInstance(this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]), instanceKey)) {
+          idSet.add(String(row[JobColumn.ID]));
           if (idSet.size >= limit) break;
         }
       }
@@ -691,9 +698,9 @@ export class SqliteDriver implements Driver {
       const setParams = [now, lockedUntil, lockedByInstanceId, instanceKey, now];
       const idPh = ids.map((_, i) => this.ph(setParams.length + i)).join(', ');
       const upd = await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET status = 'ACTIVE', started_at = ${this.ph(0)}, locked_until = ${this.ph(1)}, ` +
-          `locked_by_instance_id = ${this.ph(2)}, processed_on_instance_key = ${this.ph(3)}, updated_at = ${this.ph(4)} ` +
-          `WHERE id IN (${idPh}) AND status IN ('PENDING','RETRY') RETURNING ${cols}`,
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.ACTIVE}', ${JobColumn.STARTED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = ${this.ph(1)}, ` +
+          `${JobColumn.LOCKED_BY_INSTANCE_ID} = ${this.ph(2)}, ${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(3)}, ${JobColumn.UPDATED_AT} = ${this.ph(4)} ` +
+          `WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') RETURNING ${cols}`,
         [...setParams, ...ids],
         session,
       );
@@ -709,7 +716,7 @@ export class SqliteDriver implements Driver {
     now: number;
   }): Promise<boolean> {
     const res = await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET locked_until = ${this.ph(0)}, updated_at = ${this.ph(1)} WHERE id = ${this.ph(2)} AND status = 'ACTIVE'`,
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.LOCKED_UNTIL} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} = '${JobStatus.ACTIVE}'`,
       [options.now + options.lockDurationMs, options.now, options.jobId],
     );
     return res.rowCount > 0;
@@ -722,7 +729,7 @@ export class SqliteDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<void> {
     await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.JOB)} SET status = 'COMPLETED', return_value = ${this.ph(0)}, completed_at = ${this.ph(1)}, updated_at = ${this.ph(2)}, locked_until = NULL WHERE id = ${this.ph(3)}`,
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.COMPLETED}', ${JobColumn.RETURN_VALUE} = ${this.ph(0)}, ${JobColumn.COMPLETED_AT} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(3)}`,
       [this.toJson(options.returnValue), options.now, options.now, options.jobId],
       options.tx,
     );
@@ -736,7 +743,7 @@ export class SqliteDriver implements Driver {
     now: number;
   }): Promise<void> {
     await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET status = 'RETRY', retry_attempt = ${this.ph(0)}, start_after = ${this.ph(1)}, retried_at = ${this.ph(2)}, failure_message = ${this.ph(3)}, updated_at = ${this.ph(4)}, locked_until = NULL WHERE id = ${this.ph(5)}`,
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.RETRY}', ${JobColumn.RETRY_ATTEMPT} = ${this.ph(0)}, ${JobColumn.START_AFTER} = ${this.ph(1)}, ${JobColumn.RETRIED_AT} = ${this.ph(2)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(3)}, ${JobColumn.UPDATED_AT} = ${this.ph(4)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(5)}`,
       [
         options.retryAttempt,
         options.nextRunAt,
@@ -750,7 +757,7 @@ export class SqliteDriver implements Driver {
 
   async failJob(options: { jobId: string; lastError: string; now: number }): Promise<void> {
     await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET status = 'FAILED', failed_at = ${this.ph(0)}, failure_message = ${this.ph(1)}, updated_at = ${this.ph(2)}, locked_until = NULL WHERE id = ${this.ph(3)}`,
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.FAILED}', ${JobColumn.FAILED_AT} = ${this.ph(0)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(3)}`,
       [options.now, options.lastError, options.now, options.jobId],
     );
   }
@@ -766,7 +773,7 @@ export class SqliteDriver implements Driver {
     // Complete-this + spawn-next in ONE transaction.
     return this.transaction(async (session) => {
       await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET status = 'COMPLETED', return_value = ${this.ph(0)}, completed_at = ${this.ph(1)}, updated_at = ${this.ph(2)}, locked_until = NULL WHERE id = ${this.ph(3)}`,
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.COMPLETED}', ${JobColumn.RETURN_VALUE} = ${this.ph(0)}, ${JobColumn.COMPLETED_AT} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(3)}`,
         [this.toJson(options.returnValue), options.now, options.now, options.jobId],
         session,
       );
@@ -774,16 +781,16 @@ export class SqliteDriver implements Driver {
       const { columns, values } = this.jobInsertValues(options.spawn);
       const placeholders = values.map((_, i) => this.ph(i)).join(', ');
       const res = await this.execute(
-        `INSERT INTO ${this.t(TableName.JOB)} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id, status, start_after, workflow_id`,
+        `INSERT INTO ${this.t(TableName.JOB)} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}, ${JobColumn.WORKFLOW_ID}`,
         values,
         session,
       );
       const row = res.rows[0]!;
       return {
-        id: String(row.id),
-        status: row.status as JobStatus,
-        startAfter: Number(row.start_after),
-        workflowId: this.strOrNull(row.workflow_id),
+        id: String(row[JobColumn.ID]),
+        status: row[JobColumn.STATUS] as JobStatus,
+        startAfter: Number(row[JobColumn.START_AFTER]),
+        workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
         deduplicated: false,
       };
     });
@@ -792,14 +799,14 @@ export class SqliteDriver implements Driver {
   async reclaimStalledJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]> {
     const cols = JOB_COLUMNS.join(', ');
     const params: unknown[] = [options.now, options.now];
-    let where = `status = 'ACTIVE' AND locked_until IS NOT NULL AND locked_until < ${this.ph(1)}`;
+    let where = `${JobColumn.STATUS} = '${JobStatus.ACTIVE}' AND ${JobColumn.LOCKED_UNTIL} IS NOT NULL AND ${JobColumn.LOCKED_UNTIL} < ${this.ph(1)}`;
     if (options.queueName) {
-      where += ` AND queue_name = ${this.ph(2)}`;
+      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(2)}`;
       params.push(options.queueName);
     }
     // Return stalled jobs to PENDING (RETRY handling happens in the completion path on next fail).
     const res = await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET status = 'PENDING', stalled_at = ${this.ph(0)}, locked_until = NULL, locked_by_instance_id = NULL WHERE ${where} RETURNING ${cols}`,
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.STALLED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCKED_BY_INSTANCE_ID} = NULL WHERE ${where} RETURNING ${cols}`,
       params,
     );
     return res.rows.map((r) => this.mapJob(r));
@@ -808,13 +815,13 @@ export class SqliteDriver implements Driver {
   async expireDueJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]> {
     const cols = JOB_COLUMNS.join(', ');
     const params: unknown[] = [options.now, options.now, options.now];
-    let where = `status IN ('PENDING','RETRY') AND expire_at IS NOT NULL AND expire_at <= ${this.ph(2)}`;
+    let where = `${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') AND ${JobColumn.EXPIRE_AT} IS NOT NULL AND ${JobColumn.EXPIRE_AT} <= ${this.ph(2)}`;
     if (options.queueName) {
-      where += ` AND queue_name = ${this.ph(3)}`;
+      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(3)}`;
       params.push(options.queueName);
     }
     const res = await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET status = 'EXPIRED', expired_at = ${this.ph(0)}, updated_at = ${this.ph(1)}, locked_until = NULL WHERE ${where} RETURNING ${cols}`,
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.EXPIRED}', ${JobColumn.EXPIRED_AT} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${where} RETURNING ${cols}`,
       params,
     );
     return res.rows.map((r) => this.mapJob(r));
@@ -831,9 +838,9 @@ export class SqliteDriver implements Driver {
     if (options.from === 'FROM_FAILED_STEP') {
       // Re-arm this job's own row: back to PENDING, reset retry counters/lock/timestamps.
       await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET status = 'PENDING', retry_attempt = 0, start_after = ${this.ph(0)}, ` +
-          `failed_at = NULL, failure_message = NULL, completed_at = NULL, started_at = NULL, cancelled_at = NULL, expired_at = NULL, ` +
-          `locked_until = NULL, locked_by_instance_id = NULL, updated_at = ${this.ph(1)} WHERE id = ${this.ph(2)}`,
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.RETRY_ATTEMPT} = 0, ${JobColumn.START_AFTER} = ${this.ph(0)}, ` +
+          `${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ${JobColumn.EXPIRED_AT} = NULL, ` +
+          `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCKED_BY_INSTANCE_ID} = NULL, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)}`,
         [options.now, options.now, options.jobId],
       );
       return {
@@ -848,7 +855,7 @@ export class SqliteDriver implements Driver {
     let seed = job;
     if (job.workflowId) {
       const entry = await this.execute(
-        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} WHERE workflow_id = ${this.ph(0)} ORDER BY created_at ASC LIMIT 1`,
+        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.WORKFLOW_ID} = ${this.ph(0)} ORDER BY ${JobColumn.CREATED_AT} ASC LIMIT 1`,
         [job.workflowId],
       );
       if (entry.rows[0]) seed = this.mapJob(entry.rows[0]);
@@ -885,7 +892,7 @@ export class SqliteDriver implements Driver {
   // --- Reading ---
   async getJob(options: { jobId: string }): Promise<JobRecord | null> {
     const res = await this.execute(
-      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} WHERE id = ${this.ph(0)}`,
+      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} = ${this.ph(0)}`,
       [options.jobId],
     );
     return res.rows[0] ? this.mapJob(res.rows[0]) : null;
@@ -904,24 +911,24 @@ export class SqliteDriver implements Driver {
     const clauses: string[] = [];
     const params: unknown[] = [];
     if (options.queueName) {
-      clauses.push(`queue_name = ${this.ph(params.length)}`);
+      clauses.push(`${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`);
       params.push(options.queueName);
     }
     if (options.statuses && options.statuses.length) {
       const ph = options.statuses.map((_, i) => this.ph(params.length + i)).join(', ');
-      clauses.push(`status IN (${ph})`);
+      clauses.push(`${JobColumn.STATUS} IN (${ph})`);
       params.push(...options.statuses);
     }
     if (options.scheduleId) {
-      clauses.push(`schedule_id = ${this.ph(params.length)}`);
+      clauses.push(`${JobColumn.SCHEDULE_ID} = ${this.ph(params.length)}`);
       params.push(options.scheduleId);
     }
     if (options.workflowId) {
-      clauses.push(`workflow_id = ${this.ph(params.length)}`);
+      clauses.push(`${JobColumn.WORKFLOW_ID} = ${this.ph(params.length)}`);
       params.push(options.workflowId);
     }
     if (options.processedOnInstanceKey) {
-      clauses.push(`processed_on_instance_key = ${this.ph(params.length)}`);
+      clauses.push(`${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(params.length)}`);
       params.push(options.processedOnInstanceKey);
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
@@ -930,7 +937,7 @@ export class SqliteDriver implements Driver {
     const offsetPh = this.ph(params.length);
     params.push(options.offset);
     const res = await this.execute(
-      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ${where} ORDER BY created_at ${options.order === 'asc' ? 'ASC' : 'DESC'} LIMIT ${limitPh} OFFSET ${offsetPh}`,
+      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ${where} ORDER BY ${JobColumn.CREATED_AT} ${options.order === 'asc' ? 'ASC' : 'DESC'} LIMIT ${limitPh} OFFSET ${offsetPh}`,
       params,
     );
     return res.rows.map((r) => this.mapJob(r));
@@ -943,27 +950,27 @@ export class SqliteDriver implements Driver {
     const clauses: string[] = [];
     const params: unknown[] = [];
     if (options.queueName) {
-      clauses.push(`queue_name = ${this.ph(params.length)}`);
+      clauses.push(`${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`);
       params.push(options.queueName);
     }
     if (options.processedOnInstanceKey) {
-      clauses.push(`processed_on_instance_key = ${this.ph(params.length)}`);
+      clauses.push(`${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(params.length)}`);
       params.push(options.processedOnInstanceKey);
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const res = await this.execute(
-      `SELECT status, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ${where} GROUP BY status`,
+      `SELECT ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ${where} GROUP BY ${JobColumn.STATUS}`,
       params,
     );
     const counts = emptyStatusCounts();
     for (const row of res.rows) {
-      counts[row.status as JobStatus] = Number(row.c);
+      counts[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
     }
     return counts;
   }
 
   async listQueues(): Promise<QueueRow[]> {
-    const res = await this.execute(`SELECT * FROM ${this.t(TableName.QUEUE)} ORDER BY name ASC`, []);
+    const res = await this.execute(`SELECT * FROM ${this.t(TableName.QUEUE)} ORDER BY ${QueueColumn.NAME} ASC`, []);
     // No unique index on name: dedupe defensively so a creation race can't surface twice.
     return this.mapUnique(res.rows, (r) => this.mapQueue(r), (q) => q.name);
   }
@@ -972,11 +979,11 @@ export class SqliteDriver implements Driver {
     const params: unknown[] = [];
     let where = '';
     if (options.queueName) {
-      where = `WHERE queue_name = ${this.ph(0)}`;
+      where = `WHERE ${ScheduleColumn.QUEUE_NAME} = ${this.ph(0)}`;
       params.push(options.queueName);
     }
     const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.SCHEDULE)} ${where} ORDER BY created_at ASC`,
+      `SELECT * FROM ${this.t(TableName.SCHEDULE)} ${where} ORDER BY ${ScheduleColumn.CREATED_AT} ASC`,
       params,
     );
     return res.rows.map((r) => this.mapSchedule(r));
@@ -984,7 +991,7 @@ export class SqliteDriver implements Driver {
 
   async getSchedule(options: { scheduleId: string }): Promise<ScheduleRow | null> {
     const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE id = ${this.ph(0)}`,
+      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
       [options.scheduleId],
     );
     return res.rows[0] ? this.mapSchedule(res.rows[0]) : null;
@@ -996,23 +1003,23 @@ export class SqliteDriver implements Driver {
     now: number;
   }): Promise<ThroughputPoint[]> {
     const params: unknown[] = [options.sinceMs];
-    let where = `(completed_at IS NOT NULL OR failed_at IS NOT NULL) AND updated_at >= ${this.ph(0)}`;
+    let where = `(${JobColumn.COMPLETED_AT} IS NOT NULL OR ${JobColumn.FAILED_AT} IS NOT NULL) AND ${JobColumn.UPDATED_AT} >= ${this.ph(0)}`;
     if (options.queueName) {
-      where += ` AND queue_name = ${this.ph(1)}`;
+      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(1)}`;
       params.push(options.queueName);
     }
     const res = await this.execute(
-      `SELECT status, completed_at, failed_at FROM ${this.t(TableName.JOB)} WHERE ${where}`,
+      `SELECT ${JobColumn.STATUS}, ${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT} FROM ${this.t(TableName.JOB)} WHERE ${where}`,
       params,
     );
     // Bucket by minute in-memory (avoids engine-specific date functions).
     const buckets = new Map<number, ThroughputPoint>();
     for (const row of res.rows) {
-      const ts = row.completed_at != null ? Number(row.completed_at) : Number(row.failed_at);
+      const ts = row[JobColumn.COMPLETED_AT] != null ? Number(row[JobColumn.COMPLETED_AT]) : Number(row[JobColumn.FAILED_AT]);
       const bucket = Math.floor(ts / 60000) * 60000;
       const point = buckets.get(bucket) ?? { bucketStart: bucket, completed: 0, failed: 0 };
-      if (row.status === JobStatus.COMPLETED) point.completed += 1;
-      else if (row.status === JobStatus.FAILED) point.failed += 1;
+      if (row[JobColumn.STATUS] === JobStatus.COMPLETED) point.completed += 1;
+      else if (row[JobColumn.STATUS] === JobStatus.FAILED) point.failed += 1;
       buckets.set(bucket, point);
     }
     return [...buckets.values()].sort((a, b) => a.bucketStart - b.bucketStart);
@@ -1020,7 +1027,7 @@ export class SqliteDriver implements Driver {
 
   async getDueSchedules(options: { now: number; limit: number }): Promise<ScheduleRow[]> {
     const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ${this.ph(0)} ORDER BY next_run_at ASC LIMIT ${this.ph(1)}`,
+      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ENABLED} = 1 AND ${ScheduleColumn.NEXT_RUN_AT} IS NOT NULL AND ${ScheduleColumn.NEXT_RUN_AT} <= ${this.ph(0)} ORDER BY ${ScheduleColumn.NEXT_RUN_AT} ASC LIMIT ${this.ph(1)}`,
       [options.now, options.limit],
     );
     return res.rows.map((r) => this.mapSchedule(r));
@@ -1034,7 +1041,7 @@ export class SqliteDriver implements Driver {
   }): Promise<boolean> {
     // Guarded on the previous next_run_at: only one instance claims each tick.
     const res = await this.execute(
-      `UPDATE ${this.t(TableName.SCHEDULE)} SET next_run_at = ${this.ph(0)}, last_run_at = ${this.ph(1)}, updated_at = ${this.ph(2)} WHERE id = ${this.ph(3)} AND next_run_at = ${this.ph(4)}`,
+      `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(0)}, ${ScheduleColumn.LAST_RUN_AT} = ${this.ph(1)}, ${ScheduleColumn.UPDATED_AT} = ${this.ph(2)} WHERE ${ScheduleColumn.ID} = ${this.ph(3)} AND ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(4)}`,
       [
         options.nextRunAt,
         options.lastRunAt,
@@ -1049,7 +1056,7 @@ export class SqliteDriver implements Driver {
   // --- Job control ---
   async cancelJob(options: { jobId: string; now: number }): Promise<boolean> {
     const res = await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET status = 'CANCELLED', cancelled_at = ${this.ph(0)}, updated_at = ${this.ph(1)} WHERE id = ${this.ph(2)} AND status IN ('PENDING','RETRY')`,
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.CANCELLED}', ${JobColumn.CANCELLED_AT} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}')`,
       [options.now, options.now, options.jobId],
     );
     return res.rowCount > 0;
@@ -1057,7 +1064,7 @@ export class SqliteDriver implements Driver {
 
   async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
     const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE id = ${this.ph(0)}`,
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} = ${this.ph(0)}`,
       [options.jobId],
       options.tx,
     );
@@ -1070,7 +1077,7 @@ export class SqliteDriver implements Driver {
     // Placeholder appearance order (IN list, then queue_name) must match the params array
     // so positional-bind engines (SQLite '?') and indexed engines ('$n') both work.
     const res = await this.execute(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE id IN (${idPh}) AND queue_name = ${this.ph(options.jobIds.length)}`,
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.jobIds.length)}`,
       [...options.jobIds, options.queueName],
     );
     return res.rowCount;
@@ -1080,7 +1087,7 @@ export class SqliteDriver implements Driver {
     if (!options.statuses.length) return 0;
     const statusPh = options.statuses.map((_, i) => this.ph(i)).join(', ');
     const res = await this.execute(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE status IN (${statusPh}) AND queue_name = ${this.ph(options.statuses.length)}`,
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${statusPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.statuses.length)}`,
       [...options.statuses, options.queueName],
     );
     return res.rowCount;
@@ -1097,18 +1104,18 @@ export class SqliteDriver implements Driver {
     const sets: string[] = [];
     const params: unknown[] = [];
     if (options.processingPaused !== undefined) {
-      sets.push(`processing_paused = ${this.ph(params.length)}`);
+      sets.push(`${QueueColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
       params.push(this.boolIn(options.processingPaused));
     }
     if (options.acceptingPaused !== undefined) {
-      sets.push(`accepting_paused = ${this.ph(params.length)}`);
+      sets.push(`${QueueColumn.ACCEPTING_PAUSED} = ${this.ph(params.length)}`);
       params.push(this.boolIn(options.acceptingPaused));
     }
-    sets.push(`updated_at = ${this.ph(params.length)}`);
+    sets.push(`${QueueColumn.UPDATED_AT} = ${this.ph(params.length)}`);
     params.push(options.now);
     params.push(options.queueName);
     await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE name = ${this.ph(params.length - 1)}`,
+      `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE ${QueueColumn.NAME} = ${this.ph(params.length - 1)}`,
       params,
       options.tx,
     );
@@ -1127,7 +1134,7 @@ export class SqliteDriver implements Driver {
     // without the shard key). No unique index on name; a rare creation race can leave two rows,
     // and listQueues/getQueueByName dedupe by name so callers never see both.
     await this.runMaybeTx(
-      `INSERT INTO ${this.t(TableName.QUEUE)} (name, processing_paused, accepting_paused, created_at, updated_at) VALUES (${this.ph(0)}, 0, 0, ${this.ph(1)}, ${this.ph(2)})`,
+      `INSERT INTO ${this.t(TableName.QUEUE)} (${QueueColumn.NAME}, ${QueueColumn.PROCESSING_PAUSED}, ${QueueColumn.ACCEPTING_PAUSED}, ${QueueColumn.CREATED_AT}, ${QueueColumn.UPDATED_AT}) VALUES (${this.ph(0)}, 0, 0, ${this.ph(1)}, ${this.ph(2)})`,
       [options.name, options.now, options.now],
       options.tx,
     );
@@ -1138,7 +1145,7 @@ export class SqliteDriver implements Driver {
 
   async getQueueByName(options: { name: string }): Promise<QueueRow | null> {
     const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.QUEUE)} WHERE name = ${this.ph(0)}`,
+      `SELECT * FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
       [options.name],
     );
     return res.rows[0] ? this.mapQueue(res.rows[0]) : null;
@@ -1148,7 +1155,7 @@ export class SqliteDriver implements Driver {
     // Only removes the queue row. Jobs link by queue_name (no FK/PK), so this never cascades —
     // any leftover job rows keep their name and are unaffected; the caller guards "not in use".
     const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.QUEUE)} WHERE name = ${this.ph(0)}`,
+      `DELETE FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
       [options.name],
       options.tx,
     );
@@ -1163,12 +1170,12 @@ export class SqliteDriver implements Driver {
     // never touches the (independently controlled) pause flag; only the first beat falls through
     // to INSERT. A rare create race can leave two rows; listInstances dedupes by key.
     const updated = await this.execute(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET last_seen_at = ${this.ph(0)}, updated_at = ${this.ph(1)} WHERE instance_key = ${this.ph(2)} RETURNING *`,
+      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.LAST_SEEN_AT} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(2)} RETURNING *`,
       [options.now, options.now, options.instanceKey],
     );
     if (updated.rows[0]) return this.mapInstance(updated.rows[0]);
     const inserted = await this.execute(
-      `INSERT INTO ${this.t(TableName.INSTANCE)} (instance_key, processing_paused, created_at, updated_at, last_seen_at) VALUES (${this.ph(0)}, 0, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}) RETURNING *`,
+      `INSERT INTO ${this.t(TableName.INSTANCE)} (${InstanceColumn.INSTANCE_KEY}, ${InstanceColumn.PROCESSING_PAUSED}, ${InstanceColumn.CREATED_AT}, ${InstanceColumn.UPDATED_AT}, ${InstanceColumn.LAST_SEEN_AT}) VALUES (${this.ph(0)}, 0, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}) RETURNING *`,
       [options.instanceKey, options.now, options.now, options.now],
     );
     return this.mapInstance(inserted.rows[0]!);
@@ -1176,7 +1183,7 @@ export class SqliteDriver implements Driver {
 
   async listInstances(): Promise<InstanceRow[]> {
     const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.INSTANCE)} ORDER BY instance_key ASC`,
+      `SELECT * FROM ${this.t(TableName.INSTANCE)} ORDER BY ${InstanceColumn.INSTANCE_KEY} ASC`,
       [],
     );
     return this.mapUnique(res.rows, (r) => this.mapInstance(r), (i) => i.instanceKey);
@@ -1184,7 +1191,7 @@ export class SqliteDriver implements Driver {
 
   async getInstance(options: { instanceKey: string }): Promise<InstanceRow | null> {
     const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.INSTANCE)} WHERE instance_key = ${this.ph(0)}`,
+      `SELECT * FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
       [options.instanceKey],
     );
     return res.rows[0] ? this.mapInstance(res.rows[0]) : null;
@@ -1196,7 +1203,7 @@ export class SqliteDriver implements Driver {
     now: number;
   }): Promise<void> {
     await this.execute(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET processing_paused = ${this.ph(0)}, updated_at = ${this.ph(1)} WHERE instance_key = ${this.ph(2)}`,
+      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(2)}`,
       [this.boolIn(options.processingPaused), options.now, options.instanceKey],
     );
   }
@@ -1208,7 +1215,7 @@ export class SqliteDriver implements Driver {
     // Only removes the instance (monitoring) row. Jobs record processed_on_instance_key as a plain
     // string (no FK/PK), so removing an instance never touches or orphans any job rows.
     const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.INSTANCE)} WHERE instance_key = ${this.ph(0)}`,
+      `DELETE FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
       [options.instanceKey],
       options.tx,
     );
@@ -1228,9 +1235,9 @@ export class SqliteDriver implements Driver {
     const limitPh = this.ph(options.statuses.length + 1);
     // Bounded batch: delete finished rows whose retention window has elapsed.
     const res = await this.execute(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE id IN (SELECT id FROM ${this.t(TableName.JOB)} WHERE status IN (${statusPh}) ` +
-        `AND retention_mode = 'DELETE_AFTER' AND retention_ttl_ms IS NOT NULL ` +
-        `AND (COALESCE(completed_at, failed_at, cancelled_at, expired_at, updated_at) + retention_ttl_ms) <= ${cutoffPh} LIMIT ${limitPh})`,
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${statusPh}) ` +
+        `AND ${JobColumn.RETENTION_MODE} = 'DELETE_AFTER' AND ${JobColumn.RETENTION_TTL_MS} IS NOT NULL ` +
+        `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_MS}) <= ${cutoffPh} LIMIT ${limitPh})`,
       [...options.statuses, options.olderThan, options.limit],
     );
     return res.rowCount;
