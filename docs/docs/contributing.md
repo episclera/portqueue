@@ -60,7 +60,7 @@ Packages:
 - Open issues and PRs on [GitHub](https://github.com/episclera/portqueue). Include a
   minimal repro for bugs.
 - New behavior needs tests; a driver contribution should pass the
-  [conformance kit](./drivers/custom.md).
+  driver conformance kit.
 - Be kind — a standard code of conduct applies.
 
 Meet the people behind it on the [Team](./team.mdx) page.

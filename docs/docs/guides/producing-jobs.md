@@ -24,16 +24,17 @@ await emails.addJobs({
 `AddJobResult` carries `jobId`, `queue`, `status`, `deduplicated`, `startAfter`, and —
 for scheduled or workflow adds — `scheduleId` / `nextRunAt` / `workflowId`.
 
-## Priority & delayed start
+## Delayed start & priority
 
 ```ts
-await emails.addJob({ data, priority: 10 });                    // higher runs sooner
 await emails.addJob({ data, startAfter: '24h' });               // Duration string
 await emails.addJob({ data, startAfter: new Date('2026-08-01T09:00:00Z') });
+await emails.addJob({ data, priority: 10 });                    // higher runs sooner
 ```
 
 `startAfter` delays a **one-off** job (a `Duration` from now, or an absolute `Date`). For
-**recurring** production use `startEvery` / `cron` — see [Scheduling](./scheduling.md).
+**recurring** production use `startEvery` / `cron` — see [Delayed & recurring jobs](./scheduling.md).
+`priority` orders ready jobs — higher values are claimed first.
 
 ## Idempotency & singleton
 

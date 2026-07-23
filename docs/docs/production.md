@@ -1,10 +1,10 @@
 ---
 id: production
-title: Production best practices
-sidebar_label: Production
+title: Going to Production
+sidebar_label: Going to Production
 ---
 
-# Production best practices
+# Going to Production
 
 The one page to read before shipping. It doesn't re-teach features — it collects the
 right defaults and habits and links to the deep pages.
@@ -52,10 +52,10 @@ your own pruning); keep failed jobs longer than completed.
 Enable the `SystemMonitor` and set a worker-local
 [rate limiter](./guides/rate-limiting.md) for third-party APIs.
 
-## Multi-instance & execution locality
+## Execution locality
 
-For most deployments, leave `instanceKey` unset — interchangeable workers are simplest and most
-resilient. Turn on [multi-instance mode](./guides/multi-instance.md) only when work needs
+For most deployments, leave `instanceKey` unset — anonymous, interchangeable workers are simplest
+and most resilient. Give a server an [instance key](./scale-horizontally.md#choosing-a-preferred-server-with-patterns) only when work needs
 locality (warm cache, local data, region, specialized hardware):
 
 - Give each process a **stable `instanceKey`** (e.g. from your orchestrator's pod/host id, plus the

@@ -236,3 +236,13 @@ article a:not(.card):not(.button):not(.pagination-nav__link),
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Package-manager install tabs reuse the driver selection (groupId="driver") so the
+ * DB client in each command follows the engine picked in <DriverTabs mode="install" />.
+ * Hide the nested, redundant driver tab-strip — only the package manager is pickable
+ * here; the command still tracks the selected engine.
+ */
+ul.tabs.pm-driver-sync {
+  display: none;
+}

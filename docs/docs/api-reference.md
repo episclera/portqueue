@@ -30,11 +30,11 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 - `getQueues()`, `getQueueStats({ queue? })`, `getJob({ jobId })`, `getJobs(query)`, `getWorkflow({ workflowId })`.
 - `on(event, listener, filter?)` / `off(...)` / `once(...)`; `useHook(hook)`.
 - `pauseQueue({ queue, mode? })` / `resumeQueue({ queue })`; `removeQueue({ name })` — manual, refused while the queue is still declared in this process.
-- **Multi-instance:** `getInstances()` → `InstanceInfo[]`; `pauseInstance({ instanceKey })` / `resumeInstance({ instanceKey })`; `removeInstance({ instanceKey })` — refused until the instance has been unseen 30 min. See [Multi-instance](./guides/multi-instance.md).
+- **Multi-instance:** `getInstances()` → `InstanceInfo[]`; `pauseInstance({ instanceKey })` / `resumeInstance({ instanceKey })`; `removeInstance({ instanceKey })` — refused until the instance has been unseen 30 min. See [Multi-server / instance](./scale-horizontally.md#choosing-a-preferred-server-with-patterns).
 
 ## `Queue<TData>`
 
-- `addJob(options: AddJobOptions<TData>): Promise<AddJobResult>` — pass `startEvery`/`cron` to make it recurring; pass `preferredInstanceKeyPattern` for [instance affinity](./guides/multi-instance.md).
+- `addJob(options: AddJobOptions<TData>): Promise<AddJobResult>` — pass `startEvery`/`cron` to make it recurring; pass `preferredInstanceKeyPattern` for [instance affinity](./scale-horizontally.md#attach-a-pattern-to-the-job).
 - `addJobs({ jobs })`.
 - `getSchedules()`, `getJob`, `getJobs`, `getQueueStats`.
 - `retryJob({ jobId, from? })`, `cancelJob({ jobId })`, `cancelRunningJob({ jobId })`.
@@ -87,7 +87,7 @@ Schema identifiers (for driver authors / reporting): `TableName`, and the per-ta
 
 ## Drivers & transactions
 
-- Drivers: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite,mysql,citus,yugabyte}` — see [Drivers](./drivers/overview.md).
+- Drivers: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite,mysql,citus,yugabyte}` — one self-contained subpath export per engine.
 - Driver contract: `Driver`, `DriverProbe`, `Subscription`, `MigrationStep`,
   `DriverCapabilitySet`, `capabilities`, `DriverContext`; conformance kit at
   `@portqueue/core/conformance`.

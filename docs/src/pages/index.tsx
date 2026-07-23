@@ -9,7 +9,7 @@ import { DRIVERS } from '@site/src/constants/drivers';
 const FEATURES: { icon: string; title: string; body: string }[] = [
   {
     icon: '🌐',
-    title: 'Scalable horizontally',
+    title: 'Scales to many servers',
     body: 'Built to run across many instances at once — they cooperate through row-level claiming, so no job is ever processed twice. Runs just as well on a single instance: scalable from one to infinity.',
   },
   {
@@ -19,7 +19,7 @@ const FEATURES: { icon: string; title: string; body: string }[] = [
   },
   {
     icon: '🖥️',
-    title: 'A powerful dashboard',
+    title: 'A powerful dashboard and CLI',
     body: 'A mountable React dashboard (plus a full CLI) to monitor and control both queues and instances live — pause, resume, retry, and watch throughput, with no third-party service.',
   },
   {
@@ -282,7 +282,7 @@ export default function Home(): ReactNode {
               Per-queue claim loops, SKIP LOCKED, and visibility timeouts let N instances cooperate
               on one queue with no leader election and no cross-queue blocking.
             </SectionLead>
-            <CtaButton $variant="primary" to="/docs/scalability">
+            <CtaButton $variant="primary" to="/docs/scale-horizontally">
               How it scales
             </CtaButton>
           </ScaleStrip>

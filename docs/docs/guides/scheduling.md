@@ -1,10 +1,10 @@
 ---
 id: scheduling
-title: Scheduling & recurring jobs
-sidebar_label: Scheduling
+title: Delayed & recurring jobs
+sidebar_label: Delayed & recurring jobs
 ---
 
-# Scheduling
+# Delayed & recurring jobs
 
 Scheduling lives on `addJob` itself — there is **no separate `schedule()` method**. One
 method covers one-off and recurring production, selected by which timing prop you pass:
