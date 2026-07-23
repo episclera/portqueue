@@ -1,12 +1,12 @@
 import { MigrationMode } from '../options/enums.js';
-import { DriverCapability } from '../driver/driver-capabilities.js';
+import { DriverCapability } from '../drivers/driver-capabilities.js';
 import { PortQueueEvent } from '../events/event-name.enum.js';
 import { SubscriberService } from '../pubsub/subscriber.service.js';
 import { SchedulerService } from '../scheduling/scheduler.service.js';
 import { RetentionService } from '../retention/retention.service.js';
 import { SystemMonitorService } from '../monitoring/system-monitor.service.js';
 import { InstanceService } from './instance.service.js';
-import { MigrationRunner } from '../schema/migration/migration-runner.service.js';
+import { MigrationRunner } from '../drivers/shared/migration-runner.service.js';
 import type { Runtime } from './runtime.js';
 import type { ClientRegistryService } from './client-registry.service.js';
 

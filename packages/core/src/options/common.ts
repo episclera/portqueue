@@ -31,12 +31,13 @@ export interface RateLimiterOptions {
 /** Opaque developer metadata for correlation/tracing. */
 export type JobMetadata = Record<string, unknown>;
 
-/** Override auto-detected instance identity. */
+/**
+ * Instance identity. Provide a stable `id` to attribute lock ownership to this process; if omitted,
+ * a random per-process id is used. Never auto-detected from the environment. Multi-instance mode is
+ * opt-in separately via `instanceKey` on the client options.
+ */
 export interface InstanceIdentityOptions {
   id?: string;
-  type?: import('./enums.js').InstanceType;
-  /** Path to persist a generated bare-metal id. */
-  persistPath?: string;
 }
 
 /** System-pressure backpressure config. */

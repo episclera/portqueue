@@ -37,6 +37,21 @@
       "import": "./dist/drivers/oracle/index.mjs",
       "require": "./dist/drivers/oracle/index.cjs"
     },
+    "./drivers/mysql": {
+      "types": "./dist/drivers/mysql/index.d.ts",
+      "import": "./dist/drivers/mysql/index.mjs",
+      "require": "./dist/drivers/mysql/index.cjs"
+    },
+    "./drivers/citus": {
+      "types": "./dist/drivers/citus/index.d.ts",
+      "import": "./dist/drivers/citus/index.mjs",
+      "require": "./dist/drivers/citus/index.cjs"
+    },
+    "./drivers/yugabyte": {
+      "types": "./dist/drivers/yugabyte/index.d.ts",
+      "import": "./dist/drivers/yugabyte/index.mjs",
+      "require": "./dist/drivers/yugabyte/index.cjs"
+    },
     "./tx": {
       "types": "./dist/tx/index.d.ts",
       "import": "./dist/tx/index.mjs",

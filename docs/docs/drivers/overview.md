@@ -37,6 +37,13 @@ suffers.
 | [Oracle](./oracle.mdx) | `@portqueue/core/drivers/oracle` | `oracledb` | Oracle-shop deployments |
 | [PGLite](./pglite.mdx) | `@portqueue/core/drivers/pglite` | `@electric-sql/pglite` | Embedded Postgres, tests |
 | [SQLite](./sqlite.mdx) | `@portqueue/core/drivers/sqlite` | `better-sqlite3` | Single-node apps, zero services |
+| MySQL | `@portqueue/core/drivers/mysql` | `mysql2` | MySQL 8+ deployments (no `RETURNING`; mutate-then-read) |
+| Citus | `@portqueue/core/drivers/citus` | `pg` | Sharded Postgres at scale (distributed tables) |
+| Yugabyte | `@portqueue/core/drivers/yugabyte` | `pg` | Distributed YSQL (no LISTEN/NOTIFY; polling) |
+
+Each engine ships as its **own standalone driver** — wire-compatible engines (Citus, Yugabyte,
+PGLite) still carry their own copy of the SQL rather than sharing Postgres's, so an engine-specific
+change never affects another.
 
 Need another engine? Write a [custom driver](./custom.md) and validate it with the
 conformance kit.

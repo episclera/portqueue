@@ -1,13 +1,16 @@
-import { TableName } from '../../table-names.js';
-import type { FlavourMigration, PhysicalName } from '../types.js';
+import { TableName } from '../table-names.js';
+import type { FlavourMigration, PhysicalName } from '../shared/migration.js';
 
 /**
- * Predefined Postgres DDL, version by version. This is the canonical PG-wire family set: PGLite,
- * Yugabyte and Citus re-export it (Citus/Yugabyte add shard-key declarations in their own files
- * when needed). Authored from the JSON schema under `../../versions/`; not generated at runtime.
+ * Predefined Citus DDL, version by version. Citus extends Postgres, so the column types match the
+ * Postgres flavour — but this flavour is authored in full (not re-exported) because it does one
+ * thing Postgres never does: it distributes each table on its shard key right after creating it.
+ * Jobs and schedules co-locate with their queue on `queue_name`; instances shard on `instance_key`;
+ * the tiny migration ledger is a replicated reference table so every worker reads the version
+ * locally. Authored by hand for this engine; not generated at runtime.
  */
 
-/** Version 1 — the full base schema. */
+/** Version 1 — the full base schema, then the shard-key declarations. */
 function v1(t: PhysicalName): string[] {
   return [
     `CREATE TABLE IF NOT EXISTS ${t(TableName.QUEUE)} (
@@ -88,15 +91,22 @@ function v1(t: PhysicalName): string[] {
       created_at BIGINT NOT NULL,
       updated_at BIGINT NOT NULL
     )`,
+    // Shard declarations — the Citus-specific step. Distribute on the queue name so a queue's jobs
+    // and schedules land on the same shard and claim/scan stays node-local.
+    `SELECT create_distributed_table('${t(TableName.QUEUE)}', 'name')`,
+    `SELECT create_distributed_table('${t(TableName.JOB)}', 'queue_name', colocate_with => '${t(TableName.QUEUE)}')`,
+    `SELECT create_distributed_table('${t(TableName.SCHEDULE)}', 'queue_name', colocate_with => '${t(TableName.QUEUE)}')`,
+    `SELECT create_distributed_table('${t(TableName.INSTANCE)}', 'instance_key')`,
+    `SELECT create_reference_table('${t(TableName.MIGRATION)}')`,
   ];
 }
 
-/** Version 2 — add the schedule cross-table dedup token. */
+/** Version 2 — add the schedule cross-table dedup token (propagates to every shard). */
 function v2(t: PhysicalName): string[] {
   return [`ALTER TABLE ${t(TableName.SCHEDULE)} ADD COLUMN idempotency_key TEXT`];
 }
 
-export const POSTGRES_MIGRATIONS: FlavourMigration[] = [
+export const CITUS_MIGRATIONS: FlavourMigration[] = [
   { version: 1, checksum: 'v1-base-schema', statements: v1 },
   { version: 2, checksum: 'v2-schedule-idempotency-key', statements: v2 },
 ];

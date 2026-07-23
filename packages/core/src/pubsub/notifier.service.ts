@@ -1,4 +1,4 @@
-import type { Driver } from '../driver/driver.interface.js';
+import type { Driver } from '../drivers/driver.interface.js';
 import type { Logger } from '../logging/logger.interface.js';
 import { PubSubChannel } from './channels.js';
 

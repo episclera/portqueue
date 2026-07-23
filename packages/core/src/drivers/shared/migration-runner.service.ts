@@ -1,17 +1,18 @@
 import { MigrationMode } from '../../options/enums.js';
 import { PortQueueEvent } from '../../events/event-name.enum.js';
 import { MigrationFailedError, SchemaVersionMismatchError } from '../../errors/errors.js';
-import { DriverCapability } from '../../driver/driver-capabilities.js';
-import { CURRENT_SCHEMA_VERSION } from '../versions/index.js';
-import { MIGRATIONS } from '../migrations/index.js';
-import type { Driver } from '../../driver/driver.interface.js';
-import type { DriverContext } from '../../driver/driver-context.js';
+import { DriverCapability } from '../driver-capabilities.js';
+import { latestVersion } from './migration.js';
+import type { Driver } from '../driver.interface.js';
+import type { DriverContext } from '../driver-context.js';
 import type { Logger } from '../../logging/logger.interface.js';
 import type { EventBusService } from '../../events/event-bus.service.js';
 
 /**
- * Applies ordered, checksum-guarded migrations. Race-safe across
- * instances via an advisory lock where available. Supports AUTO / MANUAL / VALIDATE_ONLY.
+ * Applies a driver's ordered, checksum-guarded migrations. The steps come from the driver itself
+ * (`driver.migrations`) — each engine authors its own DDL alongside its driver; this is the single
+ * shared mechanism that runs them. Race-safe across instances via an advisory lock where
+ * available. Supports AUTO / MANUAL / VALIDATE_ONLY.
  */
 export class MigrationRunner {
   constructor(
@@ -20,6 +21,11 @@ export class MigrationRunner {
     private readonly logger: Logger,
     private readonly events: EventBusService,
   ) {}
+
+  /** The schema version this driver's migration set ships (its latest step). */
+  private get targetVersion(): number {
+    return latestVersion(this.driver.migrations);
+  }
 
   async run(mode: MigrationMode): Promise<void> {
     if (mode === MigrationMode.MANUAL) {
@@ -30,8 +36,8 @@ export class MigrationRunner {
     }
     const current = await this.driver.getSchemaVersion();
     if (mode === MigrationMode.VALIDATE_ONLY) {
-      if ((current ?? 0) !== CURRENT_SCHEMA_VERSION) {
-        throw new SchemaVersionMismatchError(current, CURRENT_SCHEMA_VERSION);
+      if ((current ?? 0) !== this.targetVersion) {
+        throw new SchemaVersionMismatchError(current, this.targetVersion);
       }
       return;
     }
@@ -44,9 +50,9 @@ export class MigrationRunner {
   }
 
   private async migrateAuto(current: number | null): Promise<void> {
-    const pending = MIGRATIONS.filter((m) => m.version > (current ?? 0)).sort(
-      (a, b) => a.version - b.version,
-    );
+    const pending = this.driver.migrations
+      .filter((m) => m.version > (current ?? 0))
+      .sort((a, b) => a.version - b.version);
     if (pending.length === 0) return;
 
     const useLock =
@@ -58,7 +64,7 @@ export class MigrationRunner {
       if (!locked) {
         this.logger.debug('Another instance is migrating; waiting.');
         // Another instance is applying; poll until the version catches up.
-        await this.waitForVersion(CURRENT_SCHEMA_VERSION);
+        await this.waitForVersion(this.targetVersion);
         return;
       }
     }
@@ -72,7 +78,7 @@ export class MigrationRunner {
           throw new MigrationFailedError(`Migration v${migration.version} failed.`, err);
         }
       }
-      this.events.emit(PortQueueEvent.MIGRATION_APPLIED, { from, to: CURRENT_SCHEMA_VERSION });
+      this.events.emit(PortQueueEvent.MIGRATION_APPLIED, { from, to: this.targetVersion });
     } finally {
       if (locked && this.driver.releaseAdvisoryLock) {
         await this.driver.releaseAdvisoryLock({ key: lockKey }).catch(() => undefined);

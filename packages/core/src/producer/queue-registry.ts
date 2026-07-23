@@ -1,4 +1,4 @@
-import type { Driver } from '../driver/driver.interface.js';
+import type { Driver } from '../drivers/driver.interface.js';
 import type { QueueRow } from '../jobs/job-record.js';
 import type { QueueOptions } from '../options/queue-options.js';
 import type { WorkflowStep } from '../jobs/job.js';

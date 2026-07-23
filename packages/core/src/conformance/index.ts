@@ -1,9 +1,8 @@
-import { DriverContext } from '../driver/driver-context.js';
-import { MIGRATIONS } from '../schema/migrations/index.js';
+import { DriverContext } from '../drivers/driver-context.js';
 import { JobStatus } from '../jobs/job-state.enum.js';
 import { BackoffStrategy, RetentionMode } from '../options/enums.js';
-import { DriverCapability } from '../driver/driver-capabilities.js';
-import type { Driver } from '../driver/driver.interface.js';
+import { DriverCapability } from '../drivers/driver-capabilities.js';
+import type { Driver } from '../drivers/driver.interface.js';
 import type { NewJobRecord } from '../jobs/job-record.js';
 
 /**
@@ -25,7 +24,7 @@ async function bootstrap(driver: Driver): Promise<{ queueName: string; context: 
   (driver as unknown as { setContext?: (c: DriverContext) => void }).setContext?.(context);
   await driver.connect();
   await driver.ensureBaseObjects({ context });
-  for (const migration of MIGRATIONS) await driver.applyMigration({ migration });
+  for (const migration of driver.migrations) await driver.applyMigration({ migration });
   const queue = await driver.ensureQueue({ name: QUEUE, now: Date.now() });
   return { queueName: queue.name, context };
 }

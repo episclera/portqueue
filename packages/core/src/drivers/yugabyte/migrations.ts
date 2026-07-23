@@ -1,13 +1,15 @@
-import { TableName } from '../../table-names.js';
-import type { FlavourMigration, PhysicalName } from '../types.js';
+import { TableName } from '../table-names.js';
+import type { FlavourMigration, PhysicalName } from '../shared/migration.js';
 
 /**
- * Predefined MySQL DDL. It mirrors the Postgres set with two engine-specific changes: MySQL
- * forbids a `DEFAULT` on `TEXT`/`BLOB` columns, so the two defaulted text columns (`retry_backoff`,
- * `retention_mode`) are `VARCHAR`. `REAL` is MySQL's synonym for `DOUBLE`; `BIGINT`/`INTEGER`/
- * `SMALLINT`/`TEXT` are native. Authored from the JSON schema; not generated at runtime.
+ * Predefined Yugabyte (YSQL) DDL, version by version. YSQL speaks the Postgres wire protocol, so
+ * the column types match the Postgres flavour — but the statements are authored here in full, not
+ * re-exported, so a Yugabyte-specific distribution hint (`SPLIT INTO`, colocation) can be layered
+ * in later without disturbing Postgres. Authored by hand for this engine; not
+ * generated at runtime.
  */
 
+/** Version 1 — the full base schema. */
 function v1(t: PhysicalName): string[] {
   return [
     `CREATE TABLE IF NOT EXISTS ${t(TableName.QUEUE)} (
@@ -43,12 +45,12 @@ function v1(t: PhysicalName): string[] {
       retry_attempt INTEGER NOT NULL DEFAULT 0,
       retry_max_attempts INTEGER NOT NULL DEFAULT 1,
       retry_delay_ms BIGINT NOT NULL DEFAULT 0,
-      retry_backoff VARCHAR(32) NOT NULL DEFAULT 'FIXED',
+      retry_backoff TEXT NOT NULL DEFAULT 'FIXED',
       retry_backoff_factor REAL,
       retry_max_delay_ms BIGINT,
       retry_jitter SMALLINT NOT NULL DEFAULT 0,
       failure_message TEXT,
-      retention_mode VARCHAR(32) NOT NULL DEFAULT 'KEEP_FOREVER',
+      retention_mode TEXT NOT NULL DEFAULT 'KEEP_FOREVER',
       retention_ttl_ms BIGINT,
       idempotency_key TEXT,
       schedule_id TEXT,
@@ -91,11 +93,12 @@ function v1(t: PhysicalName): string[] {
   ];
 }
 
+/** Version 2 — add the schedule cross-table dedup token. */
 function v2(t: PhysicalName): string[] {
   return [`ALTER TABLE ${t(TableName.SCHEDULE)} ADD COLUMN idempotency_key TEXT`];
 }
 
-export const MYSQL_MIGRATIONS: FlavourMigration[] = [
+export const YUGABYTE_MIGRATIONS: FlavourMigration[] = [
   { version: 1, checksum: 'v1-base-schema', statements: v1 },
   { version: 2, checksum: 'v2-schedule-idempotency-key', statements: v2 },
 ];

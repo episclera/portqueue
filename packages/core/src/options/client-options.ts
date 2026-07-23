@@ -1,4 +1,4 @@
-import type { Driver } from '../driver/driver.interface.js';
+import type { Driver } from '../drivers/driver.interface.js';
 import type { Logger, LoggerOptions } from '../logging/logger.interface.js';
 import type { MigrationMode } from './enums.js';
 import type { JobOptions } from './job-options.js';

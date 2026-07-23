@@ -23,13 +23,12 @@ export {
   RetentionMode,
   MigrationMode,
   DatabaseEngine,
-  InstanceType,
 } from './options/enums.js';
 export { PortQueueEvent } from './events/event-name.enum.js';
 export { HookPhase } from './events/hooks.js';
 export { LogLevel } from './logging/log-level.enum.js';
 export { PortQueueErrorCode } from './errors/error-codes.enum.js';
-export { DriverCapability } from './driver/driver-capabilities.js';
+export { DriverCapability } from './drivers/driver-capabilities.js';
 
 // Option types (the disjoint bags)
 export type { PortQueueOptions, ShutdownOptions } from './options/client-options.js';
@@ -80,10 +79,10 @@ export type {
   DriverProbe,
   Subscription,
   MigrationStep,
-} from './driver/driver.interface.js';
-export type { DriverCapabilitySet } from './driver/driver-capabilities.js';
-export { capabilities } from './driver/driver-capabilities.js';
-export { DriverContext } from './driver/driver-context.js';
+} from './drivers/driver.interface.js';
+export type { DriverCapabilitySet } from './drivers/driver-capabilities.js';
+export { capabilities } from './drivers/driver-capabilities.js';
+export { DriverContext } from './drivers/driver-context.js';
 export type { TransactionHandle, TxQueryResult } from './tx/transaction-handle.js';
 
 // Logging

@@ -1,5 +1,5 @@
-import type { Driver, Subscription } from '../driver/driver.interface.js';
-import { DriverCapability } from '../driver/driver-capabilities.js';
+import type { Driver, Subscription } from '../drivers/driver.interface.js';
+import { DriverCapability } from '../drivers/driver-capabilities.js';
 import { matchesInstance } from '../jobs/instance-affinity.js';
 import type { Logger } from '../logging/logger.interface.js';
 import type { Wakeup } from './wakeup.js';

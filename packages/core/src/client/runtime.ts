@@ -1,10 +1,9 @@
-import type { Driver } from '../driver/driver.interface.js';
-import type { DriverContext } from '../driver/driver-context.js';
+import type { Driver } from '../drivers/driver.interface.js';
+import type { DriverContext } from '../drivers/driver-context.js';
 import type { Logger } from '../logging/logger.interface.js';
 import type { Clock } from '../util/clock.js';
 import type { EventBusService } from '../events/event-bus.service.js';
 import type { HookRunner } from '../events/hook-runner.js';
-import type { InstanceIdentityService } from './instance-identity.service.js';
 import type { InstanceService } from './instance.service.js';
 import type { OptionResolver } from '../options/option-resolver.js';
 import type { PortQueueOptions } from '../options/client-options.js';
@@ -22,7 +21,8 @@ export interface Runtime {
   clock: Clock;
   events: EventBusService;
   hooks: HookRunner;
-  identity: InstanceIdentityService;
+  /** Lock-owner attribution id (constructor-provided or a random per-process token; never env-derived). */
+  identity: { readonly id: string };
   resolver: OptionResolver;
   options: PortQueueOptions;
   registry: QueueRegistry;

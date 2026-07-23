@@ -46,12 +46,7 @@ export enum DatabaseEngine {
   SQLITE = 'SQLITE',
   ORACLE = 'ORACLE',
   MYSQL = 'MYSQL',
+  CITUS = 'CITUS',
+  YUGABYTE = 'YUGABYTE',
   CUSTOM = 'CUSTOM',
-}
-
-/** How the running process is classified for job attribution. */
-export enum InstanceType {
-  CONTAINER = 'CONTAINER',
-  BARE_METAL = 'BARE_METAL',
-  UNKNOWN = 'UNKNOWN',
 }

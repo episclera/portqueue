@@ -49,6 +49,12 @@ export interface WorkflowNext {
 export interface Driver {
   readonly engine: DatabaseEngine;
   readonly capabilities: DriverCapabilitySet;
+  /**
+   * The ordered migration steps this driver ships, authored alongside the driver (see
+   * `drivers/<engine>/migrations.ts`). The shared migration runner applies the pending ones; each
+   * step's DDL is the engine's own — nothing is shared or generated across engines.
+   */
+  readonly migrations: MigrationStep[];
 
   // Identity & lifecycle
   connect(): Promise<void>;

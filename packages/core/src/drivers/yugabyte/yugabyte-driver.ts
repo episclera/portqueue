@@ -1,6 +1,27 @@
-import { DatabaseEngine, DeduplicationReason, RetentionMode } from '../../options/enums.js';
-import { BackoffStrategy } from '../../options/enums.js';
+import { createHash } from 'node:crypto';
+import {
+  DatabaseEngine,
+  DeduplicationReason,
+  RetentionMode,
+  BackoffStrategy,
+} from '../../options/enums.js';
 import { JobStatus } from '../../jobs/job-state.enum.js';
+import {
+  capabilities,
+  DriverCapability,
+  type DriverCapabilitySet,
+} from '../driver-capabilities.js';
+import {
+  DriverConnectionError,
+  DriverQueryError,
+  MissingPeerDependencyError,
+  UnsupportedCapabilityError,
+} from '../../errors/errors.js';
+import { TableName } from '../table-names.js';
+import { matchesInstance } from '../../jobs/instance-affinity.js';
+import { uuid } from '../../util/uuid.js';
+import { toMigrationSteps } from '../shared/migration.js';
+import { YUGABYTE_MIGRATIONS } from './migrations.js';
 import type {
   Driver,
   DriverProbe,
@@ -8,11 +29,8 @@ import type {
   RequeueFrom,
   Subscription,
   WorkflowNext,
-} from '../../driver/driver.interface.js';
-import type { DriverCapabilitySet } from '../../driver/driver-capabilities.js';
-import { DriverCapability } from '../../driver/driver-capabilities.js';
-import type { DriverContext } from '../../driver/driver-context.js';
-import { TableName } from '../../schema/table-names.js';
+} from '../driver.interface.js';
+import type { DriverContext } from '../driver-context.js';
 import type {
   InsertedJobRow,
   InstanceRow,
@@ -23,21 +41,39 @@ import type {
   ScheduleRow,
   ThroughputPoint,
 } from '../../jobs/job-record.js';
-import { matchesInstance } from '../../jobs/instance-affinity.js';
 import type { QueueOptions } from '../../options/queue-options.js';
 import type { TransactionHandle, TxQueryResult } from '../../tx/transaction-handle.js';
-import { DriverQueryError, UnsupportedCapabilityError } from '../../errors/errors.js';
-import { uuid } from '../../util/uuid.js';
 
-/** A raw query result from the concrete driver. */
-export interface RawResult {
+export interface YugabyteDriverOptions {
+  connectionString?: string;
+  /** An existing `pg.Pool` to share with the app. */
+  pool?: unknown;
+  /** Any `pg.PoolConfig` (host/user/password/database/…). */
+  config?: Record<string, unknown>;
+}
+
+interface PgQueryResult {
+  rows: Array<Record<string, unknown>>;
+  rowCount: number | null;
+}
+interface PgClient {
+  query(sql: string, params?: readonly unknown[]): Promise<PgQueryResult>;
+  release(): void;
+  on(event: string, cb: (msg: { channel: string; payload?: string }) => void): void;
+}
+interface PgPool {
+  query(sql: string, params?: readonly unknown[]): Promise<PgQueryResult>;
+  connect(): Promise<PgClient>;
+  end(): Promise<void>;
+}
+
+/** A raw query result. */
+interface RawResult {
   rows: Array<Record<string, unknown>>;
   rowCount: number;
 }
-
 /** An opaque per-connection session used inside a transaction. */
-export type Session = unknown;
-
+type Session = unknown;
 type Row = Record<string, unknown>;
 
 const JOB_COLUMNS = [
@@ -81,53 +117,115 @@ const JOB_COLUMNS = [
 ] as const;
 
 /**
- * A SQL-dialect base implementing the whole {@link Driver} contract.
- * Concrete drivers (Postgres, Oracle, PGLite, SQLite) provide only connection management,
- * the placeholder style, and any dialect specifics. No driver method emits a relational
- * JOIN — every relationship is resolved by a name/key-keyed single-table lookup, and the
- * schema carries no constraints or indexes, so invariants that would rely
- * on a UNIQUE index (name uniqueness, idempotency/singleton dedup) are enforced here in code.
+ * Yugabyte driver — YugabyteDB's YSQL API, distributed Postgres over the `pg` wire protocol.
+ * Standalone: it owns its entire SQL surface (no shared base) so a Yugabyte-specific change never
+ * touches another engine. `$1`-style placeholders, advisory locks, SKIP LOCKED claiming, RETURNING
+ * everywhere — but YSQL has no LISTEN/NOTIFY, so that capability is off and the polling backstop
+ * drives wakeups. No method emits a relational JOIN — relationships resolve by name/key lookups,
+ * and the schema carries no unique index, so name-uniqueness and idempotency/singleton dedup are
+ * enforced here in code. `pg` is an optional peer dependency.
  */
-export abstract class SqlDriver implements Driver {
-  abstract readonly engine: DatabaseEngine;
-  abstract readonly capabilities: DriverCapabilitySet;
+export class YugabyteDriver implements Driver {
+  readonly engine = DatabaseEngine.YUGABYTE;
+  readonly capabilities: DriverCapabilitySet = capabilities({
+    [DriverCapability.SKIP_LOCKED]: true,
+    [DriverCapability.RETURNING]: true,
+    [DriverCapability.TRANSACTIONS]: true,
+    // YSQL does not implement LISTEN/NOTIFY — rely on interval polling.
+    [DriverCapability.ADVISORY_LOCK]: true,
+  });
+  readonly migrations = toMigrationSteps(YUGABYTE_MIGRATIONS);
+
   protected context!: DriverContext;
+  private pool: PgPool | null = null;
+  private readonly options: YugabyteDriverOptions;
 
-  /** '$1'-style (Postgres), '?'-style (SQLite), or ':1'-style (Oracle) placeholders. */
-  protected abstract readonly placeholderStyle: 'dollar' | 'question' | 'colon';
-
-  /** Run a statement, optionally on an in-progress transaction session. */
-  protected abstract execute(
-    sql: string,
-    params: readonly unknown[],
-    session?: Session,
-  ): Promise<RawResult>;
-  /** Run `fn` inside a real DB transaction, serializing on single-connection engines. */
-  protected abstract transaction<T>(fn: (session: Session) => Promise<T>): Promise<T>;
-
-  abstract connect(): Promise<void>;
-  abstract disconnect(): Promise<void>;
+  constructor(options: YugabyteDriverOptions = {}) {
+    this.options = options;
+  }
 
   setContext(context: DriverContext): void {
     this.context = context;
   }
 
+  // --- Connection management ---
+  async connect(): Promise<void> {
+    if (this.options.pool) {
+      this.pool = this.options.pool as PgPool;
+      return;
+    }
+    let pg: { Pool: new (config?: Record<string, unknown>) => PgPool };
+    try {
+      // Dynamic specifier so TS doesn't require the optional peer's types at build time.
+      const mod = (await import('pg' as string)) as { default?: { Pool: PgPool }; Pool?: PgPool };
+      pg = (mod.default ?? mod) as unknown as {
+        Pool: new (config?: Record<string, unknown>) => PgPool;
+      };
+    } catch {
+      throw new MissingPeerDependencyError('pg', 'Yugabyte');
+    }
+    try {
+      const config: Record<string, unknown> = { ...this.options.config };
+      if (this.options.connectionString) config.connectionString = this.options.connectionString;
+      this.pool = new pg.Pool(config);
+      await this.pool.query('SELECT 1');
+    } catch (err) {
+      throw new DriverConnectionError('Failed to connect to Yugabyte.', err);
+    }
+  }
+
+  async disconnect(): Promise<void> {
+    if (this.pool && !this.options.pool) await this.pool.end();
+    this.pool = null;
+  }
+
+  private async execute(
+    sql: string,
+    params: readonly unknown[],
+    session?: Session,
+  ): Promise<RawResult> {
+    const target = (session as PgClient | undefined) ?? this.pool;
+    if (!target) throw new DriverConnectionError('Yugabyte driver is not connected.');
+    const res = await target.query(sql, params);
+    return { rows: res.rows ?? [], rowCount: res.rowCount ?? res.rows?.length ?? 0 };
+  }
+
+  private async transaction<T>(fn: (session: Session) => Promise<T>): Promise<T> {
+    if (!this.pool) throw new DriverConnectionError('Yugabyte driver is not connected.');
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await fn(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   // --- Naming helpers ---
-  protected t(table: TableName): string {
+  private t(table: TableName): string {
     return this.context.tableNames.bare(table);
   }
-  protected ph(index0: number): string {
-    if (this.placeholderStyle === 'dollar') return `$${index0 + 1}`;
-    if (this.placeholderStyle === 'colon') return `:${index0 + 1}`;
-    return '?';
+  /** Postgres uses `$1`-style positional placeholders. */
+  private ph(index0: number): string {
+    return `$${index0 + 1}`;
   }
 
   // --- Probe / migration ---
   async probe(): Promise<DriverProbe> {
-    return { serverVersion: 'unknown', verifiedCapabilities: this.enabledCapabilities() };
+    let serverVersion = 'unknown';
+    if (this.pool) {
+      const res = await this.pool.query('SHOW server_version');
+      serverVersion = String(res.rows[0]?.server_version ?? 'unknown');
+    }
+    return { serverVersion, verifiedCapabilities: this.enabledCapabilities() };
   }
 
-  protected enabledCapabilities(): DriverCapability[] {
+  private enabledCapabilities(): DriverCapability[] {
     return (Object.keys(this.capabilities) as DriverCapability[]).filter(
       (c) => this.capabilities[c],
     );
@@ -162,11 +260,11 @@ export abstract class SqlDriver implements Driver {
   }
 
   // --- Value conversion ---
-  protected toJson(value: unknown): string | null {
+  private toJson(value: unknown): string | null {
     if (value === undefined || value === null) return null;
     return JSON.stringify(value);
   }
-  protected fromJson(value: unknown): unknown {
+  private fromJson(value: unknown): unknown {
     if (value === null || value === undefined) return null;
     if (typeof value === 'string') {
       try {
@@ -177,16 +275,16 @@ export abstract class SqlDriver implements Driver {
     }
     return value;
   }
-  protected boolIn(value: boolean): number {
+  private boolIn(value: boolean): number {
     return value ? 1 : 0;
   }
-  protected boolOut(value: unknown): boolean {
+  private boolOut(value: unknown): boolean {
     return value === 1 || value === true || value === '1' || value === 't';
   }
-  protected numOrNull(value: unknown): number | null {
+  private numOrNull(value: unknown): number | null {
     return value == null ? null : Number(value);
   }
-  protected strOrNull(value: unknown): string | null {
+  private strOrNull(value: unknown): string | null {
     return value == null ? null : String(value);
   }
 
@@ -204,7 +302,7 @@ export abstract class SqlDriver implements Driver {
     return out;
   }
 
-  protected mapJob(row: Row): JobRecord {
+  private mapJob(row: Row): JobRecord {
     return {
       id: String(row.id),
       queueName: String(row.queue_name),
@@ -246,7 +344,7 @@ export abstract class SqlDriver implements Driver {
     };
   }
 
-  protected mapQueue(row: Row): QueueRow {
+  private mapQueue(row: Row): QueueRow {
     return {
       name: String(row.name),
       processingPaused: this.boolOut(row.processing_paused),
@@ -256,7 +354,7 @@ export abstract class SqlDriver implements Driver {
     };
   }
 
-  protected mapInstance(row: Row): InstanceRow {
+  private mapInstance(row: Row): InstanceRow {
     return {
       instanceKey: String(row.instance_key),
       processingPaused: this.boolOut(row.processing_paused),
@@ -266,7 +364,7 @@ export abstract class SqlDriver implements Driver {
     };
   }
 
-  protected mapSchedule(row: Row): ScheduleRow {
+  private mapSchedule(row: Row): ScheduleRow {
     return {
       id: String(row.id),
       queueName: String(row.queue_name),
@@ -289,7 +387,7 @@ export abstract class SqlDriver implements Driver {
   }
 
   // --- Producing ---
-  protected jobInsertValues(job: NewJobRecord): { columns: string[]; values: unknown[] } {
+  private jobInsertValues(job: NewJobRecord): { columns: string[]; values: unknown[] } {
     const id = job.id ?? uuid();
     const now = job.createdAt;
     const columns = [...JOB_COLUMNS];
@@ -1098,7 +1196,10 @@ export abstract class SqlDriver implements Driver {
     );
   }
 
-  async deleteInstance(options: { instanceKey: string; tx?: TransactionHandle }): Promise<boolean> {
+  async deleteInstance(options: {
+    instanceKey: string;
+    tx?: TransactionHandle;
+  }): Promise<boolean> {
     // Only removes the instance (monitoring) row. Jobs record processed_on_instance_key as a plain
     // string (no FK/PK), so removing an instance never touches or orphans any job rows.
     const res = await this.runMaybeTx(
@@ -1130,9 +1231,9 @@ export abstract class SqlDriver implements Driver {
     return res.rowCount;
   }
 
-  // --- Pub/sub (default: unsupported; PG overrides) ---
+  // --- Pub/sub (unsupported: YSQL has no LISTEN/NOTIFY; the safety poll backstops it) ---
   async notify(_options: { channel: string; payload: string }): Promise<void> {
-    // No-op when LISTEN/NOTIFY is unsupported; the safety poll backstops it.
+    // No-op — Yugabyte does not implement LISTEN/NOTIFY.
   }
 
   async subscribe(_options: {
@@ -1141,8 +1242,21 @@ export abstract class SqlDriver implements Driver {
   }): Promise<Subscription> {
     throw new UnsupportedCapabilityError(
       DriverCapability.LISTEN_NOTIFY,
-      'This driver uses interval polling instead. Core should not call subscribe() without the LISTEN_NOTIFY capability.',
+      'Yugabyte (YSQL) has no LISTEN/NOTIFY; PortQueue uses interval polling instead. Core should not call subscribe() without the LISTEN_NOTIFY capability.',
     );
+  }
+
+  // --- Advisory locks ---
+  async tryAdvisoryLock(options: { key: string }): Promise<boolean> {
+    if (!this.pool) return false;
+    const n = advisoryKey(options.key);
+    const res = await this.pool.query('SELECT pg_try_advisory_lock($1) AS locked', [n]);
+    return res.rows[0]?.locked === true;
+  }
+
+  async releaseAdvisoryLock(options: { key: string }): Promise<void> {
+    if (!this.pool) return;
+    await this.pool.query('SELECT pg_advisory_unlock($1)', [advisoryKey(options.key)]);
   }
 
   // --- Transactions (internal) ---
@@ -1159,6 +1273,13 @@ export abstract class SqlDriver implements Driver {
       return options.fn(handle);
     });
   }
+}
+
+/** Map a string key to a 63-bit advisory-lock integer. */
+function advisoryKey(key: string): number {
+  const hash = createHash('sha1').update(key).digest();
+  // Use 6 bytes to stay within a safe JS integer.
+  return hash.readUIntBE(0, 6);
 }
 
 function emptyStatusCounts(): Record<JobStatus, number> {

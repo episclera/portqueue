@@ -1,4 +1,4 @@
-import { TableNames } from '../schema/table-names.js';
+import { TableNames } from './table-names.js';
 
 /**
  * Shared value object passed to a driver so all object names are computed once

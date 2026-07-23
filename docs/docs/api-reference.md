@@ -79,12 +79,12 @@ transitions are on the `step` controller (`next` / `repeat` / `done`), not on `J
 ## Enums
 
 `JobStatus`, `BackoffStrategy`, `RetryMode`, `PauseMode`, `DeduplicationReason`,
-`RetentionMode`, `MigrationMode`, `DatabaseEngine`, `InstanceType`, `PortQueueEvent`,
+`RetentionMode`, `MigrationMode`, `DatabaseEngine`, `PortQueueEvent`,
 `HookPhase`, `LogLevel`, [`PortQueueErrorCode`](./troubleshooting.md), `DriverCapability`.
 
 ## Drivers & transactions
 
-- Drivers: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite}` — see [Drivers](./drivers/overview.md).
+- Drivers: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite,mysql,citus,yugabyte}` — see [Drivers](./drivers/overview.md).
 - Driver contract: `Driver`, `DriverProbe`, `Subscription`, `MigrationStep`,
   `DriverCapabilitySet`, `capabilities`, `DriverContext`; conformance kit at
   `@portqueue/core/conformance`.

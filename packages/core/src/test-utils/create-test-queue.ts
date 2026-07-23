@@ -3,7 +3,7 @@ import { PgliteDriver } from '../drivers/pglite/index.js';
 import { SqliteDriver } from '../drivers/sqlite/index.js';
 import { NoopLogger } from '../logging/console-logger.js';
 import { FakeClock } from '../util/clock.js';
-import type { Driver } from '../driver/driver.interface.js';
+import type { Driver } from '../drivers/driver.interface.js';
 import type { PortQueueOptions } from '../options/client-options.js';
 
 export type TestEngine = 'pglite' | 'sqlite';

@@ -1,11 +1,10 @@
 import { PauseMode } from './options/enums.js';
 import { PortQueueEvent } from './events/event-name.enum.js';
-import { DriverCapability } from './driver/driver-capabilities.js';
-import { DriverContext } from './driver/driver-context.js';
+import { DriverCapability } from './drivers/driver-capabilities.js';
+import { DriverContext } from './drivers/driver-context.js';
 import { ConsoleLogger } from './logging/console-logger.js';
 import { EventBusService } from './events/event-bus.service.js';
 import { HookRunner } from './events/hook-runner.js';
-import { InstanceIdentityService } from './client/instance-identity.service.js';
 import { OptionResolver } from './options/option-resolver.js';
 import { Wakeup } from './pubsub/wakeup.js';
 import { QueueRegistry } from './producer/queue-registry.js';
@@ -20,6 +19,7 @@ import { Queue } from './producer/queue.js';
 import { Worker, type WorkerConfig } from './consumer/worker.js';
 import { InstanceActiveError, InvalidOptionsError, QueueInUseError } from './errors/errors.js';
 import { SystemClock } from './util/clock.js';
+import { uuid } from './util/uuid.js';
 import type { PortQueueOptions, ShutdownOptions } from './options/client-options.js';
 import type { QueueOptions } from './options/queue-options.js';
 import type { WorkerOptions } from './options/worker-options.js';
@@ -80,7 +80,10 @@ export class PortQueue<
     });
     this.events = new EventBusService(logger);
     this.hooks = new HookRunner(logger, this.events);
-    const identity = new InstanceIdentityService(options.instance, logger);
+    // Lock-owner attribution id. Use the constructor-provided id if given; otherwise a random,
+    // ephemeral per-process token. Never derived from the environment (no container/host/IP
+    // sniffing). Multi-instance mode is opt-in solely via `options.instanceKey`.
+    const identity = { id: options.instance?.id ?? uuid() };
     const resolver = new OptionResolver(options.defaultJobOptions, options.retention);
     const wakeup = new Wakeup();
     const registry = new QueueRegistry(options.driver, clock);

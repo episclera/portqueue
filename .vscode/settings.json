@@ -5,6 +5,17 @@
   "[typescriptreact]": { "editor.formatOnSave": true },
   "js/ts.tsdk.path": "./node_modules/typescript/lib",
   "cSpell.words": [
-    "necesary"
+    "backoff",
+    "citus",
+    "clob",
+    "colocate",
+    "dedup",
+    "necesary",
+    "oracledb",
+    "pglite",
+    "portqueue",
+    "sqlcode",
+    "upsert",
+    "yugabyte"
   ]
 }
