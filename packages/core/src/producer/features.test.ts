@@ -214,14 +214,14 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     expect(seen).toEqual(['qa']);
   });
 
-  it('removes and purges jobs', async () => {
+  it('removes jobs by id and by status', async () => {
     const queue = h.pq.createQueue('rm');
     const a = await queue.addJob({ data: { n: 1 } });
     const b = await queue.addJob({ data: { n: 2 } });
     expect(await queue.removeJob({ jobId: a.jobId! })).toBe(true);
     expect(await queue.getJob({ jobId: a.jobId! })).toBeNull();
-    const purged = await queue.purgeJobs({ statuses: [JobStatus.PENDING] });
-    expect(purged).toBe(1);
+    const removed = await queue.removeJobs({ statuses: [JobStatus.PENDING] });
+    expect(removed).toBe(1);
     expect(await queue.getJob({ jobId: b.jobId! })).toBeNull();
   });
 

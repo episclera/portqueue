@@ -16,7 +16,7 @@ export const purgeCommand: Command = {
     if (!flagBool(flags, 'yes')) {
       throw new CliError('purge is destructive — pass --yes to confirm.');
     }
-    const n = await pq.createQueue(queue).purgeJobs({ statuses: [status!] });
+    const n = await pq.createQueue(queue).removeJobs({ statuses: [status!] });
     success(`Purged ${n} ${status} job(s) from '${queue}'.`);
   },
 };

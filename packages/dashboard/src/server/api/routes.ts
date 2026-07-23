@@ -317,7 +317,7 @@ async function runAction(portQueue: PortQueue, action: ActionRequestDto): Promis
     case 'purge': {
       const statuses = action.statuses?.filter((s) => Object.values(JobStatus).includes(s)) ?? [];
       if (!statuses.length) return json(400, { error: 'Missing statuses' });
-      const affected = await queue.purgeJobs({ statuses });
+      const affected = await queue.removeJobs({ statuses });
       return json(200, { ok: true, affected } satisfies ActionResultDto);
     }
     case 'add': {

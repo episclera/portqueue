@@ -123,13 +123,6 @@ export class Queue<TData = unknown> {
     });
   }
 
-  async purgeJobs(options: { statuses: JobStatus[] }): Promise<number> {
-    return this.runtime.driver.removeJobsByStatus({
-      queueName: this.name,
-      statuses: options.statuses,
-    });
-  }
-
   // --- Queue control (persisted, cluster-wide) ---
   async pause(options: { mode?: PauseMode } = {}): Promise<void> {
     const mode = options.mode ?? PauseMode.PROCESSING;

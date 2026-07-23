@@ -198,10 +198,10 @@ describe('purgeCommand', () => {
     const { stdout, calls } = await run(
       purgeCommand,
       { queue: 'emails', status: 'failed', yes: true },
-      { purged: 7 },
+      { removed: 7 },
     );
     expect(stdout).toContain('Purged 7');
-    expect(calls.purgeJobs).toHaveLength(1);
+    expect(calls.removeJobs).toHaveLength(1);
   });
 });
 

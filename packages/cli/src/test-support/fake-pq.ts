@@ -6,8 +6,8 @@ export interface FakePqCalls {
   retryJob: unknown[];
   cancelJob: unknown[];
   removeJob: unknown[];
+  removeJobs: unknown[];
   removeSchedule: unknown[];
-  purgeJobs: unknown[];
   pauseQueue: unknown[];
   resumeQueue: unknown[];
   createQueue: string[];
@@ -25,7 +25,7 @@ export interface FakePqOverrides {
   cancelOk?: boolean;
   removeJobOk?: boolean;
   removeScheduleOk?: boolean;
-  purged?: number;
+  removed?: number;
 }
 
 const DEFAULT_JOB = {
@@ -47,8 +47,8 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
     retryJob: [],
     cancelJob: [],
     removeJob: [],
+    removeJobs: [],
     removeSchedule: [],
-    purgeJobs: [],
     pauseQueue: [],
     resumeQueue: [],
     createQueue: [],
@@ -77,9 +77,9 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
       calls.removeSchedule.push(arg);
       return overrides.removeScheduleOk ?? true;
     },
-    purgeJobs: async (arg: unknown) => {
-      calls.purgeJobs.push(arg);
-      return overrides.purged ?? 3;
+    removeJobs: async (arg: unknown) => {
+      calls.removeJobs.push(arg);
+      return overrides.removed ?? 3;
     },
   };
 
