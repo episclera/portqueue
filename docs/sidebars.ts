@@ -54,8 +54,8 @@ const sidebars: SidebarsConfig = {
     'api-reference',
     {
       type: 'category',
-      label: 'About',
-      items: ['contributing', 'brandbook', 'team'],
+      label: 'More',
+      items: ['advanced', 'contributing', 'brandbook', 'team'],
     },
   ],
 };
