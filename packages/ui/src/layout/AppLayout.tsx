@@ -31,7 +31,6 @@ const StyledHeader = styled.header`
   padding: 0 clamp(12px, 3vw, 28px);
   background: ${(p) => p.theme.color.surface};
   border-bottom: 1px solid ${(p) => p.theme.color.border};
-  backdrop-filter: saturate(180%) blur(12px);
 `;
 
 const HeaderSlot = styled.div`
@@ -49,7 +48,7 @@ const HeaderCenter = styled.div`
   min-width: 0;
 `;
 
-/** Sticky, translucent top bar with left / center / right slots. Shared by dashboard + docs. */
+/** Sticky, opaque top bar with left / center / right slots. Shared by dashboard + docs. */
 export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header(
   { left, right, children, ...rest },
   ref,

@@ -24,22 +24,18 @@ const typeStyles = (type: AlertType): ReturnType<typeof css> => {
     case 'success':
       return css`
         background: ${(p) => p.theme.color.success}1f;
-        border-left-color: ${(p) => p.theme.color.success};
       `;
     case 'warning':
       return css`
         background: ${(p) => p.theme.color.warning}1f;
-        border-left-color: ${(p) => p.theme.color.warning};
       `;
     case 'error':
       return css`
         background: ${(p) => p.theme.color.danger}1f;
-        border-left-color: ${(p) => p.theme.color.danger};
       `;
     default:
       return css`
         background: ${(p) => p.theme.color.info}1f;
-        border-left-color: ${(p) => p.theme.color.info};
       `;
   }
 };
@@ -50,7 +46,6 @@ const Root = styled.div<{ $type: AlertType }>`
   gap: ${(p) => p.theme.space(3)};
   padding: ${(p) => p.theme.space(3)} ${(p) => p.theme.space(4)};
   border-radius: ${(p) => p.theme.radii.md}px;
-  border-left: 3px solid transparent;
   color: ${(p) => p.theme.color.text};
   font-size: 14px;
   line-height: 1.5;

@@ -51,17 +51,31 @@ has many `steps`. Producing is the same `addJob({ data })` in both.
 
 | | PortQueue | pg-boss | BullMQ | Celery |
 |---|---|---|---|---|
-| Storage | Any SQL engine (driver) | Postgres only | Redis | Redis/RabbitMQ + result backend |
+| Storage | Any SQL engine (7 drivers) | Postgres only | Redis | Redis/RabbitMQ + result backend |
 | Broker required | No | No | Yes (Redis) | Yes |
+| Same code, any engine | Yes — swap the driver | Postgres only | Redis only | Broker only |
+| Distributed instances | Yes (`SKIP LOCKED`, opt-in instance keys) | Yes | Yes | Yes |
 | Transactional enqueue | Yes (your tx) | Limited | No | No |
 | Multi-step resumable jobs | Yes (each step a row) | No | Flows (Redis) | Chains/canvas |
+| Fault tolerance | Visibility timeouts, retries + backoff, stall recovery | Retries | Retries, stalled checks | Retries, acks-late |
+| Local testing | In-process PGLite / SQLite — no service | Needs Postgres | Needs Redis | Needs broker |
 | Strict types + enums | Yes, end to end | Partial | Partial | N/A (Python) |
-| Named options everywhere | Yes | Mixed positional | Mixed positional | N/A |
+
+PortQueue is built for teams running **many cooperating instances**: workers on any number
+of servers claim jobs from the same queue with `SKIP LOCKED` and never double-process, and
+multi-instance mode is a simple opt-in. Because every engine sits behind the same driver
+contract, the **same application code runs unchanged** on Postgres, MySQL, Oracle, Citus,
+Yugabyte, PGLite, or SQLite — you swap the driver, not your code. That also makes it
+**trivial to test**: run your whole suite in-process against PGLite or SQLite with no
+external service to stand up. And it's **fault tolerant** by design — visibility timeouts,
+retries with backoff, and stalled-job recovery mean an instance can crash mid-job without
+losing work.
 
 ### What we took, and where we improved
 
 - **From pg-boss:** the insight that a relational DB with `SKIP LOCKED` + `LISTEN/NOTIFY`
-  is enough — no broker. We go **multi-driver**, strict named-options, and richer result objects.
+  is enough — no broker. We go **multi-driver** (the same code across seven engines),
+  **testable in-process** with PGLite/SQLite, and add richer result objects.
 - **From BullMQ:** the clean **producer/consumer split** (`Queue` produces, `Worker` consumes).
   We drop fragile numeric progress in favor of **resumable multi-step workflows**.
 - **From Celery:** retries with backoff, rate limits, visibility timeouts, and *acks-late*.

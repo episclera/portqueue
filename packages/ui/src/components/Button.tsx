@@ -24,12 +24,12 @@ const SIZES: Record<ButtonSize, { h: number; px: number; fs: number }> = {
 const variantStyles = (v: ButtonVariant) =>
   ({
     primary: css`
-      background: ${(p) => p.theme.color.brand};
+      background: ${(p) => p.theme.color.brandSolid};
       color: ${(p) => p.theme.color.onBrand};
-      border-color: ${(p) => p.theme.color.brand};
+      border-color: ${(p) => p.theme.color.brandSolid};
       &:hover:not(:disabled) {
-        background: ${(p) => p.theme.color.brandHover};
-        border-color: ${(p) => p.theme.color.brandHover};
+        background: ${(p) => p.theme.color.brandSolidHover};
+        border-color: ${(p) => p.theme.color.brandSolidHover};
       }
     `,
     default: css`
@@ -37,8 +37,8 @@ const variantStyles = (v: ButtonVariant) =>
       color: ${(p) => p.theme.color.text};
       border-color: ${(p) => p.theme.color.borderStrong};
       &:hover:not(:disabled) {
-        color: ${(p) => p.theme.color.brand};
-        border-color: ${(p) => p.theme.color.brand};
+        color: ${(p) => p.theme.color.link};
+        border-color: ${(p) => p.theme.color.link};
       }
     `,
     ghost: css`

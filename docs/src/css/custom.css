@@ -88,6 +88,9 @@
   --ifm-color-primary-lighter: #cfead8;
   --ifm-color-primary-lightest: #e4f4e9;
 
+  /* Keep dark text on the green button fill in dark mode too (never white). */
+  --ifm-button-color: #1b1f1d;
+
   --ifm-background-color: #171a19;
   --ifm-background-surface-color: #1f2422;
   --ifm-font-color-base: #edefec;
@@ -97,27 +100,24 @@
   --docusaurus-highlighted-code-line-bg: rgba(169, 216, 184, 0.15);
 }
 
-/* Sticky navbar with subtle glass — soft shadow, no hard border. */
+/* Sticky navbar with a soft shadow — kept fully opaque so content never shows through it. */
 .navbar {
   box-shadow: var(--ifm-global-shadow-lw);
   border-bottom: none;
-  background-color: rgba(255, 255, 255, 0.82);
+  background-color: var(--ifm-background-surface-color);
 }
 [data-theme='dark'] .navbar {
-  background-color: rgba(19, 23, 34, 0.82);
+  background-color: var(--ifm-background-surface-color);
 }
 
-/*
- * Only apply the blur on desktop. `backdrop-filter` on `.navbar` creates a
- * containing block for its descendants, which breaks the `position: fixed`
- * mobile sidebar (it lives inside `.navbar`) so the menu won't open. The mobile
- * menu only exists below the navbar breakpoint, so scope the blur above it.
- */
-@media (min-width: 997px) {
-  .navbar {
-    backdrop-filter: saturate(180%) blur(10px);
-  }
+/* The mobile slide-out menu shares the navbar surface — keep it opaque too. */
+.navbar-sidebar,
+.navbar-sidebar__backdrop {
+  background-color: var(--ifm-background-surface-color);
+}
 
+/* Desktop-only navbar polish: a divider between the brand and the nav links. */
+@media (min-width: 997px) {
   /* Divider between the brand and the nav links (desktop only). */
   .navbar__brand {
     margin-right: 1rem;
@@ -166,9 +166,10 @@ pre[class*='language-'] {
   box-shadow: var(--ifm-global-shadow-md);
 }
 
-/* Admonitions / callouts: rounded and airy. */
+/* Admonitions / callouts: rounded and airy, with no left accent border. */
 .theme-admonition {
   border-radius: 12px;
+  border-left: 0;
   box-shadow: var(--ifm-global-shadow-lw);
 }
 
@@ -185,6 +186,42 @@ pre[class*='language-'] {
   border-radius: 8px;
 }
 .menu__link--active {
+  font-weight: 600;
+}
+/* Active page title in the left sidebar uses the darker green (light mode). */
+.menu__link--active:not(.menu__link--sublist) {
+  color: var(--ifm-color-primary);
+}
+
+/* Right-hand table of contents: active + hovered entries in the darker green. */
+.table-of-contents__link--active,
+.table-of-contents__link--active code,
+.table-of-contents__link:hover,
+.table-of-contents__link:hover code {
+  color: var(--ifm-color-primary);
+}
+
+/* Prev/next pagination at the end of a page — darker green label and hover border. */
+.pagination-nav__link:hover {
+  border-color: var(--ifm-color-primary);
+}
+.pagination-nav__link:hover .pagination-nav__label,
+.pagination-nav__link .pagination-nav__label {
+  color: var(--ifm-color-primary);
+}
+
+/*
+ * Interactive text uses the darker green (light mode) / lighter green (dark mode) via
+ * --ifm-color-primary: body links, breadcrumb links, and the active breadcrumb.
+ */
+.markdown a,
+article a:not(.card):not(.button):not(.pagination-nav__link),
+.breadcrumbs__link {
+  color: var(--ifm-color-primary);
+}
+.breadcrumbs__item--active .breadcrumbs__link {
+  color: var(--ifm-color-primary);
+  background: transparent;
   font-weight: 600;
 }
 

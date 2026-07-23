@@ -12,6 +12,19 @@ import { typography } from './typography';
 export interface ThemeColor {
   brand: string;
   brandHover: string;
+  /**
+   * Primary-button fill + its hover. Light mode fills with the lighter green and darkens on
+   * hover; dark mode fills with the darker green (so the button reads as a solid accent on the
+   * dark surface) and lightens on hover. Text on both stays the near-black `onBrand` (WCAG AA).
+   */
+  brandSolid: string;
+  brandSolidHover: string;
+  /**
+   * Interactive text (links, active tabs, default-button hover). The darker green in light
+   * mode for AA contrast on light surfaces; the lighter green in dark mode so it stays legible
+   * on dark surfaces. Mirrors the docs' `--ifm-color-primary`, which flips the same way.
+   */
+  link: string;
   accent: string;
   /** Page background — the dominant neutral. */
   bg: string;
@@ -80,6 +93,9 @@ export const lightTheme: Theme = {
   mode: 'light',
   color: {
     ...semantic,
+    brandSolid: tokens.color.brand, // lighter green fill; darkens on hover
+    brandSolidHover: tokens.color.brandHover,
+    link: tokens.color.brandHover, // darker green — AA on light surfaces
     bg: tokens.color.bgLight,
     surface: tokens.color.surfaceLight,
     surfaceAlt: tokens.color.secondary,
@@ -96,6 +112,9 @@ export const darkTheme: Theme = {
   mode: 'dark',
   color: {
     ...semantic,
+    brandSolid: tokens.color.brandHover, // darker green fill on dark surfaces; lightens on hover
+    brandSolidHover: tokens.color.brand,
+    link: tokens.color.brand, // lighter green — legible on dark surfaces
     bg: tokens.color.bgDark,
     surface: tokens.color.surfaceDark,
     surfaceAlt: '#272D2A',

@@ -10,9 +10,9 @@ export interface LogoProps {
 }
 
 /**
- * The PortQueue brand mark — an abstract cargo ship seen head-on, sitting on the water:
- * a trapezoid hull with stacked deck containers above calm waves. Theme-aware via
- * `currentColor`; containers use the brand/accent colours unless `mono`.
+ * The PortQueue brand mark — an abstract cargo ship seen head-on: a trapezoid hull with
+ * stacked deck containers above. Theme-aware via `currentColor`; containers use the
+ * brand/accent colours unless `mono`.
  */
 export function Logo({ variant = 'full', size = 32, color }: LogoProps): React.ReactElement {
   const accent = variant === 'mono' ? 'currentColor' : tokens.color.accent;
@@ -27,23 +27,6 @@ export function Logo({ variant = 'full', size = 32, color }: LogoProps): React.R
       aria-label="PortQueue"
       style={{ color: color ?? 'currentColor', flex: '0 0 auto' }}
     >
-      {/* Water: calm waves the ship sits on. */}
-      <path
-        d="M6 37 q3.6 -2.4 7.2 0 t7.2 0 t7.2 0 t7.2 0"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        opacity={0.55}
-      />
-      <path
-        d="M5 41 q3.6 -2.4 7.2 0 t7.2 0 t7.2 0 t7.2 0"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        opacity={0.32}
-      />
       {/* Cargo ship, front view: trapezoid hull. */}
       <path d="M11 28 L37 28 L32 36 L16 36 Z" fill="currentColor" opacity={0.9} />
       {/* Stacked deck containers. */}

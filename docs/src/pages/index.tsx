@@ -125,10 +125,12 @@ const CtaButton = styled(Link)<{ $variant?: 'primary' | 'secondary' }>`
   border: 1px solid
     ${(p) => (p.$variant === 'primary' ? 'var(--primary)' : 'var(--secondary)')};
   background: ${(p) => (p.$variant === 'primary' ? 'var(--primary)' : 'var(--surface)')};
-  color: var(--text);
+  /* On the green primary fill, text is always the near-black brand text (never white),
+     in both light and dark themes; the surface secondary follows the theme text colour. */
+  color: ${(p) => (p.$variant === 'primary' ? '#1b1f1d' : 'var(--text)')};
   &:hover {
     text-decoration: none;
-    color: var(--text);
+    color: ${(p) => (p.$variant === 'primary' ? '#1b1f1d' : 'var(--text)')};
     transform: translateY(-1px);
     background: ${(p) => (p.$variant === 'primary' ? 'var(--primary-dark)' : 'var(--surface)')};
     border-color: var(--primary);

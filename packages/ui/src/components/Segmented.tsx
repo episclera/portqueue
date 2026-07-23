@@ -29,12 +29,12 @@ const Segment = styled.button<{ $active: boolean }>`
   font-weight: 600;
   padding: 5px 12px;
   border-radius: ${(p) => p.theme.radii.sm}px;
-  color: ${(p) => (p.$active ? p.theme.color.text : p.theme.color.textMuted)};
+  color: ${(p) => (p.$active ? p.theme.color.link : p.theme.color.textMuted)};
   background: ${(p) => (p.$active ? p.theme.color.surface : 'transparent')};
   box-shadow: ${(p) => (p.$active ? p.theme.shadow.sm : 'none')};
   transition: color ${(p) => p.theme.motion.fast}, background ${(p) => p.theme.motion.fast};
   &:hover {
-    color: ${(p) => p.theme.color.text};
+    color: ${(p) => (p.$active ? p.theme.color.link : p.theme.color.text)};
   }
 `;
 

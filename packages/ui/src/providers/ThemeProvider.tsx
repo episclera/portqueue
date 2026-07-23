@@ -20,6 +20,7 @@ export const GlobalStyle = createGlobalStyle`
     --surface: ${(p) => p.theme.color.surface};
     --primary: ${(p) => p.theme.color.brand};
     --primary-dark: ${(p) => p.theme.color.brandHover};
+    --link: ${(p) => p.theme.color.link};
     --secondary: ${(p) => p.theme.color.border};
     --text: ${(p) => p.theme.color.text};
     --text-muted: ${(p) => p.theme.color.textMuted};
@@ -30,6 +31,11 @@ export const GlobalStyle = createGlobalStyle`
     --info: ${(p) => p.theme.color.info};
   }
   *, *::before, *::after { box-sizing: border-box; }
+  a {
+    color: ${(p) => p.theme.color.link};
+    text-decoration: none;
+  }
+  a:hover { text-decoration: underline; }
   body {
     margin: 0;
     background: ${(p) => p.theme.color.bg};

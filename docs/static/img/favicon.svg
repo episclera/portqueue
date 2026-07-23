@@ -7,9 +7,6 @@
   </defs>
   <!-- Rounded tile in the brand green. -->
   <rect x="2" y="2" width="36" height="36" rx="10" fill="url(#pqg)"/>
-  <!-- Water: calm waves the ship sits on. -->
-  <path d="M5 31 q3 -2 6 0 t6 0 t6 0 t6 0" fill="none" stroke="#F2F3F1" stroke-width="1.4" stroke-linecap="round" opacity="0.75"/>
-  <path d="M4 34 q3 -2 6 0 t6 0 t6 0 t6 0" fill="none" stroke="#F2F3F1" stroke-width="1.4" stroke-linecap="round" opacity="0.5"/>
   <!-- Cargo ship, front view: trapezoid hull. -->
   <path d="M9 23 L31 23 L27 30 L13 30 Z" fill="#1B1F1D"/>
   <!-- Stacked containers on deck. -->

@@ -90,39 +90,42 @@ const config: Config = {
       style: 'light',
       links: [
         {
+          // All technical/product documentation lives here.
           title: 'Docs',
           items: [
             { label: 'Getting Started', to: '/docs/getting-started/installation' },
             { label: 'Job Lifecycle', to: '/docs/guides/consuming-jobs#job-states' },
-            { label: 'Production Best Practices', to: '/docs/production' },
+            { label: 'Workflows', to: '/docs/workflows/what-is-a-workflow' },
+            { label: 'Drivers', to: '/docs/drivers/overview' },
+            { label: 'Events reference', to: '/docs/events-hooks/events' },
             { label: 'API Reference', to: '/docs/api-reference' },
             { label: 'Dashboard', to: '/docs/dashboard' },
             { label: 'CLI', to: '/docs/cli' },
-          ],
-        },
-        {
-          title: 'Resources',
-          items: [
-            { label: 'Events reference', to: '/docs/events-hooks/events' },
+            { label: 'Production Best Practices', to: '/docs/production' },
             { label: 'Troubleshooting', to: '/docs/troubleshooting' },
-            { label: 'Drivers', to: '/docs/drivers/overview' },
-            { label: 'Workflows', to: '/docs/workflows/what-is-a-workflow' },
-            { label: 'Brandbook', to: '/docs/brandbook' },
           ],
         },
         {
-          title: 'Project',
+          // Community & contribution — how to follow along and get involved.
+          title: 'Community',
           items: [
             { label: 'Blog', to: '/blog' },
-            { label: 'Team', to: '/docs/team' },
             { label: 'GitHub', href: REPO_URL, target: '_blank', rel: 'noopener noreferrer' },
+            { label: 'Contributing', to: '/docs/contributing' },
             {
               label: 'Changelog',
               href: `${REPO_URL}/blob/main/CHANGELOG.md`,
               target: '_blank',
               rel: 'noopener noreferrer',
             },
-            { label: 'Contributing', to: '/docs/contributing' },
+          ],
+        },
+        {
+          // Who's behind PortQueue and how to represent it.
+          title: 'Team & Brand',
+          items: [
+            { label: 'Team', to: '/docs/team' },
+            { label: 'Brandbook', to: '/docs/brandbook' },
             { label: 'License', to: '/docs/introduction#license' },
           ],
         },
