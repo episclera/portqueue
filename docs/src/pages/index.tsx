@@ -38,7 +38,7 @@ const FEATURES: { icon: string; title: string; body: string; to: string; cta: st
   {
     icon: '⏰',
     title: 'Scheduling & Cron',
-    body: 'Delayed jobs, fixed intervals, and cron with timezones — one addJob method, no separate schedule() call.',
+    body: 'Delayed jobs, fixed intervals, and cron with timezones — all through one addJob method.',
     to: '/docs/guides/scheduling',
     cta: 'Schedule jobs',
   },
