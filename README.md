@@ -29,14 +29,16 @@ PortQueue treats your relational database as the single source of truth for back
 ```bash
 npm install @portqueue/core
 # plus the client for your database, e.g.
-npm install better-sqlite3   # or: pg, oracledb, @electric-sql/pglite
+npm install pg   # or: better-sqlite3, oracledb, @electric-sql/pglite
 ```
 
 ```ts
 import { PortQueue } from '@portqueue/core';
-import { SqliteDriver } from '@portqueue/core/drivers/sqlite';
+import { PostgresDriver } from '@portqueue/core/drivers/postgres';
 
-const pq = new PortQueue({ driver: new SqliteDriver({ path: './queue.db' }) });
+const pq = new PortQueue({
+  driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }),
+});
 await pq.init();
 
 const emails = pq.createQueue('emails');
