@@ -31,10 +31,12 @@ Commits follow **[Conventional Commits](https://www.conventionalcommits.org)** (
 by commitlint) — the changelog is derived from them.
 
 Tests use **PGLite + SQLite only**, so they run anywhere with no external DB server. If
-you need a real Postgres or Oracle (e.g. for manual driver testing), start one in Docker:
+you need a real Postgres, MySQL or Oracle (e.g. for manual driver testing), start one in
+Docker:
 
 ```bash
 npm run db:pg:up       # Postgres   (stop with db:pg:down)
+npm run db:mysql:up    # MySQL      (stop with db:mysql:down)
 npm run db:oracle:up   # Oracle     (stop with db:oracle:down)
 ```
 

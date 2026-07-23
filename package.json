@@ -27,6 +27,8 @@
     "dev:docs": "bash scripts/dev/start-docs.sh",
     "db:pg:up": "bash scripts/dev/start-postgres.sh",
     "db:pg:down": "bash scripts/dev/stop-postgres.sh",
+    "db:mysql:up": "bash scripts/dev/start-mysql.sh",
+    "db:mysql:down": "bash scripts/dev/stop-mysql.sh",
     "db:oracle:up": "bash scripts/dev/start-oracle.sh",
     "db:oracle:down": "bash scripts/dev/stop-oracle.sh"
   },

@@ -54,7 +54,7 @@ await emails.addJob({ data: { to: 'a@b.com' } });
 - Setup: run `./scripts/dev/setup.sh` (or `npm run setup`) — it selects the pinned Node version and installs all workspaces. That's all you need to get the repo ready.
 - Build: `npm run build`. Test: `npm test`. Lint + typecheck: `npm run lint` (ESLint + `tsc --noEmit` in one step).
 - Commits follow **Conventional Commits** (enforced by commitlint) — the changelog is derived from them.
-- Tests use **PGLite + SQLite only** (no external DB server needed). If you need a real Postgres or Oracle (e.g. for manual driver testing), start one in Docker with `npm run db:pg:up` or `npm run db:oracle:up` (stop with `db:pg:down` / `db:oracle:down`).
+- Tests use **PGLite + SQLite only** (no external DB server needed). If you need a real Postgres, MySQL or Oracle (e.g. for manual driver testing), start one in Docker with `npm run db:pg:up`, `npm run db:mysql:up` or `npm run db:oracle:up` (stop with `db:pg:down` / `db:mysql:down` / `db:oracle:down`).
 
 See [`ROADMAP.md`](./ROADMAP.md) for what's planned next.
 

@@ -1,9 +1,10 @@
 # PortQueue local dev services.
 #
-# Postgres and Oracle for local development and manual driver testing. Each service
-# is started independently — see scripts/dev/{start,stop}-{postgres,oracle}.sh, or:
+# Postgres, MySQL and Oracle for local development and manual driver testing. Each service
+# is started independently — see scripts/dev/{start,stop}-{postgres,mysql,oracle}.sh, or:
 #
 #   docker compose -f .docker/docker-compose.yml up -d postgres
+#   docker compose -f .docker/docker-compose.yml up -d mysql
 #   docker compose -f .docker/docker-compose.yml up -d oracle
 #
 # Credentials are dev-only. Do not reuse them anywhere real.
@@ -23,6 +24,24 @@ services:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U portqueue -d portqueue']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8
+    container_name: portqueue-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: portqueue
+      MYSQL_USER: portqueue
+      MYSQL_PASSWORD: portqueue
+      MYSQL_DATABASE: portqueue
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-uportqueue', '-pportqueue']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -47,4 +66,5 @@ services:
 
 volumes:
   postgres-data:
+  mysql-data:
   oracle-data:

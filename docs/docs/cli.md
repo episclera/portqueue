@@ -46,3 +46,41 @@ your app uses, so the CLI, dashboard, and app all agree on driver, schema, and q
 Run the CLI in a container for one-off ops or to host the dashboard: mount your config
 module, pass `--config`, and expose the dashboard `--port`. Because everything is driven
 by the shared config, no app changes are needed.
+
+```dockerfile title="Dockerfile"
+FROM node:20-alpine
+WORKDIR /app
+
+# Install the CLI plus the client for your driver — it's an optional peer dependency,
+# so pick the one you use: pg (Postgres/Citus/Yugabyte), mysql2, oracledb, …
+RUN npm install -g @portqueue/cli pg
+
+# The config module is mounted at runtime (see `docker run` below), so nothing
+# app-specific is baked into the image.
+EXPOSE 9000
+ENTRYPOINT ["portqueue"]
+# Default to serving the dashboard; override the command for one-off ops.
+CMD ["dashboard", "--config", "/config/portqueue.config.mjs", "--port", "9000"]
+```
+
+```bash
+# Build the image once.
+docker build -t portqueue-cli .
+
+# Host the dashboard: mount your config, publish the port.
+docker run --rm -p 9000:9000 \
+  -v "$(pwd)/portqueue.config.mjs:/config/portqueue.config.mjs:ro" \
+  portqueue-cli
+
+# One-off op: override the default command (the ENTRYPOINT stays `portqueue`).
+docker run --rm \
+  -v "$(pwd)/portqueue.config.mjs:/config/portqueue.config.mjs:ro" \
+  portqueue-cli migrate --config /config/portqueue.config.mjs
+```
+
+:::note
+The CLI ships no TypeScript compiler, so point `--config` at a prebuilt `.js`/`.mjs`
+module (as above). To load a `.ts` config directly, run it under a loader instead — e.g.
+`node --import tsx node_modules/@portqueue/cli/dist/cli.mjs …`.
+:::
+
