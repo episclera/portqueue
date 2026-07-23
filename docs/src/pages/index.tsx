@@ -9,7 +9,7 @@ import { DRIVERS } from '@site/src/constants/drivers';
 const FEATURES: { icon: string; title: string; body: string; to: string; cta: string }[] = [
   {
     icon: '🌐',
-    title: 'Scales To Many Servers',
+    title: 'Scales to Many Servers',
     body: 'Add a server and it just starts claiming — no leader election, no reconfiguration. Instances cooperate through row-level claiming, so no job runs twice, and a job can target a preferred server when it needs one.',
     to: '/docs/scale-horizontally',
     cta: 'How it scales',
