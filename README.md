@@ -13,8 +13,6 @@
 
 PortQueue treats your relational database as the single source of truth for background jobs — no Redis, no broker. Write your queue code once and run it on **Postgres, Oracle, PGLite, or SQLite** (or plug in a custom driver for any engine).
 
-> **Free and open source. Commercial use permitted. No license fee, no obligations.** (MIT)
-
 ## Why PortQueue
 
 - **One API across every driver.** Swap Postgres for SQLite without touching app code.
@@ -70,3 +68,5 @@ await emails.addJob({ data: { to: 'a@b.com' } });
 ## License
 
 MIT — see [LICENSE](./LICENSE). Free and open source, commercial use permitted, no obligations.
+
+> **Free and open source. Commercial use permitted. No license fee, no obligations.** (MIT)
