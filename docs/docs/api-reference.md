@@ -30,15 +30,15 @@ adapters come from subpaths. Kept in sync with the public API (build_plan/05).
 - `getQueues()`, `getQueueStats({ queue? })`, `getJob({ jobId })`, `getJobs(query)`, `getWorkflow({ workflowId })`.
 - `on(event, listener, filter?)` / `off(...)` / `once(...)`; `useHook(hook)`.
 - `pauseQueue({ queue, mode? })` / `resumeQueue({ queue })`; `removeQueue({ name })` — manual, refused while the queue is still declared in this process.
-- **Multi-instance:** `getInstances()` → `InstanceInfo[]`; `pauseInstance({ instanceKey })` / `resumeInstance({ instanceKey })`; `removeInstance({ instanceKey })` — refused until the instance has been unseen 30 min. See [Multi-server / instance](./scale-horizontally.md#choosing-a-preferred-server-with-patterns).
+- **Multi-instance:** `getInstances()` → `InstanceInfo[]`; `pauseInstance({ instanceKey })` / `resumeInstance({ instanceKey })`; `removeInstance({ instanceKey })` — refused until the instance has been unseen 30 min. See [Multi-server / instance](./scale-horizontally.md#choosing-a-preferred-server-with-regex-patterns).
 
 ## `Queue<TData>`
 
-- `addJob(options: AddJobOptions<TData>): Promise<AddJobResult>` — pass `schedule: { startEvery }`/`schedule: { cron }` to make it recurring; pass `preferredInstanceKeyPattern` for [instance affinity](./scale-horizontally.md#attach-a-pattern-to-the-job).
+- `addJob(options: AddJobOptions<TData>): Promise<AddJobResult>` — pass `schedule: { startEvery }`/`schedule: { cron }` to make it recurring; pass `preferredInstanceKeyPattern` for [instance affinity](./scale-horizontally.md#attach-a-regex-pattern-to-the-job).
 - `addJobs({ jobs })`.
 - `getSchedules()`, `getJob`, `getJobs`, `getQueueStats`.
 - `retryJob({ jobId, from? })`, `cancelJob({ jobId })`, `cancelRunningJob({ jobId })`.
-- `removeJob({ jobId })`, `removeSchedule({ scheduleId })`, `removeJobs(...)`, `purgeJobs({ statuses })`.
+- `removeJob({ jobId })`, `removeSchedule({ scheduleId })`, `removeJobs({ jobIds } | { statuses })`.
 - `pause({ mode? })`, `resume()`, `get name()`.
 - All producing methods accept an optional `tx?: TransactionHandle`.
 

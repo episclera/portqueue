@@ -55,7 +55,7 @@ Enable the `SystemMonitor` and set a worker-local
 ## Execution locality
 
 For most deployments, leave `instance.key` unset — anonymous, interchangeable workers are simplest
-and most resilient. Give a server an [instance key](./scale-horizontally.md#choosing-a-preferred-server-with-patterns) only when work needs
+and most resilient. Give a server an [instance key](./scale-horizontally.md#choosing-a-preferred-server-with-regex-patterns) only when work needs
 locality (warm cache, local data, region, specialized hardware):
 
 - Give each process a **stable `instance.key`** (e.g. from your orchestrator's pod/host id, plus the

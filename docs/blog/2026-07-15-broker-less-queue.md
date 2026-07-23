@@ -32,5 +32,5 @@ Low latency still matters, so where the engine supports it (Postgres) workers wa
 milliseconds via `LISTEN/NOTIFY`; elsewhere they poll on a tunable interval. You get
 broker-like responsiveness without the broker.
 
-Read how it [scales horizontally](/docs/scalability), or start with
+Read how it [scales horizontally](/docs/scale-horizontally), or start with
 [Getting Started](/docs/getting-started/installation).
