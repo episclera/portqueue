@@ -9,7 +9,7 @@ import { DRIVERS } from '@site/src/constants/drivers';
 const FEATURES: { icon: string; title: string; body: string }[] = [
   {
     icon: '🌐',
-    title: 'Distributed from the ground up',
+    title: 'Scalable horizontally',
     body: 'Built to run across many instances at once — they cooperate through row-level claiming, so no job is ever processed twice. Runs just as well on a single instance: scalable from one to infinity.',
   },
   {
@@ -91,10 +91,7 @@ const HeroTitle = styled.h1`
   font-weight: 800;
   letter-spacing: -0.03em;
   margin: 0;
-  background: linear-gradient(120deg, var(--primary-dark), var(--info));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--primary-dark);
 `;
 
 const HeroTagline = styled.p`
