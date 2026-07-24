@@ -40,6 +40,33 @@ portqueue queues --driver sqlite --connection-string /var/data/pq.sqlite
 portqueue queues --driver pglite --connection-string /var/data/pq
 ```
 
+## Reuse the connection with a script
+
+Passing `--driver` and `--connection-string` on every command gets old fast. The easiest fix is
+a tiny wrapper script that bakes in the connection once, then forwards whatever flags you give it
+straight to `portqueue`. Drop this next to your project and use it for every command:
+
+```bash title="pq"
+#!/usr/bin/env bash
+# Usage: ./pq <command> [flags]   e.g.  ./pq queues   ./pq retry --id abc --yes
+set -euo pipefail
+exec portqueue \
+  --driver postgres \
+  --connection-string "${DATABASE_URL:-postgres://user:pass@localhost:5432/app}" \
+  "$@"
+```
+
+Make it executable once (`chmod +x pq`), then:
+
+```bash
+./pq queues
+./pq stats --watch
+./pq retry --id <jobId> --yes
+```
+
+The connection lives in one place, and `"$@"` passes the rest through — so every command is just
+`./pq <command> [flags]`. Override the default per-run with `DATABASE_URL=… ./pq queues`.
+
 ## Global flags
 
 | Flag | Description |
@@ -58,30 +85,29 @@ configures on its driver, so the CLI reads and writes the same tables and channe
 
 ## Common commands
 
+Using the `./pq` wrapper from above so the connection flags stay out of the way:
+
 ```bash
 # live stats, refreshing
-portqueue stats --watch --driver postgres --connection-string $DATABASE_URL
+./pq stats --watch
 
 # tail the event feed for one queue (runs until interrupted)
-portqueue listen --queue orders --driver postgres --connection-string $DATABASE_URL
+./pq listen --queue orders
 
 # retry a failed job
-portqueue retry --id <jobId> --yes --driver postgres --connection-string $DATABASE_URL
+./pq retry --id <jobId> --yes
 
 # remove a long-inactive instance (refused unless unseen for 30+ min)
-portqueue remove-instance --instance-key 10.0.9.9:ram-2gb:cpu-1cor \
-  --driver postgres --connection-string $DATABASE_URL
+./pq remove-instance --instance-key 10.0.9.9:ram-2gb:cpu-1cor
 
 # remove an unused queue (refused if this process still declares it)
-portqueue remove-queue --queue legacy-emails \
-  --driver postgres --connection-string $DATABASE_URL
+./pq remove-queue --queue legacy-emails
 
 # serve the dashboard (see the Dashboard page)
-portqueue dashboard --driver postgres --connection-string $DATABASE_URL --port 9000 \
-  --root-user admin --root-password ****
+./pq dashboard --port 9000 --root-user admin --root-password ****
 
 # run migrations as a separate deploy step
-portqueue migrate --driver postgres --connection-string $DATABASE_URL
+./pq migrate
 ```
 
 To run the CLI-hosted dashboard in a container, see

@@ -13,7 +13,7 @@ right defaults and habits and links to the deep pages.
 
 Split **producers** (API tier — no `createWorker`) from **consumers** (worker tier). Run
 critical vs bulk workloads as **separate `PortQueue` instances / pools** for hard
-isolation. Wire the **same config module** across every tier so they agree on queues.
+isolation. Wire the **same driver configuration** across every tier so they agree on queues.
 
 ## Graceful shutdown
 
@@ -54,11 +54,11 @@ Enable the `SystemMonitor` and set a worker-local
 
 ## Execution locality
 
-For most deployments, leave `instance.key` unset — anonymous, interchangeable workers are simplest
+For most deployments, leave `instance.instanceKey` unset — anonymous, interchangeable workers are simplest
 and most resilient. Give a server an [instance key](./scale-horizontally.md#choosing-a-preferred-server-with-regex-patterns) only when work needs
 locality (warm cache, local data, region, specialized hardware):
 
-- Give each process a **stable `instance.key`** (e.g. from your orchestrator's pod/host id, plus the
+- Give each process a **stable `instance.instanceKey`** (e.g. from your orchestrator's pod/host id, plus the
   capabilities you target — `…:ram-8gb:cpu-4cor`). Reuse the same key across restarts of the *same*
   logical instance so affinity and liveness stay meaningful.
 - Target work with a **capability pattern** (`preferredInstanceKeyPattern`, e.g. `ram-(4|8)gb`)
@@ -105,7 +105,7 @@ until `init()` resolved.
 - [ ] Retries with jitter + cap; `dontAutoretryFor` for non-retryable errors.
 - [ ] Retention on; failed kept longer than completed.
 - [ ] `SystemMonitor` on; worker-local rate limiter set for third-party APIs.
-- [ ] Multi-instance (if used): stable `instance.key` per process; jobs targeted by capability pattern; heartbeat interval tuned.
+- [ ] Multi-instance (if used): stable `instance.instanceKey` per process; jobs targeted by capability pattern; heartbeat interval tuned.
 - [ ] `PortQueueEvent.ERROR` subscribed; metrics/tracing via hooks.
 - [ ] Dashboard/CLI behind auth; payloads kept small (no built-in size cap).
 - [ ] Readiness gated on `pq.isRunning` + driver ping.

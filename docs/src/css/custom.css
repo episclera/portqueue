@@ -116,13 +116,15 @@
   background-color: var(--ifm-background-surface-color);
 }
 
-/* Desktop-only navbar polish: a divider between the brand and the nav links. */
+/* Desktop-only navbar polish. */
 @media (min-width: 997px) {
-  /* Divider between the brand and the nav links (desktop only). */
   .navbar__brand {
     margin-right: 1rem;
-    padding-right: 1rem;
-    border-right: 1px solid var(--ifm-color-emphasis-300);
+  }
+  /* Breathing room before the GitHub link, which sits to the right of the nav links. */
+  .navbar__items--right > .navbar__item:last-child,
+  .navbar__items--right > .navbar__link[href*='github'] {
+    margin-left: 0.75rem;
   }
 }
 
@@ -245,4 +247,82 @@ article a:not(.card):not(.button):not(.pagination-nav__link),
  */
 ul.tabs.pm-driver-sync {
   display: none;
+}
+
+/*
+ * API reference — a hierarchy of methods and their options rendered as badges, one per line,
+ * with indentation showing what belongs to what. Authored in the reference page as nested
+ * markdown lists of <code> spans carrying these classes.
+ */
+.api-tree {
+  list-style: none;
+  padding-left: 0;
+  margin: 0 0 1.5rem;
+}
+.api-tree ul {
+  list-style: none;
+  margin: 0.15rem 0 0.15rem 0;
+  /* Indent children and draw a guide line so the hierarchy reads at a glance. */
+  padding-left: 1.15rem;
+  border-left: 1px solid var(--ifm-color-emphasis-200);
+}
+.api-tree li {
+  margin: 0.28rem 0;
+  line-height: 1.5;
+}
+/* Every badge shares a pill shape; the modifier class tints it by kind. */
+.api-badge {
+  display: inline-block;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.08rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  text-decoration: none;
+}
+a.api-badge:hover {
+  filter: brightness(0.97);
+  text-decoration: none;
+}
+/* A method / function. */
+.api-badge.is-method {
+  background: var(--ifm-color-primary-lightest);
+  color: var(--ifm-color-primary-darkest);
+  border-color: var(--ifm-color-primary-light);
+}
+/* A class / constructor / handle. */
+.api-badge.is-class {
+  background: #e7eef6;
+  color: #2f4d6b;
+  border-color: #c4d6ea;
+}
+/* An options object (links to its own section). */
+.api-badge.is-options {
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-emphasis-800);
+  border-color: var(--ifm-color-emphasis-300);
+}
+/* A scalar option / field. */
+.api-badge.is-opt {
+  background: transparent;
+  color: var(--ifm-color-content);
+  border-color: var(--ifm-color-emphasis-300);
+  font-weight: 500;
+}
+/* Short trailing note after a badge (type, default, one-liner). */
+.api-note {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.9rem;
+}
+.api-note .api-default {
+  color: var(--ifm-color-primary-darker);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.85rem;
+}
+[data-theme='dark'] .api-badge.is-class {
+  background: #223247;
+  color: #bcd4ef;
+  border-color: #33506f;
 }

@@ -33,7 +33,7 @@ pq.once(PortQueueEvent.CLIENT_STARTED, () => {});
 **Job lifecycle**
 
 - `JOB_ADDED` — `{ jobId, queue, deduplicated }`
-- `JOB_ACTIVE` — `{ jobId, queue, retryAttempt, instanceId }`
+- `JOB_ACTIVE` — `{ jobId, queue, retryAttempt, instanceKey }`
 - `JOB_COMPLETED` — `{ jobId, queue, returnValue, durationMs }`
 - `JOB_FAILED` — failure after attempts exhausted
 - `JOB_RETRYING` — scheduled for another attempt

@@ -35,10 +35,6 @@ The only difference between a simple queue and a **workflow** queue is the consu
 simple worker has one `handler`; a [workflow](./workflows/what-is-a-workflow.md) worker
 has many `steps`. Producing is the same `addJob({ data })` in both.
 
-## License {#license}
-
-**Free and open source. Commercial use permitted. No license fee, no obligations.** (MIT)
-
 ## When to use it
 
 - A backend that needs **background jobs** (emails, webhooks, image processing) without standing up a broker.
@@ -83,3 +79,7 @@ losing work.
   We add strict typing end to end and keep results in the same database — no separate result backend.
 
 Read on in [Getting Started](./getting-started/installation.mdx).
+
+## License {#license}
+
+**Free and open source. Commercial use permitted. No license fee, no obligations.** (MIT)

@@ -88,28 +88,35 @@ createServer((req, res) => {
   </TabItem>
 </Tabs>
 
-## Serve it from the CLI (no app changes)
-
-If you'd rather not touch your app, the CLI hosts the dashboard as a standalone process —
-it imports your [config module](./cli.md#the-config-module) and serves the same UI:
-
-```bash
-portqueue dashboard --config ./portqueue.config.ts --port 9000 \
-  --root-user admin --root-password ****
-```
-
 ## Securing
 
 - **Basic auth** via the `auth` option (shown above).
 - **Custom auth** — provide your own middleware/guard for SSO or session checks.
 - Always mount it behind your platform's auth in production, and rely on parameterized queries.
 
+## Serve it from the CLI (no app changes)
+
+If you'd rather not touch your app, the CLI hosts the dashboard as a standalone process. It
+opens its own short-lived connection from `--driver` + `--connection-string` (or `DATABASE_URL`)
+and serves the same UI:
+
+```bash
+portqueue dashboard --driver postgres \
+  --connection-string "$DATABASE_URL" --port 9000 \
+  --root-user admin --root-password ****
+```
+
+:::tip Wrap the connection in a small script
+So you don't retype the connection on every command, put it in a one-line shell script and call
+that instead — see [Reuse the connection with a script](./cli.md#reuse-the-connection-with-a-script)
+on the CLI page.
+:::
+
 ## Docker
 
 You don't need to containerise your app to run the dashboard — the CLI image can host it
-as its own service. Mount your [config module](./cli.md#the-config-module), pass `--config`,
-and expose the dashboard `--port`. Because everything is driven by the shared config, no app
-changes are needed and the same image doubles for one-off ops (migrations, purges, …).
+as its own service. Pass the connection via `DATABASE_URL` and expose the dashboard `--port`.
+No app changes are needed, and the same image doubles for one-off ops (migrations, purges, …).
 
 ```dockerfile title="Dockerfile"
 FROM node:34-alpine
@@ -119,30 +126,23 @@ WORKDIR /app
 # so pick the one you use: pg (Postgres), mysql2, oracledb, …
 RUN npm install -g @portqueue/cli pg
 
-# The config module is mounted at runtime (see `docker run` below), so nothing
-# app-specific is baked into the image.
 EXPOSE 9000
 ENTRYPOINT ["portqueue"]
 # Default to serving the dashboard; override the command for one-off ops.
-CMD ["dashboard", "--config", "/config/portqueue.config.mjs", "--port", "9000"]
+CMD ["dashboard", "--driver", "postgres", "--port", "9000"]
 ```
 
 ```bash
 # Build the image once.
 docker build -t portqueue-cli .
 
-# Host the dashboard: mount your config, publish the port.
+# Host the dashboard: pass the connection string, publish the port.
 docker run --rm -p 9000:9000 \
-  -v "$(pwd)/portqueue.config.mjs:/config/portqueue.config.mjs:ro" \
+  -e DATABASE_URL="postgres://user:pass@db:5432/app" \
   portqueue-cli
 
 # One-off op: override the default command (the ENTRYPOINT stays `portqueue`).
 docker run --rm \
-  -v "$(pwd)/portqueue.config.mjs:/config/portqueue.config.mjs:ro" \
-  portqueue-cli migrate --config /config/portqueue.config.mjs
+  -e DATABASE_URL="postgres://user:pass@db:5432/app" \
+  portqueue-cli migrate --driver postgres
 ```
-
-:::note
-Point `--config` at a prebuilt `.js`/`.mjs` module — see
-[The config module](./cli.md#the-config-module) for loading a `.ts` config under a loader.
-:::

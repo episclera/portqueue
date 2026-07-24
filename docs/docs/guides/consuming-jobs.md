@@ -40,7 +40,6 @@ pq.createWorker({
     job.queue;           // string
     job.data;            // TData — the payload, typed to the queue
     job.retryAttempt;    // number
-    job.metadata;        // opaque JSON (traceId, tenantId, …)
     job.signal;          // AbortSignal — fires on graceful-shutdown timeout
     await job.extendLock({ byMs: 30_000 }); // override the automatic heartbeat
   },

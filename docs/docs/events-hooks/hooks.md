@@ -35,7 +35,7 @@ pq.useHook({
   phase: HookPhase.BEFORE_ADD,
   handler: ({ job }) => ({
     options: {
-      metadata: { ...job.metadata, tenantId: currentTenant() },
+      data: { ...job.data, tenantId: currentTenant() },
       idempotencyKey: job.idempotencyKey ?? `tenant:${currentTenant()}:${job.data.id}`,
     },
   }),

@@ -74,8 +74,9 @@ const config: Config = {
         src: 'img/logo.svg',
       },
       items: [
-        { type: 'docSidebar', sidebarId: 'docsSidebar', position: 'left', label: 'Docs' },
-        { to: '/blog', label: 'Blog', position: 'left' },
+        { type: 'docSidebar', sidebarId: 'docsSidebar', position: 'right', label: 'Docs' },
+        { to: '/docs/api-reference', label: 'API Reference', position: 'right' },
+        { to: '/blog', label: 'Blog', position: 'right' },
         {
           href: REPO_URL,
           label: 'GitHub',

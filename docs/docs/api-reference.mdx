@@ -1,0 +1,397 @@
+---
+id: api-reference
+title: API Reference
+sidebar_label: API Reference
+---
+
+# API Reference
+
+Every public method and option in `@portqueue/core`, laid out as a hierarchy: each
+**class** and **method** is a badge on its own line, and the options a method accepts are
+nested underneath it. Object-shaped options link to their own section, where every field is
+listed with its type and default. Durations accept a number of milliseconds or a human string
+like `'30s'`, `'5m'`, `'1h'`.
+
+<span className="api-badge is-class">class</span>&nbsp; <span className="api-badge is-method">method</span>&nbsp; <span className="api-badge is-options">options object →</span>&nbsp; <span className="api-badge is-opt">scalar option</span>
+
+---
+
+## PortQueue
+
+The client. One per database — owns the connection, migrations, shared services, and produces
+`Queue` and `Worker` handles. Construction wires dependencies only; no I/O until `init()`.
+
+<ul className="api-tree">
+  <li>
+    <a className="api-badge is-class" href="#portqueue">new PortQueue&lt;TQueues&gt;</a>
+    <span className="api-note">— create the client</span>
+    <ul>
+      <li><a className="api-badge is-options" href="#portqueueoptions">PortQueueOptions</a> <span className="api-note">the only argument</span></li>
+    </ul>
+  </li>
+  <li><span className="api-badge is-method">init()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — connect, migrate, start services (idempotent)</span></li>
+  <li>
+    <span className="api-badge is-method">shutdown(options?)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — drain workers and disconnect</span>
+    <ul>
+      <li><a className="api-badge is-options" href="#shutdownoptions">ShutdownOptions</a></li>
+    </ul>
+  </li>
+  <li><span className="api-badge is-method">get isRunning</span> <span className="api-note">→ <code>boolean</code></span></li>
+  <li><span className="api-badge is-method">migrate()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — force-apply pending migrations (the programmatic MANUAL path)</span></li>
+  <li>
+    <span className="api-badge is-method">createQueue&lt;TData&gt;(name, options?)</span> <span className="api-note">→ <a href="#queue"><code>Queue&lt;TData&gt;</code></a></span>
+    <ul>
+      <li><span className="api-badge is-opt">name</span> <span className="api-note"><code>TQueues</code> — the queue name</span></li>
+      <li><a className="api-badge is-options" href="#queueoptions">QueueOptions</a></li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge is-method">createWorker&lt;TData, TResult&gt;(options)</span> <span className="api-note">→ <a href="#worker"><code>Worker</code></a></span>
+    <ul>
+      <li><a className="api-badge is-options" href="#workeroptions">WorkerOptions</a></li>
+    </ul>
+  </li>
+  <li><span className="api-badge is-method">getQueues()</span> <span className="api-note">→ <code>Promise&lt;QueueInfo[]&gt;</code></span></li>
+  <li><span className="api-badge is-method">getQueueStats(&#123; queue? &#125;)</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code> — omit <code>queue</code> for client-wide</span></li>
+  <li><span className="api-badge is-method">getStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code> — all queues combined</span></li>
+  <li><span className="api-badge is-method">getJob&lt;TData&gt;(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
+  <li>
+    <span className="api-badge is-method">getJobs&lt;TData&gt;(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code></span>
+    <ul>
+      <li><a className="api-badge is-options" href="#getjobsquery">GetJobsQuery</a></li>
+    </ul>
+  </li>
+  <li><span className="api-badge is-method">getWorkflow(&#123; workflowId &#125;)</span> <span className="api-note">→ <code>Promise&lt;WorkflowSnapshot | null&gt;</code></span></li>
+  <li><span className="api-badge is-method">on(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code> — see <a href="./events-hooks/events.md">Events</a></span></li>
+  <li><span className="api-badge is-method">once(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code></span></li>
+  <li><span className="api-badge is-method">off(event, listener)</span> <span className="api-note">→ <code>void</code></span></li>
+  <li><span className="api-badge is-method">useHook(hook)</span> <span className="api-note">→ <code>Unsubscribe</code> — see <a href="./events-hooks/hooks.md">Hooks</a></span></li>
+  <li><span className="api-badge is-method">pauseQueue(&#123; queue, mode? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — <code>mode</code> is a <a href="#enums">PauseMode</a></span></li>
+  <li><span className="api-badge is-method">resumeQueue(&#123; queue &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge is-method">removeQueue(&#123; name &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — refused while the queue is declared in this process</span></li>
+  <li><span className="api-badge is-method">getInstances()</span> <span className="api-note">→ <code>Promise&lt;InstanceInfo[]&gt;</code> — see <a href="./scale-horizontally.md">Scaling</a></span></li>
+  <li><span className="api-badge is-method">pauseInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge is-method">resumeInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge is-method">removeInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — refused until the instance is unseen for 30 min</span></li>
+</ul>
+
+---
+
+## Queue
+
+A producer handle for one queue, from `pq.createQueue(name, options?)`. All producing methods
+accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides/transactions.mdx).
+
+<ul className="api-tree">
+  <li>
+    <span className="api-badge is-method">addJob(options)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code></span>
+    <ul>
+      <li><a className="api-badge is-options" href="#addjoboptions">AddJobOptions&lt;TData&gt;</a></li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge is-method">addJobs(&#123; jobs &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult[]&gt;</code></span>
+    <ul>
+      <li><span className="api-badge is-opt">jobs</span> <span className="api-note"><a href="#addjoboptions"><code>AddJobOptions&lt;TData&gt;[]</code></a></span></li>
+    </ul>
+  </li>
+  <li><span className="api-badge is-method">getSchedules()</span> <span className="api-note">→ <code>Promise&lt;ScheduleInfo[]&gt;</code></span></li>
+  <li><span className="api-badge is-method">getJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
+  <li><span className="api-badge is-method">getJobs(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>, scoped to this queue</span></li>
+  <li><span className="api-badge is-method">getQueueStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code></span></li>
+  <li><span className="api-badge is-method">retryJob(&#123; jobId, from? &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — <code>from</code> is a <a href="#enums">RetryMode</a></span></li>
+  <li><span className="api-badge is-method">cancelJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — a pending/retry job</span></li>
+  <li><span className="api-badge is-method">cancelRunningJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — cooperative cancel of an active job</span></li>
+  <li><span className="api-badge is-method">removeJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
+  <li><span className="api-badge is-method">removeSchedule(&#123; scheduleId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
+  <li><span className="api-badge is-method">removeJobs(&#123; jobIds &#125; | &#123; statuses &#125;)</span> <span className="api-note">→ <code>Promise&lt;number&gt;</code></span></li>
+  <li><span className="api-badge is-method">pause(&#123; mode? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge is-method">resume()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge is-method">get name</span> <span className="api-note">→ <code>string</code></span></li>
+</ul>
+
+---
+
+## Worker
+
+A consumer registration from `pq.createWorker(options)`. It starts claiming automatically after
+`pq.init()` and stops on shutdown — **there are no lifecycle methods**. Control processing through
+the `Queue` (`pause`/`resume`) and observe it through `pq.on(...)`. All consumer settings live on
+[WorkerOptions](#workeroptions).
+
+<ul className="api-tree">
+  <li>
+    <a className="api-badge is-class" href="#worker">Worker</a> <span className="api-note">created via <code>createWorker</code></span>
+    <ul>
+      <li><a className="api-badge is-options" href="#workeroptions">WorkerOptions</a></li>
+    </ul>
+  </li>
+</ul>
+
+---
+
+## Job
+
+The read-only view handed to a handler. Workflow transitions are on the `step` controller
+(second handler argument), not on `Job`.
+
+<ul className="api-tree">
+  <li><span className="api-badge is-opt">id</span> <span className="api-note"><code>string</code></span></li>
+  <li><span className="api-badge is-opt">queue</span> <span className="api-note"><code>string</code></span></li>
+  <li><span className="api-badge is-opt">data</span> <span className="api-note"><code>TData</code> — the payload you enqueued</span></li>
+  <li><span className="api-badge is-opt">retryAttempt</span> <span className="api-note"><code>number</code></span></li>
+  <li><span className="api-badge is-opt">retryMaxAttempts</span> <span className="api-note"><code>number</code></span></li>
+  <li><span className="api-badge is-opt">priority</span> <span className="api-note"><code>number</code></span></li>
+  <li><span className="api-badge is-opt">createdAt</span> <span className="api-note"><code>Date</code></span></li>
+  <li><span className="api-badge is-opt">startAfter</span> <span className="api-note"><code>Date</code></span></li>
+  <li><span className="api-badge is-opt">scheduleId?</span> <span className="api-note"><code>string</code></span></li>
+  <li><span className="api-badge is-opt">idempotencyKey?</span> <span className="api-note"><code>string</code></span></li>
+  <li><span className="api-badge is-opt">workflowId?</span> <span className="api-note"><code>string</code></span></li>
+  <li><span className="api-badge is-opt">workflowStepKey?</span> <span className="api-note"><code>string</code></span></li>
+  <li><span className="api-badge is-opt">signal</span> <span className="api-note"><code>AbortSignal</code> — aborts on graceful-shutdown timeout / cooperative cancel</span></li>
+  <li><span className="api-badge is-method">extendLock(&#123; byMs? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — extend the visibility timeout mid-handler</span></li>
+</ul>
+
+---
+
+## Drivers
+
+One self-contained class per engine, each from its own subpath. Storage layout
+(`schema` / `tablePrefix` / `namespace`) lives on the driver, since it can differ per database.
+Pass one driver instance to `new PortQueue({ driver })`.
+
+<ul className="api-tree">
+  <li>
+    <a className="api-badge is-class" href="#drivers">new PostgresDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/postgres</code></span>
+    <ul>
+      <li><span className="api-badge is-opt">connectionString?</span> <span className="api-note"><code>string</code></span></li>
+      <li><span className="api-badge is-opt">pool?</span> <span className="api-note">an existing <code>pg.Pool</code> to share</span></li>
+      <li><span className="api-badge is-opt">config?</span> <span className="api-note">any <code>pg.PoolConfig</code></span></li>
+      <li><span className="api-badge is-opt">schema?</span> <span className="api-note"><code>string</code></span></li>
+      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
+      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+    </ul>
+  </li>
+  <li>
+    <a className="api-badge is-class" href="#drivers">new MysqlDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/mysql</code></span>
+    <ul>
+      <li><span className="api-badge is-opt">connectionString?</span> <span className="api-note"><code>mysql://…</code></span></li>
+      <li><span className="api-badge is-opt">pool?</span> <span className="api-note">an existing <code>mysql2</code> pool</span></li>
+      <li><span className="api-badge is-opt">config?</span> <span className="api-note">any <code>mysql2</code> pool config</span></li>
+      <li><span className="api-badge is-opt">schema?</span> <span className="api-note"><code>string</code> — database name</span></li>
+      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
+      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+    </ul>
+  </li>
+  <li>
+    <a className="api-badge is-class" href="#drivers">new OracleDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/oracle</code></span>
+    <ul>
+      <li><span className="api-badge is-opt">user?</span> <span className="api-note"><code>string</code></span></li>
+      <li><span className="api-badge is-opt">password?</span> <span className="api-note"><code>string</code></span></li>
+      <li><span className="api-badge is-opt">connectString?</span> <span className="api-note"><code>string</code></span></li>
+      <li><span className="api-badge is-opt">maxIdentifierLen?</span> <span className="api-note"><code>number</code> — Oracle's identifier byte limit</span></li>
+      <li><span className="api-badge is-opt">schema?</span> <span className="api-note"><code>string</code></span></li>
+      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
+      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+    </ul>
+  </li>
+  <li>
+    <a className="api-badge is-class" href="#drivers">new SqliteDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/sqlite</code></span>
+    <ul>
+      <li><span className="api-badge is-opt">path?</span> <span className="api-note"><code>string</code> · <span className="api-default">':memory:'</span></span></li>
+      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
+      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+    </ul>
+  </li>
+  <li>
+    <a className="api-badge is-class" href="#drivers">new PgliteDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/pglite</code></span>
+    <ul>
+      <li><span className="api-badge is-opt">dataDir?</span> <span className="api-note"><code>string</code> — omit for in-memory</span></li>
+      <li><span className="api-badge is-opt">schema?</span> <span className="api-note"><code>string</code></span></li>
+      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
+      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+    </ul>
+  </li>
+</ul>
+
+DB client packages (`pg`, `mysql2`, `oracledb`, `better-sqlite3`) are optional peer dependencies —
+install the one for your engine.
+
+---
+
+## Options
+
+### PortQueueOptions
+
+The single argument to `new PortQueue(...)`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `driver` | `Driver` | — **required** | A driver instance (see [Drivers](#drivers)). |
+| `logger` | `Logger \| LoggerOptions` | console logger | A logger you supply, or `{ level?, pretty? }` for the built-in one. |
+| `migration` | `MigrationMode` | `AUTO` | `AUTO` (apply pending on init), `MANUAL` (call `migrate()` yourself), or `VALIDATE_ONLY` (fail if pending). |
+| `instance` | [`InstanceOptions`](#instanceoptions) | — | This process's identity & heartbeat. |
+| `monitor` | [`SystemMonitorOptions`](#systemmonitoroptions) `\| false` | — | System-pressure thresholds; `false` disables sampling. |
+| `tickIntervalMs` | `number` | `5000` | Scheduler / retention / monitor tick interval (ms). |
+
+### ShutdownOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `graceful` | `boolean` | `true` | Let in-flight handlers finish before disconnecting. |
+| `timeoutMs` | `number` | `30000` | Max time to wait for a graceful drain. |
+| `drain` | `boolean` | — | Keep claiming until the queue empties before stopping. |
+
+### InstanceOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `instanceKey` | `string` | anonymous | Stable, human-meaningful name for this process (e.g. `'worker-eu-1'`). Naming it lets you target, list, and pause it; unnamed processes still run jobs. |
+| `heartbeatIntervalMs` | `number` | `15000` | How often the instance row's `last_seen_at` is refreshed (ms). |
+
+### SystemMonitorOptions
+
+Workers pause on pressure only when they opt in via `limiter.respectSystemPressure`. Pass
+`monitor: false` to turn sampling off entirely.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `sampleIntervalMs` | `number` | How often to sample system metrics (ms). |
+| `maxEventLoopDelayMs` | `number` | Event-loop delay above this counts as pressure. |
+| `maxCpuPercent` | `number` | CPU usage above this counts as pressure. |
+| `maxMemoryPercent` | `number` | Memory usage above this counts as pressure. |
+| `maxRssBytes` | `number` | RSS above this counts as pressure. |
+| `resumeHysteresis` | `number` | Fraction (0–1) below the threshold metrics must fall to before resuming. |
+
+### QueueOptions
+
+The second argument to `createQueue`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `defaultJobOptions` | [`JobOptions`](#joboptions) | — | Defaults every job on this queue inherits; a per-job option overrides. |
+| `retention` | [`RetentionOptions`](#retentionoptions) | keep forever | Queue default retention; resolved per-job and frozen onto each row. |
+| `hooks` | `HookRegistration[]` | `[]` | Queue-scoped [participation hooks](./events-hooks/hooks.md). |
+
+### JobOptions
+
+Per-job settings (highest precedence). Also the base of [`AddJobOptions`](#addjoboptions).
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `priority` | `number` | `0` | Higher runs first. |
+| `retry` | [`RetryOptions`](#retryoptions) | run once | How the job retries on failure. |
+| `expireIn` | `Duration` | — | Expire the job if it hasn't started within this window. |
+| `retention` | [`RetentionOptions`](#retentionoptions) | inherit queue | Per-job retention override. |
+| `idempotencyKey` | `string` | — | A second enqueue with the same key returns the existing job. |
+| `singletonKey` | `string` | — | At most one active job per key at a time. |
+| `tx` | `TransactionHandle` | — | Transactional enqueue: your own transaction, wrapped by an adapter. |
+
+### AddJobOptions
+
+`JobOptions` plus the fields below — the argument to `addJob`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `data` | `TData` | — **required** | The job payload (a named key, never positional). |
+| `schedule` | [`ScheduleOptions`](#scheduleoptions) | run now | One-off delay, fixed interval, or cron. |
+| `startStep` | `string` | entry step | For a workflow queue: begin at a non-entry step (rare). |
+| `preferredInstanceKeyPattern` | `string` | any | Regex source matching instance keys this job may run on. See [Scaling](./scale-horizontally.md). |
+
+### RetryOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxAttempts` | `number` | `1` | Total attempts including the first (`1` = no retry). |
+| `delay` | `Duration` | — | Delay before a retry. |
+| `backoff` | [`BackoffOptions`](#backoffoptions) | — | Backoff applied to `delay`. |
+
+### BackoffOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `strategy` | `BackoffStrategy` | — **required** | `FIXED` or `EXPONENTIAL`. |
+| `factor` | `number` | `2` | Growth factor for `EXPONENTIAL`; ignored for `FIXED`. |
+| `maxDelay` | `Duration` | — | Cap on the computed delay. |
+| `jitter` | `boolean` | `false` | Randomize the delay to spread retries across instances. |
+
+### RetentionOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `mode` | `RetentionMode` | — **required** | `KEEP_FOREVER` or `DELETE_AFTER`. |
+| `ttl` | `Duration` | — | How long after finishing before deletion is allowed (required for `DELETE_AFTER`). |
+| `statuses` | `JobStatus[]` | `[COMPLETED]` | Which finished statuses the policy applies to. |
+
+### ScheduleOptions
+
+Exactly one timing mode may be set.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `startAfter` | `Date \| Duration` | One-off: run not before this time. |
+| `startEvery` | `Duration` | Recurring: a fixed interval between runs, e.g. `'30s'`. |
+| `cron` | `CronSpec` | Recurring: a cron string, or `{ pattern, tz }`. |
+
+### WorkerOptions
+
+The argument to `createWorker`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `queue` | `TQueues` | — **required** | The queue this worker claims from. |
+| `handler` | `JobHandler \| WorkflowStep[]` | — **required** | A single processor function (simple mode) or an ordered array of steps (workflow mode). |
+| `limiter` | [`LimiterOptions`](#limiteroptions) | defaults | Throughput & claim tuning. |
+| `dontAutoretryFor` | `Array<ErrorClass \| string>` | `[]` | Non-retryable errors, matched by `instanceof` or `error.name`. |
+
+### LimiterOptions
+
+All **worker-local** — no cluster-wide coordination.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `concurrency` | `number` | `1` | Max handlers running at once in this worker. |
+| `rateMax` | `number` | — | Max jobs started per `rateDuration` window (set with `rateDuration`). |
+| `rateDuration` | `Duration` | — | The window for `rateMax`, e.g. `'1m'`. |
+| `respectSystemPressure` | `boolean` | `false` | Pause claiming while system pressure is high. |
+| `batchSize` | `number` | `concurrency` | Max jobs claimed per fetch. |
+| `pollIntervalMs` | `number` | `5000` | Poll cadence when `LISTEN`/`NOTIFY` is unavailable (ms). |
+| `lockDurationMs` | `number` | `30000` | Visibility timeout / heartbeat window for a claimed job (ms). |
+
+### GetJobsQuery
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `queue` | `string` | Filter to one queue (implicit on `Queue.getJobs`). |
+| `statuses` | `JobStatus[]` | Filter by status. |
+| `scheduleId` | `string` | Jobs minted by one schedule. |
+| `workflowId` | `string` | Jobs in one workflow run. |
+| `limit` | `number` | Page size. |
+| `cursor` | `string` | Opaque cursor from the previous page. |
+| `order` | `'asc' \| 'desc'` | Sort direction. |
+
+---
+
+## Result types
+
+Reads return objects, never bare ids. The main shapes:
+
+- **AddJobResult** — `jobId?`, `scheduleId?`, `nextRunAt?`, `queue`, `status?`, `deduplicated`, `deduplicationReason?`, `startAfter?`, `workflowId?`.
+- **JobSnapshot** — the full read-side view of a job (all timestamps as `Date`, plus a derived `stalled` flag).
+- **WorkflowSnapshot** — `workflowId`, `queue`, `steps: JobSnapshot[]`.
+- **ScheduleInfo** — `scheduleId`, `cron?`, `every?`, `timezone?`, `nextRunAt?`, `lastRunAt?`, `enabled`, `idempotencyKey?`.
+- **QueueInfo** — `name`, `processingPaused`, `acceptingPaused`, `counts`, `inUse`.
+- **InstanceInfo** — `instanceKey`, `processingPaused`, `alive`, `createdAt`, `updatedAt`, `lastSeenAt`, `counts`.
+- **QueueStats** — `queue?`, `counts`, `throughputPerMinute`, `failureRate`.
+- **Page&lt;T&gt;** — `items`, `cursor`, `hasMore`.
+
+---
+
+## Enums
+
+`JobStatus` (`PENDING`, `ACTIVE`, `COMPLETED`, `FAILED`, `RETRY`, `CANCELLED`, `EXPIRED`) ·
+`PauseMode` (`PROCESSING`, `ALL`) · `RetryMode` (`FROM_FAILED_STEP`, `FROM_START`) ·
+`BackoffStrategy` (`FIXED`, `EXPONENTIAL`) · `RetentionMode` (`KEEP_FOREVER`, `DELETE_AFTER`) ·
+`MigrationMode` (`AUTO`, `MANUAL`, `VALIDATE_ONLY`) · `DeduplicationReason` (`IDEMPOTENCY`, `SINGLETON`) ·
+`DatabaseEngine` · [`PortQueueEvent`](./events-hooks/events.md) · [`HookPhase`](./events-hooks/hooks.md) ·
+[`PortQueueErrorCode`](./troubleshooting.md).

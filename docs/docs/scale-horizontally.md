@@ -31,20 +31,20 @@ identity, then **attach a RegEx pattern** to the jobs that need a particular cla
 
 ### Give each server an identity key
 
-To make a server targetable, give its process a stable `instance.key`. A keyed server registers
+To make a server targetable, give its process a stable `instance.instanceKey`. A keyed server registers
 a heartbeat row, honours job affinity, and can be paused on its own from the dashboard; an
 anonymous one runs jobs but can't be addressed.
 
 ```ts
 const pq = new PortQueue({
   driver,
-  instance: { key: '10.0.1.7:ram-8gb:cpu-4cor' }, // stable, human-meaningful id for this process
+  instance: { instanceKey: '10.0.1.7:ram-8gb:cpu-4cor' }, // stable, human-meaningful name for this process
 });
 ```
 
 Run the **same code on every server**; only the key differs per process (derive it from the
-environment). Leaving `instance.key` unset keeps a server anonymous — it still processes jobs
-normally, but affinity patterns are rejected there and it never appears in the instances list.
+environment). Leaving `instance.instanceKey` unset keeps a server anonymous — it still processes
+jobs normally, but affinity patterns are rejected there and it never appears in the instances list.
 
 ### Encode capabilities in the key
 
@@ -61,7 +61,7 @@ you might want to target:
 
 `addJob` accepts a single affinity option, `preferredInstanceKeyPattern` — a regular-expression
 **source string** matched against instance keys. Affinity requires the *calling* process to have
-an `instance.key`; passing a pattern from an anonymous process throws.
+an `instance.instanceKey`; passing a pattern from an anonymous process throws.
 
 ```ts
 // Run this job only on 4 GB or 8 GB servers.
