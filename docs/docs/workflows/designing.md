@@ -60,8 +60,8 @@ const orderSteps: WorkflowStep[] = [
 pq.createWorker({ queue: 'orders', handler: orderSteps });
 
 // producer tier — starting a run is just add({ data })
-const orders = pq.createQueue('orders');
-const { workflowId } = await orders.addJob({ data: { cartId } });
+const ordersQueue = pq.createQueue('orders');
+const { workflowId } = await ordersQueue.addJob({ data: { cartId } });
 ```
 
 Step keys and their order are the single source of truth for the run.

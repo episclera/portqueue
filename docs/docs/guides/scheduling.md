@@ -25,9 +25,9 @@ recurring mode).
 `schedule.startAfter` takes a `Duration` (relative to now) or an absolute `Date`:
 
 ```ts
-const emails = pq.createQueue('emails');
-await emails.addJob({ data, schedule: { startAfter: '24h' } });
-await emails.addJob({ data, schedule: { startAfter: new Date('2026-08-01T09:00:00Z') } });
+const emailsQueue = pq.createQueue('emails');
+await emailsQueue.addJob({ data, schedule: { startAfter: '24h' } });
+await emailsQueue.addJob({ data, schedule: { startAfter: new Date('2026-08-01T09:00:00Z') } });
 ```
 
 ## Recurring — cron with timezone
@@ -37,15 +37,15 @@ the **template** for every produced run. `schedule.cron` is either a bare expres
 (evaluated in UTC) or `{ pattern, tz }` for a timezone:
 
 ```ts
-const reports = pq.createQueue('reports');
-const result = await reports.addJob({
+const reportsQueue = pq.createQueue('reports');
+const result = await reportsQueue.addJob({
   data: { kind: 'sales' },       // template for each run
   priority: 5,                   // job options apply to each run
   schedule: { cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' } },
 });
 // Bare UTC form: schedule: { cron: '0 8 * * 1-5' }
-// result.jobId is absent (no concrete job yet); result.scheduleId is stamped on every produced job;
-// result.nextRunAt is the first run time.
+// reportsJob.jobId is absent (no concrete job yet); reportsJob.scheduleId is stamped on every produced job;
+// reportsJob.nextRunAt is the first run time.
 ```
 
 **Identical schedules are allowed.** Re-adding the same `schedule.cron`/`schedule.startEvery` on a
@@ -56,8 +56,8 @@ cron), just add it twice. To keep exactly one, opt in with an `idempotencyKey` (
 ## Recurring — fixed interval
 
 ```ts
-const healthchecks = pq.createQueue('healthchecks');
-await healthchecks.addJob({ data: {}, schedule: { startEvery: '30s' } });
+const healthchecksQueue = pq.createQueue('healthchecks');
+await healthchecksQueue.addJob({ data: {}, schedule: { startEvery: '30s' } });
 ```
 
 ## Deduplicating with `idempotencyKey`
@@ -66,10 +66,10 @@ Because identical recurrences coexist, the way to guarantee **only one** produce
 `idempotencyKey`. The key is the dedup identity, scoped to the queue, and it is **first-writer-wins**:
 
 ```ts
-const reports = pq.createQueue('reports');
-const first = await reports.addJob({ data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
-const second = await reports.addJob({ data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
-// second.deduplicated === true; second.scheduleId === first.scheduleId.
+const reportsQueue = pq.createQueue('reports');
+const first = await reportsQueue.addJob({ data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
+const second = await reportsQueue.addJob({ data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
+// secondJob.deduplicated === true; secondJob.scheduleId === firstJob.scheduleId.
 // The existing schedule is kept **unchanged** — a re-add never mutates it.
 ```
 
@@ -79,9 +79,9 @@ exists, nothing new is created and the existing entity is returned with `dedupli
 `deduplicationReason: 'IDEMPOTENCY'`. This holds regardless of the two adds' shapes:
 
 - A recurring add whose key already belongs to a **one-off job** is deduped against that job
-  (`result.jobId` is the existing job; no schedule is created).
+  (`reportsJob.jobId` is the existing job; no schedule is created).
 - A plain one-off add whose key already belongs to a **schedule** is deduped against that schedule
-  (`result.scheduleId` is the existing schedule; no job is enqueued) — the key checks the schedule
+  (`reportsJob.scheduleId` is the existing schedule; no job is enqueued) — the key checks the schedule
   table even when the new add has no recurring options at all.
 
 Without an `idempotencyKey`, no cross-table check happens and every add creates a fresh job or
@@ -92,9 +92,9 @@ schedule. `getSchedules()` surfaces each schedule's `idempotencyKey` for inspect
 Unschedule a **recurring** definition by its `scheduleId`:
 
 ```ts
-const reports = pq.createQueue('reports');
-await reports.getSchedules();               // list recurring definitions (each has a scheduleId)
-await reports.removeSchedule({ scheduleId: result.scheduleId });
+const reportsQueue = pq.createQueue('reports');
+await reportsQueue.getSchedules();               // list recurring definitions (each has a scheduleId)
+await reportsQueue.removeSchedule({ scheduleId: reportsJob.scheduleId });
 ```
 
 `removeSchedule` applies **only to recurring schedules** — it stops future production but does

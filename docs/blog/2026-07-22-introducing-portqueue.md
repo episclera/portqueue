@@ -41,8 +41,8 @@ import { PostgresDriver } from '@portqueue/core/drivers/postgres';
 const pq = new PortQueue({ driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }) });
 await pq.init();
 
-const emails = pq.createQueue('emails');
-await emails.addJob({ data: { to: 'a@b.com' } });
+const emailsQueue = pq.createQueue('emails');
+await emailsQueue.addJob({ data: { to: 'a@b.com' } });
 
 pq.createWorker({ queue: 'emails', concurrency: 10, handler: async (job) => send(job.data) });
 ```

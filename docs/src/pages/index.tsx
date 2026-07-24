@@ -70,13 +70,13 @@ const pq = new PortQueue<QueueName>({
 await pq.init();
 
 // Producer — add a job (data is a named key, never positional).
-const emails = pq.createQueue<{ to: string }>(QueueName.Emails);
-await emails.addJob({ data: { to: 'a@b.com' } });
+const emailsQueue = pq.createQueue<{ to: string }>(QueueName.Emails);
+await emailsQueue.addJob({ data: { to: 'a@b.com' } });
 
 // Consumer — registering a worker is enough; it claims automatically.
 pq.createWorker({
   queue: QueueName.Emails,
-  concurrency: 10,
+  limiter: { concurrency: 10 },
   handler: async (job) => { await sendEmail(job.data); },
 });`;
 

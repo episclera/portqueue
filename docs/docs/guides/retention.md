@@ -17,12 +17,12 @@ nothing is silently inherited) and override per job when a specific job needs to
 import { RetentionMode } from '@portqueue/core';
 
 // per-queue default
-const emails = pq.createQueue('emails', {
+const emailsQueue = pq.createQueue('emails', {
   retention: { mode: RetentionMode.DELETE_AFTER, ttl: '3d' },
 });
 
 // per-job override (highest precedence) — keep this one longer
-await emails.addJob({ data, retention: { mode: RetentionMode.DELETE_AFTER, ttl: '30d' } });
+await emailsQueue.addJob({ data, retention: { mode: RetentionMode.DELETE_AFTER, ttl: '30d' } });
 ```
 
 :::tip Keep failed jobs longer
@@ -36,6 +36,6 @@ Manual pruning is always available:
 ```ts
 import { JobStatus } from '@portqueue/core';
 
-const emails = pq.createQueue('emails');
-await emails.removeJobs({ statuses: [JobStatus.COMPLETED] });
+const emailsQueue = pq.createQueue('emails');
+await emailsQueue.removeJobs({ statuses: [JobStatus.COMPLETED] });
 ```

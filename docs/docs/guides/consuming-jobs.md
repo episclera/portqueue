@@ -101,8 +101,8 @@ Throwing triggers retry/fail per the job's policy; a throw **never** crashes the
 The retry *schedule* is a producer/job concern:
 
 ```ts
-const webhooks = pq.createQueue('webhooks');
-await webhooks.addJob({
+const webhooksQueue = pq.createQueue('webhooks');
+await webhooksQueue.addJob({
   data,
   retry: {
     maxAttempts: 5,

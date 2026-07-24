@@ -27,7 +27,7 @@ const pq = new PortQueue<QueueName>({
 });
 await pq.init();
 
-const emails = pq.createQueue<{ to: string; template: string }>(QueueName.Emails);
+const emailsQueue = pq.createQueue<{ to: string; template: string }>(QueueName.Emails);
 // pq.createQueue('typo');  // ❌ compile error — not a QueueName
 ```
 
@@ -40,14 +40,14 @@ handler. `TQueues` constrains *names* only; the two are independent.
 argument — and returns a **result object**, not a bare id.
 
 ```ts
-const res = await emails.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
-// res: { jobId, queue: 'emails', status: JobStatus.PENDING, deduplicated: false, startAfter }
+const emailsJob = await emailsQueue.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
+// emailsJob: { jobId, queue: 'emails', status: JobStatus.PENDING, deduplicated: false, startAfter }
 ```
 
 :::info Jobs have no name
 Unlike BullMQ's `add(name, data)`, PortQueue jobs carry **no per-job name**. Routing is
 the queue's role (one worker per queue), so a job's *kind* is just which queue it's on.
-Labels and correlation live in `metadata` or `idempotencyKey`. See
+Labels and correlation live in `job.data` or `idempotencyKey`. See
 [Producing Jobs](../guides/producing-jobs.mdx).
 :::
 
@@ -81,8 +81,8 @@ the two tiers agree on the queue with no extra coordination.
 
 ```ts
 // api-server.ts — producer only, no worker here
-const emails = pq.createQueue(QueueName.Emails);
-await emails.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
+const emailsQueue = pq.createQueue(QueueName.Emails);
+await emailsQueue.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
 // → handled by the worker tier, not this process
 ```
 

@@ -48,14 +48,14 @@ const pq = new PortQueue({
 });
 await pq.init();
 
-const emails = pq.createQueue('emails');
+const emailsQueue = pq.createQueue('emails');
 pq.createWorker({
   queue: 'emails',
   concurrency: 10,
   handler: async (job) => { await send(job.data); },
 });
 
-await emails.addJob({ data: { to: 'a@b.com' } });
+await emailsQueue.addJob({ data: { to: 'a@b.com' } });
 ```
 
 ## Contributing
