@@ -9,10 +9,13 @@ Usage: portqueue <command> [--flags]
 
 const GLOBAL_FLAGS = `
 Global flags:
-  --config <path>   Path to your portqueue.config.{js,mjs,cjs} (auto-discovered otherwise)
-  --export <name>   Named export to use instead of default
-  --json            Machine-readable output
-  --no-color        Disable ANSI color
+  --driver <engine>          postgres | pglite | sqlite | mysql | oracle
+  --connection-string <s>    DB connection string (also via DATABASE_URL)
+  --schema <name>            Optional storage schema
+  --table-prefix <name>      Optional table prefix (default pq_)
+  --namespace <name>         Optional pub/sub namespace
+  --json                     Machine-readable output
+  --no-color                 Disable ANSI color
 `;
 
 /** Build the help text from the command registry so it can never drift from reality. */

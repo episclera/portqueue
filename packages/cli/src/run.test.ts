@@ -1,30 +1,8 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { run } from './run';
 import { setColorEnabled } from './output';
 import { captureOutput } from './test-support/capture';
 
 beforeEach(() => setColorEnabled(false));
-
-/** A self-contained config module exporting a minimal fake PortQueue. */
-function writeFakeConfig(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'pq-run-'));
-  const path = join(dir, 'portqueue.config.mjs');
-  writeFileSync(
-    path,
-    `export default {
-       isRunning: false,
-       async init() { this.isRunning = true; },
-       async shutdown() {},
-       async getQueues() {
-         return [{ name: 'emails', counts: { PENDING: 0, ACTIVE: 0, COMPLETED: 0, FAILED: 0 },
-           acceptingPaused: false, processingPaused: false }];
-       },
-     };`,
-  );
-  return path;
-}
 
 describe('run', () => {
   it('prints help and exits 0 for `help`, no args, and --help', async () => {
@@ -43,19 +21,18 @@ describe('run', () => {
     expect(stderr).toContain("Unknown command 'bogus'");
   });
 
-  it('loads the config, dispatches the command, and exits 0', async () => {
-    const path = writeFakeConfig();
+  it('builds its own in-memory sqlite instance, dispatches, and exits 0', async () => {
     const { stdout } = await captureOutput(async () => {
-      expect(await run(['queues', '--json', '--config', path])).toBe(0);
+      expect(await run(['queues', '--json', '--driver', 'sqlite'])).toBe(0);
     });
-    expect(stdout).toContain('"name": "emails"');
+    // A fresh in-memory DB has no queues yet — the command still succeeds with an empty JSON list.
+    expect(stdout).toContain('[]');
   });
 
   it('exits 1 when a command throws a CliError', async () => {
-    const path = writeFakeConfig();
     const { stderr } = await captureOutput(async () => {
-      // `schedules` without --queue throws a CliError after the instance loads.
-      expect(await run(['schedules', '--config', path])).toBe(1);
+      // `schedules` without --queue throws a CliError after the instance is built.
+      expect(await run(['schedules', '--driver', 'sqlite'])).toBe(1);
     });
     expect(stderr).toContain('requires --queue');
   });

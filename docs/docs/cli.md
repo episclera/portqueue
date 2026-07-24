@@ -6,69 +6,83 @@ sidebar_label: CLI
 
 # CLI
 
-`@portqueue/cli` operates a PortQueue from the terminal. It auto-discovers your config
-module (`./portqueue.config.ts`) so it connects to the same database as your app.
+`@portqueue/cli` operates a PortQueue from the terminal. It **builds its own short-lived
+instance** from the connection flags you pass — it never loads your app's code or a config
+file. The CLI runs with monitoring off, no `instanceKey`, and no workers, so it never picks
+up jobs or registers as an instance; it just connects, runs one command, and disconnects.
 
-## The config module
+## Connecting
 
-The CLI never builds its own instance from a connection string — it imports **exactly the
-`PortQueue` your app configures**, so the CLI, dashboard, and app always agree on driver,
-schema, and queues. Create a `portqueue.config.{ts,js,mjs,cjs}` that **default-exports** a
-`PortQueue` (or a factory that returns one):
+Point the CLI at your database with `--driver` and a connection string. The connection
+string comes from `--connection-string` or the `DATABASE_URL` environment variable.
 
-```ts title="portqueue.config.ts"
-import { PortQueue } from '@portqueue/core';
-import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+```bash
+# explicit driver + connection string
+portqueue queues --driver postgres --connection-string postgres://user:pass@host:5432/app
 
-// Default-export a configured PortQueue instance…
-export default new PortQueue({
-  driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }),
-});
-
-// …or export a factory (sync or async) — the CLI will call it:
-//   export default () => new PortQueue({ driver: new PostgresDriver({ ... }) });
+# or rely on DATABASE_URL
+DATABASE_URL=postgres://user:pass@host:5432/app portqueue queues --driver postgres
 ```
 
-The CLI discovers this file by walking up from the current directory; override the location
-with `--config <path>` and the export name with `--export <name>` (defaults to `default`).
+When the connection string carries a recognizable URL scheme, `--driver` can be omitted and
+the engine is inferred: `postgres://` / `postgresql://` → postgres, `mysql://` → mysql,
+`oracle://` → oracle. **`sqlite` and `pglite` have no URL scheme, so they always need
+`--driver`** (their connection string is a file path / data directory rather than a URL).
 
-:::note
-The CLI ships no TypeScript compiler, so point it at a prebuilt `.js`/`.mjs` module. To load
-a `.ts` config directly, run the CLI under a loader instead — e.g.
-`node --import tsx node_modules/@portqueue/cli/dist/cli.mjs …`.
-:::
+```bash
+# engine inferred from the scheme
+portqueue queues --connection-string postgres://user:pass@host:5432/app
+
+# sqlite: the connection string is a file path (":memory:" when omitted)
+portqueue queues --driver sqlite --connection-string /var/data/pq.sqlite
+
+# pglite: the connection string is a data directory (in-memory when omitted)
+portqueue queues --driver pglite --connection-string /var/data/pq
+```
+
+## Global flags
+
+| Flag | Description |
+| --- | --- |
+| `--driver <engine>` | `postgres` \| `pglite` \| `sqlite` \| `mysql` \| `oracle` |
+| `--connection-string <s>` | DB connection string (also via `DATABASE_URL`) |
+| `--schema <name>` | Optional storage schema |
+| `--table-prefix <name>` | Optional table prefix (default `pq_`) |
+| `--namespace <name>` | Optional pub/sub namespace |
+| `--json` | Machine-readable output |
+| `--no-color` | Disable ANSI color |
+
+The `--schema`, `--table-prefix`, and `--namespace` flags must match the values your app
+configures on its driver, so the CLI reads and writes the same tables and channels. (The
+`sqlite` driver has no schema, so `--schema` is ignored there.)
 
 ## Common commands
 
 ```bash
 # live stats, refreshing
-portqueue stats --watch
+portqueue stats --watch --driver postgres --connection-string $DATABASE_URL
 
 # tail the event feed for one queue (runs until interrupted)
-portqueue listen --queue orders
+portqueue listen --queue orders --driver postgres --connection-string $DATABASE_URL
 
 # retry a failed job
-portqueue retry --id <jobId> --yes
+portqueue retry --id <jobId> --yes --driver postgres --connection-string $DATABASE_URL
 
 # remove a long-inactive instance (refused unless unseen for 30+ min)
-portqueue remove-instance --instance-key 10.0.9.9:ram-2gb:cpu-1cor
+portqueue remove-instance --instance-key 10.0.9.9:ram-2gb:cpu-1cor \
+  --driver postgres --connection-string $DATABASE_URL
 
 # remove an unused queue (refused if this process still declares it)
-portqueue remove-queue --queue legacy-emails
+portqueue remove-queue --queue legacy-emails \
+  --driver postgres --connection-string $DATABASE_URL
 
 # serve the dashboard (see the Dashboard page)
-portqueue dashboard --config ./portqueue.config.ts --port 9000 \
+portqueue dashboard --driver postgres --connection-string $DATABASE_URL --port 9000 \
   --root-user admin --root-password ****
 
 # run migrations as a separate deploy step
-portqueue migrate --config ./portqueue.config.ts
+portqueue migrate --driver postgres --connection-string $DATABASE_URL
 ```
 
-## Config discovery
-
-Most commands load your configured client from `./portqueue.config.ts` (auto-discovered)
-or an explicit `--config` path — the same `PortQueue` your app uses, so the CLI, dashboard,
-and app all agree on driver, schema, and queues. See
-[The config module](#the-config-module) above. To run the CLI-hosted dashboard in a
-container, see [Dashboard → Docker](./dashboard.mdx#docker).
-
+To run the CLI-hosted dashboard in a container, see
+[Dashboard → Docker](./dashboard.mdx#docker).

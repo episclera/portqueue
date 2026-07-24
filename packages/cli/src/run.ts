@@ -1,7 +1,7 @@
 import type { PortQueue } from '@portqueue/core';
 import { flagBool, flagString, parseArgs } from './args';
 import { COMMANDS_BY_NAME } from './commands/index';
-import { loadPortQueue } from './config-loader';
+import { buildPortQueue } from './driver';
 import { CliError } from './errors';
 import { renderHelp } from './help';
 import { fail, setColorEnabled } from './output';
@@ -27,15 +27,13 @@ export async function run(argv: string[]): Promise<number> {
 
   let pq: PortQueue | undefined;
   try {
-    const loaded = await loadPortQueue({
-      ...(flagString(parsed.flags, 'config')
-        ? { configPath: flagString(parsed.flags, 'config')! }
-        : {}),
-      ...(flagString(parsed.flags, 'export')
-        ? { exportName: flagString(parsed.flags, 'export')! }
-        : {}),
+    pq = await buildPortQueue({
+      driver: flagString(parsed.flags, 'driver'),
+      connectionString: flagString(parsed.flags, 'connection-string'),
+      schema: flagString(parsed.flags, 'schema'),
+      tablePrefix: flagString(parsed.flags, 'table-prefix'),
+      namespace: flagString(parsed.flags, 'namespace'),
     });
-    pq = loaded.pq;
     if (!pq.isRunning) await pq.init();
     await command.run({ pq, flags: parsed.flags });
     // Long-running commands (stream/serve, or --watch) keep the client alive.

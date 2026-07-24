@@ -13,12 +13,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
   const command: string[] = [];
   const flags: Record<string, string | boolean> = {};
   const positionals: string[] = [];
-  let seenFlag = false;
+  let sawCommand = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]!;
     if (token.startsWith('--')) {
-      seenFlag = true;
       const eq = token.indexOf('=');
       if (eq !== -1) {
         flags[token.slice(2, eq)] = token.slice(eq + 1);
@@ -32,8 +31,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
           flags[key] = true;
         }
       }
-    } else if (!seenFlag) {
+    } else if (!sawCommand) {
+      // The first bare token (a flag's consumed value never reaches here) is the command,
+      // even when global connection flags precede it.
       command.push(token);
+      sawCommand = true;
     } else {
       positionals.push(token);
     }

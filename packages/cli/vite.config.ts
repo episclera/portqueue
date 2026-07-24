@@ -12,7 +12,9 @@ export default defineConfig({
       formats: ['es'],
     },
     rollupOptions: {
-      external: [/^node:/, '@portqueue/core', '@portqueue/dashboard'],
+      // Externalize node built-ins, the core package (including its ./drivers/* subpaths,
+      // which pull in optional DB peer deps that must not be bundled), and the dashboard.
+      external: [/^node:/, /^@portqueue\/core(\/.*)?$/, '@portqueue/dashboard'],
       output: {
         entryFileNames: '[name].mjs',
         banner: (chunk) => (chunk.name === 'cli' ? '#!/usr/bin/env node' : ''),
