@@ -819,15 +819,16 @@ export class MysqlDriver implements Driver {
     });
   }
 
-  async requeueJob(options: { jobId: string; now: number }): Promise<InsertedJobRow> {
+  async requeueJob(options: { jobId: string; now: number; tx?: TransactionHandle }): Promise<InsertedJobRow> {
     const job = await this.getJob({ jobId: options.jobId });
     if (!job) throw new DriverQueryError(`Cannot requeue: job '${options.jobId}' not found.`);
     // Re-arm this job's own row: back to PENDING, reset retry counters/lock/timestamps.
-    await this.execute(
+    await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.RETRY_ATTEMPT} = 0, ${JobColumn.START_AFTER} = ${this.ph(0)}, ` +
         `${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ${JobColumn.EXPIRED_AT} = NULL, ` +
         `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)}`,
       [options.now, options.now, options.jobId],
+      options.tx,
     );
     return {
       id: job.id,
@@ -1004,10 +1005,11 @@ export class MysqlDriver implements Driver {
   }
 
   // --- Job control ---
-  async cancelJob(options: { jobId: string; now: number }): Promise<boolean> {
-    const res = await this.execute(
+  async cancelJob(options: { jobId: string; now: number; tx?: TransactionHandle }): Promise<boolean> {
+    const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.CANCELLED}', ${JobColumn.CANCELLED_AT} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}')`,
       [options.now, options.now, options.jobId],
+      options.tx,
     );
     return res.rowCount > 0;
   }
@@ -1022,23 +1024,33 @@ export class MysqlDriver implements Driver {
     return res.rowCount > 0;
   }
 
-  async removeJobsByIds(options: { jobIds: string[]; queueName: string }): Promise<number> {
+  async removeJobsByIds(options: {
+    jobIds: string[];
+    queueName: string;
+    tx?: TransactionHandle;
+  }): Promise<number> {
     if (!options.jobIds.length) return 0;
     const idPh = options.jobIds.map((_, i) => this.ph(i)).join(', ');
     // ACTIVE (running) jobs are never removed — they're skipped and left out of the returned count.
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.jobIds.length)} AND ${JobColumn.STATUS} != ${this.ph(options.jobIds.length + 1)}`,
       [...options.jobIds, options.queueName, JobStatus.ACTIVE],
+      options.tx,
     );
     return res.rowCount;
   }
 
-  async removeJobsByStatus(options: { queueName: string; statuses: JobStatus[] }): Promise<number> {
+  async removeJobsByStatus(options: {
+    queueName: string;
+    statuses: JobStatus[];
+    tx?: TransactionHandle;
+  }): Promise<number> {
     if (!options.statuses.length) return 0;
     const statusPh = options.statuses.map((_, i) => this.ph(i)).join(', ');
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${statusPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.statuses.length)}`,
       [...options.statuses, options.queueName],
+      options.tx,
     );
     return res.rowCount;
   }

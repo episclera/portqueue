@@ -28,5 +28,8 @@ Adapters ship for the query builders `fromKnex`, `fromKysely`, `fromDrizzle`; th
 `fromPrisma`, `fromTypeorm`, `fromSequelize`, `fromMikroOrm`; and the raw clients
 `fromPg`, `fromOracle`, `fromBetterSqlite3`, and `fromNodeSqlite`.
 
-When no `tx` is passed, the method runs autonomously in its own short transaction. Every
-producing method (`addJob`, `removeJob`, `removeSchedule`, …) accepts `tx`.
+When no `tx` is passed, the method runs autonomously in its own short transaction. **Every
+job-manipulating method that writes to the database takes an optional `tx`** — `addJob`,
+`retryJob`, `cancelJob`, `removeJob`, `removeJobs`, and `removeSchedule` — so any of them can join
+your transaction and commit atomically with your business write. (Queue/instance control and
+`createQueue` / `createWorker` are not DB mutations and take no `tx`.)

@@ -114,7 +114,7 @@ export interface Driver {
   reclaimStalledJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
   expireDueJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
   /** Re-arm a failed/completed job's own row so it runs again (manual retry). */
-  requeueJob(options: { jobId: string; now: number }): Promise<InsertedJobRow>;
+  requeueJob(options: { jobId: string; now: number; tx?: TransactionHandle }): Promise<InsertedJobRow>;
 
   // Reading
   getJob(options: { jobId: string }): Promise<JobRecord | null>;
@@ -152,10 +152,18 @@ export interface Driver {
   }): Promise<boolean>;
 
   // Job control
-  cancelJob(options: { jobId: string; now: number }): Promise<boolean>;
+  cancelJob(options: { jobId: string; now: number; tx?: TransactionHandle }): Promise<boolean>;
   removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean>;
-  removeJobsByIds(options: { jobIds: string[]; queueName: string }): Promise<number>;
-  removeJobsByStatus(options: { queueName: string; statuses: JobStatus[] }): Promise<number>;
+  removeJobsByIds(options: {
+    jobIds: string[];
+    queueName: string;
+    tx?: TransactionHandle;
+  }): Promise<number>;
+  removeJobsByStatus(options: {
+    queueName: string;
+    statuses: JobStatus[];
+    tx?: TransactionHandle;
+  }): Promise<number>;
 
   // Queue control
   setQueuePaused(options: {

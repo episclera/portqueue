@@ -239,8 +239,9 @@ ORMs, and raw drivers alike. Pick your tab:
 
 <TxTabs />
 
-Every producing method (`addJob`, `removeJob`, `removeSchedule`, …) accepts
-`tx`; omit it and the method runs autonomously in its own short transaction. See
+Every job-manipulating method that writes to the database (`addJob`, `retryJob`, `cancelJob`,
+`removeJob`, `removeJobs`, `removeSchedule`) accepts `tx`; omit it and the method runs autonomously
+in its own short transaction. See
 [Transactions](./transactions.mdx) for the full list of adapters and the reasoning behind
 the design.
 

@@ -56,10 +56,11 @@ export class Queue<TData = unknown> {
    * persisted data (status back to `PENDING`, retry counters/lock/timestamps reset). To start a
    * fresh run instead, add a new job to the queue with {@link addJob}.
    */
-  async retryJob(options: { jobId: string }): Promise<AddJobResult> {
+  async retryJob(options: { jobId: string; tx?: TransactionHandle }): Promise<AddJobResult> {
     const inserted = await this.runtime.driver.requeueJob({
       jobId: options.jobId,
       now: this.runtime.clock.now(),
+      ...(options.tx ? { tx: options.tx } : {}),
     });
     this.runtime.wakeup.signal(this.name);
     return {
@@ -77,13 +78,14 @@ export class Queue<TData = unknown> {
    * to actually stop) and that settles the row. Otherwise a pending/delayed job is marked
    * `CANCELLED` so it never runs. Returns true if either path acted.
    */
-  async cancelJob(options: { jobId: string }): Promise<boolean> {
+  async cancelJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
     // A locally-running handler owns its row's outcome — fire its signal and let it settle,
     // rather than racing a DB write against its completion.
     if (this.runtime.cancelRunning?.(options.jobId)) return true;
     const ok = await this.runtime.driver.cancelJob({
       jobId: options.jobId,
       now: this.runtime.clock.now(),
+      ...(options.tx ? { tx: options.tx } : {}),
     });
     if (ok)
       this.runtime.events.emit(PortQueueEvent.JOB_CANCELLED, {
@@ -106,8 +108,11 @@ export class Queue<TData = unknown> {
     return ok;
   }
 
-  async removeSchedule(options: { scheduleId: string }): Promise<boolean> {
-    const ok = await this.runtime.driver.deleteSchedule({ scheduleId: options.scheduleId });
+  async removeSchedule(options: { scheduleId: string; tx?: TransactionHandle }): Promise<boolean> {
+    const ok = await this.runtime.driver.deleteSchedule({
+      scheduleId: options.scheduleId,
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
     if (ok)
       this.runtime.events.emit(PortQueueEvent.SCHEDULE_REMOVED, {
         scheduleId: options.scheduleId,
@@ -116,9 +121,15 @@ export class Queue<TData = unknown> {
     return ok;
   }
 
-  async removeJobs(options: { jobIds: string[] } | { statuses: JobStatus[] }): Promise<number> {
+  async removeJobs(
+    options: ({ jobIds: string[] } | { statuses: JobStatus[] }) & { tx?: TransactionHandle },
+  ): Promise<number> {
     if ('jobIds' in options)
-      return this.runtime.driver.removeJobsByIds({ jobIds: options.jobIds, queueName: this.name });
+      return this.runtime.driver.removeJobsByIds({
+        jobIds: options.jobIds,
+        queueName: this.name,
+        ...(options.tx ? { tx: options.tx } : {}),
+      });
     // Removal never touches a running job. Deleting by status would otherwise yank ACTIVE rows out
     // from under their handlers, so reject it outright — cancel the job first (see `cancelJob`).
     if (options.statuses.includes(JobStatus.ACTIVE)) {
