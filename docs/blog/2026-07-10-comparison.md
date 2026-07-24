@@ -53,4 +53,4 @@ distributed-by-design, transactional approach matters.
 If you want **transactional enqueue** or must run on a **customer-chosen database**, the
 broker-based options can't help cleanly. That's the gap PortQueue fills.
 
-See the full [Introduction](/docs/introduction) for the rationale.
+See [Getting Started](/docs/getting-started/installation) to try it.

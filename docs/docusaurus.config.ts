@@ -126,7 +126,7 @@ const config: Config = {
           items: [
             { label: 'Team', to: '/docs/team' },
             { label: 'Brandbook', to: '/docs/brandbook' },
-            { label: 'License', to: '/docs/introduction#license' },
+            { label: 'License', to: '/#license' },
           ],
         },
       ],

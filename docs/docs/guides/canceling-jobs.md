@@ -37,7 +37,34 @@ prevent the next.
 It also fires on graceful-shutdown timeout, so honoring it makes your handlers both cancellable
 **and** shutdown-friendly. A few patterns:
 
-### Pass it straight to abortable APIs
+### Pattern 1 — Make a timer abortable
+
+A bare `setTimeout` ignores cancellation and keeps a stopped job "running" until it fires.
+Wrap it in a promise that rejects on `job.signal`, and clear the timer at the end so it never
+leaks — whether the wait completed or the job was cancelled mid-wait:
+
+```ts
+handler: async (job) => {
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    // Wait up to 30s, but bail out the instant the job is cancelled.
+    await new Promise<void>((resolve, reject) => {
+      timer = setTimeout(resolve, 30_000);
+      job.signal.addEventListener(
+        'abort',
+        () => reject(job.signal.reason), // throws the AbortError, stopping the handler
+        { once: true },
+      );
+    });
+  } finally {
+    clearTimeout(timer!); // all good (or aborted) — cancel the pending timeout
+  }
+
+  // ...continue once the wait finished normally.
+};
+```
+
+### Pattern 2 — Pass it straight to abortable APIs
 
 `fetch`, many DB clients, and timers accept a signal — forward `job.signal` and they throw
 `AbortError` the moment it fires:
@@ -52,7 +79,7 @@ pq.createWorker({
 });
 ```
 
-### Check between steps of long work
+### Pattern 3 — Check between steps of long work
 
 For a loop or a multi-stage job, test the signal at safe checkpoints and bail out early:
 
@@ -65,7 +92,7 @@ handler: async (job) => {
 };
 ```
 
-### Tear down long-lived work on abort
+### Pattern 4 — Tear down long-lived work on abort
 
 When you own a subscription, stream, or observable, wire its teardown to the signal's `abort`
 event so cancellation unwinds resources deterministically:

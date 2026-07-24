@@ -4,7 +4,6 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import CodeBlock from '@theme/CodeBlock';
 import styled from 'styled-components';
-import { DRIVERS } from '@site/src/constants/drivers';
 
 const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta: string }[] = [
   {
@@ -56,8 +55,6 @@ const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta:
     cta: 'Events & hooks',
   },
 ];
-
-const DRIVER_PILLS = [...DRIVERS.map((d) => d.label), 'Custom driver'];
 
 const QUICK_START = `import { PortQueue } from '@portqueue/core';
 import { PostgresDriver } from '@portqueue/core/drivers/postgres';
@@ -230,28 +227,6 @@ const FeatureLink = styled(Link)`
   }
 `;
 
-const Drivers = styled.div`
-  display: flex;
-  gap: 0.75rem;
-  justify-content: center;
-  flex-wrap: wrap;
-`;
-
-const DriverPill = styled.span`
-  padding: 0.55rem 1.2rem;
-  border-radius: 999px;
-  font-weight: 600;
-  background: var(--surface);
-  border: 1px solid var(--secondary);
-`;
-
-const ScaleStrip = styled.div`
-  text-align: center;
-  border-radius: 24px;
-  padding: 3rem 1.5rem;
-  background: linear-gradient(120deg, rgba(169, 216, 184, 0.28), rgba(143, 184, 216, 0.18));
-`;
-
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
   return (
@@ -299,30 +274,12 @@ export default function Home(): ReactNode {
           </CodeBlock>
         </Section>
 
-        <Section>
-          <SectionTitle>Runs on your database</SectionTitle>
-          <SectionLead>Swap the driver import — your app code stays identical.</SectionLead>
-          <Drivers>
-            {DRIVER_PILLS.map((d) => (
-              <DriverPill key={d}>{d}</DriverPill>
-            ))}
-          </Drivers>
-        </Section>
-
-        <Section>
-          <ScaleStrip>
-            <SectionTitle>Built to scale horizontally</SectionTitle>
-            <SectionLead>
-              Per-queue claim loops with SKIP LOCKED let N instances cooperate on one queue —
-              no leader election, no coordinator, and no cross-queue head-of-line blocking.
-              Jobs can target a preferred server by pattern, and database pub/sub
-              (LISTEN/NOTIFY) wakes workers the moment work lands, so it stays reactive without
-              busy polling.
-            </SectionLead>
-            <CtaButton $variant="primary" to="/docs/scale-horizontally">
-              How it scales
-            </CtaButton>
-          </ScaleStrip>
+        <Section id="license">
+          <SectionTitle>License</SectionTitle>
+          <SectionLead>
+            PortQueue is <strong>absolutely free</strong> — open source under the MIT license.
+            Commercial use permitted, no license fee, no obligations. Use it in anything, forever.
+          </SectionLead>
         </Section>
       </main>
     </Layout>
