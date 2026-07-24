@@ -6,7 +6,7 @@
 
 📚 **[Read the full documentation →](https://episclera.github.io/portqueue/)**
 
-- **Getting started** — [Introduction](https://episclera.github.io/portqueue/docs/introduction) · [Installation](https://episclera.github.io/portqueue/docs/getting-started/installation) · [Your first queue](https://episclera.github.io/portqueue/docs/getting-started/first-queue)
+- **Getting started** — [Installation](https://episclera.github.io/portqueue/docs/getting-started/installation) · [Your first queue](https://episclera.github.io/portqueue/docs/getting-started/first-queue)
 - **Guides** — [Producing jobs](https://episclera.github.io/portqueue/docs/guides/producing-jobs) · [Consuming jobs](https://episclera.github.io/portqueue/docs/guides/consuming-jobs) · [Transactional enqueue](https://episclera.github.io/portqueue/docs/guides/transactions) · [Scheduling & cron](https://episclera.github.io/portqueue/docs/guides/scheduling) · [Workflows](https://episclera.github.io/portqueue/docs/workflows/what-is-a-workflow)
 - **Operate** — [Scaling horizontally](https://episclera.github.io/portqueue/docs/scale-horizontally) · [Dashboard](https://episclera.github.io/portqueue/docs/dashboard) · [CLI](https://episclera.github.io/portqueue/docs/cli)
 - **Reference** — [API reference](https://episclera.github.io/portqueue/docs/api-reference)

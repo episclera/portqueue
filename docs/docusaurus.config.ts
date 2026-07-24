@@ -126,7 +126,10 @@ const config: Config = {
           items: [
             { label: 'Team', to: '/docs/team' },
             { label: 'Brandbook', to: '/docs/brandbook' },
-            { label: 'License', to: '/#license' },
+            // Homepage anchor: `pathname://` opts out of Docusaurus link processing so its
+            // broken-anchor checker doesn't flag it — the checker only indexes Markdown heading
+            // anchors, not the `id` on this React page's <Section id="license">. Works at runtime.
+            { label: 'License', href: 'pathname:///portqueue/#license' },
           ],
         },
       ],
