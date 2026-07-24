@@ -26,6 +26,7 @@ const sidebars: SidebarsConfig = {
         'guides/retention',
         'guides/transactions',
         'guides/rate-limiting',
+        'guides/configuration',
         'troubleshooting',
       ],
     },
