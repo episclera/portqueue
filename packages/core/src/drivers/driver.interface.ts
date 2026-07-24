@@ -50,6 +50,12 @@ export interface Driver {
   readonly engine: DatabaseEngine;
   readonly capabilities: DriverCapabilitySet;
   /**
+   * This driver's resolved storage context (table prefix, schema, pub/sub namespace). The driver
+   * builds it from its own constructor options — storage layout is per-engine, not global — and
+   * core reads it here. See {@link DriverContext}.
+   */
+  readonly context: DriverContext;
+  /**
    * The ordered migration steps this driver ships, authored alongside the driver (see
    * `drivers/<engine>/migrations.ts`). The shared migration runner applies the pending ones; each
    * step's DDL is the engine's own — nothing is shared or generated across engines.
@@ -64,7 +70,7 @@ export interface Driver {
   // Schema & migration
   getSchemaVersion(): Promise<number | null>;
   applyMigration(options: { migration: MigrationStep }): Promise<void>;
-  ensureBaseObjects(options: { context: DriverContext }): Promise<void>;
+  ensureBaseObjects(): Promise<void>;
 
   // Producing
   insertJob(options: { job: NewJobRecord; tx?: TransactionHandle }): Promise<InsertedJobRow>;
@@ -97,9 +103,7 @@ export interface Driver {
     limit: number;
     lockDurationMs: number;
     now: number;
-    /** Auto-detected identity of this process (recorded as the lock owner). */
-    lockedByInstanceId: string;
-    /** This instance's multi-instance key, or null in single-instance mode. */
+    /** This instance's multi-instance key, or null when the process is unnamed. */
     instanceKey?: string | null;
   }): Promise<JobRecord[]>;
   extendLock(options: { jobId: string; lockDurationMs: number; now: number }): Promise<boolean>;

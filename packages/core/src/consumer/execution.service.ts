@@ -43,7 +43,7 @@ export class ExecutionService {
       jobId: record.id,
       queue: queueName,
       retryAttempt: record.retryAttempt,
-      instanceId: this.runtime.identity.id,
+      instanceKey: this.runtime.instanceKey,
     });
 
     const job = this.buildJob(record, controller.signal);
@@ -116,7 +116,6 @@ export class ExecutionService {
       ...(record.idempotencyKey ? { idempotencyKey: record.idempotencyKey } : {}),
       ...(record.workflowId ? { workflowId: record.workflowId } : {}),
       ...(record.workflowStepKey ? { workflowStepKey: record.workflowStepKey } : {}),
-      metadata: record.metadata,
       signal,
       async extendLock(options = {}) {
         await runtime.driver.extendLock({

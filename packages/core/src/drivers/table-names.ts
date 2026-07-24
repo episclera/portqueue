@@ -46,7 +46,6 @@ export enum JobColumn {
   CANCELLED_AT = 'cancelled_at',
   EXPIRED_AT = 'expired_at',
   LOCKED_UNTIL = 'locked_until',
-  LOCKED_BY_INSTANCE_ID = 'locked_by_instance_id',
   PREFERRED_INSTANCE_KEY_PATTERN = 'preferred_instance_key_pattern',
   PROCESSED_ON_INSTANCE_KEY = 'processed_on_instance_key',
   RETRY_ATTEMPT = 'retry_attempt',

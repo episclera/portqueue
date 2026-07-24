@@ -112,7 +112,6 @@ export class WorkflowService {
       status: JobStatus.PENDING,
       priority: record.priority,
       data: carriedData,
-      metadata: record.metadata,
       startAfter,
       expireAt: null,
       retryAttempt: 0,

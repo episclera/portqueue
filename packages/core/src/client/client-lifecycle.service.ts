@@ -44,8 +44,7 @@ export class ClientLifecycleService {
     // 2. Connect the driver.
     await driver.connect();
     // 3. Migrate.
-    (driver as unknown as { setContext?: (c: typeof context) => void }).setContext?.(context);
-    await driver.ensureBaseObjects({ context });
+    await driver.ensureBaseObjects();
     const migrationRunner = new MigrationRunner(driver, context, logger, events);
     await migrationRunner.run(options.migration ?? MigrationMode.AUTO);
 
@@ -90,7 +89,7 @@ export class ClientLifecycleService {
     this.state.running = true;
     for (const worker of this.registry.allWorkers()) await worker.start();
 
-    events.emit(PortQueueEvent.CLIENT_STARTED, { instanceId: this.runtime.identity.id });
+    events.emit(PortQueueEvent.CLIENT_STARTED, { instanceKey: this.runtime.instanceKey });
     // Run an immediate maintenance tick so due schedules/expiry aren't delayed a full interval.
     void this.tick();
   }
@@ -121,7 +120,7 @@ export class ClientLifecycleService {
   async shutdown(options: { graceful: boolean; timeoutMs: number }): Promise<void> {
     if (!this.state.running) return;
     const { events } = this.runtime;
-    events.emit(PortQueueEvent.CLIENT_STOPPING, { instanceId: this.runtime.identity.id });
+    events.emit(PortQueueEvent.CLIENT_STOPPING, { instanceKey: this.runtime.instanceKey });
 
     // Reverse order.
     if (this.tickTimer) clearInterval(this.tickTimer);
@@ -136,7 +135,7 @@ export class ClientLifecycleService {
 
     this.monitor?.stop();
     await this.runtime.driver.disconnect();
-    events.emit(PortQueueEvent.CLIENT_STOPPED, { instanceId: this.runtime.identity.id });
+    events.emit(PortQueueEvent.CLIENT_STOPPED, { instanceKey: this.runtime.instanceKey });
   }
 
   /** Whether the driver can push notifications (drives the notifier). */

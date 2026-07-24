@@ -1,6 +1,5 @@
 import type { JobStatus } from './job-state.enum';
 import { BackoffStrategy, DeduplicationReason, RetentionMode } from '../options/enums';
-import type { JobMetadata } from '../options/common';
 
 /**
  * The normalized in-memory shape of a `job` row. Drivers own the
@@ -14,7 +13,6 @@ export interface JobRecord {
   priority: number;
   data: unknown;
   returnValue: unknown;
-  metadata: JobMetadata;
   createdAt: number;
   updatedAt: number;
   startAfter: number;
@@ -27,11 +25,9 @@ export interface JobRecord {
   cancelledAt: number | null;
   expiredAt: number | null;
   lockedUntil: number | null;
-  /** The auto-detected identity of the process currently holding the lock (stall attribution). */
-  lockedByInstanceId: string | null;
   /** A regex (source string) matching the instance keys this job may run on, or null for any. */
   preferredInstanceKeyPattern: string | null;
-  /** The instance key that actually claimed/processed this job (set at claim time). */
+  /** The instance key that actually claimed/processed this job, or null when the process is unnamed. */
   processedOnInstanceKey: string | null;
   retryAttempt: number;
   retryMaxAttempts: number;
@@ -57,7 +53,6 @@ export interface NewJobRecord {
   status: JobStatus;
   priority: number;
   data: unknown;
-  metadata: JobMetadata;
   startAfter: number;
   expireAt: number | null;
   retryAttempt: number;

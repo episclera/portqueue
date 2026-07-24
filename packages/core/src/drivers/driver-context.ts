@@ -1,8 +1,23 @@
 import { TableNames } from './table-names';
 
 /**
- * Shared value object passed to a driver so all object names are computed once
- *. Also carries the pub/sub namespace.
+ * How a driver lays its data out in the database. Every field is per-engine: two drivers pointing
+ * at different databases can use different schemas, prefixes, and namespaces, so these belong on
+ * each driver's own options — not on the top-level client. A capable engine may honour `schema`;
+ * engines without schemas ignore it.
+ */
+export interface StorageOptions {
+  /** DB schema/namespace (Postgres/Oracle). */
+  schema?: string;
+  /** Prefix for all created tables (default 'pq_'). */
+  tablePrefix?: string;
+  /** Logical prefix for pub/sub channels when multiple PortQueues share one DB. */
+  namespace?: string;
+}
+
+/**
+ * Shared value object a driver builds from its {@link StorageOptions} so all object names are
+ * computed once. Also carries the pub/sub namespace.
  */
 export class DriverContext {
   readonly tableNames: TableNames;

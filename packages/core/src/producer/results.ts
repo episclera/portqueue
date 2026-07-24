@@ -1,6 +1,5 @@
 import type { JobStatus } from '../jobs/job-state.enum';
 import type { DeduplicationReason } from '../options/enums';
-import type { JobMetadata } from '../options/common';
 
 export type { Page } from '../options/common';
 
@@ -37,7 +36,6 @@ export interface JobSnapshot<TData = unknown> {
   status: JobStatus;
   data: TData;
   returnValue?: unknown;
-  metadata: JobMetadata;
   priority: number;
   retryAttempt: number;
   retryMaxAttempts: number;

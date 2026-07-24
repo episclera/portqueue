@@ -1,7 +1,6 @@
 import { PauseMode } from './options/enums';
 import { PortQueueEvent } from './events/event-name.enum';
 import { DriverCapability } from './drivers/driver-capabilities';
-import { DriverContext } from './drivers/driver-context';
 import { ConsoleLogger } from './logging/console-logger';
 import { EventBusService } from './events/event-bus.service';
 import { HookRunner } from './events/hook-runner';
@@ -19,7 +18,6 @@ import { Queue } from './producer/queue';
 import { Worker, type WorkerConfig } from './consumer/worker';
 import { InstanceActiveError, InvalidOptionsError, QueueInUseError } from './errors/errors';
 import { SystemClock } from './util/clock';
-import { uuid } from './util/uuid';
 import type { PortQueueOptions, ShutdownOptions } from './options/client-options';
 import type { QueueOptions } from './options/queue-options';
 import type { WorkerOptions } from './options/worker-options';
@@ -70,21 +68,9 @@ export class PortQueue<TQueues extends string = string> {
     }
     const logger = resolveLogger(options.logger);
     const clock = options.clock ?? new SystemClock();
-    const context = new DriverContext({
-      ...(options.storage?.tablePrefix !== undefined
-        ? { tablePrefix: options.storage.tablePrefix }
-        : {}),
-      ...(options.storage?.schema !== undefined ? { schema: options.storage.schema } : {}),
-      ...(options.storage?.namespace !== undefined
-        ? { namespace: options.storage.namespace }
-        : {}),
-    });
+    const context = options.driver.context;
     this.events = new EventBusService(logger);
     this.hooks = new HookRunner(logger, this.events);
-    // Lock-owner attribution id. Use the constructor-provided id if given; otherwise a random,
-    // ephemeral per-process token. Never derived from the environment (no container/host/IP
-    // sniffing). An instance is named solely via `options.instance.key`.
-    const identity = { id: options.instance?.id ?? uuid() };
     const resolver = new OptionResolver();
     const wakeup = new Wakeup();
     const registry = new QueueRegistry(options.driver, clock);
@@ -97,22 +83,15 @@ export class PortQueue<TQueues extends string = string> {
       clock,
       events: this.events,
       hooks: this.hooks,
-      identity,
       resolver,
       options,
       registry,
       wakeup,
-      namespace: context.namespace,
-      instanceKey: options.instance?.key ?? null,
+      instanceKey: options.instance?.instanceKey ?? null,
       instances: null,
       isRunning: () => this.state.running,
       cancelRunning: (jobId: string) => this.clientRegistry.cancelRunning(jobId),
     };
-
-    // Wire the driver's schema/prefix context up front (queries only happen after connect).
-    (options.driver as unknown as { setContext?: (c: DriverContext) => void }).setContext?.(
-      context,
-    );
 
     const notifier = new NotifierService(
       options.driver,

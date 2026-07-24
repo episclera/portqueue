@@ -1,5 +1,5 @@
 import type { Duration } from '../util/duration';
-import type { JobMetadata, RetentionOptions, RetryOptions } from './common';
+import type { RetentionOptions, RetryOptions } from './common';
 import type { TransactionHandle } from '../tx/transaction-handle';
 
 /**
@@ -15,7 +15,6 @@ export interface JobOptions {
   retention?: RetentionOptions;
   idempotencyKey?: string;
   singletonKey?: string;
-  metadata?: JobMetadata;
   /** Transactional enqueue: your own transaction wrapped by an adapter. */
   tx?: TransactionHandle;
 }

@@ -18,7 +18,6 @@ export function toSnapshot<TData = unknown>(
     status: record.status,
     data: record.data as TData,
     returnValue: record.returnValue,
-    metadata: record.metadata,
     priority: record.priority,
     retryAttempt: record.retryAttempt,
     retryMaxAttempts: record.retryMaxAttempts,

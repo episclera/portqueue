@@ -43,7 +43,6 @@ export {
 export type {
   PortQueueOptions,
   ShutdownOptions,
-  StorageOptions,
   InstanceOptions,
 } from './options/client-options';
 export type { QueueOptions } from './options/queue-options';
@@ -54,7 +53,6 @@ export type {
   RetentionOptions,
   RetryOptions,
   LimiterOptions,
-  JobMetadata,
   SystemMonitorOptions,
   Page,
 } from './options/common';
@@ -97,6 +95,7 @@ export type {
 export type { DriverCapabilitySet } from './drivers/driver-capabilities';
 export { capabilities } from './drivers/driver-capabilities';
 export { DriverContext } from './drivers/driver-context';
+export type { StorageOptions } from './drivers/driver-context';
 export type { TransactionHandle, TxQueryResult } from './tx/transaction-handle';
 
 // Logging

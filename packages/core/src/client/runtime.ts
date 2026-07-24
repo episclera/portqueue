@@ -21,16 +21,13 @@ export interface Runtime {
   clock: Clock;
   events: EventBusService;
   hooks: HookRunner;
-  /** Lock-owner attribution id (constructor-provided or a random per-process token; never env-derived). */
-  identity: { readonly id: string };
   resolver: OptionResolver;
   options: PortQueueOptions;
   registry: QueueRegistry;
   wakeup: Wakeup;
-  namespace: string;
-  /** The multi-instance key for this process, or null in single-instance mode. */
+  /** The multi-instance key for this process, or null when the process is unnamed. */
   instanceKey: string | null;
-  /** The heartbeat/liveness service — present only in multi-instance mode. Set during init. */
+  /** The heartbeat/liveness service — present only when an `instanceKey` is set. Set during init. */
   instances: InstanceService | null;
   isRunning(): boolean;
   /** Signal cooperative cancellation of an active job on this instance. */

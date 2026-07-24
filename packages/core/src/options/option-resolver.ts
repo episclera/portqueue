@@ -19,7 +19,6 @@ export interface ResolvedJobOptions {
   retentionTtlMs: number | null;
   idempotencyKey: string | null;
   singletonKey: string | null;
-  metadata: Record<string, unknown>;
 }
 
 /**
@@ -59,7 +58,6 @@ export class OptionResolver {
       retentionTtlMs: retention?.ttl != null ? toMs(retention.ttl) : null,
       idempotencyKey: merged.idempotencyKey ?? null,
       singletonKey: merged.singletonKey ?? null,
-      metadata: merged.metadata ?? {},
     };
   }
 

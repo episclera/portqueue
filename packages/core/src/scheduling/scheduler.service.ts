@@ -57,7 +57,6 @@ export class SchedulerService {
       status: JobStatus.PENDING,
       priority: schedule.priority ?? resolved.priority,
       data: schedule.data,
-      metadata: {},
       startAfter: now,
       expireAt: null,
       retryAttempt: 0,
@@ -109,7 +108,7 @@ export class SchedulerService {
       this.runtime.events.emit(PortQueueEvent.JOB_STALLED, {
         jobId: job.id,
         queue: job.queueName,
-        previousInstanceId: job.lockedByInstanceId,
+        previousInstanceKey: job.processedOnInstanceKey,
       });
       this.runtime.wakeup.signal(job.queueName);
     }

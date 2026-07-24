@@ -92,7 +92,6 @@ export class ProducerService {
       status: JobStatus.PENDING,
       priority: resolved.priority,
       data: opts.data,
-      metadata: resolved.metadata,
       startAfter: resolved.startAfter,
       expireAt: resolved.expireAt,
       retryAttempt: 0,

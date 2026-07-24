@@ -113,7 +113,6 @@ export class Worker {
           limit: want,
           lockDurationMs: this.config.lockDurationMs,
           now: this.runtime.clock.now(),
-          lockedByInstanceId: this.runtime.identity.id,
           instanceKey: this.runtime.instanceKey,
         });
         if (jobs.length === 0) break;

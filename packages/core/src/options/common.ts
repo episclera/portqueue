@@ -60,9 +60,6 @@ export interface LimiterOptions {
   lockDurationMs?: number;
 }
 
-/** Opaque developer metadata for correlation/tracing. */
-export type JobMetadata = Record<string, unknown>;
-
 /** System-pressure backpressure config. */
 export interface SystemMonitorOptions {
   sampleIntervalMs?: number;

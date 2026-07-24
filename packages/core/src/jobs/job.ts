@@ -1,5 +1,3 @@
-import type { JobMetadata } from '../options/common';
-
 /**
  * The runtime view of a job handed to a handler. Read-only fields
  * plus a couple of control methods. This is NOT how you construct jobs.
@@ -17,7 +15,6 @@ export interface Job<TData = unknown> {
   readonly idempotencyKey?: string;
   readonly workflowId?: string;
   readonly workflowStepKey?: string;
-  readonly metadata: JobMetadata;
   /** Aborts on graceful-shutdown timeout / cooperative cancel. */
   readonly signal: AbortSignal;
   /** Manually extend the visibility timeout for a long unit of work. */

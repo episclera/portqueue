@@ -56,9 +56,9 @@ export type ErrorSource =
 
 /** The typed payload for every event. */
 export interface PortQueueEventPayloads {
-  [PortQueueEvent.CLIENT_STARTED]: { instanceId: string };
-  [PortQueueEvent.CLIENT_STOPPING]: { instanceId: string };
-  [PortQueueEvent.CLIENT_STOPPED]: { instanceId: string };
+  [PortQueueEvent.CLIENT_STARTED]: { instanceKey: string | null };
+  [PortQueueEvent.CLIENT_STOPPING]: { instanceKey: string | null };
+  [PortQueueEvent.CLIENT_STOPPED]: { instanceKey: string | null };
   [PortQueueEvent.MIGRATION_APPLIED]: { from: number | null; to: number };
   [PortQueueEvent.ERROR]: { error: unknown; source: ErrorSource };
 
@@ -67,7 +67,7 @@ export interface PortQueueEventPayloads {
     jobId: string;
     queue: string;
     retryAttempt: number;
-    instanceId: string;
+    instanceKey: string | null;
   };
   [PortQueueEvent.JOB_COMPLETED]: {
     jobId: string;
@@ -87,7 +87,7 @@ export interface PortQueueEventPayloads {
     retryAttempt: number;
     nextRunAt: Date;
   };
-  [PortQueueEvent.JOB_STALLED]: { jobId: string; queue: string; previousInstanceId: string | null };
+  [PortQueueEvent.JOB_STALLED]: { jobId: string; queue: string; previousInstanceKey: string | null };
   [PortQueueEvent.JOB_EXPIRED]: { jobId: string; queue: string };
   [PortQueueEvent.JOB_CANCELLED]: { jobId: string; queue: string };
   [PortQueueEvent.JOB_REMOVED]: { jobId: string; queue: string };
