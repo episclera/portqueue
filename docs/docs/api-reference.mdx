@@ -12,17 +12,15 @@ Every public method and option in `@portqueue/core`, laid out as a hierarchy: ea
 **class** and **method** is a tag on its own line, and the options a method accepts are
 nested underneath it. Tags are just labels — anything you can click is rendered as an
 ordinary link. Object-shaped options link to their own section, where every field is listed
-with its type and default. Durations accept a number of milliseconds or a human string
-like `'30s'`, `'5m'`, `'1h'`.
-
-<span className="api-badge">new PortQueue</span>&nbsp; <span className="api-badge">method()</span>&nbsp; <span className="api-badge is-opt">scalarOption</span>&nbsp; — non-clickable tags. &nbsp;[SectionLink](#options) — a link.
+with its type and default.
 
 ---
 
 ## PortQueue
 
-The client. One per database — owns the connection, migrations, shared services, and produces
-`Queue` and `Worker` handles. Construction wires dependencies only; no I/O until `init()`.
+The top-level client. A thin facade over a driver: runs migrations on `init()`, wires the
+shared services, and produces `Queue` and `Worker` handles. Construction wires dependencies
+only; no I/O until `init()`.
 
 <ul className="api-tree">
   <li>
