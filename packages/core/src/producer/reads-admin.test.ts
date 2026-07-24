@@ -76,6 +76,28 @@ describe('client reads & admin (sqlite)', () => {
     expect(stats.throughputPerMinute).toBeGreaterThanOrEqual(0);
   });
 
+  it('never removes an ACTIVE job — it must be cancelled first', async () => {
+    const q = h.pq.createQueue('rm-active');
+    const jobId = (await q.addJob({ data: {} })).jobId!;
+    // Claim it so the row is ACTIVE, exactly as a worker would hold it.
+    await h.driver.claimJobs({
+      queueName: 'rm-active',
+      limit: 1,
+      lockDurationMs: 30_000,
+      now: h.clock.now(),
+    });
+    expect((await q.getJob({ jobId }))!.status).toBe(JobStatus.ACTIVE);
+
+    // removeJob skips the running row and reports it didn't act.
+    expect(await q.removeJob({ jobId })).toBe(false);
+    // removeJobs by id leaves the active job out of the deleted count.
+    expect(await q.removeJobs({ jobIds: [jobId] })).toBe(0);
+    // removeJobs by ACTIVE status is rejected outright.
+    await expect(q.removeJobs({ statuses: [JobStatus.ACTIVE] })).rejects.toThrow(/ACTIVE/);
+    // The job is still there, untouched.
+    expect((await q.getJob({ jobId }))!.status).toBe(JobStatus.ACTIVE);
+  });
+
   it('removes only a long-inactive instance', async () => {
     await h.driver.upsertInstance({ instanceKey: 'w1', now: h.clock.now() });
     // Freshly seen → refused.

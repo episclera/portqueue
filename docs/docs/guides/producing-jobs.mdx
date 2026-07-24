@@ -176,6 +176,16 @@ result, and failure message go with it. To merely **stop** a job rather than del
 [Remove a schedule](#remove-a-schedule) above. Reach for `removeJob` / `removeJobs` only when you
 actually want the record gone.
 
+:::warning Removal never touches a running job
+A job that is currently **`ACTIVE`** (being processed) is never deleted — **cancel it first** with
+[`cancelJob`](#cancel-a-job), then remove it once it has settled. Concretely:
+
+- `removeJob({ jobId })` on an active job **skips it and returns `false`**.
+- `removeJobs({ jobIds })` **skips any active ids** and returns a count that excludes them.
+- `removeJobs({ statuses })` **throws** if you pass `JobStatus.ACTIVE` — you can't bulk-delete
+  running jobs by status.
+:::
+
 :::warning Prefer retention over manual deletes
 Hand-deleting rows is easy to get wrong — you can lose failures you'd have wanted to triage.
 Prefer configuring [retention](./retention.md) at the **queue** level or per-job on `addJob`, and

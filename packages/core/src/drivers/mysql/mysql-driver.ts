@@ -1013,9 +1013,10 @@ export class MysqlDriver implements Driver {
   }
 
   async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
+    // Never delete a running job — an ACTIVE row is skipped and this returns false; cancel it first.
     const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} = ${this.ph(0)}`,
-      [options.jobId],
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} = ${this.ph(0)} AND ${JobColumn.STATUS} != ${this.ph(1)}`,
+      [options.jobId, JobStatus.ACTIVE],
       options.tx,
     );
     return res.rowCount > 0;
@@ -1024,9 +1025,10 @@ export class MysqlDriver implements Driver {
   async removeJobsByIds(options: { jobIds: string[]; queueName: string }): Promise<number> {
     if (!options.jobIds.length) return 0;
     const idPh = options.jobIds.map((_, i) => this.ph(i)).join(', ');
+    // ACTIVE (running) jobs are never removed — they're skipped and left out of the returned count.
     const res = await this.execute(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.jobIds.length)}`,
-      [...options.jobIds, options.queueName],
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.jobIds.length)} AND ${JobColumn.STATUS} != ${this.ph(options.jobIds.length + 1)}`,
+      [...options.jobIds, options.queueName, JobStatus.ACTIVE],
     );
     return res.rowCount;
   }

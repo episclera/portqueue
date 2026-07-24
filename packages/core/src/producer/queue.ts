@@ -1,6 +1,6 @@
 import { PauseMode } from '../options/enums';
 import { PortQueueEvent } from '../events/event-name.enum';
-import { JobNotFoundError } from '../errors/errors';
+import { JobNotFoundError, InvalidOptionsError } from '../errors/errors';
 import type { AddJobOptions } from '../options/job-options';
 import type {
   AddJobResult,
@@ -10,7 +10,7 @@ import type {
   QueueStats,
   ScheduleInfo,
 } from './results';
-import type { JobStatus } from '../jobs/job-state.enum';
+import { JobStatus } from '../jobs/job-state.enum';
 import type { ProducerService } from './producer.service';
 import type { ReadService } from '../monitoring/stats.service';
 import type { Runtime } from '../client/runtime';
@@ -119,6 +119,15 @@ export class Queue<TData = unknown> {
   async removeJobs(options: { jobIds: string[] } | { statuses: JobStatus[] }): Promise<number> {
     if ('jobIds' in options)
       return this.runtime.driver.removeJobsByIds({ jobIds: options.jobIds, queueName: this.name });
+    // Removal never touches a running job. Deleting by status would otherwise yank ACTIVE rows out
+    // from under their handlers, so reject it outright — cancel the job first (see `cancelJob`).
+    if (options.statuses.includes(JobStatus.ACTIVE)) {
+      throw new InvalidOptionsError(
+        `Cannot remove jobs by status ACTIVE on queue '${this.name}': an ACTIVE job is running. ` +
+          `Cancel it first with cancelJob({ jobId }), then remove it once it has settled.`,
+        { queue: this.name },
+      );
+    }
     return this.runtime.driver.removeJobsByStatus({
       queueName: this.name,
       statuses: options.statuses,
