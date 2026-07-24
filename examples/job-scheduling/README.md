@@ -29,6 +29,10 @@ A healthcheck every 3 seconds (`startEvery`) and a sales report every minute (`c
 Ctrl+C. Each schedule uses an `idempotencyKey` so re-running the script against the same persisted
 database keeps exactly one schedule.
 
+A recurring `addJob` returns a `scheduleId` — the example logs it. Persist it somewhere durable if
+you might later want to stop new runs being spawned for that interval/cron; that's the id you pass
+to `queue.removeSchedule({ scheduleId })` to unschedule it.
+
 ```bash
 npm run example:schedule-recurring   # from the repo root
 # or, from this folder:

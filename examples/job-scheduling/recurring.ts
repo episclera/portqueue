@@ -41,7 +41,7 @@ async function main(): Promise<void> {
 
   // Fixed interval: every 3 seconds. An `idempotencyKey` keeps exactly one schedule even if this
   // script is run repeatedly against the same (persisted) database.
-  await healthchecks.addJob({
+  const healthcheckSchedule = await healthchecks.addJob({
     data: {},
     schedule: { startEvery: '3s' },
     idempotencyKey: 'healthcheck-every-3s',
@@ -49,10 +49,19 @@ async function main(): Promise<void> {
 
   // Cron: every minute (6-field form with seconds would be '0 * * * * *'; this 5-field runs
   // at the top of every minute, in UTC).
-  await reports.addJob({
+  const reportSchedule = await reports.addJob({
     data: { kind: 'sales' },
     schedule: { cron: '* * * * *' },
     idempotencyKey: 'sales-report-every-minute',
+  });
+
+  // A recurring add returns a `scheduleId`. Persist it somewhere durable (your own DB, config,
+  // etc.) if you might ever want to stop new runs being spawned for this interval/cron later —
+  // that's the id you pass to `queue.removeSchedule({ scheduleId })` to unschedule it. (Here we
+  // just log them; you'd normally save them alongside whatever owns the recurrence.)
+  console.log('Schedule ids (save these to unschedule later):', {
+    healthcheck: healthcheckSchedule.scheduleId,
+    salesReport: reportSchedule.scheduleId,
   });
 
   console.log('Scheduled: healthcheck every 3s, sales report every minute. Ctrl+C to stop.\n');
