@@ -4,14 +4,6 @@ export enum BackoffStrategy {
   EXPONENTIAL = 'EXPONENTIAL',
 }
 
-/** Manual-retry modes for a failed job/workflow. */
-export enum RetryMode {
-  /** Re-arm the failed step's own job with its persisted data (default). */
-  FROM_FAILED_STEP = 'FROM_FAILED_STEP',
-  /** Begin a fresh run from the entry step under a new workflow id. */
-  FROM_START = 'FROM_START',
-}
-
 /** How a queue is paused. */
 export enum PauseMode {
   /** Workers stop claiming/running jobs, but the queue still accepts new adds. */

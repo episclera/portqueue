@@ -8,7 +8,6 @@
 import {
   JobStatus,
   PauseMode,
-  RetryMode,
   PortQueueEvent,
   type PortQueue,
   type GetJobsQuery,
@@ -245,7 +244,8 @@ async function runAction(portQueue: PortQueue, action: ActionRequestDto): Promis
     if (typeof action.instanceKey !== 'string' || !action.instanceKey) {
       return json(400, { error: 'Missing instanceKey' });
     }
-    if (action.kind === 'pauseInstance') await portQueue.pauseInstance({ instanceKey: action.instanceKey });
+    if (action.kind === 'pauseInstance')
+      await portQueue.pauseInstance({ instanceKey: action.instanceKey });
     else await portQueue.resumeInstance({ instanceKey: action.instanceKey });
     return json(200, { ok: true } satisfies ActionResultDto);
   }
@@ -291,9 +291,7 @@ async function runAction(portQueue: PortQueue, action: ActionRequestDto): Promis
     }
     case 'retry': {
       if (!action.jobId) return json(400, { error: 'Missing jobId' });
-      const from =
-        action.from === RetryMode.FROM_START ? RetryMode.FROM_START : RetryMode.FROM_FAILED_STEP;
-      const result = await queue.retryJob({ jobId: action.jobId, from });
+      const result = await queue.retryJob({ jobId: action.jobId });
       return json(200, {
         ok: true,
         ...(result.jobId ? { jobId: result.jobId } : {}),

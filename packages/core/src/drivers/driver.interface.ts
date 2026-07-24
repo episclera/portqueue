@@ -24,9 +24,6 @@ export interface Subscription {
   unsubscribe(): Promise<void>;
 }
 
-/** Where a manual requeue restarts from. */
-export type RequeueFrom = 'FROM_FAILED_STEP' | 'FROM_START';
-
 export interface MigrationStep {
   version: number;
   checksum: string;
@@ -131,12 +128,8 @@ export interface Driver {
   }): Promise<InsertedJobRow | null>;
   reclaimStalledJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
   expireDueJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
-  requeueJob(options: {
-    jobId: string;
-    from: RequeueFrom;
-    now: number;
-    newWorkflowId?: string;
-  }): Promise<InsertedJobRow>;
+  /** Re-arm a failed/completed job's own row so it runs again (manual retry). */
+  requeueJob(options: { jobId: string; now: number }): Promise<InsertedJobRow>;
 
   // Reading
   getJob(options: { jobId: string }): Promise<JobRecord | null>;
@@ -199,10 +192,7 @@ export interface Driver {
   deleteQueue(options: { name: string; tx?: TransactionHandle }): Promise<boolean>;
 
   // Instance liveness & per-instance pause
-  upsertInstance(options: {
-    instanceKey: string;
-    now: number;
-  }): Promise<InstanceRow>;
+  upsertInstance(options: { instanceKey: string; now: number }): Promise<InstanceRow>;
   listInstances(): Promise<InstanceRow[]>;
   getInstance(options: { instanceKey: string }): Promise<InstanceRow | null>;
   setInstancePaused(options: {

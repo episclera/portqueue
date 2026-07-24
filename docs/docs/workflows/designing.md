@@ -20,8 +20,8 @@ enum OrderStep { VALIDATE = 'VALIDATE', CHARGE = 'CHARGE', SHIP = 'SHIP', NOTIFY
 
 ## 2. Order the `steps` array (entry step first)
 
-The array order **is** the sequence. `steps[0]` is where a run starts and where a
-`FROM_START` retry resets to. Write **one handler per step**.
+The array order **is** the sequence. `steps[0]` is where a run starts (and where a fresh run from
+`addJob` begins). Write **one handler per step**.
 
 ## 3. Keep every handler idempotent
 

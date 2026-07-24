@@ -17,7 +17,6 @@ export type {
 export { JobStatus } from './jobs/job-state.enum';
 export {
   BackoffStrategy,
-  RetryMode,
   PauseMode,
   DeduplicationReason,
   RetentionMode,
@@ -40,11 +39,7 @@ export {
 } from './drivers/table-names';
 
 // Option types (the disjoint bags)
-export type {
-  PortQueueOptions,
-  ShutdownOptions,
-  InstanceOptions,
-} from './options/client-options';
+export type { PortQueueOptions, ShutdownOptions, InstanceOptions } from './options/client-options';
 export type { QueueOptions } from './options/queue-options';
 export type { WorkerOptions, ErrorClass } from './options/worker-options';
 export type { JobOptions, AddJobOptions, ScheduleOptions, CronSpec } from './options/job-options';
@@ -85,12 +80,7 @@ export type {
 } from './events/hooks';
 
 // Driver contract (for custom drivers) + transactions
-export type {
-  Driver,
-  DriverProbe,
-  Subscription,
-  MigrationStep,
-} from './drivers/driver.interface';
+export type { Driver, DriverProbe, Subscription, MigrationStep } from './drivers/driver.interface';
 export type { DriverCapabilitySet } from './drivers/driver-capabilities';
 export { capabilities } from './drivers/driver-capabilities';
 export { DriverContext } from './drivers/driver-context';

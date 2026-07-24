@@ -30,25 +30,26 @@ previous step's output is stored as its own `return_value`. Per-step retry count
 reset for the newly spawned step's job; carried business data is exactly what you passed
 forward.
 
-## Retrying a whole run
+## Retrying or replaying a run
+
+Because each step is its own job, there are two independent, always-consistent operations — and
+no arbitrary-step selector (skipping to a middle step would feed it the *wrong* carried-over input
+and skip prior side effects):
 
 ```ts
-import { RetryMode } from '@portqueue/core';
-
-// re-arm the failed step's own job with its persisted data (default)
 const ordersQueue = pq.createQueue('orders');
-await ordersQueue.retryJob({ jobId, from: RetryMode.FROM_FAILED_STEP });
 
-// start a fresh run from the entry step under a new workflowId,
-// seeded from the original run's entry-step data
-await ordersQueue.retryJob({ jobId, from: RetryMode.FROM_START });
+// 1) Resume: retry the FAILED STEP's own job — it re-runs with its persisted data,
+//    then the run continues to the remaining steps.
+await ordersQueue.retryJob({ jobId: failedStepJobId });
+
+// 2) Replay from the start: just add a new job — a workflow queue begins at the entry step.
+//    The result carries the new run's workflowId.
+const { workflowId } = await ordersQueue.addJob({ data: originalInput });
 ```
 
-:::tip Why there is no arbitrary-step selector
-Skipping to an arbitrary step would feed it the *wrong* carried-over input and skip
-prior side effects. So retries are only `FROM_FAILED_STEP` or `FROM_START` — the two
-choices that are always consistent.
-:::
+Retrying re-arms the step you name; a full replay is a brand-new run you start with `addJob`
+(supplying the input), so the two never get confused.
 
 ## Inspecting
 

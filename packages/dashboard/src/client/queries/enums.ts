@@ -25,9 +25,3 @@ export enum PauseMode {
   PROCESSING = 'PROCESSING',
   ALL = 'ALL',
 }
-
-/** Mirror of core `RetryMode`. */
-export enum RetryMode {
-  FROM_FAILED_STEP = 'FROM_FAILED_STEP',
-  FROM_START = 'FROM_START',
-}

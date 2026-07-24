@@ -1,6 +1,6 @@
 import { createTestQueue, waitFor, type TestQueueHandle } from '../test-utils/create-test-queue';
 import { JobStatus } from '../jobs/job-state.enum';
-import { PauseMode, RetryMode } from '../options/enums';
+import { PauseMode } from '../options/enums';
 
 // Single-engine (sqlite) coverage of client-wide reads + admin paths.
 describe('client reads & admin (sqlite)', () => {
@@ -46,16 +46,20 @@ describe('client reads & admin (sqlite)', () => {
     expect(res.jobId).toBeTruthy();
   });
 
-  it('requeues a finished single-function job FROM_START as a fresh run', async () => {
+  it('re-runs a finished single-function job by re-arming its own row', async () => {
     const q = h.pq.createQueue('re');
     h.pq.createWorker({ queue: 're', limiter: { pollIntervalMs: 20 }, handler: async () => 'ok' });
     const res = await q.addJob({ data: { v: 1 } });
     await waitFor(
       async () => (await q.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
     );
-    const requeued = await q.retryJob({ jobId: res.jobId!, from: RetryMode.FROM_START });
-    expect(requeued.jobId).toBeTruthy();
-    expect(requeued.jobId).not.toBe(res.jobId);
+    const requeued = await q.retryJob({ jobId: res.jobId! });
+    expect(requeued.jobId).toBe(res.jobId); // same row, re-armed (not a fresh job)
+    expect(requeued.status).toBe(JobStatus.PENDING);
+    // and it runs again to completion
+    await waitFor(
+      async () => (await q.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
+    );
   });
 
   it('returns null for an unknown job / workflow', async () => {

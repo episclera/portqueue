@@ -102,7 +102,7 @@ accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides
   <li><span className="api-badge">getJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
   <li><span className="api-badge">getJobs(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>, scoped to this queue</span></li>
   <li><span className="api-badge">getQueueStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code></span></li>
-  <li><span className="api-badge">retryJob(&#123; jobId, from? &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — <code>from</code> is a <a href="#enums">RetryMode</a></span></li>
+  <li><span className="api-badge">retryJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — re-arms the job's own row (for a workflow, the failed step); add a new job for a fresh run</span></li>
   <li><span className="api-badge">cancelJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort signal</span></li>
   <li><span className="api-badge">removeJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
   <li><span className="api-badge">removeSchedule(&#123; scheduleId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
@@ -392,7 +392,7 @@ Reads return objects, never bare ids. The main shapes:
 ## Enums
 
 `JobStatus` (`PENDING`, `ACTIVE`, `COMPLETED`, `FAILED`, `RETRY`, `CANCELLED`, `EXPIRED`) ·
-`PauseMode` (`PROCESSING`, `ALL`) · `RetryMode` (`FROM_FAILED_STEP`, `FROM_START`) ·
+`PauseMode` (`PROCESSING`, `ALL`) ·
 `BackoffStrategy` (`FIXED`, `EXPONENTIAL`) · `RetentionMode` (`KEEP_FOREVER`, `DELETE_AFTER`) ·
 `MigrationMode` (`AUTO`, `MANUAL`, `VALIDATE_ONLY`) · `DeduplicationReason` (`IDEMPOTENCY`, `SINGLETON`) ·
 `DatabaseEngine` · [`PortQueueEvent`](./events-hooks/events.md) · [`HookPhase`](./events-hooks/hooks.md) ·

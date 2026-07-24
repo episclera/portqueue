@@ -1,5 +1,5 @@
 /** Mutation request/response wire DTOs for the dashboard action endpoint. */
-import type { JobStatus, PauseMode, RetryMode } from '@portqueue/core';
+import type { JobStatus, PauseMode } from '@portqueue/core';
 
 /** Body of a mutation request. `kind` selects the action; other fields are per-action. */
 export interface ActionRequestDto {
@@ -24,7 +24,6 @@ export interface ActionRequestDto {
   jobIds?: string[];
   scheduleId?: string;
   mode?: PauseMode;
-  from?: RetryMode;
   statuses?: JobStatus[];
   /** For `add`: the AddJobOptions payload (data + options + optional recurring timing). */
   add?: {

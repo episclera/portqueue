@@ -127,38 +127,20 @@ an escape hatch for replays/backfills. Omit it to start at the entry step. See
 
 ## Retry a job
 
-Requeue a **failed or completed** job to run again. `retryJob` returns an `AddJobResult` (never a
-bare id). How it behaves depends on whether the job is a plain job or part of a workflow.
-
-### A simple job
-
-An ordinary job has no steps, so retrying just re-arms it with its persisted data. Leave `from`
-off — it only matters for workflows.
+Requeue a **failed or completed** job to run again with `retryJob`. It **re-arms that job's own
+row** — status back to `PENDING`, retry counters/lock/timestamps reset — and returns an
+`AddJobResult` (never a bare id). There are no retry "modes": one job id, one behaviour.
 
 ```ts
 const result = await emailsQueue.retryJob({ jobId });
 // → AddJobResult for the requeued job (status back to PENDING)
 ```
 
-### A job in a workflow
-
-For a workflow job, `from` (a `RetryMode`) chooses **where the run resumes**. It defaults to
-`FROM_FAILED_STEP` — re-arm the failed step's own job with its persisted data, so the run picks up
-where it stopped. Pass `FROM_START` to begin a **fresh run from the entry step** (under a new
-`workflowId`, seeded from the original run's entry-step data).
-
-```ts
-import { RetryMode } from '@portqueue/core';
-
-// resume the run at the step that failed (the default)
-await ordersQueue.retryJob({ jobId, from: RetryMode.FROM_FAILED_STEP });
-
-// or replay the whole run from the first step
-await ordersQueue.retryJob({ jobId, from: RetryMode.FROM_START });
-```
-
-Retries are deliberately limited to these two modes — there is no arbitrary-step selector. See
-[Workflow resumability](./../workflows/resumability.md) for why.
+For a **workflow**, every step is its own job, so retrying the **failed step's job** resumes the
+run at that step — the later steps run once it completes. To start a **fresh run from the
+beginning** you don't retry at all: just [add a new job](#add-one-or-many) to the queue and the
+workflow begins at its entry step (the add returns the new `workflowId` — save it if you want to
+correlate the run). See [Workflow resumability](./../workflows/resumability.md).
 
 ## Cancel a job
 

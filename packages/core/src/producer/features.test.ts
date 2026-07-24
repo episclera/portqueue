@@ -7,7 +7,7 @@ import {
 import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { HookPhase } from '../events/hooks';
-import { BackoffStrategy, RetryMode } from '../options/enums';
+import { BackoffStrategy } from '../options/enums';
 import type { WorkflowStep } from '../jobs/job';
 
 class NonRetryableError extends Error {
@@ -264,7 +264,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     expect(run!.steps).toHaveLength(3); // 0->1, 1->2, 2 done — three step jobs
   });
 
-  it('retries a failed workflow from the failed step (FROM_FAILED_STEP)', async () => {
+  it('retries a failed workflow step by re-arming the failed step job', async () => {
     let failFirst = true;
     const steps: WorkflowStep<{ v: number }>[] = [
       { key: 'a', handler: async (_j, step) => step.next({ data: { v: 1 } }) },
@@ -282,6 +282,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     const queue = h.pq.createQueue<{ v: number }>('retrywf');
     h.pq.createWorker<{ v: number }>({ queue: 'retrywf', handler: steps });
     const res = await queue.addJob({ data: { v: 0 }, retry: { maxAttempts: 1 } });
+    expect(res.workflowId).toBeTruthy(); // addJob returns the minted workflow id for a workflow queue
     // Step b fails terminally (1 attempt) → find its FAILED job.
     let failedJobId = '';
     await waitFor(async () => {
@@ -292,7 +293,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
       if (failed) failedJobId = failed.id;
       return Boolean(failed);
     });
-    await queue.retryJob({ jobId: failedJobId, from: RetryMode.FROM_FAILED_STEP });
+    await queue.retryJob({ jobId: failedJobId });
     await waitFor(async () => {
       const run = await h.pq.getWorkflow({ workflowId: res.workflowId! });
       return Boolean(

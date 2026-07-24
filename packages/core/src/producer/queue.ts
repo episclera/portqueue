@@ -1,4 +1,4 @@
-import { PauseMode, RetryMode } from '../options/enums';
+import { PauseMode } from '../options/enums';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { JobNotFoundError } from '../errors/errors';
 import type { AddJobOptions } from '../options/job-options';
@@ -55,11 +55,15 @@ export class Queue<TData = unknown> {
   }
 
   // --- Job control ---
-  async retryJob(options: { jobId: string; from?: RetryMode }): Promise<AddJobResult> {
-    const from = options.from ?? RetryMode.FROM_FAILED_STEP;
+  /**
+   * Requeue a **failed or completed** job to run again — its own row is re-armed with its
+   * persisted data (status back to `PENDING`, retry counters/lock/timestamps reset). For a
+   * workflow, the failed step is its own job, so this resumes the run at that step. To start a
+   * fresh run instead, add a new job to the queue with {@link addJob}.
+   */
+  async retryJob(options: { jobId: string }): Promise<AddJobResult> {
     const inserted = await this.runtime.driver.requeueJob({
       jobId: options.jobId,
-      from,
       now: this.runtime.clock.now(),
     });
     this.runtime.wakeup.signal(this.name);

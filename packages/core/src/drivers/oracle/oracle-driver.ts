@@ -5,11 +5,7 @@ import {
   BackoffStrategy,
 } from '../../options/enums';
 import { JobStatus } from '../../jobs/job-state.enum';
-import {
-  capabilities,
-  DriverCapability,
-  type DriverCapabilitySet,
-} from '../driver-capabilities';
+import { capabilities, DriverCapability, type DriverCapabilitySet } from '../driver-capabilities';
 import {
   DriverConnectionError,
   DriverQueryError,
@@ -32,7 +28,6 @@ import type {
   Driver,
   DriverProbe,
   MigrationStep,
-  RequeueFrom,
   Subscription,
   WorkflowNext,
 } from '../driver.interface';
@@ -155,7 +150,9 @@ export class OracleDriver implements Driver {
       ...(options.tablePrefix !== undefined ? { tablePrefix: options.tablePrefix } : {}),
       ...(options.schema !== undefined ? { schema: options.schema } : {}),
       ...(options.namespace !== undefined ? { namespace: options.namespace } : {}),
-      ...(options.maxIdentifierLen !== undefined ? { maxIdentifierLen: options.maxIdentifierLen } : {}),
+      ...(options.maxIdentifierLen !== undefined
+        ? { maxIdentifierLen: options.maxIdentifierLen }
+        : {}),
     });
   }
 
@@ -701,7 +698,12 @@ export class OracleDriver implements Driver {
       );
       if (sel.rows.length === 0) break; // exhausted — nothing more to scan
       for (const row of sel.rows) {
-        if (matchesInstance(this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]), instanceKey)) {
+        if (
+          matchesInstance(
+            this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]),
+            instanceKey,
+          )
+        ) {
           idSet.add(String(row[JobColumn.ID]));
           if (idSet.size >= limit) break;
         }
@@ -843,65 +845,23 @@ export class OracleDriver implements Driver {
     return res.rows.map((r) => this.mapJob(r));
   }
 
-  async requeueJob(options: {
-    jobId: string;
-    from: RequeueFrom;
-    now: number;
-    newWorkflowId?: string;
-  }): Promise<InsertedJobRow> {
+  async requeueJob(options: { jobId: string; now: number }): Promise<InsertedJobRow> {
     const job = await this.getJob({ jobId: options.jobId });
     if (!job) throw new DriverQueryError(`Cannot requeue: job '${options.jobId}' not found.`);
-    if (options.from === 'FROM_FAILED_STEP') {
-      // Re-arm this job's own row: back to PENDING, reset retry counters/lock/timestamps.
-      await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.RETRY_ATTEMPT} = 0, ${JobColumn.START_AFTER} = ${this.ph(0)}, ` +
-          `${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ${JobColumn.EXPIRED_AT} = NULL, ` +
-          `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)}`,
-        [options.now, options.now, options.jobId],
-      );
-      return {
-        id: job.id,
-        status: JobStatus.PENDING,
-        startAfter: options.now,
-        workflowId: job.workflowId,
-        deduplicated: false,
-      };
-    }
-    // FROM_START: for a workflow, find the entry-step job of the run; else clone this job fresh.
-    let seed = job;
-    if (job.workflowId) {
-      const entry = await this.execute(
-        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.WORKFLOW_ID} = ${this.ph(0)} ORDER BY ${JobColumn.CREATED_AT} ASC LIMIT 1`,
-        [job.workflowId],
-      );
-      if (entry.rows[0]) seed = this.mapJob(entry.rows[0]);
-    }
-    const newWorkflowId = job.workflowId ? (options.newWorkflowId ?? uuid()) : null;
-    const fresh: NewJobRecord = {
-      queueName: seed.queueName,
+    // Re-arm this job's own row: back to PENDING, reset retry counters/lock/timestamps.
+    await this.execute(
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.RETRY_ATTEMPT} = 0, ${JobColumn.START_AFTER} = ${this.ph(0)}, ` +
+        `${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ${JobColumn.EXPIRED_AT} = NULL, ` +
+        `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)}`,
+      [options.now, options.now, options.jobId],
+    );
+    return {
+      id: job.id,
       status: JobStatus.PENDING,
-      priority: seed.priority,
-      data: seed.data,
       startAfter: options.now,
-      expireAt: null,
-      retryAttempt: 0,
-      retryMaxAttempts: seed.retryMaxAttempts,
-      retryDelayMs: seed.retryDelayMs,
-      retryBackoff: seed.retryBackoff,
-      retryBackoffFactor: seed.retryBackoffFactor,
-      retryMaxDelayMs: seed.retryMaxDelayMs,
-      retryJitter: seed.retryJitter,
-      retentionMode: seed.retentionMode,
-      retentionTtlMs: seed.retentionTtlMs,
-      idempotencyKey: null,
-      scheduleId: seed.scheduleId,
-      singletonKey: null,
-      workflowId: newWorkflowId,
-      workflowStepKey: newWorkflowId ? seed.workflowStepKey : null,
-      preferredInstanceKeyPattern: seed.preferredInstanceKeyPattern,
-      createdAt: options.now,
+      workflowId: job.workflowId,
+      deduplicated: false,
     };
-    return this.insertJob({ job: fresh });
   }
 
   // --- Reading ---
@@ -985,9 +945,16 @@ export class OracleDriver implements Driver {
   }
 
   async listQueues(): Promise<QueueRow[]> {
-    const res = await this.execute(`SELECT * FROM ${this.t(TableName.QUEUE)} ORDER BY ${QueueColumn.NAME} ASC`, []);
+    const res = await this.execute(
+      `SELECT * FROM ${this.t(TableName.QUEUE)} ORDER BY ${QueueColumn.NAME} ASC`,
+      [],
+    );
     // No unique index on name: dedupe defensively so a creation race can't surface twice.
-    return this.mapUnique(res.rows, (r) => this.mapQueue(r), (q) => q.name);
+    return this.mapUnique(
+      res.rows,
+      (r) => this.mapQueue(r),
+      (q) => q.name,
+    );
   }
 
   async listSchedules(options: { queueName?: string }): Promise<ScheduleRow[]> {
@@ -1030,7 +997,10 @@ export class OracleDriver implements Driver {
     // Bucket by minute in-memory (avoids engine-specific date functions).
     const buckets = new Map<number, ThroughputPoint>();
     for (const row of res.rows) {
-      const ts = row[JobColumn.COMPLETED_AT] != null ? Number(row[JobColumn.COMPLETED_AT]) : Number(row[JobColumn.FAILED_AT]);
+      const ts =
+        row[JobColumn.COMPLETED_AT] != null
+          ? Number(row[JobColumn.COMPLETED_AT])
+          : Number(row[JobColumn.FAILED_AT]);
       const bucket = Math.floor(ts / 60000) * 60000;
       const point = buckets.get(bucket) ?? { bucketStart: bucket, completed: 0, failed: 0 };
       if (row[JobColumn.STATUS] === JobStatus.COMPLETED) point.completed += 1;
@@ -1201,7 +1171,11 @@ export class OracleDriver implements Driver {
       `SELECT * FROM ${this.t(TableName.INSTANCE)} ORDER BY ${InstanceColumn.INSTANCE_KEY} ASC`,
       [],
     );
-    return this.mapUnique(res.rows, (r) => this.mapInstance(r), (i) => i.instanceKey);
+    return this.mapUnique(
+      res.rows,
+      (r) => this.mapInstance(r),
+      (i) => i.instanceKey,
+    );
   }
 
   async getInstance(options: { instanceKey: string }): Promise<InstanceRow | null> {
@@ -1223,10 +1197,7 @@ export class OracleDriver implements Driver {
     );
   }
 
-  async deleteInstance(options: {
-    instanceKey: string;
-    tx?: TransactionHandle;
-  }): Promise<boolean> {
+  async deleteInstance(options: { instanceKey: string; tx?: TransactionHandle }): Promise<boolean> {
     // Only removes the instance (monitoring) row. Jobs record processed_on_instance_key as a plain
     // string (no FK/PK), so removing an instance never touches or orphans any job rows.
     const res = await this.runMaybeTx(

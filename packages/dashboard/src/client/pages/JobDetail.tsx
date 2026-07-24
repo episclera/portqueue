@@ -1,6 +1,6 @@
 /**
  * Job detail page: full record, lifecycle timeline (every job), workflow run
- * view (multi-step), and actions — retry (with RetryMode choice), clone (prefilled add form),
+ * view (multi-step), and actions — retry (re-arm the job), clone (prefilled add form),
  * remove, cancel. Terminal records refetch on-demand rather than on the 30s poll.
  */
 import React, { useState } from 'react';
@@ -9,7 +9,6 @@ import {
   Button,
   Card,
   Col,
-  Dropdown,
   Inline,
   Popconfirm,
   Row,
@@ -20,7 +19,7 @@ import {
   Title,
 } from '@portqueue/ui';
 import styled from 'styled-components';
-import { JobStatus, RetryMode } from '../queries/enums';
+import { JobStatus } from '../queries/enums';
 import type { JobDto, WorkflowDto } from '../../shared/dto';
 import { api, config } from '../queries/api';
 import { useQuery } from '../queries/use-poll';
@@ -83,7 +82,13 @@ const Pre = styled.pre<{ $danger?: boolean }>`
   color: ${(p) => (p.$danger ? p.theme.color.danger : p.theme.color.text)};
 `;
 
-function Item({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
+function Item({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}): React.ReactElement {
   return (
     <div>
       <DescLabel>{label}</DescLabel>
@@ -146,49 +151,14 @@ export function JobDetailPage(): React.ReactElement {
         </Inline>
         {!config.readOnly && (
           <Inline gap={2} wrap>
-            {isWorkflow ? (
-              <Dropdown
-                items={[
-                  {
-                    key: RetryMode.FROM_FAILED_STEP,
-                    label: 'From failed step (resume)',
-                    onClick: () =>
-                      void run(
-                        {
-                          kind: 'retry',
-                          queue: j.queue,
-                          jobId: j.id,
-                          from: RetryMode.FROM_FAILED_STEP,
-                        },
-                        'Retry queued',
-                      ),
-                  },
-                  {
-                    key: RetryMode.FROM_START,
-                    label: 'From start (fresh run)',
-                    onClick: () =>
-                      void run(
-                        { kind: 'retry', queue: j.queue, jobId: j.id, from: RetryMode.FROM_START },
-                        'Retry queued',
-                      ),
-                  },
-                ]}
-              >
-                <Button>Retry ▾</Button>
-              </Dropdown>
-            ) : (
-              <Button
-                disabled={!isFailed && j.status === JobStatus.ACTIVE}
-                onClick={() =>
-                  void run(
-                    { kind: 'retry', queue: j.queue, jobId: j.id, from: RetryMode.FROM_START },
-                    'Retry queued',
-                  )
-                }
-              >
-                Retry
-              </Button>
-            )}
+            <Button
+              disabled={!isFailed && j.status === JobStatus.ACTIVE}
+              onClick={() =>
+                void run({ kind: 'retry', queue: j.queue, jobId: j.id }, 'Retry queued')
+              }
+            >
+              Retry
+            </Button>
             <Button onClick={() => setCloneOpen(true)}>Clone</Button>
             {j.status === JobStatus.ACTIVE && (
               <Popconfirm
