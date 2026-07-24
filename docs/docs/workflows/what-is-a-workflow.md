@@ -15,16 +15,6 @@ That is the entire idea. A workflow queue differs from a simple queue in exactly
 way: its worker's `handler` is an **ordered array of steps** instead of a single
 function. **Producing is the same `addJob({ data })`** in both cases.
 
-## Why not numeric progress? {#why}
-
-:::tip Why we chose this
-BullMQ-style numeric progress can't **resume**: a crash at 60% has no way to pick up
-mid-way. By making each step its own claimable `job` row, an un-advanced step is just a
-job any instance can reclaim and re-run — the completed steps are already their own
-`COMPLETED` rows. This resumes exactly where it stopped, load-balances across instances,
-and is fully introspectable in the dashboard with no JSON progress log.
-:::
-
 ## The shape
 
 ```ts
@@ -48,3 +38,13 @@ what comes next. Each step's **input is `job.data`** (what the previous step car
 over); its output is what it passes forward via the `step` controller.
 
 Continue with [Designing a workflow](./designing.md).
+
+## Why not numeric progress? {#why}
+
+:::tip Why we chose this
+BullMQ-style numeric progress can't **resume**: a crash at 60% has no way to pick up
+mid-way. By making each step its own claimable `job` row, an un-advanced step is just a
+job any instance can reclaim and re-run — the completed steps are already their own
+`COMPLETED` rows. This resumes exactly where it stopped, load-balances across instances,
+and is fully introspectable in the dashboard with no JSON progress log.
+:::
