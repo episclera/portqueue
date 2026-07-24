@@ -37,6 +37,12 @@
   --ifm-color-danger: #b5645f;
   --ifm-color-info: #8fb8d8;
 
+  /* Admonition heading colours — banners stay white; only the title takes the level colour.
+     Slightly deepened over the muted tokens above so the title reads on a white surface. */
+  --pq-admonition-info: #4f86ad;
+  --pq-admonition-warning: #b47a3c;
+  --pq-admonition-danger: #a85450;
+
   /* Neutral fields. */
   --ifm-background-color: #f2f3f1;
   --ifm-background-surface-color: #ffffff;
@@ -90,6 +96,11 @@
 
   /* Keep dark text on the green button fill in dark mode too (never white). */
   --ifm-button-color: #1b1f1d;
+
+  /* Admonition heading colours on dark surfaces — the muted tokens read well here. */
+  --pq-admonition-info: #8fb8d8;
+  --pq-admonition-warning: #c68a4e;
+  --pq-admonition-danger: #c98a86;
 
   --ifm-background-color: #171a19;
   --ifm-background-surface-color: #1f2422;
@@ -168,11 +179,37 @@ pre[class*='language-'] {
   box-shadow: var(--ifm-global-shadow-md);
 }
 
-/* Admonitions / callouts: rounded and airy, with no left accent border. */
+/*
+ * Admonitions / callouts: always a plain white (surface) banner — no coloured fill.
+ * Only the heading (icon + title) takes a semantic colour, by level:
+ * info → blue, warning → orange, danger/error → red. Note stays neutral; tip reuses the
+ * info blue so the docs never show a green banner.
+ */
 .theme-admonition {
-  border-radius: 12px;
+  --ifm-alert-background-color: var(--ifm-background-surface-color);
+  --ifm-alert-background-color-highlight: rgba(0, 0, 0, 0);
+  background-color: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
   border-left: 0;
+  border-radius: 12px;
   box-shadow: var(--ifm-global-shadow-lw);
+  color: var(--ifm-color-content);
+}
+
+/* The heading is the first child of the admonition; colour it (and its icon) by level. */
+.theme-admonition > div:first-child {
+  color: var(--ifm-color-emphasis-800);
+}
+.theme-admonition-info > div:first-child,
+.theme-admonition-tip > div:first-child {
+  color: var(--pq-admonition-info);
+}
+.theme-admonition-warning > div:first-child,
+.theme-admonition-caution > div:first-child {
+  color: var(--pq-admonition-warning);
+}
+.theme-admonition-danger > div:first-child {
+  color: var(--pq-admonition-danger);
 }
 
 /* Light footer with a soft top separation. */

@@ -27,7 +27,7 @@ const emailsQueue = pq.createQueue('emails', {
 await emailsQueue.addJob({ data, retention: { mode: RetentionMode.DELETE_AFTER, ttl: '30d' } });
 ```
 
-:::tip Keep failed jobs longer
+:::note Keep failed jobs longer
 There is **no dead-letter queue** — failed jobs stay in `job` with status `FAILED` for
 triage. Keep completed jobs short and failed jobs longer so you always have failures to
 inspect and re-run with `retryJob`.

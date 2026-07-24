@@ -64,18 +64,24 @@ semantic colours stand out only where they're meaningful.
 
 ### In these docs
 
-`--bg` for content, `--secondary` for code blocks and dividers, `--primary` for links and
-`:::tip` callouts. `--warning` for "deprecated"/"caution" admonitions, `--danger` for
-"breaking change"/"critical" admonitions.
+`--bg` for content, `--secondary` for code blocks and dividers, `--primary` for links.
+Admonitions always sit on a plain white (`--surface`) banner — **no coloured fill** — and only
+the **title** takes a semantic colour: `--info` blue for `:::info`, `--warning` orange for
+`:::warning`/`:::caution`, `--danger` red for `:::danger`. `:::note` stays neutral. Green is
+never used for a banner.
 
-:::tip Primary / success
-Tip callouts and links use the green primary.
+:::info Info
+Informational callouts use a blue title on a white banner.
 :::
 
-:::caution Warning
-Caution admonitions use the muted `--warning` orange.
+:::note Note
+Plain asides use a neutral title — no accent colour.
+:::
+
+:::warning Warning
+Caution/deprecation admonitions use the muted `--warning` orange title.
 :::
 
 :::danger Breaking change
-Critical/breaking admonitions use the muted `--danger` red.
+Critical/breaking admonitions use the muted `--danger` red title.
 :::
