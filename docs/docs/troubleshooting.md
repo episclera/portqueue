@@ -43,7 +43,6 @@ try {
 | `ALREADY_STOPPED` | — | Operation after `shutdown()`. Create a new client or don't use it post-shutdown. |
 | `INVALID_OPTIONS` | `InvalidOptionsError` | An options object failed validation (e.g. both `schedule.cron` and `schedule.startEvery`, or `schedule.startAfter` combined with a recurring mode). Read the message; it names the offending field. |
 | `UNSUPPORTED_CAPABILITY` | `UnsupportedCapabilityError` | The driver's engine can't do what you asked. Use a driver that supports it or the documented fallback. |
-| `UNSUPPORTED_FOR_WORKER_TYPE` | `UnsupportedForWorkerTypeError` | Step control on a single-`handler` worker (or vice-versa). Match the call to the worker type. |
 | `IDEMPOTENCY_CONFLICT` | — | An `idempotencyKey` matched an existing job. Usually expected — inspect `result.deduplicated` instead of catching. |
 | `SINGLETON_CONFLICT` | — | A `singletonKey` already has an active job. Expected under contention; retry later or rely on dedup. |
 | `SCHEMA_VERSION_MISMATCH` | `SchemaVersionMismatchError` | The DB schema version differs from the library's. Run `portqueue migrate` (see [Going to Production](./production.md)). |

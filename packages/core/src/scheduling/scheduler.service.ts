@@ -71,8 +71,6 @@ export class SchedulerService {
       idempotencyKey: null,
       scheduleId: schedule.id,
       singletonKey: null,
-      workflowId: null,
-      workflowStepKey: null,
       preferredInstanceKeyPattern: null,
       createdAt: now,
     };

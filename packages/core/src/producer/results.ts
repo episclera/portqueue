@@ -25,8 +25,6 @@ export interface AddJobResult {
   deduplicationReason?: DeduplicationReason;
   /** When a one-off job becomes due. */
   startAfter?: Date;
-  /** Present only for a workflow queue: the run id minted for this job. */
-  workflowId?: string;
 }
 
 /** A read-side snapshot of a job. */
@@ -55,17 +53,8 @@ export interface JobSnapshot<TData = unknown> {
   failureMessage?: string | null;
   idempotencyKey?: string | null;
   scheduleId?: string | null;
-  workflowId?: string | null;
-  workflowStepKey?: string | null;
   /** True when ACTIVE and past its lock deadline (derived). */
   stalled: boolean;
-}
-
-/** A whole workflow run: its steps as an ordered list of snapshots. */
-export interface WorkflowSnapshot {
-  workflowId: string;
-  queue: string;
-  steps: JobSnapshot[];
 }
 
 /** Info about a recurring schedule. */
@@ -119,7 +108,6 @@ export interface GetJobsQuery {
   queue?: string;
   statuses?: JobStatus[];
   scheduleId?: string;
-  workflowId?: string;
   limit?: number;
   cursor?: string;
   order?: 'asc' | 'desc';

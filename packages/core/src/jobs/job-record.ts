@@ -42,8 +42,6 @@ export interface JobRecord {
   idempotencyKey: string | null;
   scheduleId: string | null;
   singletonKey: string | null;
-  workflowId: string | null;
-  workflowStepKey: string | null;
 }
 
 /** The row to insert — a fully resolved job with defaults applied. */
@@ -67,8 +65,6 @@ export interface NewJobRecord {
   idempotencyKey: string | null;
   scheduleId: string | null;
   singletonKey: string | null;
-  workflowId: string | null;
-  workflowStepKey: string | null;
   preferredInstanceKeyPattern: string | null;
   createdAt: number;
 }
@@ -78,7 +74,6 @@ export interface InsertedJobRow {
   id: string;
   status: JobStatus;
   startAfter: number;
-  workflowId: string | null;
   /** True if an idempotency/singleton match returned the existing job instead of inserting. */
   deduplicated: boolean;
   deduplicationReason?: DeduplicationReason;

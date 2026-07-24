@@ -51,8 +51,6 @@ function newJob(
     idempotencyKey: null,
     scheduleId: null,
     singletonKey: null,
-    workflowId: null,
-    workflowStepKey: null,
     preferredInstanceKeyPattern: null,
     createdAt: now,
     ...overrides,
@@ -190,33 +188,6 @@ export function runConformance(options: ConformanceOptions): void {
       expect(await driver.findScheduleByIdempotencyKey({ queueName, idempotencyKey: 'nope' })).toBe(
         null,
       );
-    });
-
-    it('advances a workflow step atomically (complete-this + spawn-next)', async () => {
-      const wfId = 'wf-1';
-      const first = await driver.insertJob({
-        job: newJob(queueName, now, { workflowId: wfId, workflowStepKey: 'a' }),
-      });
-      const spawned = await driver.advanceWorkflowStep({
-        jobId: first.id,
-        returnValue: { step: 'a' },
-        now: now + 1,
-        spawn: newJob(queueName, now + 1, {
-          workflowId: wfId,
-          workflowStepKey: 'b',
-          data: { from: 'a' },
-        }),
-      });
-      expect(spawned?.status).toBe(JobStatus.PENDING);
-      const firstRecord = await driver.getJob({ jobId: first.id });
-      expect(firstRecord?.status).toBe(JobStatus.COMPLETED);
-      const runJobs = await driver.getJobs({
-        workflowId: wfId,
-        limit: 10,
-        offset: 0,
-        order: 'asc',
-      });
-      expect(runJobs).toHaveLength(2);
     });
 
     it('enqueues transactionally (commit persists, rollback discards)', async () => {

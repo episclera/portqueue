@@ -30,8 +30,6 @@ export interface JobDto {
   failureMessage?: string | null;
   idempotencyKey?: string | null;
   scheduleId?: string | null;
-  workflowId?: string | null;
-  workflowStepKey?: string | null;
   stalled: boolean;
 }
 
@@ -40,11 +38,4 @@ export interface JobPageDto {
   items: JobDto[];
   cursor: string | null;
   hasMore: boolean;
-}
-
-/** A whole workflow run (mirrors core `WorkflowSnapshot`). */
-export interface WorkflowDto {
-  workflowId: string;
-  queue: string;
-  steps: JobDto[];
 }

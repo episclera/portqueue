@@ -2,8 +2,7 @@ import { PortQueueEvent } from '../events/event-name.enum';
 import { RateLimiterService } from '../monitoring/rate-limiter.service';
 import { ExecutionService, type ExecutionConfig } from './execution.service';
 import type { CompletionService } from './completion.service';
-import type { WorkflowService } from './workflow.service';
-import type { JobHandler, WorkflowStep } from '../jobs/job';
+import type { JobHandler } from '../jobs/job';
 import type { ErrorClass } from '../options/worker-options';
 import type { QueueOptions } from '../options/queue-options';
 import type { Runtime } from '../client/runtime';
@@ -11,8 +10,7 @@ import type { Duration } from '../util/duration';
 
 export interface WorkerConfig {
   queue: string;
-  handler?: JobHandler;
-  steps?: ReadonlyArray<WorkflowStep>;
+  handler: JobHandler;
   concurrency: number;
   batchSize: number;
   lockDurationMs: number;
@@ -43,19 +41,17 @@ export class Worker {
   constructor(
     private readonly runtime: Runtime,
     completion: CompletionService,
-    workflow: WorkflowService,
     private readonly config: WorkerConfig,
     private readonly isPressureHigh: () => boolean,
   ) {
     const execConfig: ExecutionConfig = {
       queueName: config.queue,
-      ...(config.handler ? { handler: config.handler } : {}),
-      ...(config.steps ? { steps: config.steps } : {}),
+      handler: config.handler,
       dontAutoretryFor: config.dontAutoretryFor,
       lockDurationMs: config.lockDurationMs,
       queueOptions: config.queueOptions,
     };
-    this.execution = new ExecutionService(runtime, completion, workflow, execConfig);
+    this.execution = new ExecutionService(runtime, completion, execConfig);
     if (config.limiter) this.limiter = new RateLimiterService(config.limiter, runtime.clock);
   }
 

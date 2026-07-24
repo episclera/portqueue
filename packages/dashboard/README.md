@@ -21,4 +21,4 @@ const app = express();
 app.use('/portqueue', dashboard.express());
 ```
 
-Overview / queue / job / schedules pages, live updates (SSE + 30s reconcile), workflow run views, pause/resume, retry, bulk actions. **MIT** — free for commercial use, no obligations.
+Overview / queue / job / schedules pages, live updates (SSE + 30s reconcile), pause/resume, retry, bulk actions. **MIT** — free for commercial use, no obligations.

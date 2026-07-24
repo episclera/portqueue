@@ -64,7 +64,6 @@ The client. One per database — owns the connection, migrations, shared service
       <li><a href="#getjobsquery">GetJobsQuery</a></li>
     </ul>
   </li>
-  <li><span className="api-badge">getWorkflow(&#123; workflowId &#125;)</span> <span className="api-note">→ <code>Promise&lt;WorkflowSnapshot | null&gt;</code></span></li>
   <li><span className="api-badge">on(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code> — see <a href="./events-hooks/events.md">Events</a></span></li>
   <li><span className="api-badge">once(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code></span></li>
   <li><span className="api-badge">off(event, listener)</span> <span className="api-note">→ <code>void</code></span></li>
@@ -92,17 +91,11 @@ accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides
       <li><a href="#addjoboptions">AddJobOptions&lt;TData&gt;</a></li>
     </ul>
   </li>
-  <li>
-    <span className="api-badge">addJobs(&#123; jobs &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult[]&gt;</code></span>
-    <ul>
-      <li><span className="api-badge is-opt">jobs</span> <span className="api-note"><a href="#addjoboptions"><code>AddJobOptions&lt;TData&gt;[]</code></a></span></li>
-    </ul>
-  </li>
   <li><span className="api-badge">getSchedules()</span> <span className="api-note">→ <code>Promise&lt;ScheduleInfo[]&gt;</code></span></li>
   <li><span className="api-badge">getJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
   <li><span className="api-badge">getJobs(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>, scoped to this queue</span></li>
   <li><span className="api-badge">getQueueStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code></span></li>
-  <li><span className="api-badge">retryJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — re-arms the job's own row (for a workflow, the failed step); add a new job for a fresh run</span></li>
+  <li><span className="api-badge">retryJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — re-arms the job's own row; add a new job for a fresh run</span></li>
   <li><span className="api-badge">cancelJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort signal</span></li>
   <li><span className="api-badge">removeJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
   <li><span className="api-badge">removeSchedule(&#123; scheduleId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
@@ -134,8 +127,7 @@ the `Queue` (`pause`/`resume`) and observe it through `pq.on(...)`. All consumer
 
 ## Job
 
-The read-only view handed to a handler. Workflow transitions are on the `step` controller
-(second handler argument), not on `Job`.
+The read-only view handed to a handler.
 
 <ul className="api-tree">
   <li><span className="api-badge is-opt">id</span> <span className="api-note"><code>string</code></span></li>
@@ -148,8 +140,6 @@ The read-only view handed to a handler. Workflow transitions are on the `step` c
   <li><span className="api-badge is-opt">startAfter</span> <span className="api-note"><code>Date</code></span></li>
   <li><span className="api-badge is-opt">scheduleId?</span> <span className="api-note"><code>string</code></span></li>
   <li><span className="api-badge is-opt">idempotencyKey?</span> <span className="api-note"><code>string</code></span></li>
-  <li><span className="api-badge is-opt">workflowId?</span> <span className="api-note"><code>string</code></span></li>
-  <li><span className="api-badge is-opt">workflowStepKey?</span> <span className="api-note"><code>string</code></span></li>
   <li><span className="api-badge is-opt">signal</span> <span className="api-note"><code>AbortSignal</code> — aborts on graceful-shutdown timeout / cooperative cancel</span></li>
   <li><span className="api-badge">extendLock(&#123; byMs? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — extend the visibility timeout mid-handler</span></li>
 </ul>
@@ -297,7 +287,6 @@ Per-job settings (highest precedence). Also the base of [`AddJobOptions`](#addjo
 |--------|------|---------|-------------|
 | `data` | `TData` | — **required** | The job payload (a named key, never positional). |
 | `schedule` | [`ScheduleOptions`](#scheduleoptions) | run now | One-off delay, fixed interval, or cron. |
-| `startStep` | `string` | entry step | For a workflow queue: begin at a non-entry step (rare). |
 | `preferredInstanceKeyPattern` | `string` | any | Regex source matching instance keys this job may run on. See [Scaling](./scale-horizontally.md). |
 
 ### RetryOptions
@@ -342,7 +331,7 @@ The argument to `createWorker`.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `queue` | `TQueues` | — **required** | The queue this worker claims from. |
-| `handler` | `JobHandler \| WorkflowStep[]` | — **required** | A single processor function (simple mode) or an ordered array of steps (workflow mode). |
+| `handler` | `JobHandler` | — **required** | A single processor function. |
 | `limiter` | [`LimiterOptions`](#limiteroptions) | defaults | Throughput & claim tuning. |
 | `dontAutoretryFor` | `Array<ErrorClass \| string>` | `[]` | Non-retryable errors, matched by `instanceof` or `error.name`. |
 
@@ -367,7 +356,6 @@ All **worker-local** — no cluster-wide coordination.
 | `queue` | `string` | Filter to one queue (implicit on `Queue.getJobs`). |
 | `statuses` | `JobStatus[]` | Filter by status. |
 | `scheduleId` | `string` | Jobs minted by one schedule. |
-| `workflowId` | `string` | Jobs in one workflow run. |
 | `limit` | `number` | Page size. |
 | `cursor` | `string` | Opaque cursor from the previous page. |
 | `order` | `'asc' \| 'desc'` | Sort direction. |
@@ -378,9 +366,8 @@ All **worker-local** — no cluster-wide coordination.
 
 Reads return objects, never bare ids. The main shapes:
 
-- **AddJobResult** — `jobId?`, `scheduleId?`, `nextRunAt?`, `queue`, `status?`, `deduplicated`, `deduplicationReason?`, `startAfter?`, `workflowId?`.
+- **AddJobResult** — `jobId?`, `scheduleId?`, `nextRunAt?`, `queue`, `status?`, `deduplicated`, `deduplicationReason?`, `startAfter?`.
 - **JobSnapshot** — the full read-side view of a job (all timestamps as `Date`, plus a derived `stalled` flag).
-- **WorkflowSnapshot** — `workflowId`, `queue`, `steps: JobSnapshot[]`.
 - **ScheduleInfo** — `scheduleId`, `cron?`, `every?`, `timezone?`, `nextRunAt?`, `lastRunAt?`, `enabled`, `idempotencyKey?`.
 - **QueueInfo** — `name`, `processingPaused`, `acceptingPaused`, `counts`, `inUse`.
 - **InstanceInfo** — `instanceKey`, `processingPaused`, `alive`, `createdAt`, `updatedAt`, `lastSeenAt`, `counts`.

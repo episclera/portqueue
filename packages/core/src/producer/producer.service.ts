@@ -3,7 +3,6 @@ import { PortQueueEvent } from '../events/event-name.enum';
 import { DeduplicationReason } from '../options/enums';
 import { InvalidOptionsError, QueuePausedError } from '../errors/errors';
 import { toMs } from '../util/duration';
-import { uuid } from '../util/uuid';
 import { CronExpression } from '../scheduling/cron';
 import type { AddJobOptions, CronSpec, ScheduleOptions } from '../options/job-options';
 import type { AddJobResult, ScheduleInfo } from './results';
@@ -73,20 +72,6 @@ export class ProducerService {
       now,
     });
 
-    const steps = registry.getWorkflowSteps(queue);
-    let workflowId: string | null = null;
-    let workflowStepKey: string | null = null;
-    if (steps && steps.length > 0) {
-      workflowId = uuid();
-      workflowStepKey = opts.startStep ?? steps[0]!.key;
-      if (!steps.some((s) => s.key === workflowStepKey)) {
-        throw new InvalidOptionsError(
-          `startStep '${workflowStepKey}' is not a declared step of workflow queue '${queue}'.`,
-          { queue },
-        );
-      }
-    }
-
     const job: NewJobRecord = {
       queueName: queue,
       status: JobStatus.PENDING,
@@ -106,8 +91,6 @@ export class ProducerService {
       idempotencyKey: resolved.idempotencyKey,
       scheduleId: null,
       singletonKey: resolved.singletonKey,
-      workflowId,
-      workflowStepKey,
       preferredInstanceKeyPattern: affinity.preferredInstanceKeyPattern,
       createdAt: now,
     };
@@ -123,7 +106,6 @@ export class ProducerService {
       ...(inserted.deduplicationReason
         ? { deduplicationReason: inserted.deduplicationReason }
         : {}),
-      ...(inserted.workflowId ? { workflowId: inserted.workflowId } : {}),
     };
 
     // Fire the wakeup + NOTIFY only when not deduped. With a tx, defer NOTIFY to commit.
@@ -144,12 +126,6 @@ export class ProducerService {
 
     await hooks.runAfterAdd(queue, result);
     return result;
-  }
-
-  async addJobs<TData>(queue: string, jobs: AddJobOptions<TData>[]): Promise<AddJobResult[]> {
-    const results: AddJobResult[] = [];
-    for (const job of jobs) results.push(await this.addJob(queue, job));
-    return results;
   }
 
   /**
@@ -221,7 +197,6 @@ export class ProducerService {
         startAfter: new Date(job.startAfter),
         deduplicated: true,
         deduplicationReason: DeduplicationReason.IDEMPOTENCY,
-        ...(job.workflowId ? { workflowId: job.workflowId } : {}),
       };
     }
     return null;

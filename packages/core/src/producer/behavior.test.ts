@@ -7,7 +7,6 @@ import {
 import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { PauseMode } from '../options/enums';
-import type { WorkflowStep } from '../jobs/job';
 
 describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   let h: TestQueueHandle;
@@ -113,32 +112,5 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
     const queue = h.pq.createQueue('drain');
     await queue.pause({ mode: PauseMode.ALL });
     await expect(queue.addJob({ data: {} })).rejects.toThrow(/refusing new jobs/);
-  });
-
-  it('runs a multi-step workflow to completion', async () => {
-    const steps: WorkflowStep<{ total: number }>[] = [
-      { key: 'reserve', handler: async (_job, step) => step.next({ data: { total: 10 } }) },
-      {
-        key: 'charge',
-        handler: async (job, step) => step.next({ data: { total: job.data.total + 5 } }),
-      },
-      { key: 'ship', handler: async (job, step) => step.done({ result: job.data.total }) },
-    ];
-    const queue = h.pq.createQueue<{ total: number }>('orders');
-    h.pq.createWorker<{ total: number }>({ queue: 'orders', handler: steps });
-    const res = await queue.addJob({ data: { total: 0 } });
-    expect(res.workflowId).toBeTruthy();
-
-    await waitFor(async () => {
-      const run = await h.pq.getWorkflow({ workflowId: res.workflowId! });
-      return (
-        run != null &&
-        run.steps.length === 3 &&
-        run.steps.every((s) => s.status === JobStatus.COMPLETED)
-      );
-    });
-    const run = await h.pq.getWorkflow({ workflowId: res.workflowId! });
-    expect(run!.steps.map((s) => s.workflowStepKey)).toEqual(['reserve', 'charge', 'ship']);
-    expect(run!.steps[2]!.returnValue).toBe(15);
   });
 });

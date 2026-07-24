@@ -37,8 +37,6 @@ export function toSnapshot<TData = unknown>(
     failureMessage: record.failureMessage,
     idempotencyKey: record.idempotencyKey,
     scheduleId: record.scheduleId,
-    workflowId: record.workflowId,
-    workflowStepKey: record.workflowStepKey,
     stalled,
   };
 }

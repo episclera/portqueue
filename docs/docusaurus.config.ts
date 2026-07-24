@@ -156,7 +156,7 @@ const config: Config = {
         content:
           'portqueue, job queue, task queue, message queue, background jobs, postgres queue, ' +
           'database queue, node.js job queue, typescript queue, workers, cron jobs, delayed jobs, ' +
-          'recurring jobs, workflows, transactional enqueue, bullmq alternative, pg-boss alternative, ' +
+          'recurring jobs, transactional enqueue, bullmq alternative, pg-boss alternative, ' +
           'celery alternative, sqlite, oracle, pglite, mysql',
       },
       { property: 'og:type', content: 'website' },

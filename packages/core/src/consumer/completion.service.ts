@@ -75,15 +75,6 @@ export class CompletionService {
       error,
       retryAttempt: record.retryAttempt,
     });
-    if (record.workflowId) {
-      this.runtime.events.emit(PortQueueEvent.WORKFLOW_FAILED, {
-        workflowId: record.workflowId,
-        queue: queueName,
-        stepKey: record.workflowStepKey ?? '',
-        jobId: record.id,
-        error,
-      });
-    }
     return { kind: 'failed', error };
   }
 }

@@ -63,15 +63,6 @@ export class UnsupportedCapabilityError extends PortQueueError {
   }
 }
 
-export class UnsupportedForWorkerTypeError extends PortQueueError {
-  constructor(message: string, context?: ErrorContext) {
-    super(message, {
-      code: PortQueueErrorCode.UNSUPPORTED_FOR_WORKER_TYPE,
-      ...(context ? { context } : {}),
-    });
-  }
-}
-
 export class SchemaVersionMismatchError extends PortQueueError {
   constructor(actual: number | null, expected: number, context?: ErrorContext) {
     super(

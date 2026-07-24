@@ -55,9 +55,7 @@ function v1(t: PhysicalName): string[] {
       retention_ttl_ms BIGINT,
       idempotency_key TEXT,
       schedule_id TEXT,
-      singleton_key TEXT,
-      workflow_id TEXT,
-      workflow_step_key TEXT
+      singleton_key TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.SCHEDULE)} (
       id TEXT NOT NULL,

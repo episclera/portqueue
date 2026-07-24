@@ -12,7 +12,6 @@ import type {
   QueueDto,
   ScheduleDto,
   StatsDto,
-  WorkflowDto,
 } from '../../shared/dto';
 import { REQUESTED_WITH_HEADER, REQUESTED_WITH_MARKER } from '../../shared/constants';
 
@@ -55,14 +54,11 @@ export const api = {
     queue?: string;
     statuses?: string;
     scheduleId?: string;
-    workflowId?: string;
     cursor?: string;
     limit?: string;
     order?: string;
   }) => get<JobPageDto>('/jobs', params),
   getJob: (jobId: string) => get<JobDto>(`/jobs/${encodeURIComponent(jobId)}`),
-  getWorkflow: (workflowId: string) =>
-    get<WorkflowDto>(`/workflows/${encodeURIComponent(workflowId)}`),
   getSchedules: (queue?: string) => get<ScheduleDto[]>('/schedules', { queue }),
   getInstances: () => get<InstanceDto[]>('/instances'),
 

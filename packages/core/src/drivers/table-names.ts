@@ -61,8 +61,6 @@ export enum JobColumn {
   IDEMPOTENCY_KEY = 'idempotency_key',
   SCHEDULE_ID = 'schedule_id',
   SINGLETON_KEY = 'singleton_key',
-  WORKFLOW_ID = 'workflow_id',
-  WORKFLOW_STEP_KEY = 'workflow_step_key',
 }
 
 export enum ScheduleColumn {

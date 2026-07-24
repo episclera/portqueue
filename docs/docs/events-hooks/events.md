@@ -2,8 +2,8 @@
 id: events
 title: Events reference
 sidebar_label: Events
-description: PortQueue emits typed, non-blocking lifecycle events on the client — subscribe with pq.on for job, workflow, schedule, worker, and system signals.
-keywords: [portqueue, events, lifecycle, observability, job queue, workflows, node.js, typescript]
+description: PortQueue emits typed, non-blocking lifecycle events on the client — subscribe with pq.on for job, schedule, worker, and system signals.
+keywords: [portqueue, events, lifecycle, observability, job queue, node.js, typescript]
 ---
 
 # Events reference
@@ -41,10 +41,6 @@ pq.once(PortQueueEvent.CLIENT_STARTED, () => {});
 - `JOB_RETRYING` — scheduled for another attempt
 - `JOB_STALLED` — lock lapsed, reclaimable
 - `JOB_EXPIRED`, `JOB_CANCELLED`, `JOB_REMOVED`
-
-**Workflow**
-
-- `JOB_STEP_COMPLETED`, `WORKFLOW_COMPLETED`, `WORKFLOW_FAILED`
 
 **Schedules**
 

@@ -31,13 +31,6 @@ export interface MigrationStep {
   up(driver: Driver, context: DriverContext): Promise<void>;
 }
 
-/** The next-step descriptor for an atomic workflow advance. */
-export interface WorkflowNext {
-  workflowStepKey: string;
-  data: unknown;
-  startAfter: number;
-}
-
 /**
  * The database-agnostic seam. ALL SQL and engine-specific behavior
  * lives behind this contract. Core services branch on {@link DriverCapability}, never
@@ -118,14 +111,6 @@ export interface Driver {
     now: number;
   }): Promise<void>;
   failJob(options: { jobId: string; lastError: string; now: number }): Promise<void>;
-  advanceWorkflowStep(options: {
-    jobId: string;
-    returnValue: unknown;
-    now: number;
-    next?: WorkflowNext;
-    spawn?: NewJobRecord;
-    tx?: TransactionHandle;
-  }): Promise<InsertedJobRow | null>;
   reclaimStalledJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
   expireDueJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
   /** Re-arm a failed/completed job's own row so it runs again (manual retry). */
@@ -137,7 +122,6 @@ export interface Driver {
     queueName?: string;
     statuses?: JobStatus[];
     scheduleId?: string;
-    workflowId?: string;
     processedOnInstanceKey?: string;
     limit: number;
     offset: number;

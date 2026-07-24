@@ -11,7 +11,6 @@ import { NotifierService } from './pubsub/notifier.service';
 import { ProducerService } from './producer/producer.service';
 import { ReadService } from './monitoring/stats.service';
 import { CompletionService } from './consumer/completion.service';
-import { WorkflowService } from './consumer/workflow.service';
 import { ClientRegistryService } from './client/client-registry.service';
 import { ClientLifecycleService } from './client/client-lifecycle.service';
 import { Queue } from './producer/queue';
@@ -21,7 +20,7 @@ import { SystemClock } from './util/clock';
 import type { PortQueueOptions, ShutdownOptions } from './options/client-options';
 import type { QueueOptions } from './options/queue-options';
 import type { WorkerOptions } from './options/worker-options';
-import type { JobHandler, WorkflowStep } from './jobs/job';
+import type { JobHandler } from './jobs/job';
 import type { Logger } from './logging/logger.interface';
 import type { Runtime } from './client/runtime';
 import type { HookRegistration } from './events/hooks';
@@ -33,7 +32,6 @@ import type {
   Page,
   QueueInfo,
   QueueStats,
-  WorkflowSnapshot,
 } from './producer/results';
 
 /** An instance must be unseen for at least this long before it can be manually removed. */
@@ -52,7 +50,6 @@ export class PortQueue<TQueues extends string = string> {
   private readonly producer: ProducerService;
   private readonly reads: ReadService;
   private readonly completion: CompletionService;
-  private readonly workflow: WorkflowService;
   private readonly clientRegistry: ClientRegistryService;
   private readonly lifecycle: ClientLifecycleService;
   private readonly events: EventBusService;
@@ -101,7 +98,6 @@ export class PortQueue<TQueues extends string = string> {
     this.producer = new ProducerService(this.runtime, notifier);
     this.reads = new ReadService(this.runtime);
     this.completion = new CompletionService(this.runtime);
-    this.workflow = new WorkflowService(this.runtime);
     this.lifecycle = new ClientLifecycleService(this.runtime, this.clientRegistry, this.state);
   }
 
@@ -149,27 +145,14 @@ export class PortQueue<TQueues extends string = string> {
   createWorker<TData = unknown, TResult = unknown>(
     options: WorkerOptions<TData, TResult, TQueues>,
   ): Worker {
-    // The handler is either a single function (simple mode) or an ordered array of
-    // workflow steps (workflow mode). There is no separate workflow-definition object.
-    let handler: JobHandler | undefined;
-    let steps: ReadonlyArray<WorkflowStep> | undefined;
-    if (Array.isArray(options.handler)) {
-      steps = validateWorkflowSteps(options.queue, options.handler as ReadonlyArray<WorkflowStep>);
-    } else if (typeof options.handler === 'function') {
-      handler = options.handler as unknown as JobHandler;
-    } else {
+    if (typeof options.handler !== 'function') {
       throw new InvalidOptionsError(
-        `createWorker for queue '${options.queue}' requires 'handler' to be a function (simple job) or a non-empty array of steps (workflow).`,
+        `createWorker for queue '${options.queue}' requires 'handler' to be a function.`,
         { queue: options.queue },
       );
     }
-    // A workflow worker registers its steps so the producer mints workflow jobs
-    // (workflowId + entry step) when adding to this queue.
-    this.runtime.registry.define(
-      options.queue,
-      this.runtime.registry.getOptions(options.queue),
-      steps,
-    );
+    const handler = options.handler as unknown as JobHandler;
+    this.runtime.registry.define(options.queue, this.runtime.registry.getOptions(options.queue));
     const limiter = options.limiter ?? {};
     const concurrency = limiter.concurrency ?? 1;
     const notifyCapable = this.runtime.driver.capabilities[DriverCapability.LISTEN_NOTIFY];
@@ -179,8 +162,7 @@ export class PortQueue<TQueues extends string = string> {
         : null;
     const config: WorkerConfig = {
       queue: options.queue,
-      ...(handler ? { handler } : {}),
-      ...(steps ? { steps } : {}),
+      handler,
       concurrency,
       batchSize: limiter.batchSize ?? concurrency,
       lockDurationMs: limiter.lockDurationMs ?? 30000,
@@ -193,7 +175,6 @@ export class PortQueue<TQueues extends string = string> {
     const worker = new Worker(
       this.runtime,
       this.completion,
-      this.workflow,
       config,
       () => this.lifecycle.systemPressureHigh,
     );
@@ -222,10 +203,6 @@ export class PortQueue<TQueues extends string = string> {
 
   getJobs<TData = unknown>(options: GetJobsQuery = {}): Promise<Page<JobSnapshot<TData>>> {
     return this.reads.getJobs<TData>(options);
-  }
-
-  getWorkflow(options: { workflowId: string }): Promise<WorkflowSnapshot | null> {
-    return this.reads.getWorkflow(options.workflowId);
   }
 
   // --- Events & hooks ---
@@ -329,38 +306,4 @@ export class PortQueue<TQueues extends string = string> {
 function resolveLogger(logger: PortQueueOptions['logger']): Logger {
   if (logger && typeof (logger as Logger).info === 'function') return logger as Logger;
   return new ConsoleLogger((logger as ConstructorParameters<typeof ConsoleLogger>[0]) ?? {});
-}
-
-/**
- * Validate a workflow worker's steps: non-empty, non-empty keys, and
- * unique keys. Returns the same array so it can be registered/stored as the canonical
- * ordered sequence (`steps[0]` is the entry step).
- */
-function validateWorkflowSteps(
-  queue: string,
-  steps: ReadonlyArray<WorkflowStep>,
-): ReadonlyArray<WorkflowStep> {
-  if (steps.length === 0) {
-    throw new InvalidOptionsError(
-      `Workflow worker for queue '${queue}' must declare at least one step (an ordered array of { key, handler }).`,
-      { queue },
-    );
-  }
-  const seen = new Set<string>();
-  for (const step of steps) {
-    if (!step.key) {
-      throw new InvalidOptionsError(
-        `Workflow worker for queue '${queue}' has a step with an empty key.`,
-        { queue },
-      );
-    }
-    if (seen.has(step.key)) {
-      throw new InvalidOptionsError(
-        `Workflow worker for queue '${queue}' has a duplicate step key '${step.key}'. Step keys must be unique.`,
-        { queue },
-      );
-    }
-    seen.add(step.key);
-  }
-  return steps;
 }

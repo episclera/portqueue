@@ -1,7 +1,7 @@
 /**
- * Job detail page: full record, lifecycle timeline (every job), workflow run
- * view (multi-step), and actions — retry (re-arm the job), clone (prefilled add form),
- * remove, cancel. Terminal records refetch on-demand rather than on the 30s poll.
+ * Job detail page: full record, lifecycle timeline (every job), and actions —
+ * retry (re-arm the job), clone (prefilled add form), remove, cancel. Terminal
+ * records refetch on-demand rather than on the 30s poll.
  */
 import React, { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -15,17 +15,15 @@ import {
   Skeleton,
   Stack,
   StatusTag,
-  Text,
   Title,
 } from '@portqueue/ui';
 import styled from 'styled-components';
 import { JobStatus } from '../queries/enums';
-import type { JobDto, WorkflowDto } from '../../shared/dto';
+import type { JobDto } from '../../shared/dto';
 import { api, config } from '../queries/api';
 import { useQuery } from '../queries/use-poll';
 import { useAction } from '../queries/use-action';
 import { LifecycleTimeline } from '../components/LifecycleTimeline';
-import { WorkflowView } from '../components/WorkflowView';
 import { AddJobForm } from '../components/AddJobForm';
 import { formatDate } from '../components/format';
 
@@ -103,11 +101,6 @@ export function JobDetailPage(): React.ReactElement {
   const { run } = useAction();
 
   const job = useQuery<JobDto>(() => api.getJob(jobId), [jobId]);
-  const workflowId = job.data?.workflowId ?? undefined;
-  const workflow = useQuery<WorkflowDto | undefined>(
-    () => (workflowId ? api.getWorkflow(workflowId) : Promise.resolve(undefined)),
-    [workflowId],
-  );
 
   const [cloneOpen, setCloneOpen] = useState(false);
 
@@ -131,7 +124,6 @@ export function JobDetailPage(): React.ReactElement {
   const j = job.data;
   if (!j) return <Skeleton height={120} />;
 
-  const isWorkflow = Boolean(j.workflowId);
   const isFailed = j.status === JobStatus.FAILED;
 
   return (
@@ -197,7 +189,6 @@ export function JobDetailPage(): React.ReactElement {
               <Item label="Schedule">
                 {j.scheduleId ? <Link to={`/schedules`}>{j.scheduleId}</Link> : '—'}
               </Item>
-              {j.workflowStepKey && <Item label="Step">{j.workflowStepKey}</Item>}
             </DescGrid>
             {j.failureMessage && (
               <InnerCard>
@@ -223,18 +214,6 @@ export function JobDetailPage(): React.ReactElement {
           </Card>
         </Col>
       </Row>
-
-      {isWorkflow && (
-        <Card title="Workflow run">
-          {workflow.loading && !workflow.data ? (
-            <Skeleton height={80} />
-          ) : workflow.data ? (
-            <WorkflowView workflow={workflow.data} />
-          ) : (
-            <Text $tone="muted">No workflow steps found.</Text>
-          )}
-        </Card>
-      )}
 
       <AddJobForm
         open={cloneOpen}

@@ -4,14 +4,7 @@
 export { PortQueue } from './port-queue';
 export { Queue } from './producer/queue';
 export { Worker } from './consumer/worker';
-export type {
-  Job,
-  JobHandler,
-  StepHandler,
-  StepController,
-  StepOutcome,
-  WorkflowStep,
-} from './jobs/job';
+export type { Job, JobHandler } from './jobs/job';
 
 // Enums (no magic strings)
 export { JobStatus } from './jobs/job-state.enum';
@@ -57,7 +50,6 @@ export type { Duration } from './util/duration';
 export type {
   AddJobResult,
   JobSnapshot,
-  WorkflowSnapshot,
   ScheduleInfo,
   QueueInfo,
   InstanceInfo,
@@ -96,7 +88,6 @@ export {
   NotStartedError,
   InvalidOptionsError,
   UnsupportedCapabilityError,
-  UnsupportedForWorkerTypeError,
   SchemaVersionMismatchError,
   MigrationFailedError,
   DriverConnectionError,

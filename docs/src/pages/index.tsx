@@ -34,13 +34,6 @@ const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta:
     cta: 'See the dashboard',
   },
   {
-    icon: '🔁',
-    title: 'Workflows',
-    body: 'Multi-step jobs where each step is its own row — crash-safe and resumable, with same-machine affinity, not a fragile numeric progress counter.',
-    to: '/docs/workflows/what-is-a-workflow',
-    cta: 'Build a workflow',
-  },
-  {
     icon: '⏰',
     title: 'Scheduling & Cron',
     body: 'Delayed jobs, fixed intervals, and cron with timezones — all through one addJob method.',
@@ -53,6 +46,13 @@ const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta:
     body: 'Automatic retries with backoff, stalled-job reclaim, liveness-aware fallback, and at-least-once delivery — with rich events and hooks for metrics and tracing.',
     to: '/docs/events-hooks/events',
     cta: 'Events & hooks',
+  },
+  {
+    icon: '🧹',
+    title: 'Retention & Auto-Cleaning',
+    body: 'Finished jobs never pile up. Set a retention TTL per queue or per job and PortQueue prunes completed and failed rows automatically in the background — or keep them forever when you need the history.',
+    to: '/docs/guides/retention',
+    cta: 'Configure retention',
   },
 ];
 
@@ -236,7 +236,7 @@ export default function Home(): ReactNode {
   // Keyword-rich meta description for the highest-traffic page (SEO landing page).
   const description =
     'PortQueue is a broker-less, strictly typed background job queue for Node.js & TypeScript — ' +
-    'delayed & cron jobs, workflows, retries, and rate limiting on Postgres, PGLite, SQLite, Oracle, or MySQL.';
+    'delayed & cron jobs, retries, retention, and rate limiting on Postgres, PGLite, SQLite, Oracle, or MySQL.';
   return (
     <Layout title="PortQueue" description={description}>
       <Hero>

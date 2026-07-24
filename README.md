@@ -7,7 +7,7 @@
 📚 **[Read the full documentation →](https://episclera.github.io/portqueue/)**
 
 - **Getting started** — [Installation](https://episclera.github.io/portqueue/docs/getting-started/installation) · [Your first queue](https://episclera.github.io/portqueue/docs/getting-started/first-queue)
-- **Guides** — [Producing jobs](https://episclera.github.io/portqueue/docs/guides/producing-jobs) · [Consuming jobs](https://episclera.github.io/portqueue/docs/guides/consuming-jobs) · [Transactional enqueue](https://episclera.github.io/portqueue/docs/guides/transactions) · [Scheduling & cron](https://episclera.github.io/portqueue/docs/guides/scheduling) · [Workflows](https://episclera.github.io/portqueue/docs/workflows/what-is-a-workflow)
+- **Guides** — [Producing jobs](https://episclera.github.io/portqueue/docs/guides/producing-jobs) · [Consuming jobs](https://episclera.github.io/portqueue/docs/guides/consuming-jobs) · [Transactional enqueue](https://episclera.github.io/portqueue/docs/guides/transactions) · [Scheduling & cron](https://episclera.github.io/portqueue/docs/guides/scheduling)
 - **Operate** — [Scaling horizontally](https://episclera.github.io/portqueue/docs/scale-horizontally) · [Dashboard](https://episclera.github.io/portqueue/docs/dashboard) · [CLI](https://episclera.github.io/portqueue/docs/cli)
 - **Reference** — [API reference](https://episclera.github.io/portqueue/docs/api-reference)
 
@@ -20,7 +20,7 @@ PortQueue treats your relational database as the single source of truth for back
 - **Horizontally scalable.** Multiple instances cooperate through row-level claiming (`SKIP LOCKED` or a safe fallback) — no double-processing.
 - **Fault tolerant.** A throwing handler never crashes the worker loop.
 - **Transactional enqueue.** A job is queued if and only if your surrounding DB transaction commits.
-- **Feature-complete:** concurrency, rate limiting, priorities, delayed jobs, cron/recurring with timezones, idempotency, multi-step workflows, retention, backpressure, graceful shutdown.
+- **Feature-complete:** concurrency, rate limiting, priorities, delayed jobs, cron/recurring with timezones, idempotency, retention, backpressure, graceful shutdown.
 - **Minimal footprint.** Near-zero runtime dependencies; DB clients are optional peers you choose.
 
 ## Quick start

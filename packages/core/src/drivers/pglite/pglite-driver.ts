@@ -29,7 +29,6 @@ import type {
   DriverProbe,
   MigrationStep,
   Subscription,
-  WorkflowNext,
 } from '../driver.interface';
 import { DriverContext } from '../driver-context';
 import type {
@@ -110,8 +109,6 @@ const JOB_COLUMNS = [
   JobColumn.IDEMPOTENCY_KEY,
   JobColumn.SCHEDULE_ID,
   JobColumn.SINGLETON_KEY,
-  JobColumn.WORKFLOW_ID,
-  JobColumn.WORKFLOW_STEP_KEY,
 ] as const;
 
 /**
@@ -309,8 +306,6 @@ export class PgliteDriver implements Driver {
       idempotencyKey: this.strOrNull(row[JobColumn.IDEMPOTENCY_KEY]),
       scheduleId: this.strOrNull(row[JobColumn.SCHEDULE_ID]),
       singletonKey: this.strOrNull(row[JobColumn.SINGLETON_KEY]),
-      workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
-      workflowStepKey: this.strOrNull(row[JobColumn.WORKFLOW_STEP_KEY]),
     };
   }
 
@@ -395,8 +390,6 @@ export class PgliteDriver implements Driver {
       job.idempotencyKey,
       job.scheduleId,
       job.singletonKey,
-      job.workflowId,
-      job.workflowStepKey,
     ];
     return { columns, values };
   }
@@ -423,7 +416,7 @@ export class PgliteDriver implements Driver {
     }
     const { columns, values } = this.jobInsertValues(job);
     const placeholders = values.map((_, i) => this.ph(i)).join(', ');
-    const sql = `INSERT INTO ${this.t(TableName.JOB)} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}, ${JobColumn.WORKFLOW_ID}`;
+    const sql = `INSERT INTO ${this.t(TableName.JOB)} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}`;
     try {
       const res = await this.runMaybeTx(sql, values, tx);
       const row = res.rows[0]!;
@@ -431,7 +424,6 @@ export class PgliteDriver implements Driver {
         id: String(row[JobColumn.ID]),
         status: row[JobColumn.STATUS] as JobStatus,
         startAfter: Number(row[JobColumn.START_AFTER]),
-        workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
         deduplicated: false,
       };
     } catch (err) {
@@ -454,7 +446,7 @@ export class PgliteDriver implements Driver {
     }
     if (job.singletonKey != null) {
       const res = await this.runMaybeTx(
-        `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}, ${JobColumn.WORKFLOW_ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} = ${this.ph(1)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.ACTIVE}','${JobStatus.RETRY}')`,
+        `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} = ${this.ph(1)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.ACTIVE}','${JobStatus.RETRY}')`,
         [job.queueName, job.singletonKey],
         tx,
       );
@@ -464,7 +456,6 @@ export class PgliteDriver implements Driver {
           id: String(row[JobColumn.ID]),
           status: row[JobColumn.STATUS] as JobStatus,
           startAfter: Number(row[JobColumn.START_AFTER]),
-          workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
           deduplicated: true,
           deduplicationReason: DeduplicationReason.SINGLETON,
         };
@@ -479,7 +470,7 @@ export class PgliteDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<InsertedJobRow | null> {
     const res = await this.runMaybeTx(
-      `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}, ${JobColumn.WORKFLOW_ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} = ${this.ph(1)}`,
+      `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} = ${this.ph(1)}`,
       [options.queueName, options.idempotencyKey],
       options.tx,
     );
@@ -489,7 +480,6 @@ export class PgliteDriver implements Driver {
       id: String(row[JobColumn.ID]),
       status: row[JobColumn.STATUS] as JobStatus,
       startAfter: Number(row[JobColumn.START_AFTER]),
-      workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
       deduplicated: true,
       deduplicationReason: DeduplicationReason.IDEMPOTENCY,
     };
@@ -722,40 +712,6 @@ export class PgliteDriver implements Driver {
     );
   }
 
-  async advanceWorkflowStep(options: {
-    jobId: string;
-    returnValue: unknown;
-    now: number;
-    next?: WorkflowNext;
-    spawn?: NewJobRecord;
-    tx?: TransactionHandle;
-  }): Promise<InsertedJobRow | null> {
-    // Complete-this + spawn-next in ONE transaction.
-    return this.transaction(async (session) => {
-      await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.COMPLETED}', ${JobColumn.RETURN_VALUE} = ${this.ph(0)}, ${JobColumn.COMPLETED_AT} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(3)}`,
-        [this.toJson(options.returnValue), options.now, options.now, options.jobId],
-        session,
-      );
-      if (!options.spawn) return null;
-      const { columns, values } = this.jobInsertValues(options.spawn);
-      const placeholders = values.map((_, i) => this.ph(i)).join(', ');
-      const res = await this.execute(
-        `INSERT INTO ${this.t(TableName.JOB)} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}, ${JobColumn.WORKFLOW_ID}`,
-        values,
-        session,
-      );
-      const row = res.rows[0]!;
-      return {
-        id: String(row[JobColumn.ID]),
-        status: row[JobColumn.STATUS] as JobStatus,
-        startAfter: Number(row[JobColumn.START_AFTER]),
-        workflowId: this.strOrNull(row[JobColumn.WORKFLOW_ID]),
-        deduplicated: false,
-      };
-    });
-  }
-
   async reclaimStalledJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]> {
     const cols = JOB_COLUMNS.join(', ');
     const params: unknown[] = [options.now, options.now];
@@ -801,7 +757,6 @@ export class PgliteDriver implements Driver {
       id: job.id,
       status: JobStatus.PENDING,
       startAfter: options.now,
-      workflowId: job.workflowId,
       deduplicated: false,
     };
   }
@@ -819,7 +774,6 @@ export class PgliteDriver implements Driver {
     queueName?: string;
     statuses?: JobStatus[];
     scheduleId?: string;
-    workflowId?: string;
     processedOnInstanceKey?: string;
     limit: number;
     offset: number;
@@ -839,10 +793,6 @@ export class PgliteDriver implements Driver {
     if (options.scheduleId) {
       clauses.push(`${JobColumn.SCHEDULE_ID} = ${this.ph(params.length)}`);
       params.push(options.scheduleId);
-    }
-    if (options.workflowId) {
-      clauses.push(`${JobColumn.WORKFLOW_ID} = ${this.ph(params.length)}`);
-      params.push(options.workflowId);
     }
     if (options.processedOnInstanceKey) {
       clauses.push(`${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(params.length)}`);

@@ -56,8 +56,6 @@ export type AddJobOptions<TData> = JobOptions & {
   data: TData;
   /** When the job runs: a one-off delay, a fixed interval, or a cron expression. */
   schedule?: ScheduleOptions;
-  /** For a workflow queue: begin at a non-entry step (rare; defaults to the entry step). */
-  startStep?: string;
   /**
    * Multi-instance affinity: run this job only on instances whose key matches this regular
    * expression (source string, e.g. `'ram-(4|8)gb'`). Requires an `instanceKey` on the PortQueue.

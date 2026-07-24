@@ -33,10 +33,6 @@ export class Queue<TData = unknown> {
     return this.producer.addJob(this.name, options);
   }
 
-  addJobs(options: { jobs: AddJobOptions<TData>[] }): Promise<AddJobResult[]> {
-    return this.producer.addJobs(this.name, options.jobs);
-  }
-
   getSchedules(): Promise<ScheduleInfo[]> {
     return this.producer.getSchedules(this.name);
   }
@@ -57,8 +53,7 @@ export class Queue<TData = unknown> {
   // --- Job control ---
   /**
    * Requeue a **failed or completed** job to run again — its own row is re-armed with its
-   * persisted data (status back to `PENDING`, retry counters/lock/timestamps reset). For a
-   * workflow, the failed step is its own job, so this resumes the run at that step. To start a
+   * persisted data (status back to `PENDING`, retry counters/lock/timestamps reset). To start a
    * fresh run instead, add a new job to the queue with {@link addJob}.
    */
   async retryJob(options: { jobId: string }): Promise<AddJobResult> {
@@ -73,7 +68,6 @@ export class Queue<TData = unknown> {
       status: inserted.status,
       startAfter: new Date(inserted.startAfter),
       deduplicated: false,
-      ...(inserted.workflowId ? { workflowId: inserted.workflowId } : {}),
     };
   }
 

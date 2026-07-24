@@ -8,7 +8,6 @@ import type {
   QueueInfo,
   QueueStats,
   ScheduleInfo,
-  WorkflowSnapshot,
   Page,
 } from '@portqueue/core';
 import type {
@@ -17,7 +16,6 @@ import type {
   QueueDto,
   ScheduleDto,
   StatsDto,
-  WorkflowDto,
   InstanceDto,
   CountsDto,
 } from '../../shared/dto';
@@ -58,8 +56,6 @@ export function serializeJob(job: JobSnapshot): JobDto {
     failureMessage: job.failureMessage,
     idempotencyKey: job.idempotencyKey,
     scheduleId: job.scheduleId,
-    workflowId: job.workflowId,
-    workflowStepKey: job.workflowStepKey,
     stalled: job.stalled,
   };
 }
@@ -88,14 +84,6 @@ export function serializeJobPage(page: Page<JobSnapshot>): JobPageDto {
     items: page.items.map(serializeJob),
     cursor: page.cursor,
     hasMore: page.hasMore,
-  };
-}
-
-export function serializeWorkflow(w: WorkflowSnapshot): WorkflowDto {
-  return {
-    workflowId: w.workflowId,
-    queue: w.queue,
-    steps: w.steps.map(serializeJob),
   };
 }
 

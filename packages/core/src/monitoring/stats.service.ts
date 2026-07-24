@@ -8,7 +8,6 @@ import type {
   Page,
   QueueInfo,
   QueueStats,
-  WorkflowSnapshot,
 } from '../producer/results';
 
 /**
@@ -33,7 +32,6 @@ export class ReadService {
       ...(query.queue ? { queueName: query.queue } : {}),
       ...(query.statuses ? { statuses: query.statuses } : {}),
       ...(query.scheduleId ? { scheduleId: query.scheduleId } : {}),
-      ...(query.workflowId ? { workflowId: query.workflowId } : {}),
       limit: limit + 1,
       offset,
       order: query.order ?? 'desc',
@@ -46,23 +44,6 @@ export class ReadService {
       items,
       cursor: hasMore ? Buffer.from(String(offset + limit)).toString('base64') : null,
       hasMore,
-    };
-  }
-
-  async getWorkflow(workflowId: string): Promise<WorkflowSnapshot | null> {
-    const records = await this.runtime.driver.getJobs({
-      workflowId,
-      limit: 1000,
-      offset: 0,
-      order: 'asc',
-    });
-    if (!records.length) return null;
-    const now = this.runtime.clock.now();
-    const queue = records[0]!.queueName;
-    return {
-      workflowId,
-      queue,
-      steps: records.map((r) => toSnapshot(r, r.queueName, now)),
     };
   }
 

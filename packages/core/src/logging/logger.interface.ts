@@ -5,7 +5,6 @@ export interface LogContext {
   queue?: string;
   jobId?: string;
   scheduleId?: string;
-  workflowId?: string;
   instanceId?: string;
   err?: unknown;
   [key: string]: unknown;

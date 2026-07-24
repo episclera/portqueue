@@ -82,9 +82,7 @@ function v1(t: PhysicalName): string[] {
         retention_ttl_ms NUMBER(19),
         idempotency_key VARCHAR2(4000),
         schedule_id VARCHAR2(4000),
-        singleton_key VARCHAR2(4000),
-        workflow_id VARCHAR2(4000),
-        workflow_step_key VARCHAR2(4000)
+        singleton_key VARCHAR2(4000)
       )`,
     ),
     createIfAbsent(

@@ -29,8 +29,6 @@ a robust queue, as pg-boss showed. PortQueue takes that insight and makes it
   process there" is a first-class deployment.
 - **Transactional enqueue.** A job exists only if your business transaction commits — the
   dual-write bug, gone.
-- **Resumable workflows.** Multi-step jobs where each step is its own crash-safe row —
-  not fragile numeric progress.
 - **Operational maturity.** Retries with backoff, rate limiting, backpressure, cron with
   timezones, a dashboard, and a CLI — no third-party service.
 

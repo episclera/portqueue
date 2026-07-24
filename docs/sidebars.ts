@@ -33,16 +33,6 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Workflows',
-      items: [
-        'workflows/what-is-a-workflow',
-        'workflows/designing',
-        'workflows/step-controller',
-        'workflows/resumability',
-      ],
-    },
-    {
-      type: 'category',
       label: 'Events & Hooks',
       items: ['events-hooks/events-vs-hooks', 'events-hooks/events', 'events-hooks/hooks'],
     },
@@ -52,7 +42,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'More',
-      items: ['advanced', 'examples', 'contributing', 'brandbook', 'team'],
+      items: ['examples', 'contributing', 'testing', 'advanced', 'brandbook', 'team'],
     },
   ],
 };

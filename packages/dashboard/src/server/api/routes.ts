@@ -20,7 +20,6 @@ import {
   serializeQueue,
   serializeSchedule,
   serializeStats,
-  serializeWorkflow,
   serializeInstance,
 } from './serialize';
 import type { ActionRequestDto, ActionResultDto } from '../../shared/dto';
@@ -110,8 +109,6 @@ function buildJobsQuery(params: URLSearchParams): GetJobsQuery {
   if (statuses) q.statuses = statuses;
   const scheduleId = params.get('scheduleId');
   if (scheduleId) q.scheduleId = scheduleId;
-  const workflowId = params.get('workflowId');
-  if (workflowId) q.workflowId = workflowId;
   const limit = params.get('limit');
   if (limit && Number.isFinite(Number(limit))) q.limit = Math.min(Math.max(Number(limit), 1), 200);
   const cursor = params.get('cursor');
@@ -196,12 +193,6 @@ export function createRouter(options: RouterOptions): {
         const job = await portQueue.getJob({ jobId: decodeURIComponent(jobMatch[1]) });
         if (!job) return json(404, { error: 'Job not found' });
         return json(200, serializeJob(job));
-      }
-      const wfMatch = /^\/api\/workflows\/([^/]+)$/.exec(path);
-      if (wfMatch && wfMatch[1]) {
-        const wf = await portQueue.getWorkflow({ workflowId: decodeURIComponent(wfMatch[1]) });
-        if (!wf) return json(404, { error: 'Workflow not found' });
-        return json(200, serializeWorkflow(wf));
       }
       if (path === '/api/schedules') {
         const queueFilter = params.get('queue') ?? undefined;
@@ -348,8 +339,6 @@ export const STREAMED_EVENTS: readonly PortQueueEvent[] = [
   PortQueueEvent.JOB_EXPIRED,
   PortQueueEvent.JOB_CANCELLED,
   PortQueueEvent.JOB_REMOVED,
-  PortQueueEvent.WORKFLOW_COMPLETED,
-  PortQueueEvent.WORKFLOW_FAILED,
   PortQueueEvent.QUEUE_PAUSED,
   PortQueueEvent.QUEUE_RESUMED,
   PortQueueEvent.QUEUE_REMOVED,

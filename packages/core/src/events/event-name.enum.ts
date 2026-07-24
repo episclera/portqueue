@@ -20,9 +20,6 @@ export enum PortQueueEvent {
   JOB_EXPIRED = 'JOB_EXPIRED',
   JOB_CANCELLED = 'JOB_CANCELLED',
   JOB_REMOVED = 'JOB_REMOVED',
-  JOB_STEP_COMPLETED = 'JOB_STEP_COMPLETED',
-  WORKFLOW_COMPLETED = 'WORKFLOW_COMPLETED',
-  WORKFLOW_FAILED = 'WORKFLOW_FAILED',
 
   SCHEDULE_CREATED = 'SCHEDULE_CREATED',
   SCHEDULE_UPDATED = 'SCHEDULE_UPDATED',
@@ -91,28 +88,6 @@ export interface PortQueueEventPayloads {
   [PortQueueEvent.JOB_EXPIRED]: { jobId: string; queue: string };
   [PortQueueEvent.JOB_CANCELLED]: { jobId: string; queue: string };
   [PortQueueEvent.JOB_REMOVED]: { jobId: string; queue: string };
-  [PortQueueEvent.JOB_STEP_COMPLETED]: {
-    jobId: string;
-    queue: string;
-    workflowId: string;
-    stepKey: string;
-    nextStepKey?: string;
-    nextJobId?: string;
-  };
-  [PortQueueEvent.WORKFLOW_COMPLETED]: {
-    workflowId: string;
-    queue: string;
-    result: unknown;
-    lastStepKey: string;
-    jobId: string;
-  };
-  [PortQueueEvent.WORKFLOW_FAILED]: {
-    workflowId: string;
-    queue: string;
-    stepKey: string;
-    jobId: string;
-    error: unknown;
-  };
 
   [PortQueueEvent.SCHEDULE_CREATED]: { scheduleId: string; queue: string };
   [PortQueueEvent.SCHEDULE_UPDATED]: { scheduleId: string; queue: string };

@@ -62,9 +62,8 @@ describe('client reads & admin (sqlite)', () => {
     );
   });
 
-  it('returns null for an unknown job / workflow', async () => {
+  it('returns null for an unknown job', async () => {
     expect(await h.pq.getJob({ jobId: 'nope' })).toBeNull();
-    expect(await h.pq.getWorkflow({ workflowId: 'nope' })).toBeNull();
   });
 
   it('bulk-removes jobs by id and reports throughput after completion', async () => {
