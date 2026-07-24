@@ -13,7 +13,6 @@ const baseJob = (over: Partial<JobSnapshot> = {}): JobSnapshot =>
     queue: 'emails',
     status: 'COMPLETED',
     data: { to: 'a@b.com' },
-    metadata: {},
     priority: 0,
     retryAttempt: 0,
     retryMaxAttempts: 3,

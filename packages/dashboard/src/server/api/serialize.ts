@@ -39,7 +39,6 @@ export function serializeJob(job: JobSnapshot): JobDto {
     status: job.status,
     data: job.data,
     returnValue: job.returnValue,
-    metadata: job.metadata,
     priority: job.priority,
     retryAttempt: job.retryAttempt,
     retryMaxAttempts: job.retryMaxAttempts,

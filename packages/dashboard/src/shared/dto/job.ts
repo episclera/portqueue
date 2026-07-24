@@ -11,7 +11,6 @@ export interface JobDto {
   status: JobStatus;
   data: unknown;
   returnValue?: unknown;
-  metadata: Record<string, unknown>;
   priority: number;
   retryAttempt: number;
   retryMaxAttempts: number;

@@ -32,7 +32,6 @@ export interface ActionRequestDto {
     priority?: number;
     idempotencyKey?: string;
     singletonKey?: string;
-    metadata?: Record<string, unknown>;
     /** One-off delay (a Duration string, ms number, or ISO date string). */
     startAfter?: number | string;
     /** Recurring: fixed interval (a Duration string or ms number). */
