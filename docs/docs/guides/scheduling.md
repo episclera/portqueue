@@ -89,13 +89,12 @@ exists, nothing new is created and the existing entity is returned with `dedupli
 Without an `idempotencyKey`, no cross-table check happens and every add creates a fresh job or
 schedule. `getSchedules()` surfaces each schedule's `idempotencyKey` for inspection.
 
-## Inspecting & unscheduling
+## Unscheduling
 
 Unschedule a **recurring** definition by its `scheduleId`:
 
 ```ts
 const reportsQueue = pq.createQueue('reports');
-await reportsQueue.getSchedules();               // list recurring definitions (each has a scheduleId)
 await reportsQueue.removeSchedule({ scheduleId: reportsJob.scheduleId });
 ```
 
@@ -107,3 +106,12 @@ For a **one-off** job there is no schedule to remove — use the job-level metho
 `queue.cancelJob({ jobId })` to cancel a not-yet-active job, or `queue.removeJob({ jobId })` to
 delete the row outright. See [Cancel a job](./producing-jobs.mdx#cancel-a-job) and
 [Remove jobs](./producing-jobs.mdx#remove-jobs).
+
+## Inspecting
+
+List a queue's recurring definitions — each carries the `scheduleId` you pass to `removeSchedule`:
+
+```ts
+const reportsQueue = pq.createQueue('reports');
+const schedules = await reportsQueue.getSchedules(); // recurring definitions, each with a scheduleId
+```
