@@ -6,7 +6,7 @@ import CodeBlock from '@theme/CodeBlock';
 import styled from 'styled-components';
 import { DRIVERS } from '@site/src/constants/drivers';
 
-const FEATURES: { icon: string; title: string; body: string; to: string; cta: string }[] = [
+const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta: string }[] = [
   {
     icon: '🌐',
     title: 'Scales to Many Servers',
@@ -17,7 +17,13 @@ const FEATURES: { icon: string; title: string; body: string; to: string; cta: st
   {
     icon: '🗄️',
     title: 'Database Agnostic',
-    body: 'Point it at the database you already run — Postgres, MySQL, Oracle, PGLite, or SQLite. Each driver picks the best strategy its engine supports, so your app code stays identical.',
+    body: (
+      <>
+        Point it at the database you already run — <strong>Postgres</strong>, <strong>MySQL</strong>,{' '}
+        <strong>Oracle</strong>, <strong>PGLite</strong>, or <strong>SQLite</strong>. Each driver picks
+        the best strategy its engine supports, so your app code stays identical.
+      </>
+    ),
     to: '/docs/getting-started/installation',
     cta: 'Pick a driver',
   },
