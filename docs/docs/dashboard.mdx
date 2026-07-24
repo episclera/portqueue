@@ -116,10 +116,9 @@ on the CLI page.
 
 You don't need to containerise your app to run the dashboard — the CLI image can host it
 as its own service. Pass the connection via `DATABASE_URL` and expose the dashboard `--port`.
-No app changes are needed, and the same image doubles for one-off ops (migrations, purges, …).
 
 ```dockerfile title="Dockerfile"
-FROM node:34-alpine
+FROM node:22-alpine
 WORKDIR /app
 
 # Install the CLI plus the client for your driver — it's an optional peer dependency,
@@ -127,22 +126,19 @@ WORKDIR /app
 RUN npm install -g @portqueue/cli pg
 
 EXPOSE 9000
-ENTRYPOINT ["portqueue"]
-# Default to serving the dashboard; override the command for one-off ops.
-CMD ["dashboard", "--driver", "postgres", "--port", "9000"]
+# Serve the dashboard. DATABASE_URL and the dashboard credentials
+# (PORTQUEUE_ROOT_USER / PORTQUEUE_ROOT_PASSWORD) are supplied at run time (see below).
+ENTRYPOINT ["portqueue", "dashboard", "--driver", "postgres", "--port", "9000"]
 ```
 
-```bash
+```bash title="Serve the dashboard"
 # Build the image once.
-docker build -t portqueue-cli .
+docker build -t portqueue-dashboard .
 
-# Host the dashboard: pass the connection string, publish the port.
+# Run it: pass the connection string and dashboard credentials, publish the port.
 docker run --rm -p 9000:9000 \
   -e DATABASE_URL="postgres://user:pass@db:5432/app" \
-  portqueue-cli
-
-# One-off op: override the default command (the ENTRYPOINT stays `portqueue`).
-docker run --rm \
-  -e DATABASE_URL="postgres://user:pass@db:5432/app" \
-  portqueue-cli migrate --driver postgres
+  -e PORTQUEUE_ROOT_USER="admin" \
+  -e PORTQUEUE_ROOT_PASSWORD="****" \
+  portqueue-dashboard
 ```
