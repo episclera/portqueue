@@ -30,12 +30,6 @@ producing new jobs, delete the schedule with
 prevent the next.
 :::
 
-:::info Running jobs are cancelled where they run
-The abort signal only reaches a handler executing **in this process**. Firing it is a local,
-in-memory action — there's no cross-instance "cancel running job" RPC. To stop a job running on
-another server, cancel it there, or design handlers to check a shared flag.
-:::
-
 ## Honor the signal in a handler
 
 `job.signal` is a standard [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal).
