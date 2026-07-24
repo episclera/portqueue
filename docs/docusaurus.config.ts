@@ -50,15 +50,16 @@ function footerDocsItems(): Array<{ label: string; to: string }> {
   return top.flatMap((entry) => {
     const id = firstDocId(entry);
     if (!id) return [];
-    const label = typeof entry === 'string' ? humanizeDocId(entry) : (entry.label ?? humanizeDocId(id));
+    const label =
+      typeof entry === 'string' ? humanizeDocId(entry) : (entry.label ?? humanizeDocId(id));
     return [{ label, to: `/docs/${id}` }];
   });
 }
 
-
 const config: Config = {
   title: 'PortQueue',
-  tagline: 'The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.',
+  tagline:
+    'The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.',
   favicon: 'img/favicon.svg',
 
   // GitHub Pages deployment (build_plan/15.10). Adjust `url` to the real Pages domain.
@@ -80,6 +81,41 @@ const config: Config = {
     defaultLocale: 'en',
     locales: ['en'],
   },
+
+  // Structured data (JSON-LD) injected into every page's <head> for rich search results:
+  // a WebSite entity and the SoftwareApplication entity for the library itself.
+  headTags: [
+    {
+      tagName: 'script',
+      attributes: { type: 'application/ld+json' },
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'PortQueue',
+        url: 'https://episclera.github.io/portqueue/',
+        description:
+          'The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.',
+      }),
+    },
+    {
+      tagName: 'script',
+      attributes: { type: 'application/ld+json' },
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: 'PortQueue',
+        applicationCategory: 'DeveloperApplication',
+        operatingSystem: 'Node.js',
+        description:
+          'A broker-less, strictly typed background job queue for Node.js and TypeScript that treats your relational database (Postgres, PGLite, SQLite, Oracle, MySQL) as the single source of truth.',
+        url: 'https://episclera.github.io/portqueue/',
+        codeRepository: REPO_URL,
+        license: 'https://opensource.org/licenses/MIT',
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+        author: { '@type': 'Organization', name: 'episclera', url: 'https://github.com/episclera' },
+      }),
+    },
+  ],
 
   presets: [
     [
@@ -111,6 +147,20 @@ const config: Config = {
 
   themeConfig: {
     image: 'img/social-card.png',
+    // Site-wide meta tags. Per-page `description` (frontmatter) supplies the per-page
+    // description; these add the global keyword set and Open Graph type that Docusaurus
+    // does not emit on its own (it already handles og/twitter title, description & image).
+    metadata: [
+      {
+        name: 'keywords',
+        content:
+          'portqueue, job queue, task queue, message queue, background jobs, postgres queue, ' +
+          'database queue, node.js job queue, typescript queue, workers, cron jobs, delayed jobs, ' +
+          'recurring jobs, workflows, transactional enqueue, bullmq alternative, pg-boss alternative, ' +
+          'celery alternative, sqlite, oracle, pglite, mysql',
+      },
+      { property: 'og:type', content: 'website' },
+    ],
     // Follow system preference on first load (build_plan/14.4).
     colorMode: {
       defaultMode: 'light',

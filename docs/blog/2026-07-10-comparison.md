@@ -3,6 +3,8 @@ slug: portqueue-vs-pgboss-bullmq-celery
 title: PortQueue vs pg-boss vs BullMQ vs Celery
 authors: [gheorghe]
 tags: [comparison]
+description: PortQueue vs pg-boss, BullMQ, and Celery — a multi-driver, distributed, transactional job queue that runs on any SQL engine with no broker.
+keywords: [portqueue, bullmq alternative, pg-boss alternative, celery alternative, job queue, database queue, broker-less, node.js]
 ---
 
 An honest look at where each of these shines — and where PortQueue's multi-driver,

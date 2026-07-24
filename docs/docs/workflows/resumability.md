@@ -2,6 +2,8 @@
 id: resumability
 title: Resumability, retries & inspection
 sidebar_label: Resumability & retries
+description: PortQueue workflows resume exactly where they crashed — each step is its own job row, reclaimed and re-run on any instance with per-step retries.
+keywords: [portqueue, workflows, resumability, durable execution, retries, multi-step jobs, node.js, typescript]
 ---
 
 # Resumability, retries & inspection

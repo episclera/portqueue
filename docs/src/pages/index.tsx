@@ -18,9 +18,9 @@ const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta:
     title: 'Database Agnostic',
     body: (
       <>
-        Point it at the database you already run — <strong>Postgres</strong>, <strong>MySQL</strong>,{' '}
-        <strong>Oracle</strong>, <strong>PGLite</strong>, or <strong>SQLite</strong>. Each driver picks
-        the best strategy its engine supports, so your app code stays identical.
+        Point it at the database you already run — <strong>Postgres</strong>, <strong>MySQL</strong>
+        , <strong>Oracle</strong>, <strong>PGLite</strong>, or <strong>SQLite</strong>. Each driver
+        picks the best strategy its engine supports, so your app code stays identical.
       </>
     ),
     to: '/docs/getting-started/installation',
@@ -133,9 +133,11 @@ const CtaButton = styled(Link)<{ $variant?: 'primary' | 'secondary' }>`
   font-weight: 700;
   font-size: 1rem;
   text-decoration: none;
-  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
-  border: 1px solid
-    ${(p) => (p.$variant === 'primary' ? 'var(--primary)' : 'var(--secondary)')};
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
+  border: 1px solid ${(p) => (p.$variant === 'primary' ? 'var(--primary)' : 'var(--secondary)')};
   background: ${(p) => (p.$variant === 'primary' ? 'var(--primary)' : 'var(--surface)')};
   /* On the green primary fill, text is always the near-black brand text (never white),
      in both light and dark themes; the surface secondary follows the theme text colour. */
@@ -184,7 +186,9 @@ const Feature = styled.div`
   background: var(--surface);
   border: 1px solid var(--secondary);
   box-shadow: var(--ifm-global-shadow-md);
-  transition: transform 200ms ease, box-shadow 200ms ease;
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease;
   &:hover {
     transform: translateY(-3px);
     box-shadow: var(--ifm-global-shadow-tl);
@@ -229,8 +233,12 @@ const FeatureLink = styled(Link)`
 
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
+  // Keyword-rich meta description for the highest-traffic page (SEO landing page).
+  const description =
+    'PortQueue is a broker-less, strictly typed background job queue for Node.js & TypeScript — ' +
+    'delayed & cron jobs, workflows, retries, and rate limiting on Postgres, PGLite, SQLite, Oracle, or MySQL.';
   return (
-    <Layout title="PortQueue" description={siteConfig.tagline}>
+    <Layout title="PortQueue" description={description}>
       <Hero>
         <HeroBrand>
           <HeroLogo src="/portqueue/img/logo.svg" alt="PortQueue logo" />

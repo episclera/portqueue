@@ -3,6 +3,8 @@ slug: introducing-portqueue
 title: Introducing PortQueue
 authors: [gheorghe]
 tags: [announcement]
+description: Introducing PortQueue, a broker-less, strictly typed job queue for Node.js that runs on Postgres, Oracle, PGLite, and SQLite from one API.
+keywords: [portqueue, job queue, background jobs, database queue, broker-less, node.js, typescript, bullmq alternative]
 ---
 
 **PortQueue is a database-backed job queue for Node.js** — no broker required. If your

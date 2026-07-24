@@ -2,6 +2,8 @@
 id: contributing
 title: Contributing
 sidebar_label: Contributing
+description: Contribute to PortQueue — set up the monorepo, run the build and test suite on PGLite and SQLite, follow the conventions, and open issues and PRs.
+keywords: [portqueue, contributing, open source, monorepo, node.js, typescript, drivers, conformance kit]
 ---
 
 # Contributing

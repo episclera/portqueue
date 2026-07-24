@@ -2,6 +2,8 @@
 id: retention
 title: Retention & cleanup
 sidebar_label: Retention
+description: Control how long PortQueue keeps finished jobs — set queue and per-job TTL retention, prune the job table automatically, and keep failed jobs for triage.
+keywords: [portqueue, job queue, retention, cleanup, database queue, background jobs, postgres queue, node.js]
 ---
 
 # Retention & cleanup

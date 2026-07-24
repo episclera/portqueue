@@ -2,6 +2,8 @@
 id: rate-limiting
 title: Rate limiting & backpressure
 sidebar_label: Rate limiting
+description: Throttle PortQueue workers with concurrency, token-bucket rate limits, and system-pressure backpressure to protect third-party APIs and busy hosts.
+keywords: [portqueue, rate limiting, concurrency, backpressure, workers, job queue, throughput, node.js]
 ---
 
 # Rate limiting & backpressure

@@ -2,6 +2,8 @@
 id: production
 title: Going to Production
 sidebar_label: Going to Production
+description: Ship PortQueue to production — deployment topology, graceful shutdown, pool sizing, idempotency, retries, retention, and a full production checklist.
+keywords: [portqueue, production, job queue, scaling, multi-instance, node.js, monitoring, database queue]
 ---
 
 # Going to Production

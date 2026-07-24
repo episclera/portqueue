@@ -2,6 +2,8 @@
 id: advanced
 title: Advanced
 sidebar_label: Advanced
+description: Extend PortQueue with a custom driver for any database engine — implement the Driver interface, declare capabilities, and validate with the conformance kit.
+keywords: [portqueue, custom driver, drivers, database queue, job queue, node.js, typescript, api reference]
 ---
 
 # Advanced

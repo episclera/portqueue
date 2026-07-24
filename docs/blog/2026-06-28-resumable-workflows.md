@@ -3,6 +3,8 @@ slug: resumable-workflows-no-numeric-progress
 title: Resumable workflows (and why we skipped numeric progress)
 authors: [gheorghe]
 tags: [design, workflows]
+description: How PortQueue models resumable, crash-safe workflows as one job row per step, so a pipeline recovers exactly where it stopped without numeric progress.
+keywords: [portqueue, workflows, resumable workflows, background jobs, job queue, node.js, typescript, bullmq alternative]
 ---
 
 An order pipeline — validate, charge, ship, notify — should survive a crash. If the

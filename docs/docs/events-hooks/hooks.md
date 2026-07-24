@@ -2,6 +2,8 @@
 id: hooks
 title: Hooks reference
 sidebar_label: Hooks
+description: PortQueue hooks let you participate in an operation — awaited in order to mutate an outgoing job, enrich context, or veto an add or process by throwing.
+keywords: [portqueue, hooks, lifecycle, background jobs, job queue, observability, node.js, typescript]
 ---
 
 # Hooks reference

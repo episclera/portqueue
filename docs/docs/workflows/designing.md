@@ -2,6 +2,8 @@
 id: designing
 title: Designing a workflow
 sidebar_label: Designing
+description: Design PortQueue workflows with a StepKey enum, an ordered steps array, and idempotent handlers that pass minimal data forward between crash-safe steps.
+keywords: [portqueue, workflows, multi-step jobs, steps, idempotency, durable execution, node.js, typescript]
 ---
 
 # Designing a workflow

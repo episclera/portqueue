@@ -1,0 +1,6 @@
+# https://www.robotstxt.org/robotstxt.html
+# Allow all crawlers full access and advertise the sitemap.
+User-agent: *
+Allow: /
+
+Sitemap: https://episclera.github.io/portqueue/sitemap.xml

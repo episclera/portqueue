@@ -2,6 +2,8 @@
 id: first-queue
 title: Your first queue & worker
 sidebar_label: First queue & worker
+description: Build your first PortQueue queue and worker — typed payloads, enum-named queues, add jobs, and process them with a background worker in Node.js.
+keywords: [portqueue, job queue, background jobs, workers, typescript, node.js, task queue, postgres queue]
 ---
 
 # Your first queue & worker

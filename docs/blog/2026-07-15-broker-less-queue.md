@@ -3,6 +3,8 @@ slug: broker-less-database-native-queue
 title: Why we built a broker-less, database-native job queue
 authors: [gheorghe]
 tags: [design]
+description: Why PortQueue is a broker-less, database-native job queue using SKIP LOCKED and LISTEN/NOTIFY, so your existing SQL database is all you need.
+keywords: [portqueue, broker-less, database queue, postgres queue, background jobs, transactional enqueue, node.js, job queue]
 ---
 
 Adding a queue shouldn't mean adding a broker. If you already run Postgres (or SQLite, or

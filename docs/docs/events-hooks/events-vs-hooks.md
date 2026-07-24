@@ -2,6 +2,8 @@
 id: events-vs-hooks
 title: Events vs Hooks — when to use which
 sidebar_label: Events vs Hooks
+description: Choose between PortQueue events and hooks — events observe after the fact, hooks participate before or around an operation to mutate or veto it.
+keywords: [portqueue, events, hooks, lifecycle, observability, background jobs, node.js, typescript]
 ---
 
 # Events vs Hooks — when to use which

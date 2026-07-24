@@ -2,6 +2,8 @@
 id: troubleshooting
 title: Troubleshooting
 sidebar_label: Troubleshooting
+description: Troubleshoot PortQueue with typed error codes and events — diagnose stalled jobs, silent failures, retries, and schema mismatches in your job queue.
+keywords: [portqueue, troubleshooting, error codes, events, job queue, node.js, debugging, monitoring]
 ---
 
 # Troubleshooting

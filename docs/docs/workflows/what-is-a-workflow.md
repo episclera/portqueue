@@ -2,6 +2,8 @@
 id: what-is-a-workflow
 title: What a workflow is
 sidebar_label: What a workflow is
+description: A PortQueue workflow is a multi-step job where each step is its own claimable job row sharing a workflowId, spawning the next step as it completes.
+keywords: [portqueue, workflows, multi-step jobs, steps, resumability, durable execution, node.js, typescript]
 ---
 
 # What a workflow is

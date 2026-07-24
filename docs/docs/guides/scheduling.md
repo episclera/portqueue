@@ -2,6 +2,8 @@
 id: scheduling
 title: Delayed & recurring jobs
 sidebar_label: Delayed & recurring jobs
+description: Schedule delayed, recurring, and cron jobs with PortQueue — fixed intervals, timezone-aware cron, and idempotent recurrences, all from addJob.
+keywords: [portqueue, job queue, cron, delayed jobs, recurring jobs, scheduling, background jobs, node.js]
 ---
 
 # Delayed & recurring jobs

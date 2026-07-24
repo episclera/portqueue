@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="PortQueue — the distributed, database-backed job queue">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0E1B14"/>
+      <stop offset="1" stop-color="#16261C"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A9D8B8"/>
+      <stop offset="1" stop-color="#6FA184"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <!-- Subtle top accent bar -->
+  <rect x="0" y="0" width="1200" height="8" fill="url(#mark)"/>
+
+  <!-- Brand mark: rounded tile with a stylized queue of bars -->
+  <g transform="translate(96,150)">
+    <rect x="0" y="0" width="150" height="150" rx="34" fill="url(#mark)"/>
+    <g fill="#0E1B14" opacity="0.92">
+      <rect x="34" y="42" width="82" height="16" rx="8"/>
+      <rect x="34" y="72" width="62" height="16" rx="8"/>
+      <rect x="34" y="102" width="42" height="16" rx="8"/>
+    </g>
+  </g>
+
+  <!-- Wordmark + tagline -->
+  <text x="290" y="228" font-family="Inter, Helvetica, Arial, sans-serif" font-size="104" font-weight="800" fill="#F4FBF6" letter-spacing="-2">PortQueue</text>
+  <text x="294" y="300" font-family="Inter, Helvetica, Arial, sans-serif" font-size="34" font-weight="600" fill="#A9D8B8">The database-backed job queue for Node.js</text>
+
+  <!-- Supporting line -->
+  <text x="96" y="430" font-family="Inter, Helvetica, Arial, sans-serif" font-size="30" font-weight="500" fill="#C8D6CD">Distributed · fault-tolerant · broker-less — runs on your database.</text>
+  <text x="96" y="474" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="400" fill="#8FA697">Postgres · PGLite · SQLite · Oracle · MySQL — one type-safe API.</text>
+
+  <!-- URL footer -->
+  <text x="96" y="566" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="600" fill="#6FA184">episclera.github.io/portqueue</text>
+</svg>

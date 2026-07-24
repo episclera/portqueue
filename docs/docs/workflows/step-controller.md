@@ -2,6 +2,8 @@
 id: step-controller
 title: The step controller
 sidebar_label: Step controller
+description: The PortQueue step controller owns workflow transitions with three outcomes — next, repeat, and done — atomically spawning the next step's job.
+keywords: [portqueue, workflows, multi-step jobs, steps, step controller, durable execution, node.js, typescript]
 ---
 
 # The step controller

@@ -2,6 +2,8 @@
 id: scale-horizontally
 title: Multi-server / instance
 sidebar_label: Multi-server / instance
+description: Scale PortQueue horizontally across many servers with no leader election — instance keys, RegEx affinity patterns, and the mechanics that prevent double-processing.
+keywords: [portqueue, horizontal scaling, multi-instance, scaling, job queue, node.js, production, database queue]
 ---
 
 # Multi-server / instance

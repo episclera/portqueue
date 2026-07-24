@@ -2,6 +2,8 @@
 id: events
 title: Events reference
 sidebar_label: Events
+description: PortQueue emits typed, non-blocking lifecycle events on the client — subscribe with pq.on for job, workflow, schedule, worker, and system signals.
+keywords: [portqueue, events, lifecycle, observability, job queue, workflows, node.js, typescript]
 ---
 
 # Events reference

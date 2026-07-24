@@ -2,6 +2,8 @@
 id: consuming-jobs
 title: Consuming jobs
 sidebar_label: Consuming jobs
+description: Process jobs with PortQueue workers — concurrency, batching, at-least-once delivery, idempotency, retries, and cooperative cancellation in Node.js.
+keywords: [portqueue, job queue, workers, concurrency, retries, idempotency, background jobs, typescript]
 ---
 
 # Consuming jobs

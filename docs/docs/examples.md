@@ -2,6 +2,8 @@
 id: examples
 title: Examples
 sidebar_label: Examples
+description: Runnable PortQueue example apps — serve the dashboard from Node or Express and schedule delayed and recurring jobs, all on PGLite with no external database.
+keywords: [portqueue, examples, dashboard, job scheduling, node.js, typescript, background jobs]
 ---
 
 # Examples

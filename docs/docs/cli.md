@@ -2,6 +2,8 @@
 id: cli
 title: CLI
 sidebar_label: CLI
+description: Operate PortQueue from the terminal with the CLI — inspect queues and stats, retry jobs, run migrations, and serve the dashboard for Postgres, MySQL, and more.
+keywords: [portqueue, cli, command line, job queue, postgres queue, database queue, monitoring, node.js]
 ---
 
 # CLI

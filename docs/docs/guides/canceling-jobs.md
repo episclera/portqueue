@@ -2,6 +2,8 @@
 id: canceling-jobs
 title: Canceling jobs
 sidebar_label: Canceling jobs
+description: Cancel pending, delayed, or running jobs with PortQueue using cooperative AbortSignal handlers — stop work without deleting rows in Node.js.
+keywords: [portqueue, job queue, cancel jobs, abortsignal, workers, background jobs, typescript, node.js]
 ---
 
 # Canceling jobs
