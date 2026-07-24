@@ -251,8 +251,8 @@ ul.tabs.pm-driver-sync {
 
 /*
  * API reference — a hierarchy of methods and their options rendered as badges, one per line,
- * with indentation showing what belongs to what. Authored in the reference page as nested
- * markdown lists of <code> spans carrying these classes.
+ * with indentation showing what belongs to what. Badges are **never** links: they're neutral
+ * grey tags. Anything clickable is rendered as an ordinary link so links stay visually distinct.
  */
 .api-tree {
   list-style: none;
@@ -270,7 +270,7 @@ ul.tabs.pm-driver-sync {
   margin: 0.28rem 0;
   line-height: 1.5;
 }
-/* Every badge shares a pill shape; the modifier class tints it by kind. */
+/* All badges are the same neutral grey pill — a non-clickable label, never a link. */
 .api-badge {
   display: inline-block;
   font-family: var(--ifm-font-family-monospace);
@@ -278,51 +278,24 @@ ul.tabs.pm-driver-sync {
   font-weight: 600;
   padding: 0.08rem 0.5rem;
   border-radius: 6px;
-  border: 1px solid transparent;
-  white-space: nowrap;
-  text-decoration: none;
-}
-a.api-badge:hover {
-  filter: brightness(0.97);
-  text-decoration: none;
-}
-/* A method / function. */
-.api-badge.is-method {
-  background: var(--ifm-color-primary-lightest);
-  color: var(--ifm-color-primary-darkest);
-  border-color: var(--ifm-color-primary-light);
-}
-/* A class / constructor / handle. */
-.api-badge.is-class {
-  background: #e7eef6;
-  color: #2f4d6b;
-  border-color: #c4d6ea;
-}
-/* An options object (links to its own section). */
-.api-badge.is-options {
   background: var(--ifm-color-emphasis-100);
   color: var(--ifm-color-emphasis-800);
-  border-color: var(--ifm-color-emphasis-300);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  white-space: nowrap;
 }
-/* A scalar option / field. */
+/* A scalar option / field — a lighter, outline-only variant of the same grey. */
 .api-badge.is-opt {
   background: transparent;
   color: var(--ifm-color-content);
-  border-color: var(--ifm-color-emphasis-300);
   font-weight: 500;
 }
-/* Short trailing note after a badge (type, default, one-liner). */
+/* Short trailing note after a badge (type, default, one-liner). Links inside render normally. */
 .api-note {
   color: var(--ifm-color-emphasis-700);
   font-size: 0.9rem;
 }
 .api-note .api-default {
-  color: var(--ifm-color-primary-darker);
+  color: var(--ifm-color-emphasis-800);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.85rem;
-}
-[data-theme='dark'] .api-badge.is-class {
-  background: #223247;
-  color: #bcd4ef;
-  border-color: #33506f;
 }

@@ -7,12 +7,13 @@ sidebar_label: API Reference
 # API Reference
 
 Every public method and option in `@portqueue/core`, laid out as a hierarchy: each
-**class** and **method** is a badge on its own line, and the options a method accepts are
-nested underneath it. Object-shaped options link to their own section, where every field is
-listed with its type and default. Durations accept a number of milliseconds or a human string
+**class** and **method** is a tag on its own line, and the options a method accepts are
+nested underneath it. Tags are just labels — anything you can click is rendered as an
+ordinary link. Object-shaped options link to their own section, where every field is listed
+with its type and default. Durations accept a number of milliseconds or a human string
 like `'30s'`, `'5m'`, `'1h'`.
 
-<span className="api-badge is-class">class</span>&nbsp; <span className="api-badge is-method">method</span>&nbsp; <span className="api-badge is-options">options object →</span>&nbsp; <span className="api-badge is-opt">scalar option</span>
+<span className="api-badge">new PortQueue</span>&nbsp; <span className="api-badge">method()</span>&nbsp; <span className="api-badge is-opt">scalarOption</span>&nbsp; — non-clickable tags. &nbsp;[SectionLink](#options) — a link.
 
 ---
 
@@ -23,56 +24,56 @@ The client. One per database — owns the connection, migrations, shared service
 
 <ul className="api-tree">
   <li>
-    <a className="api-badge is-class" href="#portqueue">new PortQueue&lt;TQueues&gt;</a>
+    <span className="api-badge">new PortQueue&lt;TQueues&gt;</span>
     <span className="api-note">— create the client</span>
     <ul>
-      <li><a className="api-badge is-options" href="#portqueueoptions">PortQueueOptions</a> <span className="api-note">the only argument</span></li>
+      <li><a href="#portqueueoptions">PortQueueOptions</a> <span className="api-note">the only argument</span></li>
     </ul>
   </li>
-  <li><span className="api-badge is-method">init()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — connect, migrate, start services (idempotent)</span></li>
+  <li><span className="api-badge">init()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — connect, migrate, start services (idempotent)</span></li>
   <li>
-    <span className="api-badge is-method">shutdown(options?)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — drain workers and disconnect</span>
+    <span className="api-badge">shutdown(options?)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — drain workers and disconnect</span>
     <ul>
-      <li><a className="api-badge is-options" href="#shutdownoptions">ShutdownOptions</a></li>
+      <li><a href="#shutdownoptions">ShutdownOptions</a></li>
     </ul>
   </li>
-  <li><span className="api-badge is-method">get isRunning</span> <span className="api-note">→ <code>boolean</code></span></li>
-  <li><span className="api-badge is-method">migrate()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — force-apply pending migrations (the programmatic MANUAL path)</span></li>
+  <li><span className="api-badge">get isRunning</span> <span className="api-note">→ <code>boolean</code></span></li>
+  <li><span className="api-badge">migrate()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — force-apply pending migrations (the programmatic MANUAL path)</span></li>
   <li>
-    <span className="api-badge is-method">createQueue&lt;TData&gt;(name, options?)</span> <span className="api-note">→ <a href="#queue"><code>Queue&lt;TData&gt;</code></a></span>
+    <span className="api-badge">createQueue&lt;TData&gt;(name, options?)</span> <span className="api-note">→ <a href="#queue"><code>Queue&lt;TData&gt;</code></a></span>
     <ul>
       <li><span className="api-badge is-opt">name</span> <span className="api-note"><code>TQueues</code> — the queue name</span></li>
-      <li><a className="api-badge is-options" href="#queueoptions">QueueOptions</a></li>
+      <li><a href="#queueoptions">QueueOptions</a></li>
     </ul>
   </li>
   <li>
-    <span className="api-badge is-method">createWorker&lt;TData, TResult&gt;(options)</span> <span className="api-note">→ <a href="#worker"><code>Worker</code></a></span>
+    <span className="api-badge">createWorker&lt;TData, TResult&gt;(options)</span> <span className="api-note">→ <a href="#worker"><code>Worker</code></a></span>
     <ul>
-      <li><a className="api-badge is-options" href="#workeroptions">WorkerOptions</a></li>
+      <li><a href="#workeroptions">WorkerOptions</a></li>
     </ul>
   </li>
-  <li><span className="api-badge is-method">getQueues()</span> <span className="api-note">→ <code>Promise&lt;QueueInfo[]&gt;</code></span></li>
-  <li><span className="api-badge is-method">getQueueStats(&#123; queue? &#125;)</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code> — omit <code>queue</code> for client-wide</span></li>
-  <li><span className="api-badge is-method">getStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code> — all queues combined</span></li>
-  <li><span className="api-badge is-method">getJob&lt;TData&gt;(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
+  <li><span className="api-badge">getQueues()</span> <span className="api-note">→ <code>Promise&lt;QueueInfo[]&gt;</code></span></li>
+  <li><span className="api-badge">getQueueStats(&#123; queue? &#125;)</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code> — omit <code>queue</code> for client-wide</span></li>
+  <li><span className="api-badge">getStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code> — all queues combined</span></li>
+  <li><span className="api-badge">getJob&lt;TData&gt;(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
   <li>
-    <span className="api-badge is-method">getJobs&lt;TData&gt;(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code></span>
+    <span className="api-badge">getJobs&lt;TData&gt;(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code></span>
     <ul>
-      <li><a className="api-badge is-options" href="#getjobsquery">GetJobsQuery</a></li>
+      <li><a href="#getjobsquery">GetJobsQuery</a></li>
     </ul>
   </li>
-  <li><span className="api-badge is-method">getWorkflow(&#123; workflowId &#125;)</span> <span className="api-note">→ <code>Promise&lt;WorkflowSnapshot | null&gt;</code></span></li>
-  <li><span className="api-badge is-method">on(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code> — see <a href="./events-hooks/events.md">Events</a></span></li>
-  <li><span className="api-badge is-method">once(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code></span></li>
-  <li><span className="api-badge is-method">off(event, listener)</span> <span className="api-note">→ <code>void</code></span></li>
-  <li><span className="api-badge is-method">useHook(hook)</span> <span className="api-note">→ <code>Unsubscribe</code> — see <a href="./events-hooks/hooks.md">Hooks</a></span></li>
-  <li><span className="api-badge is-method">pauseQueue(&#123; queue, mode? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — <code>mode</code> is a <a href="#enums">PauseMode</a></span></li>
-  <li><span className="api-badge is-method">resumeQueue(&#123; queue &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge is-method">removeQueue(&#123; name &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — refused while the queue is declared in this process</span></li>
-  <li><span className="api-badge is-method">getInstances()</span> <span className="api-note">→ <code>Promise&lt;InstanceInfo[]&gt;</code> — see <a href="./scale-horizontally.md">Scaling</a></span></li>
-  <li><span className="api-badge is-method">pauseInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge is-method">resumeInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge is-method">removeInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — refused until the instance is unseen for 30 min</span></li>
+  <li><span className="api-badge">getWorkflow(&#123; workflowId &#125;)</span> <span className="api-note">→ <code>Promise&lt;WorkflowSnapshot | null&gt;</code></span></li>
+  <li><span className="api-badge">on(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code> — see <a href="./events-hooks/events.md">Events</a></span></li>
+  <li><span className="api-badge">once(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code></span></li>
+  <li><span className="api-badge">off(event, listener)</span> <span className="api-note">→ <code>void</code></span></li>
+  <li><span className="api-badge">useHook(hook)</span> <span className="api-note">→ <code>Unsubscribe</code> — see <a href="./events-hooks/hooks.md">Hooks</a></span></li>
+  <li><span className="api-badge">pauseQueue(&#123; queue, mode? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — <code>mode</code> is a <a href="#enums">PauseMode</a></span></li>
+  <li><span className="api-badge">resumeQueue(&#123; queue &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge">removeQueue(&#123; name &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — refused while the queue is declared in this process</span></li>
+  <li><span className="api-badge">getInstances()</span> <span className="api-note">→ <code>Promise&lt;InstanceInfo[]&gt;</code> — see <a href="./scale-horizontally.md">Scaling</a></span></li>
+  <li><span className="api-badge">pauseInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge">resumeInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge">removeInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — refused until the instance is unseen for 30 min</span></li>
 </ul>
 
 ---
@@ -84,30 +85,29 @@ accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides
 
 <ul className="api-tree">
   <li>
-    <span className="api-badge is-method">addJob(options)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code></span>
+    <span className="api-badge">addJob(options)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code></span>
     <ul>
-      <li><a className="api-badge is-options" href="#addjoboptions">AddJobOptions&lt;TData&gt;</a></li>
+      <li><a href="#addjoboptions">AddJobOptions&lt;TData&gt;</a></li>
     </ul>
   </li>
   <li>
-    <span className="api-badge is-method">addJobs(&#123; jobs &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult[]&gt;</code></span>
+    <span className="api-badge">addJobs(&#123; jobs &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult[]&gt;</code></span>
     <ul>
       <li><span className="api-badge is-opt">jobs</span> <span className="api-note"><a href="#addjoboptions"><code>AddJobOptions&lt;TData&gt;[]</code></a></span></li>
     </ul>
   </li>
-  <li><span className="api-badge is-method">getSchedules()</span> <span className="api-note">→ <code>Promise&lt;ScheduleInfo[]&gt;</code></span></li>
-  <li><span className="api-badge is-method">getJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
-  <li><span className="api-badge is-method">getJobs(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>, scoped to this queue</span></li>
-  <li><span className="api-badge is-method">getQueueStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code></span></li>
-  <li><span className="api-badge is-method">retryJob(&#123; jobId, from? &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — <code>from</code> is a <a href="#enums">RetryMode</a></span></li>
-  <li><span className="api-badge is-method">cancelJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — a pending/retry job</span></li>
-  <li><span className="api-badge is-method">cancelRunningJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — cooperative cancel of an active job</span></li>
-  <li><span className="api-badge is-method">removeJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
-  <li><span className="api-badge is-method">removeSchedule(&#123; scheduleId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
-  <li><span className="api-badge is-method">removeJobs(&#123; jobIds &#125; | &#123; statuses &#125;)</span> <span className="api-note">→ <code>Promise&lt;number&gt;</code></span></li>
-  <li><span className="api-badge is-method">pause(&#123; mode? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge is-method">resume()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge is-method">get name</span> <span className="api-note">→ <code>string</code></span></li>
+  <li><span className="api-badge">getSchedules()</span> <span className="api-note">→ <code>Promise&lt;ScheduleInfo[]&gt;</code></span></li>
+  <li><span className="api-badge">getJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
+  <li><span className="api-badge">getJobs(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>, scoped to this queue</span></li>
+  <li><span className="api-badge">getQueueStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code></span></li>
+  <li><span className="api-badge">retryJob(&#123; jobId, from? &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — <code>from</code> is a <a href="#enums">RetryMode</a></span></li>
+  <li><span className="api-badge">cancelJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort signal</span></li>
+  <li><span className="api-badge">removeJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
+  <li><span className="api-badge">removeSchedule(&#123; scheduleId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
+  <li><span className="api-badge">removeJobs(&#123; jobIds &#125; | &#123; statuses &#125;)</span> <span className="api-note">→ <code>Promise&lt;number&gt;</code></span></li>
+  <li><span className="api-badge">pause(&#123; mode? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge">resume()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
+  <li><span className="api-badge">get name</span> <span className="api-note">→ <code>string</code></span></li>
 </ul>
 
 ---
@@ -121,9 +121,9 @@ the `Queue` (`pause`/`resume`) and observe it through `pq.on(...)`. All consumer
 
 <ul className="api-tree">
   <li>
-    <a className="api-badge is-class" href="#worker">Worker</a> <span className="api-note">created via <code>createWorker</code></span>
+    <span className="api-badge">Worker</span> <span className="api-note">created via <code>createWorker</code></span>
     <ul>
-      <li><a className="api-badge is-options" href="#workeroptions">WorkerOptions</a></li>
+      <li><a href="#workeroptions">WorkerOptions</a></li>
     </ul>
   </li>
 </ul>
@@ -149,7 +149,7 @@ The read-only view handed to a handler. Workflow transitions are on the `step` c
   <li><span className="api-badge is-opt">workflowId?</span> <span className="api-note"><code>string</code></span></li>
   <li><span className="api-badge is-opt">workflowStepKey?</span> <span className="api-note"><code>string</code></span></li>
   <li><span className="api-badge is-opt">signal</span> <span className="api-note"><code>AbortSignal</code> — aborts on graceful-shutdown timeout / cooperative cancel</span></li>
-  <li><span className="api-badge is-method">extendLock(&#123; byMs? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — extend the visibility timeout mid-handler</span></li>
+  <li><span className="api-badge">extendLock(&#123; byMs? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — extend the visibility timeout mid-handler</span></li>
 </ul>
 
 ---
@@ -162,7 +162,7 @@ Pass one driver instance to `new PortQueue({ driver })`.
 
 <ul className="api-tree">
   <li>
-    <a className="api-badge is-class" href="#drivers">new PostgresDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/postgres</code></span>
+    <span className="api-badge">new PostgresDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/postgres</code></span>
     <ul>
       <li><span className="api-badge is-opt">connectionString?</span> <span className="api-note"><code>string</code></span></li>
       <li><span className="api-badge is-opt">pool?</span> <span className="api-note">an existing <code>pg.Pool</code> to share</span></li>
@@ -173,7 +173,7 @@ Pass one driver instance to `new PortQueue({ driver })`.
     </ul>
   </li>
   <li>
-    <a className="api-badge is-class" href="#drivers">new MysqlDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/mysql</code></span>
+    <span className="api-badge">new MysqlDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/mysql</code></span>
     <ul>
       <li><span className="api-badge is-opt">connectionString?</span> <span className="api-note"><code>mysql://…</code></span></li>
       <li><span className="api-badge is-opt">pool?</span> <span className="api-note">an existing <code>mysql2</code> pool</span></li>
@@ -184,7 +184,7 @@ Pass one driver instance to `new PortQueue({ driver })`.
     </ul>
   </li>
   <li>
-    <a className="api-badge is-class" href="#drivers">new OracleDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/oracle</code></span>
+    <span className="api-badge">new OracleDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/oracle</code></span>
     <ul>
       <li><span className="api-badge is-opt">user?</span> <span className="api-note"><code>string</code></span></li>
       <li><span className="api-badge is-opt">password?</span> <span className="api-note"><code>string</code></span></li>
@@ -196,7 +196,7 @@ Pass one driver instance to `new PortQueue({ driver })`.
     </ul>
   </li>
   <li>
-    <a className="api-badge is-class" href="#drivers">new SqliteDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/sqlite</code></span>
+    <span className="api-badge">new SqliteDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/sqlite</code></span>
     <ul>
       <li><span className="api-badge is-opt">path?</span> <span className="api-note"><code>string</code> · <span className="api-default">':memory:'</span></span></li>
       <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
@@ -204,7 +204,7 @@ Pass one driver instance to `new PortQueue({ driver })`.
     </ul>
   </li>
   <li>
-    <a className="api-badge is-class" href="#drivers">new PgliteDriver(options?)</a> <span className="api-note"><code>@portqueue/core/drivers/pglite</code></span>
+    <span className="api-badge">new PgliteDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/pglite</code></span>
     <ul>
       <li><span className="api-badge is-opt">dataDir?</span> <span className="api-note"><code>string</code> — omit for in-memory</span></li>
       <li><span className="api-badge is-opt">schema?</span> <span className="api-note"><code>string</code></span></li>

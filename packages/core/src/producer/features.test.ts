@@ -152,7 +152,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.ACTIVE,
     );
-    const signaled = await queue.cancelRunningJob({ jobId: res.jobId! });
+    const signaled = await queue.cancelJob({ jobId: res.jobId! });
     expect(signaled).toBe(true);
     await waitFor(() => aborted);
   });

@@ -25,6 +25,7 @@ const sidebars: SidebarsConfig = {
         'guides/scheduling',
         'guides/retention',
         'guides/transactions',
+        'guides/canceling-jobs',
         'guides/rate-limiting',
         'troubleshooting',
       ],

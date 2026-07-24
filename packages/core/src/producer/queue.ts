@@ -73,7 +73,16 @@ export class Queue<TData = unknown> {
     };
   }
 
+  /**
+   * Cancel a job. If the job is **currently running on this instance**, its handler's
+   * `AbortSignal` is fired for cooperative cancellation (the handler must honour `job.signal`
+   * to actually stop) and that settles the row. Otherwise a pending/delayed job is marked
+   * `CANCELLED` so it never runs. Returns true if either path acted.
+   */
   async cancelJob(options: { jobId: string }): Promise<boolean> {
+    // A locally-running handler owns its row's outcome — fire its signal and let it settle,
+    // rather than racing a DB write against its completion.
+    if (this.runtime.cancelRunning?.(options.jobId)) return true;
     const ok = await this.runtime.driver.cancelJob({
       jobId: options.jobId,
       now: this.runtime.clock.now(),
@@ -84,11 +93,6 @@ export class Queue<TData = unknown> {
         queue: this.name,
       });
     return ok;
-  }
-
-  /** Request cooperative cancellation of an active job by firing its signal. */
-  async cancelRunningJob(options: { jobId: string }): Promise<boolean> {
-    return this.runtime.cancelRunning?.(options.jobId) ?? false;
   }
 
   async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {

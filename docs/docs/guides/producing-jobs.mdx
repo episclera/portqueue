@@ -26,6 +26,9 @@ await emailsQueue.addJobs({
 `AddJobResult` carries `jobId`, `queue`, `status`, `deduplicated`, `startAfter`, and —
 for scheduled or workflow adds — `scheduleId` / `nextRunAt` / `workflowId`.
 
+Everything below is an option on that same `addJob` call. `data` is the only required key;
+the rest are optional and default sensibly.
+
 ## Scheduling
 
 All timing lives under the `schedule` group — pass exactly one mode:
@@ -52,8 +55,132 @@ recurring story (dedup, timezones, unscheduling).
 await emailsQueue.addJob({ data, priority: 10 }); // higher values are claimed first
 ```
 
-`priority` orders ready jobs — higher values run sooner. It composes with scheduling: a job
-becomes eligible at its `schedule.startAfter` time, then priority breaks ties among the ready set.
+`priority` orders ready jobs — higher values run sooner (default `0`). It composes with
+scheduling: a job becomes eligible at its `schedule.startAfter` time, then priority breaks ties
+among the ready set.
+
+## Automatic retries
+
+`retry` sets the per-job retry policy: how many attempts, the base delay, and the backoff curve.
+
+```ts
+await emailsQueue.addJob({
+  data,
+  retry: {
+    maxAttempts: 5,                                    // total attempts incl. the first (default 1 = no retry)
+    delay: '2s',                                       // base delay before a retry
+    backoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2, maxDelay: '5m', jitter: true },
+  },
+});
+```
+
+A throwing handler is retried per this policy until attempts are exhausted, then the job goes
+`FAILED`. *Which* thrown errors skip retry is a **consumer** concern (`dontAutoretryFor`) — see
+[Consuming jobs → error handling](./consuming-jobs.md#error-handling--retries). Full field list in the
+[API reference](../api-reference.mdx#retryoptions).
+
+## Expiry
+
+```ts
+await emailsQueue.addJob({ data, expireIn: '1h' }); // give up if it hasn't started in time
+```
+
+`expireIn` (a `Duration`) drops the job to `EXPIRED` if it hasn't **started** within the window —
+useful for time-sensitive work that's worthless if delayed. It bounds the wait to start, not the
+handler's own run time.
+
+## Retention
+
+```ts
+await emailsQueue.addJob({
+  data,
+  retention: { mode: RetentionMode.DELETE_AFTER, ttl: '7d' },
+});
+```
+
+`retention` overrides the queue's default retention for this one job — how long the finished row
+is kept before automatic pruning. See [Retention](./retention.md) for queue-level defaults and
+the trade-offs.
+
+## Preferred server
+
+```ts
+await emailsQueue.addJob({ data, preferredInstanceKeyPattern: 'ram-(4|8)gb' });
+```
+
+`preferredInstanceKeyPattern` is a regular-expression **source string** matched against instance
+keys — only servers whose `instanceKey` matches will claim the job. It requires the *producing*
+process to have an `instanceKey`. Prefer broad, capability-based patterns over pinning one host.
+See [Multi-server / instance](./../scale-horizontally.md#choosing-a-preferred-server-with-regex-patterns).
+
+## Workflow entry step
+
+```ts
+await ordersQueue.addJob({ data, startStep: OrderStep.CHARGE }); // begin at a non-entry step (rare)
+```
+
+On a **workflow** queue, `startStep` begins the run at a specific step instead of the first one —
+an escape hatch for replays/backfills. Omit it to start at the entry step. See
+[Workflows](./../workflows/what-is-a-workflow.md).
+
+## Retry a job
+
+Requeue a **failed or completed** job. `from` (a `RetryMode`) defaults to `FROM_FAILED_STEP`;
+`FROM_START` begins a fresh workflow run from the entry step.
+
+```ts
+await emailsQueue.retryJob({ jobId, from: RetryMode.FROM_START });
+```
+
+## Cancel a job
+
+Stop a job from running — without deleting its row.
+
+```ts
+await emailsQueue.cancelJob({ jobId });
+```
+
+If the job is still **pending/delayed**, it's marked `CANCELLED` so it never runs. If it's
+**already running on this instance**, its handler's `AbortSignal` is fired instead — the handler
+must honour `job.signal` to actually stop. See [Canceling jobs](./canceling-jobs.md) for how to
+write abort-aware handlers.
+
+## Remove jobs & schedules
+
+Removal **deletes rows** — it is for cleanup, not for stopping work:
+
+```ts
+await emailsQueue.removeJob({ jobId });                            // delete one job row (accepts tx)
+await emailsQueue.removeJobs({ jobIds: [a, b] });                 // delete several job rows by id
+await emailsQueue.removeJobs({ statuses: [JobStatus.COMPLETED] }); // bulk-delete job rows by status
+await emailsQueue.removeSchedule({ scheduleId });                 // delete a schedule row
+```
+
+- **`removeJob` / `removeJobs`** delete rows from the **jobs** table. The job is gone — its
+  history, result, and failure message go with it.
+- **`removeSchedule`** deletes a row from the **schedule** table, so no *new* jobs are produced
+  from that recurrence. Jobs it already produced are untouched (remove those separately if you
+  want them gone).
+
+To **stop** a job rather than delete it, use [`cancelJob`](#cancel-a-job) (a one-off or running
+job) or `removeSchedule` (halt a recurrence). Reach for `removeJob`/`removeJobs` only when you
+actually want the record gone.
+
+:::warning Prefer retention over manual deletes
+Hand-deleting rows is easy to get wrong — you can lose failures you'd have wanted to triage.
+Prefer configuring [retention](./retention.md) at the **queue** level or per-job on `addJob`, and
+let PortQueue prune finished jobs for you. Keep manual `remove*` for deliberate one-offs.
+:::
+
+## Pause & resume the queue
+
+Persisted and cluster-wide — every instance honours it:
+
+```ts
+await emailsQueue.pause({ mode: PauseMode.PROCESSING }); // stop claiming; still accepts adds (default)
+await emailsQueue.pause({ mode: PauseMode.ALL });        // also refuse new adds (drain)
+await emailsQueue.resume();
+```
 
 ## Idempotency & singleton
 
@@ -72,58 +199,11 @@ Both keys are **queue-scoped**, but they solve different problems:
 
 ```ts
 const paymentsQueue = pq.createQueue('payments');
-const result = await paymentsQueue.addJob({ data: { orderId }, idempotencyKey: `charge:${orderId}` });
-if (result.deduplicated) logger.info('already queued', { jobId: result.jobId }); // charged at most once
+const paymentsJob = await paymentsQueue.addJob({ data: { orderId }, idempotencyKey: `charge:${orderId}` });
+if (paymentsJob.deduplicated) logger.info('already queued', { jobId: paymentsJob.jobId }); // charged at most once
 
 const reindexQueue = pq.createQueue('reindex');
 await reindexQueue.addJob({ data, singletonKey: `reindex:${tenantId}` }); // one live reindex per tenant
-```
-
-## Controlling produced jobs
-
-The `Queue` handle exposes the full control surface. Every method takes one options object.
-
-**Inspect**
-
-```ts
-const snapshot = await emailsQueue.getJob({ jobId });                 // JobSnapshot | null
-const page = await emailsQueue.getJobs({ statuses: [JobStatus.FAILED] }); // cursor-paged
-const stats = await emailsQueue.getQueueStats();                      // per-status counts
-const schedules = await emailsQueue.getSchedules();                   // recurring definitions
-```
-
-**Retry & cancel**
-
-```ts
-// Requeue a failed/completed job. `from` (a RetryMode) defaults to FROM_FAILED_STEP;
-// FROM_START begins a fresh workflow run from the entry step.
-await emailsQueue.retryJob({ jobId, from: RetryMode.FROM_START });
-
-// Cancel a not-yet-active (pending/delayed) job.
-await emailsQueue.cancelJob({ jobId });
-
-// Cooperatively signal an already-running job via its handler's AbortSignal.
-await emailsQueue.cancelRunningJob({ jobId });
-```
-
-**Remove**
-
-```ts
-await emailsQueue.removeJob({ jobId });                       // one job (accepts tx)
-await emailsQueue.removeJobs({ jobIds: [a, b] });             // by id
-await emailsQueue.removeJobs({ statuses: [JobStatus.COMPLETED] }); // bulk delete by status
-await emailsQueue.removeSchedule({ scheduleId });             // stop a recurring definition
-```
-
-`removeSchedule` only affects **recurring** schedules — for one-off jobs use `cancelJob` /
-`removeJob`. See [Delayed & recurring jobs](./scheduling.md#inspecting--unscheduling).
-
-**Queue control** (persisted, cluster-wide)
-
-```ts
-await emailsQueue.pause({ mode: PauseMode.PROCESSING }); // stop claiming; still accepts adds (default)
-await emailsQueue.pause({ mode: PauseMode.ALL });        // also refuse new adds (drain)
-await emailsQueue.resume();
 ```
 
 ## Transactional enqueue
@@ -143,3 +223,14 @@ Every producing method (`addJob`, `addJobs`, `removeJob`, `removeSchedule`, …)
 `tx`; omit it and the method runs autonomously in its own short transaction. See
 [Transactions](./transactions.mdx) for the full list of adapters and the reasoning behind
 the design.
+
+## Inspect
+
+Read-side views of what you've produced (all scoped to this queue):
+
+```ts
+const emailsJob = await emailsQueue.getJob({ jobId });                    // JobSnapshot | null
+const emailsPage = await emailsQueue.getJobs({ statuses: [JobStatus.FAILED] }); // cursor-paged
+const emailsStats = await emailsQueue.getQueueStats();                    // per-status counts
+const emailsSchedules = await emailsQueue.getSchedules();                 // recurring definitions
+```
