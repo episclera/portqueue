@@ -10,7 +10,7 @@ keywords: [portqueue, job queue, cancel jobs, abortsignal, workers, background j
 
 Canceling **stops a job from running** — whether it's waiting in the queue, scheduled for later,
 or executing right now. It never deletes rows (that's
-[`removeJob`](./producing-jobs.mdx#remove-jobs--schedules)). One method covers every case:
+[`removeJob`](./producing-jobs.mdx#remove-jobs)). One method covers every case:
 
 ```ts
 await emailsQueue.cancelJob({ jobId });
@@ -19,7 +19,7 @@ await emailsQueue.cancelJob({ jobId });
 - **Pending** — the job is marked `CANCELLED` and will never be claimed.
 - **Delayed / scheduled to run later** (non-recurring) — same: it's marked `CANCELLED` before its
   `startAfter` time arrives, so it never becomes eligible. For a **recurring** schedule, cancel the
-  recurrence with [`removeSchedule`](./producing-jobs.mdx#remove-jobs--schedules) instead.
+  recurrence with [`removeSchedule`](./producing-jobs.mdx#remove-a-schedule) instead.
 - **Already running on this instance** — its handler's `AbortSignal` (`job.signal`) is fired.
   Cancellation is then **cooperative**: the handler has to notice the signal and stop. A handler
   that ignores `job.signal` runs to completion regardless.
@@ -29,7 +29,7 @@ await emailsQueue.cancelJob({ jobId });
 :::note Recurring jobs
 `cancelJob` cancels a single job instance, not a recurrence. To stop a **recurring schedule** from
 producing new jobs, delete the schedule with
-[`removeSchedule`](./producing-jobs.mdx#remove-jobs--schedules) — canceling one produced run won't
+[`removeSchedule`](./producing-jobs.mdx#remove-a-schedule) — canceling one produced run won't
 prevent the next.
 :::
 
@@ -125,6 +125,6 @@ handler: async (job) => {
 | You want to… | Use |
 |---|---|
 | Stop a specific job (pending or running) | [`cancelJob`](./producing-jobs.mdx#cancel-a-job) |
-| Stop a recurring schedule producing new jobs | [`removeSchedule`](./producing-jobs.mdx#remove-jobs--schedules) |
-| Delete job rows for cleanup | [`removeJob` / `removeJobs`](./producing-jobs.mdx#remove-jobs--schedules) |
+| Stop a recurring schedule producing new jobs | [`removeSchedule`](./producing-jobs.mdx#remove-a-schedule) |
+| Delete job rows for cleanup | [`removeJob` / `removeJobs`](./producing-jobs.mdx#remove-jobs) |
 | Stop the whole queue temporarily | [`pause` / `resume`](./producing-jobs.mdx#pause--resume-the-queue) |

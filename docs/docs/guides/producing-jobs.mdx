@@ -143,11 +143,22 @@ write abort-aware handlers.
 
 :::note Recurring jobs are different
 `cancelJob` acts on a single job. To stop a **recurring** (interval/cron) job, cancel or
-remove its **schedule** instead — see [Remove jobs & schedules](#remove-jobs--schedules) below
+remove its **schedule** instead — see [Remove a schedule](#remove-a-schedule) below
 (`removeSchedule` halts the recurrence so no new jobs are produced).
 :::
 
-## Remove jobs & schedules
+## Remove a schedule
+
+```ts
+await emailsQueue.removeSchedule({ scheduleId }); // delete a schedule row
+```
+
+`removeSchedule` deletes a row from the **schedule** table, so no *new* jobs are produced from
+that recurrence — this is how you **stop a recurring (interval/cron) job**. Jobs it has already
+produced are untouched; remove those separately with `removeJob` / `removeJobs` if you want them
+gone too.
+
+## Remove jobs
 
 Removal **deletes rows** — it is for cleanup, not for stopping work:
 
@@ -155,17 +166,12 @@ Removal **deletes rows** — it is for cleanup, not for stopping work:
 await emailsQueue.removeJob({ jobId });                            // delete one job row (accepts tx)
 await emailsQueue.removeJobs({ jobIds: [a, b] });                 // delete several job rows by id
 await emailsQueue.removeJobs({ statuses: [JobStatus.COMPLETED] }); // bulk-delete job rows by status
-await emailsQueue.removeSchedule({ scheduleId });                 // delete a schedule row
 ```
 
-- **`removeJob` / `removeJobs`** delete rows from the **jobs** table. The job is gone — its
-  history, result, and failure message go with it.
-- **`removeSchedule`** deletes a row from the **schedule** table, so no *new* jobs are produced
-  from that recurrence. Jobs it already produced are untouched (remove those separately if you
-  want them gone).
-
-To **stop** a job rather than delete it, use [`cancelJob`](#cancel-a-job) (a one-off or running
-job) or `removeSchedule` (halt a recurrence). Reach for `removeJob`/`removeJobs` only when you
+`removeJob` / `removeJobs` delete rows from the **jobs** table. The job is gone — its history,
+result, and failure message go with it. To merely **stop** a job rather than delete it, use
+[`cancelJob`](#cancel-a-job); to stop a **recurring** job, remove its schedule instead — see
+[Remove a schedule](#remove-a-schedule) above. Reach for `removeJob` / `removeJobs` only when you
 actually want the record gone.
 
 :::warning Prefer retention over manual deletes
