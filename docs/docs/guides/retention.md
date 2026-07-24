@@ -27,6 +27,11 @@ const emailsQueue = pq.createQueue('emails', {
 await emailsQueue.addJob({ data, retention: { mode: RetentionMode.DELETE_AFTER, ttl: '30d' } });
 ```
 
+Retention only ever acts on **finished** jobs — those with status `COMPLETED`, `FAILED`,
+`CANCELLED`, or `EXPIRED` (and only when their resolved retention is `DELETE_AFTER` and the
+TTL has elapsed). Jobs still in flight — `PENDING`, `ACTIVE`, `RETRY`, and the derived
+`STALLED` status — are **never touched** by retention.
+
 :::note Keep failed jobs longer
 There is **no dead-letter queue** — failed jobs stay in `job` with status `FAILED` for
 triage. Keep completed jobs short and failed jobs longer so you always have failures to
