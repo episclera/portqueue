@@ -12,5 +12,6 @@ docs/build/
 *.db
 .pglite/
 scripts/cli/.data/
+tmp/
 .env
 .env.local

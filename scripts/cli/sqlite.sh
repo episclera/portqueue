@@ -5,10 +5,13 @@
 #   scripts/cli/sqlite.sh add --queue emails --data '{"to":"a@b.com"}'
 #   scripts/cli/sqlite.sh jobs --queue emails
 #
-# The connection string is the SQLite file path. Override it with SQLITE_PATH, or set
-# SQLITE_PATH=:memory: for a throwaway in-memory database. Builds @portqueue/core and
+# The connection string is the SQLite file path. Defaults to tmp/portqueue-cli.sqlite in
+# the repo root (gitignored). Override it with SQLITE_PATH, or set SQLITE_PATH=:memory: for
+# a throwaway in-memory database. Builds @portqueue/core and
 # @portqueue/cli on first run.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
-pq_exec sqlite "${SQLITE_PATH:-/tmp/portqueue-cli.sqlite}" "$@"
+SQLITE_DB_PATH="${SQLITE_PATH:-$REPO_ROOT/tmp/portqueue-cli.sqlite}"
+[ "$SQLITE_DB_PATH" != ":memory:" ] && mkdir -p "$(dirname "$SQLITE_DB_PATH")"
+pq_exec sqlite "$SQLITE_DB_PATH" "$@"
