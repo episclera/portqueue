@@ -15,8 +15,9 @@ await emailsQueue.cancelJob({ jobId });
 ```
 
 - **Pending** — the job is marked `CANCELLED` and will never be claimed.
-- **Delayed / scheduled to run later** — same: it's marked `CANCELLED` before its `startAfter`
-  time arrives, so it never becomes eligible.
+- **Delayed / scheduled to run later** (non-recurring) — same: it's marked `CANCELLED` before its
+  `startAfter` time arrives, so it never becomes eligible. For a **recurring** schedule, cancel the
+  recurrence with [`removeSchedule`](./producing-jobs.mdx#remove-jobs--schedules) instead.
 - **Already running on this instance** — its handler's `AbortSignal` (`job.signal`) is fired.
   Cancellation is then **cooperative**: the handler has to notice the signal and stop. A handler
   that ignores `job.signal` runs to completion regardless.
