@@ -1,11 +1,60 @@
 import { themes as prismThemes } from 'prism-react-renderer';
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import sidebars from './sidebars';
 
 // Brand tokens mirrored from `@portqueue/ui` (build_plan/14 — tokens.ts).
 // Kept in sync manually here so the docs chrome (Infima) matches the dashboard
 // without pulling the AntD/CSS-in-JS package into the static Docusaurus config.
 const REPO_URL = 'https://github.com/episclera/portqueue';
+
+// --- Footer "Docs" column, derived from the left sidebar ---------------------------------
+// The footer lists one link per top-level section/page of the docs sidebar, so adding a
+// page or section to `sidebars.ts` automatically surfaces it in the footer too — a single
+// source of truth. Categories link to their first child doc.
+type SidebarEntry =
+  | string
+  | {
+      type?: string;
+      id?: string;
+      label?: string;
+      link?: { type?: string; id?: string };
+      items?: SidebarEntry[];
+    };
+
+// Words to keep fully uppercased when turning a doc id into a label (e.g. 'api-reference').
+const LABEL_ACRONYMS = new Set(['api', 'cli', 'ui', 'sql']);
+
+function humanizeDocId(id: string): string {
+  const last = id.split('/').pop() ?? id;
+  return last
+    .split('-')
+    .map((w) => (LABEL_ACRONYMS.has(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+}
+
+// The first linkable doc id under a sidebar entry (recurses into categories).
+function firstDocId(entry: SidebarEntry): string | undefined {
+  if (typeof entry === 'string') return entry;
+  if (entry.type === 'doc' && entry.id) return entry.id;
+  if (entry.link?.type === 'doc' && entry.link.id) return entry.link.id;
+  for (const child of entry.items ?? []) {
+    const found = firstDocId(child);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+function footerDocsItems(): Array<{ label: string; to: string }> {
+  const top = (sidebars.docsSidebar ?? []) as SidebarEntry[];
+  return top.flatMap((entry) => {
+    const id = firstDocId(entry);
+    if (!id) return [];
+    const label = typeof entry === 'string' ? humanizeDocId(entry) : (entry.label ?? humanizeDocId(id));
+    return [{ label, to: `/docs/${id}` }];
+  });
+}
+
 
 const config: Config = {
   title: 'PortQueue',
@@ -93,17 +142,9 @@ const config: Config = {
         {
           // All technical/product documentation lives here.
           title: 'Docs',
-          items: [
-            { label: 'Getting Started', to: '/docs/getting-started/installation' },
-            { label: 'Job Lifecycle', to: '/docs/guides/consuming-jobs#job-states' },
-            { label: 'Workflows', to: '/docs/workflows/what-is-a-workflow' },
-            { label: 'Events reference', to: '/docs/events-hooks/events' },
-            { label: 'API Reference', to: '/docs/api-reference' },
-            { label: 'Dashboard', to: '/docs/dashboard' },
-            { label: 'CLI', to: '/docs/cli' },
-            { label: 'Going to Production', to: '/docs/production' },
-            { label: 'Troubleshooting', to: '/docs/troubleshooting' },
-          ],
+          // Auto-derived from the left sidebar (see footerDocsItems above): one link per
+          // top-level section/page. Add a section to sidebars.ts and it appears here too.
+          items: footerDocsItems(),
         },
         {
           // Community & contribution — how to follow along and get involved.
