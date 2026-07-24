@@ -75,19 +75,24 @@ const second = await reportsQueue.addJob({ data: { kind: 'sales' }, schedule: { 
 // The existing schedule is kept **unchanged** — a re-add never mutates it.
 ```
 
-The key spans **both the job and the schedule tables**. Whenever an `idempotencyKey` is supplied,
-`addJob` first looks for any existing job _or_ schedule on that queue carrying the same key; if one
-exists, nothing new is created and the existing entity is returned with `deduplicated: true` and
-`deduplicationReason: 'IDEMPOTENCY'`. This holds regardless of the two adds' shapes:
+The key is **per entity**: a one-off `addJob` dedups against the **jobs** table, and a recurring
+`addJob` (with `cron`/`startEvery`) dedups against the **schedule** table. `addJob` looks only in
+the table that matches the add's shape; if a matching entity already carries the key, nothing new
+is created and the existing one is returned with `deduplicated: true` and
+`deduplicationReason: 'IDEMPOTENCY'`.
 
-- A recurring add whose key already belongs to a **one-off job** is deduped against that job
-  (`reportsJob.jobId` is the existing job; no schedule is created).
-- A plain one-off add whose key already belongs to a **schedule** is deduped against that schedule
-  (`reportsJob.scheduleId` is the existing schedule; no job is enqueued) — the key checks the schedule
-  table even when the new add has no recurring options at all.
+- A **recurring** add dedups only against existing **schedules** — a one-off job with the same key
+  never blocks it.
+- A **one-off** add dedups only against existing **jobs** — a schedule with the same key never
+  blocks it.
 
-Without an `idempotencyKey`, no cross-table check happens and every add creates a fresh job or
-schedule. `getSchedules()` surfaces each schedule's `idempotencyKey` for inspection.
+So a one-off job and a schedule may safely share a key on the same queue; they never dedup against
+each other. And the per-run jobs a schedule produces are **not** stamped with the key — otherwise a
+recurring schedule could only ever produce its first run — so those runs never collide with the
+schedule's own key.
+
+Without an `idempotencyKey`, every add creates a fresh job or schedule. `getSchedules()` surfaces
+each schedule's `idempotencyKey` for inspection.
 
 ## Unscheduling
 

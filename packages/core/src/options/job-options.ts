@@ -49,8 +49,9 @@ export interface ScheduleOptions {
  * (`startAfter`), a fixed interval (`startEvery`), or a `cron` expression. Omit `schedule`
  * to run immediately.
  *
- * Identical recurrences may coexist; pass an `idempotencyKey` to guarantee a single one (it dedups
- * across both the job and schedule tables, queue-scoped, first-writer-wins).
+ * Identical recurrences may coexist; pass an `idempotencyKey` to guarantee a single one. Dedup is
+ * queue-scoped and per-entity, first-writer-wins: a one-off add dedups against the jobs table, a
+ * recurring add against the schedule table (the two never dedup against each other).
  */
 export type AddJobOptions<TData> = JobOptions & {
   data: TData;

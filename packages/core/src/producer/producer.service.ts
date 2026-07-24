@@ -35,12 +35,19 @@ export class ProducerService {
 
     const queueOptions = registry.getOptions(queue);
 
-    // Idempotency dedup spans BOTH the job and schedule tables, is queue-scoped, and applies to
-    // one-off and recurring adds alike — but only when a key is given. First writer wins: a later
-    // add with the same key returns the existing job or schedule instead of creating anything new,
-    // even when the two adds differ in shape (e.g. a plain job matching a recurring schedule).
+    // Idempotency dedup is queue-scoped and per-entity: a one-off add (no recurring options)
+    // dedups against the jobs table; a recurring add dedups against the schedule table. Each key is
+    // unique only within its own entity's table, so a one-off job and a schedule may share a key
+    // without colliding. First writer wins within that table — a later add with the same key
+    // returns the existing entity instead of creating a new one. (Jobs a schedule produces are
+    // never stamped with the key, so a recurring schedule keeps producing every run.)
     if (opts.idempotencyKey != null) {
-      const dup = await this.findIdempotencyDuplicate(queue, opts.idempotencyKey, opts.tx);
+      const dup = await this.findIdempotencyDuplicate(
+        queue,
+        opts.idempotencyKey,
+        isRecurring,
+        opts.tx,
+      );
       if (dup) {
         // Only a job match carries a jobId the JOB_ADDED event needs; a schedule match is silent.
         if (dup.jobId != null) {
@@ -160,22 +167,24 @@ export class ProducerService {
   }
 
   /**
-   * The unified idempotency lookup behind {@link addJob}. Checks the schedule table then the job
-   * table for this queue+key; at most one can exist (first writer wins across both). Returns a
-   * deduplicated result shaped for whichever entity matched, or null when the key is free.
+   * The idempotency lookup behind {@link addJob}. A one-off add checks the jobs table; a recurring
+   * add checks the schedule table — a key is unique only within its own entity's table. Returns a
+   * deduplicated result shaped for the matched entity, or null when the key is free in that table.
    */
   private async findIdempotencyDuplicate(
     queue: string,
     idempotencyKey: string,
+    isRecurring: boolean,
     tx?: AddJobOptions<unknown>['tx'],
   ): Promise<AddJobResult | null> {
     const { driver } = this.runtime;
-    const schedule = await driver.findScheduleByIdempotencyKey({
-      queueName: queue,
-      idempotencyKey,
-      ...(tx ? { tx } : {}),
-    });
-    if (schedule) {
+    if (isRecurring) {
+      const schedule = await driver.findScheduleByIdempotencyKey({
+        queueName: queue,
+        idempotencyKey,
+        ...(tx ? { tx } : {}),
+      });
+      if (!schedule) return null;
       return {
         queue,
         scheduleId: schedule.id,
@@ -189,17 +198,15 @@ export class ProducerService {
       idempotencyKey,
       ...(tx ? { tx } : {}),
     });
-    if (job) {
-      return {
-        jobId: job.id,
-        queue,
-        status: job.status,
-        startAfter: new Date(job.startAfter),
-        deduplicated: true,
-        deduplicationReason: DeduplicationReason.IDEMPOTENCY,
-      };
-    }
-    return null;
+    if (!job) return null;
+    return {
+      jobId: job.id,
+      queue,
+      status: job.status,
+      startAfter: new Date(job.startAfter),
+      deduplicated: true,
+      deduplicationReason: DeduplicationReason.IDEMPOTENCY,
+    };
   }
 
   private async createSchedule<TData>(

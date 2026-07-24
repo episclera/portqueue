@@ -69,24 +69,37 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     expect(schedules[0]!.idempotencyKey).toBe('daily');
   });
 
-  it('idempotency key dedups across the job and schedule tables', async () => {
+  it('idempotency key dedups per table — one-off and recurring keys are independent', async () => {
     const queue = h.pq.createQueue('sched-cross');
-    // A one-off job claims the key first.
+    // A one-off add only checks the jobs table.
     const job = await queue.addJob({ data: {}, idempotencyKey: 'shared' });
-    // A later recurring add with the same key is deduped against the existing job, not created.
-    const sched = await queue.addJob({ data: {}, schedule: { cron: '0 0 * * *' }, idempotencyKey: 'shared' });
-    expect(sched.deduplicated).toBe(true);
-    expect(sched.jobId).toBe(job.jobId);
-    expect(sched.scheduleId).toBeUndefined();
-    expect(await queue.getSchedules()).toHaveLength(0);
+    // A recurring add with the same key checks only the schedule table, so it is NOT deduped
+    // against the existing one-off job — it creates its own schedule.
+    const sched = await queue.addJob({
+      data: {},
+      schedule: { cron: '0 0 * * *' },
+      idempotencyKey: 'shared',
+    });
+    expect(sched.deduplicated).toBe(false);
+    expect(sched.scheduleId).toBeTruthy();
+    expect(sched.jobId).toBeUndefined();
+    expect(await queue.getSchedules()).toHaveLength(1);
 
-    // And the reverse: a schedule's key blocks a plain one-off add carrying the same key.
-    const other = h.pq.createQueue('sched-cross-2');
-    const s = await other.addJob({ data: {}, schedule: { startEvery: 1000 }, idempotencyKey: 'k2' });
-    const dupJob = await other.addJob({ data: {}, idempotencyKey: 'k2' });
+    // A second one-off add with that key dedups against the existing job (jobs table only).
+    const dupJob = await queue.addJob({ data: {}, idempotencyKey: 'shared' });
     expect(dupJob.deduplicated).toBe(true);
-    expect(dupJob.scheduleId).toBe(s.scheduleId);
-    expect(dupJob.jobId).toBeUndefined();
+    expect(dupJob.jobId).toBe(job.jobId);
+    expect(dupJob.scheduleId).toBeUndefined();
+
+    // A second recurring add with that key dedups against the existing schedule (schedule table only).
+    const dupSched = await queue.addJob({
+      data: {},
+      schedule: { cron: '0 0 * * *' },
+      idempotencyKey: 'shared',
+    });
+    expect(dupSched.deduplicated).toBe(true);
+    expect(dupSched.scheduleId).toBe(sched.scheduleId);
+    expect(await queue.getSchedules()).toHaveLength(1);
   });
 
   it('deletes finished jobs after their retention TTL elapses', async () => {

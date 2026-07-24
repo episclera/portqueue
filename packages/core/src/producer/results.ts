@@ -19,7 +19,8 @@ export interface AddJobResult {
   status?: JobStatus;
   /**
    * True if an idempotency/singleton guard matched an existing job or schedule and returned it
-   * instead of creating a new one. Idempotency matches span both the job and schedule tables.
+   * instead of creating a new one. An idempotency match is per-entity: a one-off add matches an
+   * existing job, a recurring add matches an existing schedule.
    */
   deduplicated: boolean;
   deduplicationReason?: DeduplicationReason;

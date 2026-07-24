@@ -197,9 +197,9 @@ Both keys are **queue-scoped**, but they solve different problems:
 - **`idempotencyKey`** — a *first-writer-wins dedup identity*. The first add with a given key
   creates the job (or schedule); any later add with the same key on that queue returns the
   **existing** entity **unchanged** (`deduplicated: true`, `deduplicationReason: 'IDEMPOTENCY'`)
-  and creates nothing. The check spans **both** the job and schedule tables, so a plain add and a
-  recurring add sharing a key still collapse to one entity. Use it to guarantee an operation is
-  enqueued **at most once ever** (per key).
+  and creates nothing. Dedup is **per entity**: a one-off add is matched against the jobs table, a
+  recurring add against the schedule table (they never dedup against each other). Use it to
+  guarantee an operation is enqueued **at most once ever** (per key).
 - **`singletonKey`** — *at most one active/pending job at a time* for that key. Unlike
   `idempotencyKey`, it does not pin a permanent identity: once the job finishes, a new add with
   the same key can enqueue again. Use it to prevent a **second concurrent** run (e.g. one reindex
