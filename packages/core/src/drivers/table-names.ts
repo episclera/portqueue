@@ -79,6 +79,7 @@ export enum ScheduleColumn {
   START_AT = 'start_at',
   END_AT = 'end_at',
   IDEMPOTENCY_KEY = 'idempotency_key',
+  JOB_OPTIONS = 'job_options',
   CREATED_AT = 'created_at',
   UPDATED_AT = 'updated_at',
 }

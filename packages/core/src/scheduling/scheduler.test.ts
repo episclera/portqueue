@@ -36,6 +36,32 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     expect(page.items[0]!.scheduleId).toBe(res.scheduleId);
   });
 
+  it('carries per-job options (expireIn) from a recurring add onto every spawned job', async () => {
+    const queue = h.pq.createQueue('carry');
+    // No worker: a produced run just sits until it expires. The recurring add sets expireIn, which
+    // must ride along and apply to each spawned job (relative to its own fire time). Without
+    // carry-through the produced job would have no deadline and never expire.
+    const res = await queue.addJob({
+      data: {},
+      schedule: { startEvery: 1000 },
+      expireIn: 500,
+    });
+
+    // Fire the first run.
+    h.clock.advance(1500);
+    let jobId = '';
+    await waitFor(async () => {
+      const page = await queue.getJobs({ scheduleId: res.scheduleId! });
+      if (page.items[0]) jobId = page.items[0].id;
+      return page.items.length >= 1;
+    });
+
+    // Push past the produced job's 500ms deadline; the maintenance tick expires it.
+    h.clock.advance(1000);
+    await waitFor(async () => (await queue.getJob({ jobId }))?.status === JobStatus.EXPIRED);
+    expect((await queue.getJob({ jobId }))!.status).toBe(JobStatus.EXPIRED);
+  });
+
   it('lists schedules and removes them', async () => {
     const queue = h.pq.createQueue('sched');
     const res = await queue.addJob({ data: {}, schedule: { cron: '0 0 * * *' } });

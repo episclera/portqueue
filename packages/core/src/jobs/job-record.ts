@@ -113,8 +113,29 @@ export interface ScheduleRow {
   endAt: number | null;
   /** Optional dedup token. When set, only one job/schedule with this key exists per queue. */
   idempotencyKey: string | null;
+  /** The resolved per-run job template stamped onto every job this schedule spawns. */
+  jobOptions: ScheduledJobOptions | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * The per-run job template a recurring schedule carries — every option passed to the recurring
+ * `addJob` that shapes the *spawned jobs* (not the schedule itself), beyond the fields the schedule
+ * already stores as columns (`priority`, `retryMaxAttempts`, `retryDelayMs`). `expireInMs` is a
+ * duration re-applied relative to each run's fire time. Persisted as one JSON column so new options
+ * don't need a schema change.
+ */
+export interface ScheduledJobOptions {
+  expireInMs: number | null;
+  retryBackoff: BackoffStrategy;
+  retryBackoffFactor: number | null;
+  retryMaxDelayMs: number | null;
+  retryJitter: boolean;
+  retentionMode: RetentionMode;
+  retentionTtlMs: number | null;
+  singletonKey: string | null;
+  preferredInstanceKeyPattern: string | null;
 }
 
 /** A new schedule to insert. */
@@ -134,6 +155,8 @@ export interface NewScheduleRow {
   endAt: number | null;
   /** Optional dedup token. When set, only one job/schedule with this key exists per queue. */
   idempotencyKey: string | null;
+  /** The resolved per-run job template stamped onto every job this schedule spawns. */
+  jobOptions: ScheduledJobOptions | null;
 }
 
 export interface ThroughputPoint {

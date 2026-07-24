@@ -63,6 +63,7 @@ function v1(t: PhysicalName): string[] {
       every_ms BIGINT,
       timezone TEXT,
       data TEXT,
+      job_options TEXT,
       priority INTEGER,
       retry_max_attempts INTEGER,
       retry_delay_ms BIGINT,

@@ -47,8 +47,10 @@ await emailsQueue.addJob({ data, schedule: { cron: { pattern: '0 8 * * 1-5', tz:
 - `schedule.cron` — a **recurring** cron expression, a bare string (UTC) or `{ pattern, tz }`.
 
 Pick **exactly one** recurring mode, and `startAfter` can't be combined with a recurring mode.
-Omit `schedule` to run immediately. See [Delayed & recurring jobs](./scheduling.md) for the full
-recurring story (dedup, timezones, unscheduling).
+Omit `schedule` to run immediately. For a recurring mode, **every option on the add** (priority,
+retry/backoff, `expireIn`, `retention`, …) becomes the template stamped onto each spawned run — it
+shapes the produced jobs, not the schedule. See [Delayed & recurring jobs](./scheduling.md) for the
+full recurring story (dedup, timezones, unscheduling).
 
 ## Priority
 

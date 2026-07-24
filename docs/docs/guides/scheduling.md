@@ -34,8 +34,8 @@ await emailsQueue.addJob({ data, schedule: { startAfter: new Date('2026-08-01T09
 
 ## Recurring — cron with timezone
 
-A recurring add creates/updates a **recurring producer**; `data` + the job options become
-the **template** for every produced run. `schedule.cron` is either a bare expression string
+A recurring add creates/updates a **recurring producer**; `data` **and every job option you pass**
+become the **template** for each produced run. `schedule.cron` is either a bare expression string
 (evaluated in UTC) or `{ pattern, tz }` for a timezone:
 
 ```ts
@@ -43,12 +43,23 @@ const reportsQueue = pq.createQueue('reports');
 const result = await reportsQueue.addJob({
   data: { kind: 'sales' },       // template for each run
   priority: 5,                   // job options apply to each run
+  retry: { maxAttempts: 3 },     // …as do retry, backoff, expireIn, retention, etc.
   schedule: { cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' } },
 });
 // Bare UTC form: schedule: { cron: '0 8 * * 1-5' }
 // reportsJob.jobId is absent (no concrete job yet); reportsJob.scheduleId is stamped on every produced job;
 // reportsJob.nextRunAt is the first run time.
 ```
+
+:::note Options shape the spawned jobs, not the schedule
+A schedule **spawns a new job** on each tick, and **every option** you pass to the recurring
+`addJob` — `priority`, `retry`/`backoff`, `expireIn`, `retention`, `singletonKey`,
+`preferredInstanceKeyPattern` — is carried onto each spawned job. These govern the **produced
+jobs**, never the schedule itself: `expireIn` bounds how long each run may wait before it starts
+(re-applied relative to that run), `retention` controls how long each finished run is kept, and so
+on. The schedule keeps firing regardless. (One exception: `idempotencyKey` is **not** copied to the
+runs — otherwise a schedule could only ever produce its first job.)
+:::
 
 **Identical schedules are allowed.** Re-adding the same `schedule.cron`/`schedule.startEvery` on a
 queue creates a **new, independent schedule** — PortQueue does not deduplicate by recurrence pattern.

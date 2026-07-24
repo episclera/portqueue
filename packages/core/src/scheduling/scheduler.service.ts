@@ -1,4 +1,5 @@
 import { JobStatus } from '../jobs/job-state.enum';
+import { BackoffStrategy, RetentionMode } from '../options/enums';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { CronExpression } from './cron';
 import type { NewJobRecord, ScheduleRow } from '../jobs/job-record';
@@ -50,28 +51,32 @@ export class SchedulerService {
     });
     if (!won) return;
 
-    const resolved = this.runtime.resolver.resolve({ job: {}, now });
+    // Stamp every option the recurring add carried (see ScheduledJobOptions) onto this run. These
+    // shape the produced job, never the schedule itself; `expireInMs` becomes an absolute deadline
+    // relative to *this* run. Produced jobs are never given the schedule's idempotencyKey, so the
+    // recurrence keeps firing.
+    const t = schedule.jobOptions;
     const queueName = schedule.queueName;
     const job: NewJobRecord = {
       queueName: schedule.queueName,
       status: JobStatus.PENDING,
-      priority: schedule.priority ?? resolved.priority,
+      priority: schedule.priority ?? 0,
       data: schedule.data,
       startAfter: now,
-      expireAt: null,
+      expireAt: t?.expireInMs != null ? now + t.expireInMs : null,
       retryAttempt: 0,
-      retryMaxAttempts: schedule.retryMaxAttempts ?? resolved.retryMaxAttempts,
-      retryDelayMs: schedule.retryDelayMs ?? resolved.retryDelayMs,
-      retryBackoff: resolved.retryBackoff,
-      retryBackoffFactor: resolved.retryBackoffFactor,
-      retryMaxDelayMs: resolved.retryMaxDelayMs,
-      retryJitter: resolved.retryJitter,
-      retentionMode: resolved.retentionMode,
-      retentionTtlMs: resolved.retentionTtlMs,
+      retryMaxAttempts: schedule.retryMaxAttempts ?? 1,
+      retryDelayMs: schedule.retryDelayMs ?? 0,
+      retryBackoff: t?.retryBackoff ?? BackoffStrategy.FIXED,
+      retryBackoffFactor: t?.retryBackoffFactor ?? null,
+      retryMaxDelayMs: t?.retryMaxDelayMs ?? null,
+      retryJitter: t?.retryJitter ?? false,
+      retentionMode: t?.retentionMode ?? RetentionMode.KEEP_FOREVER,
+      retentionTtlMs: t?.retentionTtlMs ?? null,
       idempotencyKey: null,
       scheduleId: schedule.id,
-      singletonKey: null,
-      preferredInstanceKeyPattern: null,
+      singletonKey: t?.singletonKey ?? null,
+      preferredInstanceKeyPattern: t?.preferredInstanceKeyPattern ?? null,
       createdAt: now,
     };
     const inserted = await this.runtime.driver.insertJob({ job });

@@ -93,6 +93,7 @@ function v1(t: PhysicalName): string[] {
         every_ms NUMBER(19),
         timezone VARCHAR2(4000),
         data CLOB,
+        job_options CLOB,
         priority NUMBER(10),
         retry_max_attempts NUMBER(10),
         retry_delay_ms NUMBER(19),

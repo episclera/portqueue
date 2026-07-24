@@ -171,6 +171,7 @@ export function runConformance(options: ConformanceOptions): void {
         startAt: null,
         endAt: null,
         idempotencyKey: null,
+        jobOptions: null,
       };
       // No pattern-based dedup: two identical recurrences are two distinct schedule rows.
       const first = await driver.insertSchedule({ schedule: base });

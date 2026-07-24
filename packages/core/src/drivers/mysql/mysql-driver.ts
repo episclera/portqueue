@@ -38,6 +38,7 @@ import type {
   NewJobRecord,
   NewScheduleRow,
   QueueRow,
+  ScheduledJobOptions,
   ScheduleRow,
   ThroughputPoint,
 } from '../../jobs/job-record';
@@ -380,6 +381,8 @@ export class MysqlDriver implements Driver {
       everyMs: this.numOrNull(row[ScheduleColumn.EVERY_MS]),
       timezone: this.strOrNull(row[ScheduleColumn.TIMEZONE]),
       data: this.fromJson(row[ScheduleColumn.DATA]),
+      jobOptions:
+        (this.fromJson(row[ScheduleColumn.JOB_OPTIONS]) as ScheduledJobOptions | null) ?? null,
       priority: this.numOrNull(row[ScheduleColumn.PRIORITY]),
       retryMaxAttempts: this.numOrNull(row[ScheduleColumn.RETRY_MAX_ATTEMPTS]),
       retryDelayMs: this.numOrNull(row[ScheduleColumn.RETRY_DELAY_MS]),
@@ -568,6 +571,7 @@ export class MysqlDriver implements Driver {
       ScheduleColumn.EVERY_MS,
       ScheduleColumn.TIMEZONE,
       ScheduleColumn.DATA,
+      ScheduleColumn.JOB_OPTIONS,
       ScheduleColumn.PRIORITY,
       ScheduleColumn.RETRY_MAX_ATTEMPTS,
       ScheduleColumn.RETRY_DELAY_MS,
@@ -586,6 +590,7 @@ export class MysqlDriver implements Driver {
       schedule.everyMs,
       schedule.timezone,
       this.toJson(schedule.data),
+      this.toJson(schedule.jobOptions),
       schedule.priority,
       schedule.retryMaxAttempts,
       schedule.retryDelayMs,

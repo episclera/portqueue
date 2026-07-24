@@ -6,7 +6,7 @@ import { toMs } from '../util/duration';
 import { CronExpression } from '../scheduling/cron';
 import type { AddJobOptions, CronSpec, ScheduleOptions } from '../options/job-options';
 import type { AddJobResult, ScheduleInfo } from './results';
-import type { NewJobRecord, NewScheduleRow } from '../jobs/job-record';
+import type { NewJobRecord, NewScheduleRow, ScheduledJobOptions } from '../jobs/job-record';
 import type { Runtime } from '../client/runtime';
 import type { NotifierService } from '../pubsub/notifier.service';
 
@@ -216,14 +216,37 @@ export class ProducerService {
     this.validateSchedule(queue, opts);
     const { registry, driver, clock, resolver, events } = this.runtime;
     await registry.ensure(queue);
+    const queueOptions = registry.getOptions(queue);
+    const affinity = this.resolveAffinity(queue, opts);
     const now = clock.now();
-    const resolved = resolver.resolve({ job: opts, now });
+    const resolved = resolver.resolve({
+      job: opts,
+      ...(queueOptions.defaultJobOptions ? { queueDefaults: queueOptions.defaultJobOptions } : {}),
+      ...(queueOptions.retention ? { queueRetention: queueOptions.retention } : {}),
+      now,
+    });
     const cron = opts.schedule?.cron != null ? normalizeCron(opts.schedule.cron) : null;
     const everyMs = opts.schedule?.startEvery != null ? toMs(opts.schedule.startEvery) : null;
     // No pattern-based dedup: identical recurrences on a queue are allowed to coexist. When the
     // caller wants exactly one, they pass an idempotencyKey — that dedup ran in addJob() above, so
     // reaching here means the key was free (or absent) and we always insert a fresh schedule.
     const nextRunAt = this.computeNextRun(opts.schedule!, now);
+
+    // Every option that shapes the *produced* jobs (beyond the columns below) rides along with the
+    // schedule and is stamped onto each run — the schedule row itself is never expired/retained by
+    // these; they govern the spawned jobs. `expireIn` is stored as a duration and re-applied
+    // relative to each run's fire time. See {@link ScheduledJobOptions}.
+    const jobOptions: ScheduledJobOptions = {
+      expireInMs: opts.expireIn != null ? toMs(opts.expireIn) : null,
+      retryBackoff: resolved.retryBackoff,
+      retryBackoffFactor: resolved.retryBackoffFactor,
+      retryMaxDelayMs: resolved.retryMaxDelayMs,
+      retryJitter: resolved.retryJitter,
+      retentionMode: resolved.retentionMode,
+      retentionTtlMs: resolved.retentionTtlMs,
+      singletonKey: resolved.singletonKey,
+      preferredInstanceKeyPattern: affinity.preferredInstanceKeyPattern,
+    };
 
     const newSchedule: NewScheduleRow = {
       queueName: queue,
@@ -239,6 +262,7 @@ export class ProducerService {
       startAt: null,
       endAt: null,
       idempotencyKey: resolved.idempotencyKey,
+      jobOptions,
     };
     const saved = await driver.insertSchedule({
       schedule: newSchedule,
