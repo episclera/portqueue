@@ -1,0 +1,77 @@
+/**
+ * Serve the PortQueue dashboard from a plain `node:http` server.
+ *
+ * Run with: `npm run example:dashboard-node` (from the repo root) or `npm start` here.
+ * Then open http://127.0.0.1:4321/portqueue
+ *
+ * Everything is backed by PGLite in a file-backed data directory under the repo-root `tmp/`
+ * folder, so there is no external database to install or start.
+ */
+import { createServer } from 'node:http';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PortQueue } from '@portqueue/core';
+import { PgliteDriver } from '@portqueue/core/drivers/pglite';
+import { createDashboard } from '@portqueue/dashboard';
+
+// Persist the DB under <repo-root>/tmp (gitignored) — the same convention as scripts/cli.
+const here = dirname(fileURLToPath(import.meta.url));
+const dataDir =
+  process.env.PORTQUEUE_DATA_DIR ?? resolve(here, '../..', 'tmp/portqueue-example-dashboard-node');
+
+const HOST = '127.0.0.1';
+const PORT = 4321;
+
+type QueueName = 'emails' | 'reports';
+
+async function main(): Promise<void> {
+  const pq = new PortQueue<QueueName>({
+    driver: new PgliteDriver({ dataDir }),
+  });
+  await pq.init();
+
+  // A worker so the dashboard has completing jobs to show.
+  const emails = pq.createQueue<{ to: string; template: string }>('emails');
+  pq.createWorker<{ to: string; template: string }>({
+    queue: 'emails',
+    limiter: { concurrency: 5 },
+    handler: async (job) => {
+      console.log(`📧 sending "${job.data.template}" to ${job.data.to}`);
+    },
+  });
+
+  // Seed some jobs so the dashboard isn't empty: a few immediate, one delayed, one recurring.
+  await emails.addJob({ data: { to: 'ada@example.com', template: 'welcome' } });
+  await emails.addJob({ data: { to: 'grace@example.com', template: 'welcome' } });
+  await emails.addJob({
+    data: { to: 'alan@example.com', template: 'digest' },
+    schedule: { startAfter: '30s' },
+  });
+
+  const reports = pq.createQueue<{ kind: string }>('reports');
+  await reports.addJob({ data: { kind: 'sales' }, schedule: { startEvery: '15s' } });
+
+  // Mount the dashboard and serve it from a bare node:http server.
+  const dashboard = createDashboard({ portQueue: pq, title: 'PortQueue — node:http example' });
+  const handler = dashboard.node();
+
+  const server = createServer((req, res) => {
+    if (handler(req, res)) return; // the dashboard served it
+    res.statusCode = 404;
+    res.end('Not found — try ' + dashboard.basePath);
+  });
+
+  await new Promise<void>((r) => server.listen(PORT, HOST, r));
+  console.log(`\n🚀 Dashboard: http://${HOST}:${PORT}${dashboard.basePath}\n`);
+
+  const shutdown = async (): Promise<void> => {
+    console.log('\nShutting down…');
+    server.close();
+    await pq.shutdown();
+    process.exit(0);
+  };
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
+}
+
+void main();

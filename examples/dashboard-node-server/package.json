@@ -1,0 +1,22 @@
+{
+  "name": "@portqueue-examples/dashboard-node-server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Serve the PortQueue dashboard from a plain node:http server (PGLite).",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "start": "node index.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "@portqueue/core": "*",
+    "@portqueue/dashboard": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

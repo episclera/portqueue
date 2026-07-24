@@ -23,14 +23,6 @@ PortQueue treats your relational database as the single source of truth for back
 - **Feature-complete:** concurrency, rate limiting, priorities, delayed jobs, cron/recurring with timezones, idempotency, multi-step workflows, retention, backpressure, graceful shutdown.
 - **Minimal footprint.** Near-zero runtime dependencies; DB clients are optional peers you choose.
 
-## Packages
-
-| Package | Description |
-|---|---|
-| [`@portqueue/core`](./packages/core) | The queue engine, driver model, and first-party drivers |
-| [`@portqueue/dashboard`](./packages/dashboard) | Pluggable React dashboard middleware |
-| [`@portqueue/cli`](./packages/cli) | Command-line tool for stats, actions, and serving the dashboard |
-
 ## Quick start
 
 ```bash
@@ -60,10 +52,8 @@ await emailsQueue.addJob({ data: { to: 'a@b.com' } });
 
 ## Contributing
 
-- Setup: run `./scripts/dev/setup.sh` (or `npm run setup`) — it selects the pinned Node version and installs all workspaces. That's all you need to get the repo ready.
-- Build: `npm run build`. Test: `npm test`. Lint + typecheck: `npm run lint` (ESLint + `tsc --noEmit` in one step).
-- Commits follow **Conventional Commits** (enforced by commitlint) — the changelog is derived from them.
-- Tests use **PGLite + SQLite only** (no external DB server needed). If you need a real Postgres, MySQL or Oracle (e.g. for manual driver testing), start one in Docker with `npm run db:pg:up`, `npm run db:mysql:up` or `npm run db:oracle:up` (stop with `db:pg:down` / `db:mysql:down` / `db:oracle:down`).
+For full details — dev setup, conventions, running the examples, and filing issues & PRs — see the
+**[Contributing guide](https://episclera.github.io/portqueue/docs/contributing)**.
 
 ## License
 

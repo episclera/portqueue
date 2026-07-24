@@ -10,10 +10,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Getting Started',
       collapsed: false,
-      items: [
-        'getting-started/installation',
-        'getting-started/first-queue',
-      ],
+      items: ['getting-started/installation', 'getting-started/first-queue'],
     },
     {
       type: 'category',
@@ -55,7 +52,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'More',
-      items: ['advanced', 'contributing', 'brandbook', 'team'],
+      items: ['advanced', 'examples', 'contributing', 'brandbook', 'team'],
     },
   ],
 };

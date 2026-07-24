@@ -32,13 +32,18 @@ by commitlint) — the changelog is derived from them.
 
 Tests use **PGLite + SQLite only**, so they run anywhere with no external DB server. If
 you need a real Postgres, MySQL or Oracle (e.g. for manual driver testing), start one in
-Docker:
+Docker. Each has an `npm run` script and an equivalent shell script under `scripts/dev/db/`
+— use whichever you prefer:
 
 ```bash
-npm run db:pg:up       # Postgres   (stop with db:pg:down)
-npm run db:mysql:up    # MySQL      (stop with db:mysql:down)
-npm run db:oracle:up   # Oracle     (stop with db:oracle:down)
+npm run db:pg:up          # or: ./scripts/dev/db/start-postgres.sh   (stop: db:pg:down)
+npm run db:mysql:up       # or: ./scripts/dev/db/start-mysql.sh      (stop: db:mysql:down)
+npm run db:oracle:up      # or: ./scripts/dev/db/start-oracle.sh     (stop: db:oracle:down)
 ```
+
+There are also runnable [example apps](./examples.md) under `examples/` (dashboard servers,
+job scheduling) — a quick way to exercise the library locally. See the
+[Examples](./examples.md) page for how to run each one.
 
 Packages:
 
@@ -64,3 +69,9 @@ Packages:
 - Be kind — a standard code of conduct applies.
 
 Meet the people behind it on the [Team](./team.mdx) page.
+
+## Working on the UI
+
+When implementing anything user-facing — the dashboard, docs, or shared `@portqueue/ui`
+components — consult the [Brandbook](./brandbook.mdx) first. It's the source of truth for the
+palette, typography, tone, and component style, so contributions stay visually consistent.

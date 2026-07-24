@@ -10,6 +10,7 @@
   },
   "workspaces": [
     "packages/*",
+    "examples/*",
     "docs"
   ],
   "scripts": {
@@ -25,12 +26,16 @@
     "setup": "bash scripts/dev/setup.sh",
     "cli": "bash scripts/cli/run.sh",
     "dev:docs": "bash scripts/dev/start-docs.sh",
-    "db:pg:up": "bash scripts/dev/start-postgres.sh",
-    "db:pg:down": "bash scripts/dev/stop-postgres.sh",
-    "db:mysql:up": "bash scripts/dev/start-mysql.sh",
-    "db:mysql:down": "bash scripts/dev/stop-mysql.sh",
-    "db:oracle:up": "bash scripts/dev/start-oracle.sh",
-    "db:oracle:down": "bash scripts/dev/stop-oracle.sh"
+    "db:pg:up": "bash scripts/dev/db/start-postgres.sh",
+    "db:pg:down": "bash scripts/dev/db/stop-postgres.sh",
+    "db:mysql:up": "bash scripts/dev/db/start-mysql.sh",
+    "db:mysql:down": "bash scripts/dev/db/stop-mysql.sh",
+    "db:oracle:up": "bash scripts/dev/db/start-oracle.sh",
+    "db:oracle:down": "bash scripts/dev/db/stop-oracle.sh",
+    "example:dashboard-node": "bash scripts/dev/examples/dashboard-node-server.sh",
+    "example:dashboard-express": "bash scripts/dev/examples/dashboard-express.sh",
+    "example:schedule-delayed": "bash scripts/dev/examples/job-scheduling-delayed.sh",
+    "example:schedule-recurring": "bash scripts/dev/examples/job-scheduling-recurring.sh"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",
