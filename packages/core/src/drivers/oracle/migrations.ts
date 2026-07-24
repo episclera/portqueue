@@ -9,7 +9,7 @@ import type { FlavourMigration, PhysicalName } from '../shared/migration';
  * Predefined Oracle DDL, version by version. Oracle has no `TEXT`/`BIGINT`/`SMALLINT` and (pre-23c)
  * no `CREATE TABLE IF NOT EXISTS`, so this flavour is authored from scratch rather than borrowed
  * from Postgres:
- *   - short strings → `VARCHAR2(4000)`, free-form payloads (`data`, `return_value`, `metadata`,
+ *   - short strings → `VARCHAR2(4000)`, free-form payloads (`data`, `return_value`,
  *     `failure_message`) → `CLOB`;
  *   - integers → `NUMBER(p)` (`NUMBER(19)` bigint, `NUMBER(10)` int, `NUMBER(5)` smallint),
  *     floats → `BINARY_DOUBLE`;
@@ -56,7 +56,6 @@ function v1(t: PhysicalName): string[] {
         priority NUMBER(10) DEFAULT 0 NOT NULL,
         data CLOB,
         return_value CLOB,
-        metadata CLOB,
         created_at NUMBER(19) NOT NULL,
         updated_at NUMBER(19) NOT NULL,
         start_after NUMBER(19) NOT NULL,
@@ -69,7 +68,6 @@ function v1(t: PhysicalName): string[] {
         cancelled_at NUMBER(19),
         expired_at NUMBER(19),
         locked_until NUMBER(19),
-        locked_by_instance_id VARCHAR2(4000),
         preferred_instance_key_pattern VARCHAR2(4000),
         processed_on_instance_key VARCHAR2(4000),
         retry_attempt NUMBER(10) DEFAULT 0 NOT NULL,

@@ -36,7 +36,7 @@ import type {
   Subscription,
   WorkflowNext,
 } from '../driver.interface';
-import type { DriverContext } from '../driver-context';
+import { DriverContext } from '../driver-context';
 import type {
   InsertedJobRow,
   InstanceRow,
@@ -57,6 +57,12 @@ export interface MysqlDriverOptions {
   pool?: unknown;
   /** Any `mysql2` pool config (host/user/password/database/…). */
   config?: Record<string, unknown>;
+  /** DB schema/database for all objects. */
+  schema?: string;
+  /** Prefix for all created tables (default 'pq_'). */
+  tablePrefix?: string;
+  /** Logical prefix for pub/sub channels when multiple PortQueues share one DB. */
+  namespace?: string;
 }
 
 interface MysqlOkPacket {
@@ -92,7 +98,6 @@ const JOB_COLUMNS = [
   JobColumn.PRIORITY,
   JobColumn.DATA,
   JobColumn.RETURN_VALUE,
-  JobColumn.METADATA,
   JobColumn.CREATED_AT,
   JobColumn.UPDATED_AT,
   JobColumn.START_AFTER,
@@ -105,7 +110,6 @@ const JOB_COLUMNS = [
   JobColumn.CANCELLED_AT,
   JobColumn.EXPIRED_AT,
   JobColumn.LOCKED_UNTIL,
-  JobColumn.LOCKED_BY_INSTANCE_ID,
   JobColumn.PREFERRED_INSTANCE_KEY_PATTERN,
   JobColumn.PROCESSED_ON_INSTANCE_KEY,
   JobColumn.RETRY_ATTEMPT,
@@ -144,16 +148,17 @@ export class MysqlDriver implements Driver {
   });
   readonly migrations = toMigrationSteps(MYSQL_MIGRATIONS);
 
-  protected context!: DriverContext;
+  readonly context: DriverContext;
   private pool: MysqlPool | null = null;
   private readonly options: MysqlDriverOptions;
 
   constructor(options: MysqlDriverOptions = {}) {
     this.options = options;
-  }
-
-  setContext(context: DriverContext): void {
-    this.context = context;
+    this.context = new DriverContext({
+      ...(options.tablePrefix !== undefined ? { tablePrefix: options.tablePrefix } : {}),
+      ...(options.schema !== undefined ? { schema: options.schema } : {}),
+      ...(options.namespace !== undefined ? { namespace: options.namespace } : {}),
+    });
   }
 
   // --- Connection management ---
@@ -272,9 +277,7 @@ export class MysqlDriver implements Driver {
     );
   }
 
-  async ensureBaseObjects(options: { context: DriverContext }): Promise<void> {
-    this.context = options.context;
-  }
+  async ensureBaseObjects(): Promise<void> {}
 
   // --- Value conversion ---
   private toJson(value: unknown): string | null {
@@ -327,7 +330,6 @@ export class MysqlDriver implements Driver {
       priority: Number(row[JobColumn.PRIORITY]),
       data: this.fromJson(row[JobColumn.DATA]),
       returnValue: this.fromJson(row[JobColumn.RETURN_VALUE]),
-      metadata: (this.fromJson(row[JobColumn.METADATA]) as Record<string, unknown>) ?? {},
       createdAt: Number(row[JobColumn.CREATED_AT]),
       updatedAt: Number(row[JobColumn.UPDATED_AT]),
       startAfter: Number(row[JobColumn.START_AFTER]),
@@ -340,7 +342,6 @@ export class MysqlDriver implements Driver {
       cancelledAt: this.numOrNull(row[JobColumn.CANCELLED_AT]),
       expiredAt: this.numOrNull(row[JobColumn.EXPIRED_AT]),
       lockedUntil: this.numOrNull(row[JobColumn.LOCKED_UNTIL]),
-      lockedByInstanceId: this.strOrNull(row[JobColumn.LOCKED_BY_INSTANCE_ID]),
       preferredInstanceKeyPattern: this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]),
       processedOnInstanceKey: this.strOrNull(row[JobColumn.PROCESSED_ON_INSTANCE_KEY]),
       retryAttempt: Number(row[JobColumn.RETRY_ATTEMPT]),
@@ -415,7 +416,6 @@ export class MysqlDriver implements Driver {
       job.priority,
       this.toJson(job.data),
       null, // return_value
-      this.toJson(job.metadata),
       now,
       now,
       job.startAfter,
@@ -428,7 +428,6 @@ export class MysqlDriver implements Driver {
       null, // cancelled_at
       null, // expired_at
       null, // locked_until
-      null, // locked_by_instance_id
       job.preferredInstanceKeyPattern,
       null, // processed_on_instance_key (set at claim time)
       job.retryAttempt,
@@ -643,10 +642,9 @@ export class MysqlDriver implements Driver {
     limit: number;
     lockDurationMs: number;
     now: number;
-    lockedByInstanceId: string;
     instanceKey?: string | null;
   }): Promise<JobRecord[]> {
-    const { queueName, limit, lockDurationMs, now, lockedByInstanceId, instanceKey } = options;
+    const { queueName, limit, lockDurationMs, now, instanceKey } = options;
     const lockedUntil = now + lockDurationMs;
 
     // Select claimable ids highest-priority-first, locking them for the transaction with SKIP
@@ -691,12 +689,12 @@ export class MysqlDriver implements Driver {
       if (ids.length === 0) return [];
 
       // Guarded UPDATE of exactly the locked ids, then read them back (no RETURNING on MySQL).
-      const idPh = ids.map((_, i) => this.ph(5 + i)).join(', ');
+      const idPh = ids.map((_, i) => this.ph(4 + i)).join(', ');
       await this.execute(
         `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.ACTIVE}', ${JobColumn.STARTED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = ${this.ph(1)}, ` +
-          `${JobColumn.LOCKED_BY_INSTANCE_ID} = ${this.ph(2)}, ${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(3)}, ${JobColumn.UPDATED_AT} = ${this.ph(4)} ` +
+          `${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)} ` +
           `WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}')`,
-        [now, lockedUntil, lockedByInstanceId, instanceKey ?? null, now, ...ids],
+        [now, lockedUntil, instanceKey ?? null, now, ...ids],
         session,
       );
       const readPh = ids.map((_, i) => this.ph(i)).join(', ');
@@ -814,7 +812,7 @@ export class MysqlDriver implements Driver {
       if (ids.length === 0) return [];
       const idPh = ids.map((_, i) => this.ph(1 + i)).join(', ');
       await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.STALLED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCKED_BY_INSTANCE_ID} = NULL WHERE ${JobColumn.ID} IN (${idPh})`,
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.STALLED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} IN (${idPh})`,
         [options.now, ...ids],
         session,
       );
@@ -872,7 +870,7 @@ export class MysqlDriver implements Driver {
       await this.execute(
         `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.RETRY_ATTEMPT} = 0, ${JobColumn.START_AFTER} = ${this.ph(0)}, ` +
           `${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ${JobColumn.EXPIRED_AT} = NULL, ` +
-          `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCKED_BY_INSTANCE_ID} = NULL, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)}`,
+          `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)}`,
         [options.now, options.now, options.jobId],
       );
       return {
@@ -898,7 +896,6 @@ export class MysqlDriver implements Driver {
       status: JobStatus.PENDING,
       priority: seed.priority,
       data: seed.data,
-      metadata: seed.metadata,
       startAfter: options.now,
       expireAt: null,
       retryAttempt: 0,

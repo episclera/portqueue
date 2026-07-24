@@ -165,7 +165,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
       queue: 'hooked',
       handler: (ctx: { queue: string; options: { data: unknown } }) => ({
         options: {
-          metadata: { injected: true },
           data: { ...(ctx.options.data as object), tenant: 't1' },
         },
       }),
@@ -188,8 +187,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     );
     expect(seenTenant).toBe('t1');
     expect(outcomes).toContain('completed');
-    const snap = await queue.getJob({ jobId: res.jobId! });
-    expect(snap!.metadata).toMatchObject({ injected: true });
   });
 
   it('vetoes an add when a BEFORE_ADD hook throws', async () => {

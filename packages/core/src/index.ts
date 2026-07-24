@@ -57,7 +57,6 @@ export type {
   Page,
 } from './options/common';
 export type { Duration } from './util/duration';
-export { duration } from './util/duration';
 
 // Result & snapshot types
 export type {
@@ -100,7 +99,6 @@ export type { TransactionHandle, TxQueryResult } from './tx/transaction-handle';
 
 // Logging
 export type { Logger, LogContext, LoggerOptions } from './logging/logger.interface';
-export { ConsoleLogger, NoopLogger } from './logging/console-logger';
 
 // Errors
 export {

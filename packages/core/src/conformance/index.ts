@@ -20,13 +20,11 @@ export interface ConformanceOptions {
 const QUEUE = 'conformance';
 
 async function bootstrap(driver: Driver): Promise<{ queueName: string; context: DriverContext }> {
-  const context = new DriverContext({ tablePrefix: 'pq_' });
-  (driver as unknown as { setContext?: (c: DriverContext) => void }).setContext?.(context);
   await driver.connect();
-  await driver.ensureBaseObjects({ context });
+  await driver.ensureBaseObjects();
   for (const migration of driver.migrations) await driver.applyMigration({ migration });
   const queue = await driver.ensureQueue({ name: QUEUE, now: Date.now() });
-  return { queueName: queue.name, context };
+  return { queueName: queue.name, context: driver.context };
 }
 
 function newJob(
@@ -39,7 +37,6 @@ function newJob(
     status: JobStatus.PENDING,
     priority: 0,
     data: { hello: 'world' },
-    metadata: {},
     startAfter: now,
     expireAt: null,
     retryAttempt: 0,
@@ -92,7 +89,6 @@ export function runConformance(options: ConformanceOptions): void {
         limit: 10,
         lockDurationMs: 30000,
         now: now + 1,
-        lockedByInstanceId: 'i1',
       });
       expect(claimed).toHaveLength(2);
       expect((claimed[0]!.data as { n: number }).n).toBe(2); // higher priority first
@@ -108,7 +104,6 @@ export function runConformance(options: ConformanceOptions): void {
           limit: 20,
           lockDurationMs: 30000,
           now: now + 1,
-          lockedByInstanceId: 'x',
         });
       const [a, b] = await Promise.all([claimOnce(), claimOnce()]);
       const ids = new Set([...a, ...b].map((j) => j.id));
@@ -123,7 +118,6 @@ export function runConformance(options: ConformanceOptions): void {
         limit: 10,
         lockDurationMs: 30000,
         now: now + 1,
-        lockedByInstanceId: 'i',
       });
       expect(claimed).toHaveLength(0);
     });
@@ -135,7 +129,6 @@ export function runConformance(options: ConformanceOptions): void {
         limit: 1,
         lockDurationMs: 30000,
         now: now + 1,
-        lockedByInstanceId: 'i',
       });
       await driver.completeJob({ jobId: inserted.id, returnValue: { ok: true }, now: now + 2 });
       const record = await driver.getJob({ jobId: inserted.id });
@@ -150,7 +143,6 @@ export function runConformance(options: ConformanceOptions): void {
         limit: 1,
         lockDurationMs: 1000,
         now,
-        lockedByInstanceId: 'i',
       });
       const reclaimed = await driver.reclaimStalledJobs({ now: now + 5000 });
       expect(reclaimed.map((j) => j.id)).toContain(inserted.id);
@@ -302,7 +294,6 @@ export function runConformance(options: ConformanceOptions): void {
         limit: 10,
         lockDurationMs: 30000,
         now: now + 1,
-        lockedByInstanceId: 'us',
         instanceKey: 'worker-us-1',
       });
       expect(us).toHaveLength(0);
@@ -312,7 +303,6 @@ export function runConformance(options: ConformanceOptions): void {
         limit: 10,
         lockDurationMs: 30000,
         now: now + 2,
-        lockedByInstanceId: 'eu',
         instanceKey: 'worker-eu-1',
       });
       expect(eu).toHaveLength(1);
@@ -326,7 +316,6 @@ export function runConformance(options: ConformanceOptions): void {
         limit: 10,
         lockDurationMs: 30000,
         now: now + 1,
-        lockedByInstanceId: 'b',
         instanceKey: 'worker-any-1',
       });
       expect(claim).toHaveLength(1);
@@ -347,7 +336,6 @@ export function runConformance(options: ConformanceOptions): void {
         limit: 5,
         lockDurationMs: 30000,
         now: now + 1,
-        lockedByInstanceId: 'us',
         instanceKey: 'worker-us-1',
       });
       expect(claim).toHaveLength(1);
