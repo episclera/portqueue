@@ -11,6 +11,9 @@ export default {
     // Resolve workspace siblings to their source so tests need no prior build.
     '^@portqueue/core$': '<rootDir>/../core/src/index.ts',
     '^@portqueue/ui$': '<rootDir>/../ui/src/index.ts',
+    // styled-components is CJS with the styled() fn on `.default`; ts-jest's ESM mode doesn't
+    // apply default-interop, so route it through a shim that unwraps it (see the shim's header).
+    '^styled-components$': '<rootDir>/src/test-support/styled-components-shim.mjs',
     // Stub stylesheet imports (jsdom can't parse CSS and we don't assert on it).
     '\\.(css|less|scss)$': '<rootDir>/src/test-support/style-stub.js',
     // NodeNext ESM requires .js extensions on relative imports; strip them for ts-jest.
