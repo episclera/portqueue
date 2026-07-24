@@ -8,8 +8,12 @@ sidebar_label: Configuration reference
 
 Every knob PortQueue exposes lives on one of three option objects: what you pass to the
 **constructor**, to **`createQueue`**, and to **`createWorker`**. This page lists each option,
-its type, its default, and what it does. Durations accept a number of milliseconds or a human
-string like `'30s'`, `'5m'`, `'1h'`, `'2d'`, `'500ms'`.
+its type, its default, and what it does.
+
+:::note Durations
+Any `Duration` accepts a number of milliseconds or a human string like `'30s'`, `'5m'`, `'1h'`,
+`'2d'`, `'500ms'`.
+:::
 
 ## Constructor options
 
