@@ -96,6 +96,7 @@ caller's transaction. The interface groups its methods by concern:
 - `getJob({ jobId }): Promise<JobRecord | null>`
 - `getJobs({ queueName?, statuses?, scheduleId?, processedOnInstanceKey?, limit, offset, order }): Promise<JobRecord[]>`
 - `countJobsByStatus({ queueName?, processedOnInstanceKey? }): Promise<Record<JobStatus, number>>`
+- `countJobs({ queueName?, statuses?, scheduleId?, processedOnInstanceKey? }): Promise<number>` — total rows behind a `getJobs` filter, ignoring paging.
 - `listQueues(): Promise<QueueRow[]>`
 - `listSchedules({ queueName? }): Promise<ScheduleRow[]>`
 - `getSchedule({ scheduleId }): Promise<ScheduleRow | null>`

@@ -1,28 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { Segmented } from './Segmented';
+import { useTheme } from 'styled-components';
+import { IconButton } from './IconButton';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 export interface ThemeSwitcherProps {
-  value: ThemeMode;
   onChange: (mode: ThemeMode) => void;
 }
 
 const STORAGE_KEY = 'portqueue-theme';
 
-/** Light/dark/system switcher. */
-export function ThemeSwitcher({ value, onChange }: ThemeSwitcherProps): React.ReactElement {
+/**
+ * One-button theme toggle: the icon shows the theme in effect and pressing it flips to the
+ * other one (which also clears a "system" preference).
+ */
+export function ThemeSwitcher({ onChange }: ThemeSwitcherProps): React.ReactElement {
+  const theme = useTheme();
+  const dark = theme?.mode === 'dark';
+  const next: ThemeMode = dark ? 'light' : 'dark';
   return (
-    <Segmented<ThemeMode>
+    <IconButton
       size="sm"
-      value={value}
-      onChange={onChange}
-      options={[
-        { label: 'Light', value: 'light' },
-        { label: 'Dark', value: 'dark' },
-        { label: 'System', value: 'system' },
-      ]}
-    />
+      onClick={() => onChange(next)}
+      title={`Switch to ${next} theme`}
+      aria-label={`Switch to ${next} theme`}
+    >
+      <span aria-hidden>{dark ? '🌙' : '☀️'}</span>
+    </IconButton>
   );
 }
 

@@ -37,6 +37,42 @@ describe('client reads & admin (sqlite)', () => {
     expect(page2.items[0]!.id).not.toBe(page1.items[0]!.id);
   });
 
+  it('pages jobs by offset and reports the filter total on every page', async () => {
+    const q = h.pq.createQueue('offset-paged');
+    for (let i = 0; i < 5; i += 1) await q.addJob({ data: { i } });
+
+    const page1 = await h.pq.getJobs({ queue: 'offset-paged', limit: 2, offset: 0 });
+    const page3 = await h.pq.getJobs({ queue: 'offset-paged', limit: 2, offset: 4 });
+
+    expect(page1.items).toHaveLength(2);
+    expect(page1.total).toBe(5);
+    expect(page1.hasMore).toBe(true);
+
+    // The last page is short, has nothing after it, and shares no row with the first.
+    expect(page3.items).toHaveLength(1);
+    expect(page3.total).toBe(5);
+    expect(page3.hasMore).toBe(false);
+    const firstIds = page1.items.map((j) => j.id);
+    expect(page3.items.every((j) => !firstIds.includes(j.id))).toBe(true);
+  });
+
+  it('counts only the filtered rows in total', async () => {
+    const q = h.pq.createQueue('counted');
+    for (let i = 0; i < 3; i += 1) await q.addJob({ data: { i } });
+    await h.pq.createQueue('other').addJob({ data: {} });
+
+    const scoped = await h.pq.getJobs({ queue: 'counted', limit: 1 });
+    expect(scoped.total).toBe(3);
+
+    const byStatus = await h.pq.getJobs({
+      queue: 'counted',
+      statuses: [JobStatus.COMPLETED],
+      limit: 1,
+    });
+    expect(byStatus.total).toBe(0);
+    expect(byStatus.items).toHaveLength(0);
+  });
+
   it('pauses and resumes via the client convenience methods', async () => {
     h.pq.createQueue('cq');
     await h.pq.pauseQueue({ queue: 'cq', mode: PauseMode.ALL });

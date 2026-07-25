@@ -9,7 +9,9 @@ import {
   Button,
   Card,
   Col,
+  Content,
   Inline,
+  PageHeader,
   Popconfirm,
   Row,
   Skeleton,
@@ -23,12 +25,13 @@ import type { JobDto } from '../../shared/dto';
 import { api, config } from '../queries/api';
 import { useQuery } from '../queries/use-poll';
 import { useAction } from '../queries/use-action';
+import { ACTIONS_CONFIG, STALLED, statusLabel } from '../constants/labels';
 import { LifecycleTimeline } from '../components/LifecycleTimeline';
 import { AddJobForm } from '../components/AddJobForm';
-import { formatDate } from '../components/format';
+import { formatDate, truncate } from '../components/format';
 
 const MonoTitle = styled(Title)`
-  font-family: ui-monospace, monospace;
+  font-family: ${(p) => p.theme.font.mono};
 `;
 
 const DescGrid = styled.dl`
@@ -106,114 +109,149 @@ export function JobDetailPage(): React.ReactElement {
 
   if (job.error) {
     return (
-      <Card>
-        <Stack gap={3} align="center">
-          <Title level={3}>Job not found</Title>
-          <Link to="/">Back to overview</Link>
-        </Stack>
-      </Card>
+      <>
+        <PageHeader title="Job not found" subtitle="This job id is not in the database." />
+        <Content>
+          <Card>
+            <Link to="/">Back to overview</Link>
+          </Card>
+        </Content>
+      </>
     );
   }
   if (job.loading && !job.data) {
     return (
-      <Card>
-        <Skeleton height={120} />
-      </Card>
+      <>
+        <PageHeader title="Job" subtitle="Loading the record…" />
+        <Content>
+          <Card>
+            <Stack gap={3}>
+              <Skeleton height={18} width="40%" />
+              <Skeleton height={120} />
+            </Stack>
+          </Card>
+        </Content>
+      </>
     );
   }
   const j = job.data;
-  if (!j) return <Skeleton height={120} />;
+  if (!j) {
+    return (
+      <Content>
+        <Card>
+          <Skeleton height={120} />
+        </Card>
+      </Content>
+    );
+  }
 
   const isFailed = j.status === JobStatus.FAILED;
+  const rawStatus = j.stalled ? STALLED : j.status;
+  const status = statusLabel(rawStatus);
+
+  const actions = !config.readOnly ? (
+    <Inline gap={2} wrap>
+      <Button
+        icon={ACTIONS_CONFIG.retry.icon}
+        disabled={!isFailed && j.status === JobStatus.ACTIVE}
+        onClick={() => void run({ kind: 'retry', queue: j.queue, jobId: j.id }, 'Retry queued')}
+      >
+        {ACTIONS_CONFIG.retry.label}
+      </Button>
+      <Button icon={ACTIONS_CONFIG.clone.icon} onClick={() => setCloneOpen(true)}>
+        {ACTIONS_CONFIG.clone.label}
+      </Button>
+      {j.status === JobStatus.ACTIVE && (
+        <Popconfirm
+          title="Cancel this job?"
+          onConfirm={() => void run({ kind: 'cancel', queue: j.queue, jobId: j.id }, 'Cancelled')}
+        >
+          <Button icon={ACTIONS_CONFIG.cancel.icon}>{ACTIONS_CONFIG.cancel.label}</Button>
+        </Popconfirm>
+      )}
+      <Popconfirm
+        title="Remove this job permanently?"
+        okDanger
+        onConfirm={() => void run({ kind: 'remove', queue: j.queue, jobId: j.id }, 'Removed')}
+      >
+        <Button variant="danger" icon={ACTIONS_CONFIG.remove.icon}>
+          {ACTIONS_CONFIG.remove.label}
+        </Button>
+      </Popconfirm>
+    </Inline>
+  ) : undefined;
 
   return (
-    <Stack gap={6}>
-      <Inline justify="space-between" align="center" wrap style={{ width: '100%' }}>
-        <Inline gap={3} align="center" wrap>
-          <MonoTitle level={4}>{j.id}</MonoTitle>
-          <Button
-            size="sm"
-            variant="text"
-            icon="📋"
-            onClick={() => void navigator.clipboard?.writeText(j.id)}
-            aria-label="Copy job id"
-          />
-          <StatusTag status={j.stalled ? 'STALLED' : j.status} />
-          <Link to={`/queues/${encodeURIComponent(j.queue)}`}>{j.queue}</Link>
-        </Inline>
-        {!config.readOnly && (
-          <Inline gap={2} wrap>
+    <>
+      <PageHeader
+        title={
+          <Inline gap={3} align="center" wrap>
+            <MonoTitle level={4} as="span">
+              {truncate(j.id, 14, 8)}
+            </MonoTitle>
             <Button
-              disabled={!isFailed && j.status === JobStatus.ACTIVE}
-              onClick={() =>
-                void run({ kind: 'retry', queue: j.queue, jobId: j.id }, 'Retry queued')
-              }
-            >
-              Retry
-            </Button>
-            <Button onClick={() => setCloneOpen(true)}>Clone</Button>
-            {j.status === JobStatus.ACTIVE && (
-              <Popconfirm
-                title="Cancel this job?"
-                onConfirm={() =>
-                  void run({ kind: 'cancel', queue: j.queue, jobId: j.id }, 'Cancelled')
-                }
-              >
-                <Button>Cancel</Button>
-              </Popconfirm>
-            )}
-            <Popconfirm
-              title="Remove this job permanently?"
-              okDanger
-              onConfirm={() => void run({ kind: 'remove', queue: j.queue, jobId: j.id }, 'Removed')}
-            >
-              <Button variant="danger">Remove</Button>
-            </Popconfirm>
+              size="sm"
+              variant="text"
+              icon={ACTIONS_CONFIG.copy.icon}
+              onClick={() => void navigator.clipboard?.writeText(j.id)}
+              aria-label="Copy job id"
+            />
           </Inline>
-        )}
-      </Inline>
-
-      <Row gutter={16}>
-        <Col span={14}>
-          <Card title="Record">
-            <DescGrid>
-              <Item label="Status">{j.stalled ? 'STALLED' : j.status}</Item>
-              <Item label="Priority">{j.priority}</Item>
-              <Item label="Attempts">
-                {j.retryAttempt} / {j.retryMaxAttempts}
-              </Item>
-              <Item label="Instance">{j.processedOnInstanceKey ?? '—'}</Item>
-              <Item label="Created">{formatDate(j.createdAt)}</Item>
-              <Item label="Start after">{formatDate(j.startAfter)}</Item>
-              <Item label="Idempotency key">{j.idempotencyKey ?? '—'}</Item>
-              <Item label="Schedule">
-                {j.scheduleId ? <Link to={`/schedules`}>{j.scheduleId}</Link> : '—'}
-              </Item>
-            </DescGrid>
-            {j.failureMessage && (
+        }
+        subtitle={
+          <Inline gap={2} align="center">
+            <StatusTag status={rawStatus} label={status} />
+            <Link to={`/queues/${encodeURIComponent(j.queue)}`}>{j.queue}</Link>
+          </Inline>
+        }
+        extra={actions}
+      />
+      <Content>
+        <Row gutter={16}>
+          <Col span={14}>
+            <Card title="Record">
+              <DescGrid>
+                <Item label="Status">{status}</Item>
+                <Item label="Priority">{j.priority}</Item>
+                <Item label="Attempts">
+                  {j.retryAttempt} / {j.retryMaxAttempts}
+                </Item>
+                <Item label="Processed on instance">{j.processedOnInstanceKey ?? '—'}</Item>
+                <Item label="Preferred instance pattern">
+                  {j.preferredInstanceKeyPattern ?? '—'}
+                </Item>
+                <Item label="Created">{formatDate(j.createdAt)}</Item>
+                <Item label="Start after">{formatDate(j.startAfter)}</Item>
+                <Item label="Idempotency key">{j.idempotencyKey ?? '—'}</Item>
+                <Item label="Schedule">
+                  {j.scheduleId ? <Link to={`/schedules`}>{j.scheduleId}</Link> : '—'}
+                </Item>
+              </DescGrid>
+              {j.failureMessage && (
+                <InnerCard>
+                  <InnerCardTitle>Failure message</InnerCardTitle>
+                  <Pre $danger>{j.failureMessage}</Pre>
+                </InnerCard>
+              )}
               <InnerCard>
-                <InnerCardTitle>Failure message</InnerCardTitle>
-                <Pre $danger>{j.failureMessage}</Pre>
+                <InnerCardTitle>Data</InnerCardTitle>
+                <Pre>{JSON.stringify(j.data, null, 2)}</Pre>
               </InnerCard>
-            )}
-            <InnerCard>
-              <InnerCardTitle>Data</InnerCardTitle>
-              <Pre>{JSON.stringify(j.data, null, 2)}</Pre>
-            </InnerCard>
-            {j.returnValue !== undefined && j.returnValue !== null && (
-              <InnerCard>
-                <InnerCardTitle>Return value</InnerCardTitle>
-                <Pre>{JSON.stringify(j.returnValue, null, 2)}</Pre>
-              </InnerCard>
-            )}
-          </Card>
-        </Col>
-        <Col span={10}>
-          <Card title="Lifecycle">
-            <LifecycleTimeline job={j} />
-          </Card>
-        </Col>
-      </Row>
+              {j.returnValue !== undefined && j.returnValue !== null && (
+                <InnerCard>
+                  <InnerCardTitle>Return value</InnerCardTitle>
+                  <Pre>{JSON.stringify(j.returnValue, null, 2)}</Pre>
+                </InnerCard>
+              )}
+            </Card>
+          </Col>
+          <Col span={10}>
+            <Card title="Lifecycle">
+              <LifecycleTimeline job={j} />
+            </Card>
+          </Col>
+        </Row>
+      </Content>
 
       <AddJobForm
         open={cloneOpen}
@@ -221,6 +259,6 @@ export function JobDetailPage(): React.ReactElement {
         onClose={() => setCloneOpen(false)}
         initial={{ data: j.data, priority: j.priority }}
       />
-    </Stack>
+    </>
   );
 }

@@ -131,6 +131,13 @@ export interface Driver {
     queueName?: string;
     processedOnInstanceKey?: string;
   }): Promise<Record<JobStatus, number>>;
+  /** Total rows matching a {@link Driver.getJobs} filter, ignoring paging. */
+  countJobs(options: {
+    queueName?: string;
+    statuses?: JobStatus[];
+    scheduleId?: string;
+    processedOnInstanceKey?: string;
+  }): Promise<number>;
   listQueues(): Promise<QueueRow[]>;
   listSchedules(options: { queueName?: string }): Promise<ScheduleRow[]>;
   getSchedule(options: { scheduleId: string }): Promise<ScheduleRow | null>;

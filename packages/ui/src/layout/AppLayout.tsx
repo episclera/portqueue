@@ -62,12 +62,13 @@ export const Header = React.forwardRef<HTMLElement, HeaderProps>(function Header
   );
 });
 
-/** Centered content column with a comfortable max width and responsive padding. */
+/** The single page gutter, shared by the content column and the subheader band. */
+const PAGE_GUTTER = 'clamp(16px, 2vw, 24px)';
+
+/** Content column — spans the full available width with responsive padding. */
 export const Content = styled.main`
-  max-width: 1280px;
-  margin: 0 auto;
   width: 100%;
-  padding: clamp(16px, 3vw, 32px);
+  padding: ${PAGE_GUTTER};
 `;
 
 /** Muted, centered footer with a top border. */
@@ -87,34 +88,49 @@ export interface PageHeaderProps extends Omit<React.HTMLAttributes<HTMLDivElemen
   extra?: React.ReactNode;
 }
 
+/**
+ * Full-bleed band: title + one-line description on the left, actions hard right on the same
+ * row. Rendered as a sibling of `Content` (not inside it) so it spans the whole width.
+ */
 const PageHeaderRoot = styled.div`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: ${(p) => p.theme.space(4)};
-  margin-bottom: ${(p) => p.theme.space(6)};
+  width: 100%;
+  padding: ${(p) => p.theme.space(4)} ${PAGE_GUTTER};
+  background: ${(p) => p.theme.color.surface};
+  border-bottom: 1px solid ${(p) => p.theme.color.border};
+
+  @media (max-width: ${(p) => p.theme.breakpoints.sm}px) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 `;
 
 const PageHeaderText = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${(p) => p.theme.space(1)};
+  gap: 2px;
   min-width: 0;
 `;
 
 const PageTitle = styled.h1`
   margin: 0;
   font-family: ${(p) => p.theme.font.display};
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.25;
   color: ${(p) => p.theme.color.text};
 `;
 
 const PageSubtitle = styled.p`
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: ${(p) => p.theme.color.textMuted};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
 const PageHeaderExtra = styled.div`
@@ -122,9 +138,10 @@ const PageHeaderExtra = styled.div`
   align-items: center;
   gap: ${(p) => p.theme.space(2)};
   flex: none;
+  flex-wrap: wrap;
 `;
 
-/** Heading block for a page — big title, muted subtitle, right-aligned extras. */
+/** Page subheader band — title, one-line description, and right-aligned actions. */
 export const PageHeader = React.forwardRef<HTMLDivElement, PageHeaderProps>(function PageHeader(
   { title, subtitle, extra, ...rest },
   ref,

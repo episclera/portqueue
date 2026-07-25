@@ -50,11 +50,11 @@ const variantStyles = (v: ButtonVariant) =>
       }
     `,
     danger: css`
-      background: ${(p) => p.theme.color.danger};
-      color: ${(p) => p.theme.color.onBrand};
+      background: transparent;
+      color: ${(p) => p.theme.color.dangerHover};
       border-color: ${(p) => p.theme.color.danger};
       &:hover:not(:disabled) {
-        background: ${(p) => p.theme.color.dangerHover};
+        background: ${(p) => p.theme.color.danger}1f;
         border-color: ${(p) => p.theme.color.dangerHover};
       }
     `,

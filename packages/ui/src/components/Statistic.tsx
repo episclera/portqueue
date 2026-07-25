@@ -45,10 +45,9 @@ const Root = styled.div<{ $below: boolean }>`
 `;
 
 const Label = styled.div`
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: ${(p) => p.theme.color.textMuted};
 `;
 

@@ -1,6 +1,6 @@
-/** Schedules page: all recurring definitions across queues. Polls every 30s. */
+/** Schedules page: every recurring definition across queues. Polls every 30s. */
 import React from 'react';
-import { Card, Stack, Title } from '@portqueue/ui';
+import { Content, PageHeader } from '@portqueue/ui';
 import type { ScheduleDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { usePoll } from '../queries/use-poll';
@@ -10,15 +10,18 @@ export function SchedulesPage(): React.ReactElement {
   const schedules = usePoll<ScheduleDto[]>(() => api.getSchedules(), []);
 
   return (
-    <Stack gap={4} style={{ width: '100%' }}>
-      <Title level={3}>Schedules</Title>
-      <Card>
+    <>
+      <PageHeader
+        title="Schedules"
+        subtitle="Recurring definitions and when they next fire, across every queue."
+      />
+      <Content>
         <SchedulesPanel
           rows={schedules.data ?? []}
-          loading={schedules.loading}
+          loading={schedules.loading && !schedules.data}
           onChanged={schedules.refetch}
         />
-      </Card>
-    </Stack>
+      </Content>
+    </>
   );
 }

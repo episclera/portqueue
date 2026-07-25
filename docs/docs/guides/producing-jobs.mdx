@@ -255,7 +255,7 @@ Read-side views of what you've produced (all scoped to this queue):
 
 ```ts
 const emailsJob = await emailsQueue.getJob({ jobId });                    // JobSnapshot | null
-const emailsPage = await emailsQueue.getJobs({ statuses: [JobStatus.FAILED] }); // cursor-paged
+const emailsPage = await emailsQueue.getJobs({ statuses: [JobStatus.FAILED] }); // cursor- or offset-paged; carries `total`
 const emailsStats = await emailsQueue.getQueueStats();                    // per-status counts
 const emailsSchedules = await emailsQueue.getSchedules();                 // recurring definitions
 ```

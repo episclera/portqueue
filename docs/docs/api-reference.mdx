@@ -366,6 +366,7 @@ All **worker-local** — no cluster-wide coordination.
 | `scheduleId` | `string` | Jobs minted by one schedule. |
 | `limit` | `number` | Page size. |
 | `cursor` | `string` | Opaque cursor from the previous page. |
+| `offset` | `number` | Row offset, for numbered pagination. Wins over `cursor` when both are given. |
 | `order` | `'asc' \| 'desc'` | Sort direction. |
 
 ---
@@ -380,7 +381,7 @@ Reads return objects, never bare ids. The main shapes:
 - **QueueInfo** — `name`, `processingPaused`, `acceptingPaused`, `counts`, `inUse`.
 - **InstanceInfo** — `instanceKey`, `processingPaused`, `alive`, `createdAt`, `updatedAt`, `lastSeenAt`, `counts`.
 - **QueueStats** — `queue?`, `counts`, `throughputPerMinute`, `failureRate`.
-- **Page&lt;T&gt;** — `items`, `cursor`, `hasMore`.
+- **Page&lt;T&gt;** — `items`, `cursor`, `hasMore`, `total` (rows matching the query, ignoring paging).
 
 ---
 

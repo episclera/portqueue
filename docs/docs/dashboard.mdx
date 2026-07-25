@@ -17,12 +17,36 @@ server.
 
 ## Pages
 
-- **Overview** — KPI cards, per-queue table with pause/resume, throughput trend, and an
-  instances summary.
+Navigation lives in a left sidebar (it collapses behind a burger button on small screens), with
+the live-updates control and the light/dark toggle in the top bar. Every page opens with a
+full-width subheader carrying its title, a one-line description, and the page's actions.
+
+- **Overview** — the activity cards for each job state, then the per-queue table with
+  pause/resume.
 - **Instances** — every registered instance with liveness, per-instance job counts, and
   per-instance pause/resume (only populated for servers that set an [instance key](./scale-horizontally.md#give-each-server-an-identity-key)).
-- **Schedules** — recurring definitions across queues.
+- **Schedules** — recurring definitions across queues, with bulk unschedule.
 - **Queue / Job detail** — drill into a queue's jobs or a single job.
+
+### Tables
+
+Every table works the same way:
+
+- **`Results (n)`** in the card's top-left is the total number of matching rows in the database,
+  not just the rows on screen.
+- **Filters** opens a dialog of the filters that table supports; **search** sits next to it and
+  matches that table's leading columns (queue name, schedule cadence, job id or status).
+- **20 rows a page**, with numbered pagination at the bottom of the card.
+- The page, the search term and the applied filters are all kept in the URL
+  (`#/queues/emails?jobs.page=3&jobs.status=FAILED`), so any table view can be linked or
+  reloaded.
+- Rows are selectable where bulk actions apply (jobs, schedules); the **Bulk actions** button
+  appears once something is selected.
+
+:::note Searching jobs scans the most recent 500
+Job ids have no text index, so a job search filters the most recent 500 jobs matching the other
+filters rather than scanning the whole table. Narrow it with a status filter to reach older jobs.
+:::
 
 ## Mount on an existing app
 

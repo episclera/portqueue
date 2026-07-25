@@ -84,6 +84,7 @@ export function serializeJobPage(page: Page<JobSnapshot>): JobPageDto {
     items: page.items.map(serializeJob),
     cursor: page.cursor,
     hasMore: page.hasMore,
+    total: page.total,
   };
 }
 

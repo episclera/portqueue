@@ -13,27 +13,44 @@ export interface ColProps extends React.HTMLAttributes<HTMLDivElement> {
   flex?: string;
 }
 
+const DEFAULT_GUTTER = 16;
+
+/**
+ * The row's gutter, read by its columns. The gap lives in the columns' own padding (with the
+ * row pulling back half a gutter on each side), so spans summing to 24 still fit on one line —
+ * a `gap` would push the last column onto the next row.
+ */
+const GutterContext = React.createContext(DEFAULT_GUTTER);
+
 const StyledRow = styled.div<{ $gutter: number }>`
   display: flex;
   flex-wrap: wrap;
-  gap: ${(p) => p.$gutter}px;
+  row-gap: ${(p) => p.$gutter}px;
+  margin-left: ${(p) => -p.$gutter / 2}px;
+  margin-right: ${(p) => -p.$gutter / 2}px;
 `;
 
 /** Row of a simple 24-column flex grid. Sizes children by their `span`. */
 export const Row = React.forwardRef<HTMLDivElement, RowProps>(function Row(
-  { gutter = 16, children, ...rest },
+  { gutter = DEFAULT_GUTTER, children, ...rest },
   ref,
 ): React.ReactElement {
   return (
-    <StyledRow ref={ref} $gutter={gutter} {...rest}>
-      {children}
-    </StyledRow>
+    <GutterContext.Provider value={gutter}>
+      <StyledRow ref={ref} $gutter={gutter} {...rest}>
+        {children}
+      </StyledRow>
+    </GutterContext.Provider>
   );
 });
 
 const clampSpan = (span: number): number => Math.min(24, Math.max(1, span));
 
-const StyledCol = styled.div<{ $span?: number; $flex?: string }>`
+const StyledCol = styled.div<{ $span?: number; $flex?: string; $gutter: number }>`
+  box-sizing: border-box;
+  min-width: 0;
+  padding-left: ${(p) => p.$gutter / 2}px;
+  padding-right: ${(p) => p.$gutter / 2}px;
   ${(p) =>
     p.$flex
       ? `flex: ${p.$flex};`
@@ -47,8 +64,9 @@ export const Col = React.forwardRef<HTMLDivElement, ColProps>(function Col(
   { span, flex, children, ...rest },
   ref,
 ): React.ReactElement {
+  const gutter = React.useContext(GutterContext);
   return (
-    <StyledCol ref={ref} $span={span} $flex={flex} {...rest}>
+    <StyledCol ref={ref} $span={span} $flex={flex} $gutter={gutter} {...rest}>
       {children}
     </StyledCol>
   );

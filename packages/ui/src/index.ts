@@ -15,9 +15,11 @@ export type { ToastApi, ToastKind } from './providers/ToastProvider';
 // Primitives
 export { Button } from './components/Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './components/Button';
+export { IconButton } from './components/IconButton';
+export { Checkbox } from './components/Checkbox';
 export { Card, CardHeader, CardBody, Panel } from './components/Card';
 export type { CardProps, CardHeaderProps } from './components/Card';
-export { Title, Text, Paragraph, Code } from './components/Typography';
+export { Title, Text, Paragraph, Code, Mono } from './components/Typography';
 export type { TextTone } from './components/Typography';
 export { Tag } from './components/Tag';
 export type { TagProps, TagVariant, TagTone } from './components/Tag';
@@ -50,7 +52,15 @@ export type { DropdownProps, DropdownItem } from './components/Dropdown';
 
 // Data display
 export { Table } from './components/Table';
-export type { TableProps, TableColumn, TableAlign, TableSize } from './components/Table';
+export type {
+  TableProps,
+  TableColumn,
+  TableAlign,
+  TableSize,
+  TableRowSelection,
+} from './components/Table';
+export { Pagination } from './components/Pagination';
+export type { PaginationProps } from './components/Pagination';
 export { Timeline } from './components/Timeline';
 export type { TimelineProps, TimelineItem } from './components/Timeline';
 export { Collapse } from './components/Collapse';

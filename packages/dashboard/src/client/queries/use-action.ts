@@ -8,18 +8,33 @@ import { api } from '../queries/api';
 import { useLive } from '../components/LiveProvider';
 import type { ActionRequestDto } from '../../shared/dto';
 
+export interface RunOptions {
+  /**
+   * Skip the success toast and the refetch pulse. Used by bulk fan-outs so N mutations cost one
+   * toast and one refetch instead of N of each — the caller refreshes once at the end.
+   */
+  silent?: boolean;
+}
+
 export function useAction(): {
-  run: (body: ActionRequestDto, successMessage?: string) => Promise<boolean>;
+  run: (body: ActionRequestDto, successMessage?: string, options?: RunOptions) => Promise<boolean>;
+  refresh: () => void;
 } {
   const toast = useToast();
   const { refreshNow } = useLive();
 
   const run = useCallback(
-    async (body: ActionRequestDto, successMessage?: string): Promise<boolean> => {
+    async (
+      body: ActionRequestDto,
+      successMessage?: string,
+      options?: RunOptions,
+    ): Promise<boolean> => {
       try {
         await api.action(body);
-        toast.success(successMessage ?? 'Done');
-        refreshNow();
+        if (!options?.silent) {
+          toast.success(successMessage ?? 'Done');
+          refreshNow();
+        }
         return true;
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Action failed');
@@ -29,5 +44,5 @@ export function useAction(): {
     [toast, refreshNow],
   );
 
-  return { run };
+  return { run, refresh: refreshNow };
 }

@@ -22,8 +22,12 @@ import {
   serializeStats,
   serializeInstance,
 } from './serialize';
-import type { ActionRequestDto, ActionResultDto } from '../../shared/dto';
-import { REQUESTED_WITH_HEADER, REQUESTED_WITH_MARKER } from '../../shared/constants';
+import type { ActionRequestDto, ActionResultDto, JobPageDto } from '../../shared/dto';
+import {
+  JOB_SEARCH_SCAN_LIMIT,
+  REQUESTED_WITH_HEADER,
+  REQUESTED_WITH_MARKER,
+} from '../../shared/constants';
 
 export interface RouterOptions {
   portQueue: PortQueue;
@@ -101,8 +105,11 @@ function parseStatuses(raw: string | null): JobStatus[] | undefined {
   return out.length ? out : undefined;
 }
 
+/** Default page size, so the search path never re-guesses core's own default. */
+const DEFAULT_LIMIT = 50;
+
 function buildJobsQuery(params: URLSearchParams): GetJobsQuery {
-  const q: GetJobsQuery = {};
+  const q: GetJobsQuery = { limit: DEFAULT_LIMIT };
   const queue = params.get('queue');
   if (queue) q.queue = queue;
   const statuses = parseStatuses(params.get('statuses'));
@@ -113,9 +120,45 @@ function buildJobsQuery(params: URLSearchParams): GetJobsQuery {
   if (limit && Number.isFinite(Number(limit))) q.limit = Math.min(Math.max(Number(limit), 1), 200);
   const cursor = params.get('cursor');
   if (cursor) q.cursor = cursor;
+  const offset = params.get('offset');
+  if (offset && Number.isFinite(Number(offset))) q.offset = Math.max(Math.trunc(Number(offset)), 0);
   const order = params.get('order');
   if (order === 'asc' || order === 'desc') q.order = order;
   return q;
+}
+
+/** Substring match over the columns a job table shows first: its id and its status. */
+function matchesJobSearch(job: { id: string; status: string }, term: string): boolean {
+  return job.id.toLowerCase().includes(term) || job.status.toLowerCase().includes(term);
+}
+
+/**
+ * Page of jobs, optionally narrowed by a search term. A search filters the bounded scan window
+ * from {@link JOB_SEARCH_SCAN_LIMIT} and pages within the matches, reporting `searchTruncated`
+ * when that window — not the filter — was the limiting factor.
+ */
+async function readJobs(portQueue: PortQueue, params: URLSearchParams): Promise<HandlerResult> {
+  const query = buildJobsQuery(params);
+  const search = params.get('search')?.trim().toLowerCase();
+  if (!search) {
+    const page = await portQueue.getJobs(query);
+    return json(200, serializeJobPage(page));
+  }
+
+  const limit = query.limit ?? DEFAULT_LIMIT;
+  const offset = query.offset ?? 0;
+  const scan = await portQueue.getJobs({ ...query, limit: JOB_SEARCH_SCAN_LIMIT, offset: 0 });
+  const matched = scan.items.filter((job) => matchesJobSearch(job, search));
+  const items = matched.slice(offset, offset + limit);
+  return json(200, {
+    ...serializeJobPage({
+      items,
+      cursor: null,
+      hasMore: offset + items.length < matched.length,
+      total: matched.length,
+    }),
+    searchTruncated: scan.items.length >= JOB_SEARCH_SCAN_LIMIT,
+  } satisfies JobPageDto);
 }
 
 /** Build the core AddJobOptions from a validated action body. */
@@ -180,8 +223,7 @@ export function createRouter(options: RouterOptions): {
         return json(200, serializeStats(stats));
       }
       if (path === '/api/jobs') {
-        const page = await portQueue.getJobs(buildJobsQuery(params));
-        return json(200, serializeJobPage(page));
+        return readJobs(portQueue, params);
       }
       if (path === '/api/instances') {
         // Real instance rows with liveness + per-instance job attribution.

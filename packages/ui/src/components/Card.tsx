@@ -69,7 +69,11 @@ export interface CardHeaderProps {
 export function CardHeader({ title, subtitle, extra, icon }: CardHeaderProps): React.ReactElement {
   return (
     <HeaderRow>
-      {icon ? <span aria-hidden style={{ fontSize: 20 }}>{icon}</span> : null}
+      {icon ? (
+        <span aria-hidden style={{ fontSize: 20 }}>
+          {icon}
+        </span>
+      ) : null}
       <HeaderTitles>
         <HeaderTitle>{title}</HeaderTitle>
         {subtitle ? <HeaderSubtitle>{subtitle}</HeaderSubtitle> : null}
@@ -91,30 +95,24 @@ export interface CardProps extends Omit<React.HTMLAttributes<HTMLElement>, 'titl
 }
 
 /** Surface container. With `title` it renders a header + padded body; otherwise a plain padded surface. */
-export function Card({
-  title,
-  subtitle,
-  extra,
-  icon,
-  interactive = false,
-  bodyPadding = true,
-  children,
-  ...rest
-}: CardProps): React.ReactElement {
+export const Card = React.forwardRef<HTMLElement, CardProps>(function Card(
+  { title, subtitle, extra, icon, interactive = false, bodyPadding = true, children, ...rest },
+  ref,
+): React.ReactElement {
   if (title !== undefined || subtitle !== undefined || extra !== undefined) {
     return (
-      <CardRoot $interactive={interactive} $pad={false} {...rest}>
+      <CardRoot ref={ref} $interactive={interactive} $pad={false} {...rest}>
         <CardHeader title={title} subtitle={subtitle} extra={extra} icon={icon} />
         <Body $pad={bodyPadding}>{children}</Body>
       </CardRoot>
     );
   }
   return (
-    <CardRoot $interactive={interactive} $pad={bodyPadding} {...rest}>
+    <CardRoot ref={ref} $interactive={interactive} $pad={bodyPadding} {...rest}>
       {children}
     </CardRoot>
   );
-}
+});
 
 /** Body region for a manually-composed Card. */
 export function CardBody({

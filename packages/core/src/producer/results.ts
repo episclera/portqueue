@@ -111,5 +111,7 @@ export interface GetJobsQuery {
   scheduleId?: string;
   limit?: number;
   cursor?: string;
+  /** Row offset for numbered pagination. Takes precedence over `cursor` when both are given. */
+  offset?: number;
   order?: 'asc' | 'desc';
 }

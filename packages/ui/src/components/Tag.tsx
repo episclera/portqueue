@@ -32,6 +32,10 @@ function tagColor(p: { $color?: string; $tone: TagTone; theme: DefaultTheme }): 
   }
 }
 
+/**
+ * Every tag is bordered, and the border always matches the text inside it — so a chip reads as
+ * one colour whatever its variant.
+ */
 const Root = styled.span<{ $color?: string; $tone: TagTone; $variant: TagVariant; $pill: boolean }>`
   display: inline-flex;
   align-items: center;
@@ -41,7 +45,7 @@ const Root = styled.span<{ $color?: string; $tone: TagTone; $variant: TagVariant
   line-height: 1;
   padding: 4px 10px;
   border-radius: ${(p) => (p.$pill ? '999px' : `${p.theme.radii.sm}px`)};
-  border: 1px solid transparent;
+  border: 1px solid currentColor;
   white-space: nowrap;
   ${(p) =>
     p.$variant === 'solid'
@@ -52,7 +56,6 @@ const Root = styled.span<{ $color?: string; $tone: TagTone; $variant: TagVariant
       : p.$variant === 'outline'
         ? css`
             color: ${tagColor(p)};
-            border-color: ${tagColor(p)};
             background: transparent;
           `
         : css`

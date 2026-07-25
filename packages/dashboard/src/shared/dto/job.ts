@@ -33,9 +33,16 @@ export interface JobDto {
   stalled: boolean;
 }
 
-/** Cursor page of jobs. */
+/** Page of jobs — `cursor`/`hasMore` for streaming, `total` for numbered pagination. */
 export interface JobPageDto {
   items: JobDto[];
   cursor: string | null;
   hasMore: boolean;
+  /** Rows matching the query across every page. */
+  total: number;
+  /**
+   * True when a `search` matched inside a truncated scan window, so `total` counts only the
+   * jobs that were scanned. Absent when the query wasn't a search.
+   */
+  searchTruncated?: boolean;
 }

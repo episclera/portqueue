@@ -11,12 +11,12 @@ import { LiveProvider } from './components/LiveProvider';
 import { config } from './queries/api';
 
 function Root(): React.ReactElement {
-  const { mode, effective, setMode } = useThemeMode();
+  const { effective, setMode } = useThemeMode();
   return (
     <ThemeProvider mode={effective} applyGlobalStyles>
       <ToastProvider>
         <LiveProvider>
-          <App themeMode={mode} onThemeChange={setMode} />
+          <App onThemeChange={setMode} />
         </LiveProvider>
       </ToastProvider>
     </ThemeProvider>

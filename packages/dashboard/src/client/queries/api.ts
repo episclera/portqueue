@@ -55,6 +55,8 @@ export const api = {
     statuses?: string;
     scheduleId?: string;
     cursor?: string;
+    offset?: string;
+    search?: string;
     limit?: string;
     order?: string;
   }) => get<JobPageDto>('/jobs', params),

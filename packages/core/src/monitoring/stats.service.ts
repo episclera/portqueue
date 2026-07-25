@@ -25,25 +25,36 @@ export class ReadService {
 
   async getJobs<TData = unknown>(query: GetJobsQuery): Promise<Page<JobSnapshot<TData>>> {
     const limit = Math.min(query.limit ?? 50, 500);
-    const offset = query.cursor
-      ? Number(Buffer.from(query.cursor, 'base64').toString('utf8')) || 0
-      : 0;
-    const records = await this.runtime.driver.getJobs({
+    // An explicit offset wins; otherwise decode the cursor (which encodes the next offset).
+    const offset =
+      query.offset !== undefined
+        ? Math.max(Math.trunc(query.offset), 0)
+        : query.cursor
+          ? Number(Buffer.from(query.cursor, 'base64').toString('utf8')) || 0
+          : 0;
+    const filter = {
       ...(query.queue ? { queueName: query.queue } : {}),
       ...(query.statuses ? { statuses: query.statuses } : {}),
       ...(query.scheduleId ? { scheduleId: query.scheduleId } : {}),
+    };
+    const records = await this.runtime.driver.getJobs({
+      ...filter,
       limit: limit + 1,
       offset,
       order: query.order ?? 'desc',
     });
     const hasMore = records.length > limit;
     const page = records.slice(0, limit);
+    // The limit+1 over-fetch already pins the total whenever nothing follows this page, so the
+    // extra COUNT is only paid when there genuinely are rows beyond it.
+    const total = hasMore ? await this.runtime.driver.countJobs(filter) : offset + page.length;
     const now = this.runtime.clock.now();
     const items = page.map((r) => toSnapshot<TData>(r, r.queueName, now));
     return {
       items,
       cursor: hasMore ? Buffer.from(String(offset + limit)).toString('base64') : null,
       hasMore,
+      total,
     };
   }
 

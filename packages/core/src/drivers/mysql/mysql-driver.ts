@@ -847,17 +847,20 @@ export class MysqlDriver implements Driver {
     return res.rows[0] ? this.mapJob(res.rows[0]) : null;
   }
 
-  async getJobs(options: {
-    queueName?: string;
-    statuses?: JobStatus[];
-    scheduleId?: string;
-    processedOnInstanceKey?: string;
-    limit: number;
-    offset: number;
-    order: 'asc' | 'desc';
-  }): Promise<JobRecord[]> {
+  /**
+   * WHERE clauses for a job filter, appending each value to `params`. Shared by `getJobs` and
+   * `countJobs` so a page and its total can never disagree about what they select.
+   */
+  private jobFilterClauses(
+    options: {
+      queueName?: string;
+      statuses?: JobStatus[];
+      scheduleId?: string;
+      processedOnInstanceKey?: string;
+    },
+    params: unknown[],
+  ): string {
     const clauses: string[] = [];
-    const params: unknown[] = [];
     if (options.queueName) {
       clauses.push(`${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`);
       params.push(options.queueName);
@@ -875,7 +878,20 @@ export class MysqlDriver implements Driver {
       clauses.push(`${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(params.length)}`);
       params.push(options.processedOnInstanceKey);
     }
-    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  }
+
+  async getJobs(options: {
+    queueName?: string;
+    statuses?: JobStatus[];
+    scheduleId?: string;
+    processedOnInstanceKey?: string;
+    limit: number;
+    offset: number;
+    order: 'asc' | 'desc';
+  }): Promise<JobRecord[]> {
+    const params: unknown[] = [];
+    const where = this.jobFilterClauses(options, params);
     const limitPh = this.ph(params.length);
     params.push(options.limit);
     const offsetPh = this.ph(params.length);
@@ -885,6 +901,21 @@ export class MysqlDriver implements Driver {
       params,
     );
     return res.rows.map((r) => this.mapJob(r));
+  }
+
+  async countJobs(options: {
+    queueName?: string;
+    statuses?: JobStatus[];
+    scheduleId?: string;
+    processedOnInstanceKey?: string;
+  }): Promise<number> {
+    const params: unknown[] = [];
+    const where = this.jobFilterClauses(options, params);
+    const res = await this.execute(
+      `SELECT COUNT(*) AS c FROM ${this.t(TableName.JOB)} ${where}`,
+      params,
+    );
+    return Number(res.rows[0]?.c ?? 0);
   }
 
   async countJobsByStatus(options: {

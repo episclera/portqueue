@@ -99,7 +99,7 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
         },
       ],
     getJobs: async () =>
-      overrides.jobPage ?? { items: [DEFAULT_JOB], hasMore: false, cursor: null },
+      overrides.jobPage ?? { items: [DEFAULT_JOB], hasMore: false, cursor: null, total: 1 },
     getJob: async () => ('job' in overrides ? overrides.job : DEFAULT_JOB),
     createQueue: (name: string) => {
       calls.createQueue.push(name);

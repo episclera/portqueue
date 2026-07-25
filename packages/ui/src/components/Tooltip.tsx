@@ -1,5 +1,6 @@
 import React from 'react';
-import styled, { css } from 'styled-components';
+import { createPortal } from 'react-dom';
+import styled from 'styled-components';
 
 export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 
@@ -14,39 +15,18 @@ const Wrapper = styled.span`
   display: inline-flex;
 `;
 
-const placementStyles = (placement: TooltipPlacement) =>
-  ({
-    top: css`
-      bottom: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      margin-bottom: 6px;
-    `,
-    bottom: css`
-      top: 100%;
-      left: 50%;
-      transform: translateX(-50%);
-      margin-top: 6px;
-    `,
-    left: css`
-      right: 100%;
-      top: 50%;
-      transform: translateY(-50%);
-      margin-right: 6px;
-    `,
-    right: css`
-      left: 100%;
-      top: 50%;
-      transform: translateY(-50%);
-      margin-left: 6px;
-    `,
-  })[placement];
-
-const Bubble = styled.span<{ $placement: TooltipPlacement }>`
-  position: absolute;
+/**
+ * Rendered in a body portal with fixed coordinates, so an ancestor with `overflow: hidden`
+ * (a Card, a horizontally scrolling table) can never clip it.
+ */
+const Bubble = styled.span<{ $top: number; $left: number }>`
+  position: fixed;
+  top: ${(p) => p.$top}px;
+  left: ${(p) => p.$left}px;
   z-index: ${(p) => p.theme.zIndex.toast};
   max-width: 240px;
   padding: 5px 9px;
+  font-family: ${(p) => p.theme.font.family};
   font-size: 12.5px;
   line-height: 1.4;
   font-weight: 500;
@@ -56,29 +36,98 @@ const Bubble = styled.span<{ $placement: TooltipPlacement }>`
   border-radius: ${(p) => p.theme.radii.sm}px;
   box-shadow: ${(p) => p.theme.shadow.md};
   pointer-events: none;
-  ${(p) => placementStyles(p.$placement)}
 `;
 
-/** Bespoke tooltip — shows a dark bubble on hover/focus of its single child. */
-export const Tooltip = ({ title, placement = 'top', children }: TooltipProps): React.ReactElement => {
-  const [visible, setVisible] = React.useState(false);
+const OFFSET = 6;
+const ESTIMATED = { width: 180, height: 30 };
 
-  const show = (): void => setVisible(true);
-  const hide = (): void => setVisible(false);
+/** Place the bubble against the trigger rect, flipping when it would leave the viewport. */
+function position(
+  rect: DOMRect,
+  placement: TooltipPlacement,
+  bubble: { width: number; height: number },
+): { top: number; left: number } {
+  const viewportWidth = window.innerWidth || 0;
+  const viewportHeight = window.innerHeight || 0;
+
+  let effective = placement;
+  if (placement === 'top' && rect.top < bubble.height + OFFSET) effective = 'bottom';
+  if (placement === 'bottom' && rect.bottom + bubble.height + OFFSET > viewportHeight)
+    effective = 'top';
+  if (placement === 'left' && rect.left < bubble.width + OFFSET) effective = 'right';
+  if (placement === 'right' && rect.right + bubble.width + OFFSET > viewportWidth)
+    effective = 'left';
+
+  const centerX = rect.left + rect.width / 2 - bubble.width / 2;
+  const centerY = rect.top + rect.height / 2 - bubble.height / 2;
+
+  const raw = {
+    top: { top: rect.top - bubble.height - OFFSET, left: centerX },
+    bottom: { top: rect.bottom + OFFSET, left: centerX },
+    left: { top: centerY, left: rect.left - bubble.width - OFFSET },
+    right: { top: centerY, left: rect.right + OFFSET },
+  }[effective];
+
+  // Keep the bubble inside the viewport on both axes.
+  return {
+    top: Math.max(4, Math.min(raw.top, viewportHeight - bubble.height - 4)),
+    left: Math.max(4, Math.min(raw.left, viewportWidth - bubble.width - 4)),
+  };
+}
+
+/** Bespoke tooltip — shows a dark bubble on hover/focus of its single child. */
+export const Tooltip = ({
+  title,
+  placement = 'top',
+  children,
+}: TooltipProps): React.ReactElement => {
+  const [coords, setCoords] = React.useState<{ top: number; left: number } | null>(null);
+  const triggerRef = React.useRef<HTMLSpanElement>(null);
+  const bubbleRef = React.useRef<HTMLSpanElement>(null);
+
+  const place = React.useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setCoords(position(rect, placement, ESTIMATED));
+  }, [placement]);
+
+  // Re-place once the bubble is measurable, so the first paint isn't off by its real size.
+  React.useLayoutEffect(() => {
+    if (!coords) return;
+    const node = bubbleRef.current;
+    if (!node) return;
+    const { width, height } = node.getBoundingClientRect();
+    if (!width || !height) return;
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const next = position(rect, placement, { width, height });
+    if (Math.abs(next.top - coords.top) > 1 || Math.abs(next.left - coords.left) > 1) {
+      setCoords(next);
+    }
+  }, [coords, placement]);
+
+  const show = (): void => place();
+  const hide = (): void => setCoords(null);
 
   return (
-    <Wrapper
-      onMouseEnter={show}
-      onMouseLeave={hide}
-      onFocus={show}
-      onBlur={hide}
-    >
-      {children}
-      {visible ? (
-        <Bubble $placement={placement} role="tooltip">
-          {title}
-        </Bubble>
-      ) : null}
-    </Wrapper>
+    <>
+      <Wrapper
+        ref={triggerRef}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+      >
+        {children}
+      </Wrapper>
+      {coords && typeof document !== 'undefined'
+        ? createPortal(
+            <Bubble ref={bubbleRef} $top={coords.top} $left={coords.left} role="tooltip">
+              {title}
+            </Bubble>,
+            document.body,
+          )
+        : null}
+    </>
   );
 };

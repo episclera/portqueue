@@ -71,9 +71,11 @@ export interface SystemMonitorOptions {
   resumeHysteresis?: number;
 }
 
-/** Cursor-based page result. */
+/** Page result — cursor for streaming, `total` for numbered pagination. */
 export interface Page<T> {
   items: T[];
   cursor: string | null;
   hasMore: boolean;
+  /** Total rows matching the query, ignoring `limit`/`offset`/`cursor`. */
+  total: number;
 }

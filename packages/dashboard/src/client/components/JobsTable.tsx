@@ -1,90 +1,89 @@
 /**
- * Reusable jobs table with cursor paging, status filter, row selection + bulk actions.
+ * The jobs table for a queue: server-paged (20 rows a page) with the page, the search term and
+ * the status filter all held in the URL. Rows are selectable for bulk retry / cancel / remove,
+ * and every row carries the same three actions as icon buttons.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import {
-  Button,
-  Inline,
-  Popconfirm,
-  SkeletonText,
-  Stack,
-  StatusTag,
-  Text,
-  Table,
-  Tooltip,
-} from '@portqueue/ui';
-import type { TableColumn } from '@portqueue/ui';
+import { Mono, StatusTag, Table, Text, Tooltip } from '@portqueue/ui';
+import type { DropdownItem, TableColumn } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums';
-import type { JobDto } from '../../shared/dto';
-import { config } from '../queries/api';
-import { relativeTime, truncate } from './format';
+import type { JobDto, JobPageDto } from '../../shared/dto';
+import { api, config } from '../queries/api';
+import { usePoll } from '../queries/use-poll';
 import { useAction } from '../queries/use-action';
+import { PAGE_SIZE, useTableParams } from '../queries/use-table-params';
+import { ACTIONS_CONFIG, STALLED, STATUSES_CONFIG, statusLabel } from '../constants/labels';
+import { JOB_SEARCH_SCAN_LIMIT } from '../../shared/constants';
+import { relativeTime, truncate } from './format';
+import { TableCard } from './TableCard';
+import type { FilterDef } from './FiltersModal';
+import { BulkActionsButton, ConfirmModal, RowAction, RowActions } from './RowActions';
 
 export interface JobsTableProps {
   queue: string;
-  jobs: JobDto[];
-  loading: boolean;
-  statuses: JobStatus[];
-  onStatusesChange: (s: JobStatus[]) => void;
-  hasMore: boolean;
-  onNext: () => void;
-  onPrev: () => void;
-  canPrev: boolean;
-  onRefresh: () => void;
 }
 
 const MonoLink = styled(Link)`
-  font-family: ui-monospace, monospace;
+  font-family: ${(p) => p.theme.font.mono};
   font-size: 12px;
 `;
 
-const TableScroll = styled.div`
-  width: 100%;
-  overflow-x: auto;
-`;
+const FILTER_KEYS = ['status'] as const;
 
-export function JobsTable(props: JobsTableProps): React.ReactElement {
-  const { run } = useAction();
-  const [selected, setSelected] = useState<string[]>([]);
+const FILTER_DEFS: FilterDef[] = [
+  {
+    key: 'status',
+    label: 'Status',
+    multiple: true,
+    options: Object.values(JobStatus).map((s) => ({ label: STATUSES_CONFIG[s].label, value: s })),
+  },
+];
+
+/** A job can be cancelled while it is still on its way through the queue. */
+const CANCELLABLE: JobStatus[] = [JobStatus.PENDING, JobStatus.ACTIVE, JobStatus.RETRY];
+
+export function JobsTable({ queue }: JobsTableProps): React.ReactElement {
+  const { run, refresh } = useAction();
   const readOnly = config.readOnly;
+  const params = useTableParams('jobs', FILTER_KEYS);
+  const statusesKey = (params.filters.status ?? []).join(',');
 
-  const toggleRow = (id: string): void => {
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
+  const [selected, setSelected] = useState<string[]>([]);
+  const [confirmBulkRemove, setConfirmBulkRemove] = useState(false);
+
+  const jobs = usePoll<JobPageDto>(
+    () =>
+      api.getJobs({
+        queue,
+        statuses: statusesKey || undefined,
+        search: params.search || undefined,
+        offset: String(params.offset),
+        limit: String(PAGE_SIZE),
+        order: 'desc',
+      }),
+    [queue, statusesKey, params.search, params.offset],
+  );
+
+  const rows = jobs.data?.items ?? [];
+
+  // A different page / filter / search means a different row set; drop the stale selection.
+  useEffect(() => setSelected([]), [queue, statusesKey, params.search, params.offset]);
 
   const columns: TableColumn<JobDto>[] = [
-    ...(readOnly
-      ? []
-      : [
-          {
-            title: '',
-            key: 'select',
-            width: 40,
-            render: (r: JobDto) => (
-              <input
-                type="checkbox"
-                checked={selected.includes(r.id)}
-                onChange={() => toggleRow(r.id)}
-                aria-label={`Select job ${r.id}`}
-              />
-            ),
-          } satisfies TableColumn<JobDto>,
-        ]),
     {
       title: 'Job',
-      dataIndex: 'id',
       key: 'id',
-      render: (r) => (
-        <MonoLink to={`/jobs/${encodeURIComponent(r.id)}`}>{truncate(r.id)}</MonoLink>
-      ),
+      render: (r) => <MonoLink to={`/jobs/${encodeURIComponent(r.id)}`}>{truncate(r.id)}</MonoLink>,
     },
     {
       title: 'Status',
-      dataIndex: 'status',
       key: 'status',
-      render: (r) => <StatusTag status={r.status} />,
+      render: (r) => {
+        const status = r.stalled ? STALLED : r.status;
+        return <StatusTag status={status} label={statusLabel(status)} />;
+      },
     },
     {
       title: 'Attempt',
@@ -93,101 +92,142 @@ export function JobsTable(props: JobsTableProps): React.ReactElement {
     },
     { title: 'Priority', dataIndex: 'priority', key: 'priority' },
     {
-      title: 'Instance',
-      key: 'instance',
+      title: 'Processed On Instance',
+      key: 'processedOnInstanceKey',
       render: (r) =>
         r.processedOnInstanceKey ? (
-          <Tooltip title={r.processedOnInstanceKey}>
-            <span>{truncate(r.processedOnInstanceKey, 6, 4)}</span>
+          <Tooltip title={r.processedOnInstanceKey} placement="bottom">
+            <Mono>{truncate(r.processedOnInstanceKey, 8, 4)}</Mono>
           </Tooltip>
         ) : (
           '—'
         ),
     },
     {
+      title: 'Preferred Instance Pattern',
+      key: 'preferredInstanceKeyPattern',
+      render: (r) =>
+        r.preferredInstanceKeyPattern ? <Mono>{r.preferredInstanceKeyPattern}</Mono> : '—',
+    },
+    {
       title: 'Created',
-      dataIndex: 'createdAt',
       key: 'createdAt',
       render: (r) => relativeTime(r.createdAt),
     },
+    ...(readOnly
+      ? []
+      : [
+          {
+            title: 'Actions',
+            key: 'actions',
+            align: 'right',
+            render: (r: JobDto) => (
+              <RowActions>
+                <RowAction
+                  icon={ACTIONS_CONFIG.retry.icon}
+                  label={ACTIONS_CONFIG.retry.label}
+                  disabled={r.status === JobStatus.ACTIVE}
+                  onClick={() => void run({ kind: 'retry', queue, jobId: r.id }, 'Retry queued')}
+                />
+                <RowAction
+                  icon={ACTIONS_CONFIG.cancel.icon}
+                  label={ACTIONS_CONFIG.cancel.label}
+                  disabled={!CANCELLABLE.includes(r.status as JobStatus)}
+                  confirm={{ title: 'Cancel this job?' }}
+                  onClick={() => void run({ kind: 'cancel', queue, jobId: r.id }, 'Cancelled')}
+                />
+                <RowAction
+                  danger
+                  icon={ACTIONS_CONFIG.remove.icon}
+                  label={ACTIONS_CONFIG.remove.label}
+                  confirm={{ title: 'Remove this job permanently?' }}
+                  onClick={() => void run({ kind: 'remove', queue, jobId: r.id }, 'Removed')}
+                />
+              </RowActions>
+            ),
+          } satisfies TableColumn<JobDto>,
+        ]),
   ];
 
-  const doBulk = async (kind: 'retry' | 'remove' | 'cancel'): Promise<void> => {
+  const runBulk = async (kind: 'retry' | 'remove' | 'cancel'): Promise<void> => {
     const jobIds = [...selected];
     if (kind === 'remove') {
-      await run({ kind: 'remove', queue: props.queue, jobIds }, `Removed ${jobIds.length} job(s)`);
+      await run({ kind: 'remove', queue, jobIds }, `Removed ${jobIds.length} job(s)`);
     } else {
-      // retry/cancel are per-job in core; fan out.
-      for (const jobId of jobIds) await run({ kind, queue: props.queue, jobId });
+      // retry/cancel are per-job in core; fan out quietly, then refresh + report once.
+      for (const jobId of jobIds) await run({ kind, queue, jobId }, undefined, { silent: true });
+      refresh();
     }
     setSelected([]);
   };
 
-  const toggleStatus = (s: JobStatus): void => {
-    props.onStatusesChange(
-      props.statuses.includes(s)
-        ? props.statuses.filter((x) => x !== s)
-        : [...props.statuses, s],
-    );
-  };
+  const bulkItems: DropdownItem[] = [
+    {
+      key: 'retry',
+      label: `${ACTIONS_CONFIG.retry.label} selected`,
+      icon: ACTIONS_CONFIG.retry.icon,
+      onClick: () => void runBulk('retry'),
+    },
+    {
+      key: 'cancel',
+      label: `${ACTIONS_CONFIG.cancel.label} selected`,
+      icon: ACTIONS_CONFIG.cancel.icon,
+      onClick: () => void runBulk('cancel'),
+    },
+    {
+      key: 'remove',
+      label: `${ACTIONS_CONFIG.remove.label} selected`,
+      icon: ACTIONS_CONFIG.remove.icon,
+      danger: true,
+      onClick: () => setConfirmBulkRemove(true),
+    },
+  ];
+
+  const empty = params.search ? (
+    <Text $tone="muted">No jobs match “{params.search}”.</Text>
+  ) : undefined;
 
   return (
-    <Stack gap={3}>
-      <Inline wrap justify="space-between" align="center">
-        <Inline wrap gap={2} align="center">
-          {Object.values(JobStatus).map((s) => (
-            <Button
-              key={s}
-              size="sm"
-              variant={props.statuses.includes(s) ? 'primary' : 'default'}
-              onClick={() => toggleStatus(s)}
-            >
-              {s}
-            </Button>
-          ))}
-          <Button icon="🔄" onClick={props.onRefresh}>
-            Refresh
-          </Button>
-        </Inline>
-        {!readOnly && selected.length > 0 && (
-          <Inline wrap gap={2} align="center">
-            <Text $tone="muted">{selected.length} selected</Text>
-            <Button size="sm" onClick={() => void doBulk('retry')}>
-              Retry
-            </Button>
-            <Button size="sm" onClick={() => void doBulk('cancel')}>
-              Cancel
-            </Button>
-            <Popconfirm
-              title="Remove selected jobs?"
-              okText="Remove"
-              okDanger
-              onConfirm={() => void doBulk('remove')}
-            >
-              <Button size="sm" variant="danger">
-                Remove
-              </Button>
-            </Popconfirm>
-          </Inline>
-        )}
-      </Inline>
+    <>
+      <TableCard
+        total={jobs.data?.total ?? 0}
+        page={params.page}
+        onPageChange={params.setPage}
+        loading={jobs.loading && !jobs.data}
+        paginationLabel="Jobs pagination"
+        search={{
+          value: params.search,
+          onChange: params.setSearch,
+          placeholder: 'Search job id or status',
+        }}
+        filters={{ defs: FILTER_DEFS, values: params.filters, onChange: params.setFilters }}
+        toolbarLeading={<BulkActionsButton count={selected.length} items={bulkItems} />}
+      >
+        <Table<JobDto>
+          rowKey={(r) => r.id}
+          columns={columns}
+          data={rows}
+          empty={empty}
+          {...(readOnly ? {} : { rowSelection: { selectedKeys: selected, onChange: setSelected } })}
+        />
+      </TableCard>
 
-      {props.loading ? (
-        <SkeletonText rows={6} />
-      ) : (
-        <TableScroll>
-          <Table<JobDto> rowKey={(r) => r.id} size="md" columns={columns} data={props.jobs} />
-        </TableScroll>
-      )}
+      {jobs.data?.searchTruncated ? (
+        <Text $tone="muted">
+          Search scanned the most recent {JOB_SEARCH_SCAN_LIMIT} jobs — narrow it with a status
+          filter to reach older jobs.
+        </Text>
+      ) : null}
 
-      <Inline justify="flex-end" gap={2}>
-        <Button disabled={!props.canPrev} onClick={props.onPrev}>
-          Previous
-        </Button>
-        <Button disabled={!props.hasMore} onClick={props.onNext}>
-          Next
-        </Button>
-      </Inline>
-    </Stack>
+      <ConfirmModal
+        open={confirmBulkRemove}
+        title={`Remove ${selected.length} job(s)?`}
+        description="This permanently deletes the selected job rows. It cannot be undone."
+        okText={ACTIONS_CONFIG.remove.label}
+        okDanger
+        onClose={() => setConfirmBulkRemove(false)}
+        onConfirm={() => void runBulk('remove')}
+      />
+    </>
   );
 }

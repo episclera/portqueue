@@ -67,3 +67,9 @@ export const Code = styled.code`
   background: ${(p) => p.theme.color.surfaceAlt};
   border: 1px solid ${(p) => p.theme.color.border};
 `;
+
+/** Undecorated monospace text — ids, keys, patterns. */
+export const Mono = styled.span`
+  font-family: ${(p) => p.theme.font.mono};
+  font-size: 12px;
+`;
