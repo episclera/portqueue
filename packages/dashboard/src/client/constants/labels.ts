@@ -30,12 +30,12 @@ export const STALLED_LABEL = 'Stalled';
 
 /**
  * The statuses every count breakdown shows as table columns — the queues table and the instances
- * table. Pending sits next to Active so a row reads as "running now / waiting next".
+ * table. Pending sits next to Active so a row reads as "running now / waiting next"; Retry is
+ * absent, like on the activity cards, since a retrying job is still in flight.
  */
 export const COUNT_STATUSES: JobStatus[] = [
   JobStatus.ACTIVE,
   JobStatus.PENDING,
-  JobStatus.RETRY,
   JobStatus.FAILED,
   JobStatus.COMPLETED,
 ];
