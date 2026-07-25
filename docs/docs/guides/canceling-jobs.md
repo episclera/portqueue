@@ -129,31 +129,6 @@ handler: async (job) => {
 };
 ```
 
-Without RxJS, use [Pattern 1](#pattern-1--listen-for-abort-then-throw-on-the-way-out): the `abort`
-listener does the teardown (`sub.unsubscribe()`, `stream.destroy()`, …) and `finally` removes it.
-
-:::warning Don't `throw` from a timer or listener callback
-The obvious-looking watchdog doesn't cancel anything — it crashes the worker:
-
-```ts
-// ⚠️ Does NOT cancel the job — crashes the process.
-const watchdog = setInterval(() => {
-  if (job.signal.aborted) throw job.signal.reason; // uncaughtException
-}, 1_000);
-try {
-  await doLongWork(job.data);
-} finally {
-  clearInterval(watchdog);
-}
-```
-
-The event loop calls that callback, so your handler isn't awaiting it: the throw escapes as an
-`uncaughtException` (which by default takes the whole process down) while `doLongWork` keeps
-running. Only a rejection on something the handler `await`s can fail the job — so do the throwing in
-the handler body, as in [Pattern 1](#pattern-1--listen-for-abort-then-throw-on-the-way-out). The same
-applies to `abort` listeners.
-:::
-
 ## Cancel vs. remove vs. pause
 
 | You want to… | Use |
