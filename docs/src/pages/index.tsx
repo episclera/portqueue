@@ -9,7 +9,14 @@ const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta:
   {
     icon: '🌐',
     title: 'Scales to Many Servers',
-    body: 'Add a server and it just starts claiming — no leader election, no reconfiguration. Instances cooperate through row-level claiming, so no job runs twice, and a job can target a preferred server when it needs one.',
+    body: (
+      <>
+        Scaling is just running more copies of your app — no leader election, no config, no
+        coordinator.
+        <br />
+        Jobs can also target specific servers in your fleet for data locality.
+      </>
+    ),
     to: '/docs/scale-horizontally',
     cta: 'How it scales',
   },
@@ -50,7 +57,7 @@ const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta:
   {
     icon: '🧹',
     title: 'Retention & Auto-Cleaning',
-    body: 'Finished jobs never pile up. Set a retention TTL per queue or per job and PortQueue prunes completed and failed rows automatically in the background — or keep them forever when you need the history.',
+    body: 'Your table never fills up on its own. Pick a retention mode per queue or per job — keep the history forever, or delete after a TTL — and PortQueue does the cleanup in the background.',
     to: '/docs/guides/retention',
     cta: 'Configure retention',
   },
