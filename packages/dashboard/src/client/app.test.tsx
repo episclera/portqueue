@@ -178,7 +178,7 @@ describe('job detail page', () => {
   it('shows the whole record, both payloads and every lifecycle timestamp', async () => {
     renderApp(`#/jobs/${JOB.id}`);
 
-    expect(await screen.findByText('Record')).toBeInTheDocument();
+    expect(await screen.findByText('Details')).toBeInTheDocument();
     expect(screen.getByText('Preferred instance pattern')).toBeInTheDocument();
     expect(screen.getByText(JOB.preferredInstanceKeyPattern)).toBeInTheDocument();
     expect(screen.getByText(JOB.processedOnInstanceKey)).toBeInTheDocument();

@@ -104,14 +104,14 @@ export function JobsTable({ queue }: JobsTableProps): React.ReactElement {
         ),
     },
     {
-      title: 'Start After',
-      key: 'startAfter',
-      render: (r) => relativeTime(r.startAfter),
-    },
-    {
       title: 'Created At',
       key: 'createdAt',
       render: (r) => relativeTime(r.createdAt),
+    },
+    {
+      title: 'Start After',
+      key: 'startAfter',
+      render: (r) => relativeTime(r.startAfter),
     },
     {
       title: 'Completed At',

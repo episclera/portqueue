@@ -1,6 +1,6 @@
 /**
- * Job detail page: full record, lifecycle timeline (every job), and actions —
- * retry (re-arm the job), clone (prefilled add form), remove, cancel. Terminal
+ * Job detail page: the full record (payloads and every timestamp) beside the lifecycle timeline,
+ * plus actions — retry (re-arm the job), clone (prefilled add form), remove, cancel. Terminal
  * records refetch on-demand rather than on the 30s poll.
  */
 import React, { useState } from 'react';
@@ -74,6 +74,10 @@ const InnerCardTitle = styled.div`
   border-bottom: 1px solid ${(p) => p.theme.color.border};
 `;
 
+const InnerCardBody = styled.div`
+  padding: ${(p) => p.theme.space(3)};
+`;
+
 const Pre = styled.pre<{ $danger?: boolean }>`
   margin: 0;
   padding: ${(p) => p.theme.space(3)};
@@ -85,7 +89,7 @@ const Pre = styled.pre<{ $danger?: boolean }>`
 `;
 
 /**
- * Every timestamp a job row carries, in lifecycle order. The panel lists all of them — including
+ * Every timestamp a job row carries, in lifecycle order. The section lists all of them — including
  * the ones that never happened — so "did this job ever stall / get cancelled?" is answerable from
  * the page, which the timeline alone can't do (it only plots the events that fired).
  */
@@ -248,7 +252,7 @@ export function JobDetailPage(): React.ReactElement {
       <Content>
         <Row gutter={16}>
           <Col span={14}>
-            <Card title="Record">
+            <Card title="Details">
               <DescGrid>
                 <Item label="Job id">
                   <Mono>{j.id}</Mono>
@@ -296,23 +300,24 @@ export function JobDetailPage(): React.ReactElement {
                 <InnerCardTitle>Return value</InnerCardTitle>
                 <Pre>{formatPayload(j.returnValue)}</Pre>
               </InnerCard>
+              <InnerCard>
+                <InnerCardTitle>Timestamps</InnerCardTitle>
+                <InnerCardBody>
+                  <DescGrid>
+                    {TIMESTAMPS.map((t) => (
+                      <Item key={t.key} label={t.label}>
+                        {formatDate(j[t.key])}
+                      </Item>
+                    ))}
+                  </DescGrid>
+                </InnerCardBody>
+              </InnerCard>
             </Card>
           </Col>
           <Col span={10}>
-            <Stack gap={4}>
-              <Card title="Lifecycle">
-                <LifecycleTimeline job={j} />
-              </Card>
-              <Card title="Timestamps">
-                <DescGrid>
-                  {TIMESTAMPS.map((t) => (
-                    <Item key={t.key} label={t.label}>
-                      {formatDate(j[t.key])}
-                    </Item>
-                  ))}
-                </DescGrid>
-              </Card>
-            </Stack>
+            <Card title="Lifecycle">
+              <LifecycleTimeline job={j} />
+            </Card>
           </Col>
         </Row>
       </Content>
