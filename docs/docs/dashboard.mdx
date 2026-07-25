@@ -18,11 +18,12 @@ server.
 ## Pages
 
 Navigation lives in a left sidebar (it collapses behind a burger button on small screens), with
-the live-updates control and the light/dark toggle in the top bar. Every page opens with a
-full-width subheader carrying its title, a one-line description, and the page's actions.
+links to these docs and the GitHub repo pinned at its foot, and the live-updates control and the
+light/dark toggle in the top bar. Every page opens with a full-width subheader carrying its title,
+a one-line description, and the page's actions.
 
-- **Overview** — the activity cards for each job state, then the per-queue table with
-  pause/resume.
+- **Overview** — activity cards for pending, active, failed, completed and stalled jobs, then the
+  per-queue table (totals and per-status counts) with pause/resume.
 - **Instances** — every registered instance with liveness, per-instance job counts, and
   per-instance pause/resume (only populated for servers that set an [instance key](./scale-horizontally.md#give-each-server-an-identity-key)).
 - **Schedules** — recurring definitions across queues, with bulk unschedule.

@@ -28,10 +28,26 @@ export const STATUSES_CONFIG: Record<JobStatus, DisplayConfig> = {
 /** The stalled pseudo-status' label, kept beside the real ones. */
 export const STALLED_LABEL = 'Stalled';
 
-/** The statuses every count breakdown shows — activity cards and per-row count columns. */
+/**
+ * The statuses every count breakdown shows as table columns — the queues table and the instances
+ * table. Pending sits next to Active so a row reads as "running now / waiting next".
+ */
 export const COUNT_STATUSES: JobStatus[] = [
   JobStatus.ACTIVE,
+  JobStatus.PENDING,
   JobStatus.RETRY,
+  JobStatus.FAILED,
+  JobStatus.COMPLETED,
+];
+
+/**
+ * The statuses the activity cards show, in pipeline order: what is waiting, what is running,
+ * and how it ended. Retry is deliberately absent — a retrying job is still in flight and is
+ * covered by the row-level attempt column.
+ */
+export const CARD_STATUSES: JobStatus[] = [
+  JobStatus.PENDING,
+  JobStatus.ACTIVE,
   JobStatus.FAILED,
   JobStatus.COMPLETED,
 ];

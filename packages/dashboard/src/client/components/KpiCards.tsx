@@ -3,7 +3,7 @@ import React from 'react';
 import styled from 'styled-components';
 import { Card, Col, Row, SkeletonText, Statistic, tokens } from '@portqueue/ui';
 import type { StatsDto } from '../../shared/dto';
-import { COUNT_STATUSES, STALLED, STALLED_LABEL, STATUSES_CONFIG } from '../constants/labels';
+import { CARD_STATUSES, STALLED, STALLED_LABEL, STATUSES_CONFIG } from '../constants/labels';
 
 export interface KpiCardsProps {
   stats: StatsDto | undefined;
@@ -19,7 +19,7 @@ export function KpiCards({ stats, loading }: KpiCardsProps): React.ReactElement 
   const counts = stats?.counts ?? {};
 
   const items: { label: string; value: React.ReactNode; color?: string }[] = [
-    ...COUNT_STATUSES.map((s) => ({
+    ...CARD_STATUSES.map((s) => ({
       label: STATUSES_CONFIG[s].label,
       value: counts[s] ?? 0,
       color: tokens.color.status[s],

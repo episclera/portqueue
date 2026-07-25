@@ -42,6 +42,12 @@ const NAV_ITEMS: NavItem[] = [
 const HEADER_HEIGHT = 60;
 const SIDEBAR_WIDTH = 232;
 
+/** Sidebar footer links — docs site and repository, side by side. */
+const EXTERNAL_LINKS: { href: string; label: string; icon: string }[] = [
+  { href: 'https://episclera.github.io/portqueue/', label: 'Docs', icon: '📖' },
+  { href: 'https://github.com/episclera/portqueue', label: 'GitHub', icon: '🐙' },
+];
+
 const Body = styled.div`
   display: flex;
   flex: 1;
@@ -56,6 +62,8 @@ const Nav = styled.nav<{ $open: boolean }>`
   position: sticky;
   top: ${HEADER_HEIGHT}px;
   height: calc(100vh - ${HEADER_HEIGHT}px);
+  display: flex;
+  flex-direction: column;
   padding: ${(p) => p.theme.space(4)} ${(p) => p.theme.space(3)};
   background: ${(p) => p.theme.color.surface};
   border-right: 1px solid ${(p) => p.theme.color.border};
@@ -114,6 +122,40 @@ const NavItemLink = styled(NavLink)`
   &.active {
     background: ${(p) => p.theme.color.brand}24;
     color: ${(p) => p.theme.color.link};
+  }
+`;
+
+/** Pinned to the bottom of the sidebar: both links share one row. */
+const NavFooter = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${(p) => p.theme.space(2)};
+  margin-top: auto;
+  padding-top: ${(p) => p.theme.space(3)};
+  border-top: 1px solid ${(p) => p.theme.color.border};
+`;
+
+const NavFooterLink = styled.a`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: ${(p) => p.theme.space(2)};
+  flex: 1;
+  padding: ${(p) => p.theme.space(2)};
+  font-size: 13px;
+  font-weight: 600;
+  color: ${(p) => p.theme.color.textMuted};
+  text-decoration: none;
+  border: 1px solid ${(p) => p.theme.color.border};
+  border-radius: ${(p) => p.theme.radii.md}px;
+  transition:
+    background ${(p) => p.theme.motion.fast},
+    color ${(p) => p.theme.motion.fast};
+
+  &:hover {
+    background: ${(p) => p.theme.color.surfaceAlt};
+    color: ${(p) => p.theme.color.text};
+    text-decoration: none;
   }
 `;
 
@@ -243,6 +285,19 @@ export function Shell({ onThemeChange, children }: ShellProps): React.ReactEleme
               </li>
             ))}
           </NavList>
+          <NavFooter>
+            {EXTERNAL_LINKS.map((link) => (
+              <NavFooterLink
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                <span aria-hidden>{link.icon}</span>
+                {link.label}
+              </NavFooterLink>
+            ))}
+          </NavFooter>
         </Nav>
         <Main>{children}</Main>
       </Body>

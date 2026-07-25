@@ -63,6 +63,9 @@ export function RowAction({
       title={confirm.title}
       description={confirm.description}
       okText={label}
+      // Not "Cancel" — the confirm button is already labelled with the action, which for the
+      // cancel-job row action would leave two identically named buttons in the popover.
+      cancelText="Keep"
       okDanger={danger}
       onConfirm={onClick}
     >
