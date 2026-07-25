@@ -1,5 +1,8 @@
 import React from 'react';
 import styled, { css } from 'styled-components';
+import { Portal } from '../overlay/Portal';
+import { useAnchoredLayer } from '../overlay/useAnchoredLayer';
+import { useDismiss } from '../overlay/useDismiss';
 
 export type SelectSize = 'sm' | 'md' | 'lg';
 
@@ -25,7 +28,6 @@ const SIZES: Record<SelectSize, { h: number; px: number; fs: number }> = {
 };
 
 const Wrapper = styled.div<{ $block: boolean }>`
-  position: relative;
   display: ${(p) => (p.$block ? 'block' : 'inline-block')};
   width: ${(p) => (p.$block ? '100%' : 'auto')};
 `;
@@ -85,17 +87,25 @@ const Label = styled.span`
   white-space: nowrap;
 `;
 
-const Menu = styled.ul`
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: ${(p) => p.theme.zIndex.drawer};
+/** Preferred menu height; shrinks further when the viewport leaves less room. */
+const MAX_MENU_HEIGHT = 260;
+
+/**
+ * Rendered in a body portal at fixed viewport coordinates and stretched to the trigger width,
+ * so a select inside a Card, a modal or a scrolling table is never clipped or under-stacked.
+ */
+const Menu = styled.ul<{ $top: number; $left: number; $width: number; $maxHeight: number }>`
+  position: fixed;
+  top: ${(p) => p.$top}px;
+  left: ${(p) => p.$left}px;
+  width: ${(p) => p.$width}px;
+  z-index: ${(p) => p.theme.zIndex.select};
   margin: 0;
   padding: ${(p) => p.theme.space(1)};
   list-style: none;
-  max-height: 260px;
+  max-height: ${(p) => p.$maxHeight}px;
   overflow-y: auto;
+  box-sizing: border-box;
   background: ${(p) => p.theme.color.surface};
   border: 1px solid ${(p) => p.theme.color.border};
   border-radius: ${(p) => p.theme.radii.md}px;
@@ -131,27 +141,15 @@ export function Select<T extends string | number>({
   size = 'md',
 }: SelectProps<T>): React.ReactElement {
   const [open, setOpen] = React.useState(false);
-  const wrapperRef = React.useRef<HTMLDivElement>(null);
+  const { triggerRef, layerRef, position } = useAnchoredLayer<HTMLDivElement, HTMLUListElement>({
+    open,
+    align: 'stretch',
+    gap: 4,
+  });
 
   const selected = options.find((option) => option.value === value);
 
-  React.useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent): void => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  useDismiss({ open, onDismiss: () => setOpen(false), refs: [triggerRef, layerRef] });
 
   const handleSelect = (next: T): void => {
     onChange(next);
@@ -159,7 +157,7 @@ export function Select<T extends string | number>({
   };
 
   return (
-    <Wrapper ref={wrapperRef} $block={block}>
+    <Wrapper ref={triggerRef} $block={block}>
       <Trigger
         type="button"
         $size={size}
@@ -175,25 +173,34 @@ export function Select<T extends string | number>({
           ▾
         </Caret>
       </Trigger>
-      {open && (
-        <Menu role="listbox">
-          {options.map((option) => {
-            const isSelected = option.value === value;
-            return (
-              <Item
-                key={String(option.value)}
-                role="option"
-                aria-selected={isSelected}
-                $selected={isSelected}
-                onClick={() => handleSelect(option.value)}
-              >
-                <span>{option.label}</span>
-                {isSelected ? <span aria-hidden>✓</span> : null}
-              </Item>
-            );
-          })}
-        </Menu>
-      )}
+      {open && position ? (
+        <Portal>
+          <Menu
+            ref={layerRef}
+            role="listbox"
+            $top={position.top}
+            $left={position.left}
+            $width={position.width ?? 0}
+            $maxHeight={Math.min(MAX_MENU_HEIGHT, position.maxHeight)}
+          >
+            {options.map((option) => {
+              const isSelected = option.value === value;
+              return (
+                <Item
+                  key={String(option.value)}
+                  role="option"
+                  aria-selected={isSelected}
+                  $selected={isSelected}
+                  onClick={() => handleSelect(option.value)}
+                >
+                  <span>{option.label}</span>
+                  {isSelected ? <span aria-hidden>✓</span> : null}
+                </Item>
+              );
+            })}
+          </Menu>
+        </Portal>
+      ) : null}
     </Wrapper>
   );
 }

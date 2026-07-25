@@ -1,6 +1,9 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
 import { Button } from './Button';
+import { Portal } from '../overlay/Portal';
+import { useAnchoredLayer } from '../overlay/useAnchoredLayer';
+import { useDismiss } from '../overlay/useDismiss';
 
 export interface PopconfirmProps {
   title: React.ReactNode;
@@ -19,18 +22,22 @@ const popIn = keyframes`
 `;
 
 const Wrapper = styled.span`
-  position: relative;
   display: inline-block;
 `;
 
-const Popover = styled.div`
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: ${(p) => p.theme.zIndex.modal};
-  min-width: 220px;
+const MIN_WIDTH = 220;
+
+/**
+ * Rendered in a body portal at fixed viewport coordinates: a row-action popover has to escape
+ * the table cell that would otherwise clip it, and outrank the dialog it may be opened inside.
+ */
+const Popover = styled.div<{ $top: number; $left: number }>`
+  position: fixed;
+  top: ${(p) => p.$top}px;
+  left: ${(p) => p.$left}px;
+  z-index: ${(p) => p.theme.zIndex.popover};
+  min-width: ${MIN_WIDTH}px;
   max-width: 300px;
-  margin-top: 6px;
   padding: ${(p) => p.theme.space(3)} ${(p) => p.theme.space(4)};
   background: ${(p) => p.theme.color.surface};
   color: ${(p) => p.theme.color.text};
@@ -64,7 +71,7 @@ const Actions = styled.div`
   margin-top: ${(p) => p.theme.space(3)};
 `;
 
-/** Bespoke confirmation popover anchored to its trigger child. */
+/** Bespoke confirmation popover, portalled to the body and anchored to its trigger child. */
 export const Popconfirm = ({
   title,
   description,
@@ -76,25 +83,12 @@ export const Popconfirm = ({
   children,
 }: PopconfirmProps): React.ReactElement => {
   const [open, setOpen] = React.useState(false);
-  const wrapperRef = React.useRef<HTMLSpanElement>(null);
+  const { triggerRef, layerRef, position } = useAnchoredLayer<HTMLSpanElement, HTMLDivElement>({
+    open,
+    minWidth: MIN_WIDTH,
+  });
 
-  React.useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent): void => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  useDismiss({ open, onDismiss: () => setOpen(false), refs: [triggerRef, layerRef] });
 
   const handleCancel = (): void => {
     setOpen(false);
@@ -114,25 +108,27 @@ export const Popconfirm = ({
   });
 
   return (
-    <Wrapper ref={wrapperRef}>
-      {trigger}
-      {open ? (
-        <Popover role="dialog">
-          <Title>
-            <span aria-hidden>❓</span>
-            <span>{title}</span>
-          </Title>
-          {description != null ? <Description>{description}</Description> : null}
-          <Actions>
-            <Button variant="text" size="sm" onClick={handleCancel}>
-              {cancelText}
-            </Button>
-            <Button variant={okDanger ? 'danger' : 'primary'} size="sm" onClick={handleConfirm}>
-              {okText}
-            </Button>
-          </Actions>
-        </Popover>
+    <>
+      <Wrapper ref={triggerRef}>{trigger}</Wrapper>
+      {open && position ? (
+        <Portal>
+          <Popover ref={layerRef} role="dialog" $top={position.top} $left={position.left}>
+            <Title>
+              <span aria-hidden>❓</span>
+              <span>{title}</span>
+            </Title>
+            {description != null ? <Description>{description}</Description> : null}
+            <Actions>
+              <Button variant="text" size="sm" onClick={handleCancel}>
+                {cancelText}
+              </Button>
+              <Button variant={okDanger ? 'danger' : 'primary'} size="sm" onClick={handleConfirm}>
+                {okText}
+              </Button>
+            </Actions>
+          </Popover>
+        </Portal>
       ) : null}
-    </Wrapper>
+    </>
   );
 };

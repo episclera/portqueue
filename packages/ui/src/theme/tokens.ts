@@ -52,7 +52,21 @@ export const tokens = {
     md: '0 4px 12px rgba(27,31,29,0.07), 0 2px 6px rgba(27,31,29,0.05)',
     lg: '0 12px 32px rgba(27,31,29,0.10), 0 6px 16px rgba(27,31,29,0.07)',
   },
-  zIndex: { header: 100, drawer: 200, modal: 300, toast: 400 },
+  /**
+   * Stacking order for floating layers, all of which render into a body portal. Page chrome
+   * sits low; dialogs sit above it; the transient layers a dialog can itself contain
+   * (popovers, menus, selects) sit above dialogs; tooltips are last so they are never covered.
+   */
+  zIndex: {
+    header: 100,
+    drawer: 200,
+    modal: 1000,
+    popover: 1100,
+    dropdown: 1200,
+    select: 1300,
+    toast: 1400,
+    tooltip: 1500,
+  },
   breakpoints: { xs: 480, sm: 640, md: 768, lg: 1024, xl: 1280 },
   motion: {
     fast: '120ms cubic-bezier(0.4, 0, 0.2, 1)',

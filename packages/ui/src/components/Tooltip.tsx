@@ -1,6 +1,6 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
 import styled from 'styled-components';
+import { Portal } from '../overlay/Portal';
 
 export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 
@@ -17,13 +17,14 @@ const Wrapper = styled.span`
 
 /**
  * Rendered in a body portal with fixed coordinates, so an ancestor with `overflow: hidden`
- * (a Card, a horizontally scrolling table) can never clip it.
+ * (a Card, a horizontally scrolling table) can never clip it. Sits at the top of the stack —
+ * a tooltip can be triggered from inside a dialog, a menu or a popover.
  */
 const Bubble = styled.span<{ $top: number; $left: number }>`
   position: fixed;
   top: ${(p) => p.$top}px;
   left: ${(p) => p.$left}px;
-  z-index: ${(p) => p.theme.zIndex.toast};
+  z-index: ${(p) => p.theme.zIndex.tooltip};
   max-width: 240px;
   padding: 5px 9px;
   font-family: ${(p) => p.theme.font.family};
@@ -120,14 +121,13 @@ export const Tooltip = ({
       >
         {children}
       </Wrapper>
-      {coords && typeof document !== 'undefined'
-        ? createPortal(
-            <Bubble ref={bubbleRef} $top={coords.top} $left={coords.left} role="tooltip">
-              {title}
-            </Bubble>,
-            document.body,
-          )
-        : null}
+      {coords ? (
+        <Portal>
+          <Bubble ref={bubbleRef} $top={coords.top} $left={coords.left} role="tooltip">
+            {title}
+          </Bubble>
+        </Portal>
+      ) : null}
     </>
   );
 };

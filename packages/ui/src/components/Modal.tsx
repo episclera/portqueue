@@ -1,6 +1,6 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
-import { createPortal } from 'react-dom';
+import { Portal } from '../overlay/Portal';
 
 export interface ModalProps {
   open: boolean;
@@ -22,6 +22,10 @@ const popIn = keyframes`
   to { opacity: 1; transform: translateY(0) scale(1); }
 `;
 
+/**
+ * Full-viewport backdrop, portalled to the body. Stacks above all page chrome; the transient
+ * layers a dialog can contain (selects, popovers, tooltips) deliberately stack above it.
+ */
 const Backdrop = styled.div`
   position: fixed;
   inset: 0;
@@ -128,24 +132,20 @@ export const Modal = ({
   if (typeof document === 'undefined') return null;
   if (!open) return null;
 
-  return createPortal(
-    <Backdrop onClick={onClose} role="presentation">
-      <Dialog
-        $width={width}
-        role="dialog"
-        aria-modal="true"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Header>
-          {title != null ? <Title>{title}</Title> : <span />}
-          <CloseButton type="button" onClick={onClose} aria-label="Close">
-            ✕
-          </CloseButton>
-        </Header>
-        <Body>{children}</Body>
-        {footer != null ? <Footer>{footer}</Footer> : null}
-      </Dialog>
-    </Backdrop>,
-    document.body,
+  return (
+    <Portal>
+      <Backdrop onClick={onClose} role="presentation">
+        <Dialog $width={width} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+          <Header>
+            {title != null ? <Title>{title}</Title> : <span />}
+            <CloseButton type="button" onClick={onClose} aria-label="Close">
+              ✕
+            </CloseButton>
+          </Header>
+          <Body>{children}</Body>
+          {footer != null ? <Footer>{footer}</Footer> : null}
+        </Dialog>
+      </Backdrop>
+    </Portal>
   );
 };

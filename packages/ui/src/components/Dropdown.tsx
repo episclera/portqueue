@@ -1,5 +1,8 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
+import { Portal } from '../overlay/Portal';
+import { useAnchoredLayer } from '../overlay/useAnchoredLayer';
+import { useDismiss } from '../overlay/useDismiss';
 
 export interface DropdownItem {
   key: string;
@@ -22,17 +25,23 @@ const popIn = keyframes`
 `;
 
 const Wrapper = styled.span`
-  position: relative;
   display: inline-block;
 `;
 
-const Menu = styled.div<{ $align: 'left' | 'right' }>`
-  position: absolute;
-  top: 100%;
-  ${(p) => (p.$align === 'right' ? 'right: 0;' : 'left: 0;')}
-  z-index: ${(p) => p.theme.zIndex.modal};
-  min-width: 180px;
-  margin-top: 6px;
+const MIN_WIDTH = 180;
+
+/**
+ * Rendered in a body portal at fixed viewport coordinates, so a toolbar or table cell with
+ * `overflow: hidden` can't clip the menu and no ancestor stacking context can bury it.
+ */
+const Menu = styled.div<{ $top: number; $left: number; $maxHeight: number }>`
+  position: fixed;
+  top: ${(p) => p.$top}px;
+  left: ${(p) => p.$left}px;
+  z-index: ${(p) => p.theme.zIndex.dropdown};
+  min-width: ${MIN_WIDTH}px;
+  max-height: ${(p) => p.$maxHeight}px;
+  overflow-y: auto;
   padding: ${(p) => p.theme.space(1)};
   background: ${(p) => p.theme.color.surface};
   border: 1px solid ${(p) => p.theme.color.border};
@@ -76,28 +85,16 @@ const ItemIcon = styled.span`
   justify-content: center;
 `;
 
-/** Bespoke dropdown menu anchored to its trigger child. */
+/** Bespoke dropdown menu, portalled to the body and anchored to its trigger child. */
 export const Dropdown = ({ items, children, align = 'left' }: DropdownProps): React.ReactElement => {
   const [open, setOpen] = React.useState(false);
-  const wrapperRef = React.useRef<HTMLSpanElement>(null);
+  const { triggerRef, layerRef, position } = useAnchoredLayer<HTMLSpanElement, HTMLDivElement>({
+    open,
+    align: align === 'right' ? 'end' : 'start',
+    minWidth: MIN_WIDTH,
+  });
 
-  React.useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent): void => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  useDismiss({ open, onDismiss: () => setOpen(false), refs: [triggerRef, layerRef] });
 
   const handleItemClick = (item: DropdownItem): void => {
     if (item.disabled) return;
@@ -113,25 +110,33 @@ export const Dropdown = ({ items, children, align = 'left' }: DropdownProps): Re
   });
 
   return (
-    <Wrapper ref={wrapperRef}>
-      {trigger}
-      {open ? (
-        <Menu $align={align} role="menu">
-          {items.map((item) => (
-            <MenuItem
-              key={item.key}
-              type="button"
-              role="menuitem"
-              $danger={item.danger ?? false}
-              disabled={item.disabled}
-              onClick={() => handleItemClick(item)}
-            >
-              {item.icon != null ? <ItemIcon aria-hidden>{item.icon}</ItemIcon> : null}
-              <span>{item.label}</span>
-            </MenuItem>
-          ))}
-        </Menu>
+    <>
+      <Wrapper ref={triggerRef}>{trigger}</Wrapper>
+      {open && position ? (
+        <Portal>
+          <Menu
+            ref={layerRef}
+            role="menu"
+            $top={position.top}
+            $left={position.left}
+            $maxHeight={position.maxHeight}
+          >
+            {items.map((item) => (
+              <MenuItem
+                key={item.key}
+                type="button"
+                role="menuitem"
+                $danger={item.danger ?? false}
+                disabled={item.disabled}
+                onClick={() => handleItemClick(item)}
+              >
+                {item.icon != null ? <ItemIcon aria-hidden>{item.icon}</ItemIcon> : null}
+                <span>{item.label}</span>
+              </MenuItem>
+            ))}
+          </Menu>
+        </Portal>
       ) : null}
-    </Wrapper>
+    </>
   );
 };

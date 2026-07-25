@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
 import type { DefaultTheme } from 'styled-components';
+import { Portal } from '../overlay/Portal';
 
 export type ToastKind = 'success' | 'error' | 'info' | 'warning';
 
@@ -104,14 +105,16 @@ export function ToastProvider({
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <Viewport role="status" aria-live="polite">
-        {toasts.map((t) => (
-          <Item key={t.id} $kind={t.kind}>
-            <span aria-hidden>{ICON[t.kind]}</span>
-            <span>{t.content}</span>
-          </Item>
-        ))}
-      </Viewport>
+      <Portal>
+        <Viewport role="status" aria-live="polite">
+          {toasts.map((t) => (
+            <Item key={t.id} $kind={t.kind}>
+              <span aria-hidden>{ICON[t.kind]}</span>
+              <span>{t.content}</span>
+            </Item>
+          ))}
+        </Viewport>
+      </Portal>
     </ToastContext.Provider>
   );
 }
