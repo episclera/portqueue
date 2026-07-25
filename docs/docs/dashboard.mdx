@@ -27,7 +27,10 @@ a one-line description, and the page's actions.
 - **Instances** — every registered instance with liveness, per-instance job counts, and
   per-instance pause/resume (only populated for servers that set an [instance key](./scale-horizontally.md#give-each-server-an-identity-key)).
 - **Schedules** — recurring definitions across queues, with bulk unschedule.
-- **Queue / Job detail** — drill into a queue's jobs or a single job.
+- **Queue / Job detail** — drill into a queue's jobs, or into a single job: its full record
+  (queue, status, priority, attempts, the instance that processed it and any preferred-instance
+  pattern, lock, idempotency key, schedule), its `data` and return value, the failure message, a
+  lifecycle timeline, and every lifecycle timestamp — including the ones the job never reached.
 
 ### Tables
 

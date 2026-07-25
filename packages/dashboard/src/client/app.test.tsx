@@ -32,15 +32,18 @@ const JOB = {
   id: 'job-abcdef123456',
   queue: 'emails',
   status: 'FAILED',
-  data: {},
+  data: { to: 'ada@example.com' },
+  returnValue: 'delivery deferred',
   priority: 0,
   retryAttempt: 1,
   retryMaxAttempts: 3,
   createdAt: '2026-07-22T00:00:00.000Z',
   updatedAt: '2026-07-22T00:00:00.000Z',
   startAfter: '2026-07-22T00:00:00.000Z',
+  failedAt: '2026-07-22T00:01:00.000Z',
   processedOnInstanceKey: 'worker-eu-1',
   preferredInstanceKeyPattern: 'worker-eu-*',
+  failureMessage: 'smtp timeout',
   stalled: false,
 };
 
@@ -58,13 +61,15 @@ function stubFetch(): void {
       ? QUEUES
       : url.includes('/api/stats')
         ? STATS
-        : url.includes('/api/jobs')
-          ? { items: [JOB], cursor: null, hasMore: false, total: 42 }
-          : url.includes('/api/schedules')
-            ? []
-            : url.includes('/api/instances')
+        : /\/api\/jobs\/[^?]/.test(url)
+          ? JOB
+          : url.includes('/api/jobs')
+            ? { items: [JOB], cursor: null, hasMore: false, total: 42 }
+            : url.includes('/api/schedules')
               ? []
-              : {};
+              : url.includes('/api/instances')
+                ? []
+                : {};
     return { ok: true, status: 200, json: async () => body };
   }) as never;
 }
@@ -141,7 +146,13 @@ describe('queue detail page', () => {
     expect(await screen.findByText('Results (42)')).toBeInTheDocument();
 
     expect(await screen.findByText('Processed On Instance')).toBeInTheDocument();
-    expect(screen.getByText('Preferred Instance Pattern')).toBeInTheDocument();
+    // The preferred-instance pattern is detail-page material, not a jobs-table column.
+    expect(screen.queryByText('Preferred Instance Pattern')).not.toBeInTheDocument();
+    // Timing columns, in pipeline order.
+    expect(screen.getByText('Start After')).toBeInTheDocument();
+    expect(screen.getByText('Created At')).toBeInTheDocument();
+    expect(screen.getByText('Completed At')).toBeInTheDocument();
+    expect(screen.getByText('Failed At')).toBeInTheDocument();
     expect(screen.getByText('Actions')).toBeInTheDocument();
 
     // Statuses render through the label config, never as a raw enum value.
@@ -160,5 +171,40 @@ describe('queue detail page', () => {
 
     fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
     expect(await screen.findByRole('button', { name: /Bulk actions \(1\)/ })).toBeInTheDocument();
+  });
+});
+
+describe('job detail page', () => {
+  it('shows the whole record, both payloads and every lifecycle timestamp', async () => {
+    renderApp(`#/jobs/${JOB.id}`);
+
+    expect(await screen.findByText('Record')).toBeInTheDocument();
+    expect(screen.getByText('Preferred instance pattern')).toBeInTheDocument();
+    expect(screen.getByText(JOB.preferredInstanceKeyPattern)).toBeInTheDocument();
+    expect(screen.getByText(JOB.processedOnInstanceKey)).toBeInTheDocument();
+    expect(screen.getByText('Locked until')).toBeInTheDocument();
+    expect(screen.getByText(JOB.failureMessage)).toBeInTheDocument();
+
+    // Data is pretty-printed JSON; a scalar return value stays a plain string.
+    expect(screen.getByText(/"to": "ada@example.com"/)).toBeInTheDocument();
+    expect(screen.getByText('Return value')).toBeInTheDocument();
+    expect(screen.getByText(JOB.returnValue)).toBeInTheDocument();
+
+    // Every timestamp is listed, including the ones this job never reached.
+    expect(screen.getByText('Timestamps')).toBeInTheDocument();
+    for (const label of [
+      'Created at',
+      'Start after',
+      'Started at',
+      'Retried at',
+      'Stalled at',
+      'Completed at',
+      'Failed at',
+      'Cancelled at',
+      'Expired at',
+      'Updated at',
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
   });
 });

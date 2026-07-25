@@ -11,6 +11,7 @@ import {
   Col,
   Content,
   Inline,
+  Mono,
   PageHeader,
   Popconfirm,
   Row,
@@ -83,6 +84,24 @@ const Pre = styled.pre<{ $danger?: boolean }>`
   color: ${(p) => (p.$danger ? p.theme.color.danger : p.theme.color.text)};
 `;
 
+/**
+ * Every timestamp a job row carries, in lifecycle order. The panel lists all of them — including
+ * the ones that never happened — so "did this job ever stall / get cancelled?" is answerable from
+ * the page, which the timeline alone can't do (it only plots the events that fired).
+ */
+const TIMESTAMPS: { key: Extract<keyof JobDto, `${string}At` | 'startAfter'>; label: string }[] = [
+  { key: 'createdAt', label: 'Created at' },
+  { key: 'startAfter', label: 'Start after' },
+  { key: 'startedAt', label: 'Started at' },
+  { key: 'retriedAt', label: 'Retried at' },
+  { key: 'stalledAt', label: 'Stalled at' },
+  { key: 'completedAt', label: 'Completed at' },
+  { key: 'failedAt', label: 'Failed at' },
+  { key: 'cancelledAt', label: 'Cancelled at' },
+  { key: 'expiredAt', label: 'Expired at' },
+  { key: 'updatedAt', label: 'Updated at' },
+];
+
 function Item({
   label,
   children,
@@ -96,6 +115,26 @@ function Item({
       <DescValue>{children}</DescValue>
     </div>
   );
+}
+
+/** A value that may be absent — renders the em dash the rest of the UI uses for "nothing". */
+function Maybe({ value }: { value: string | null | undefined }): React.ReactElement {
+  return value ? <Mono>{value}</Mono> : <>—</>;
+}
+
+/**
+ * `data` and `returnValue` are `unknown` on the wire: pretty-print anything structured, and show
+ * a scalar (string, number, boolean) as itself rather than as a quoted JSON literal.
+ */
+function formatPayload(value: unknown): string {
+  if (value === undefined || value === null) return '—';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 }
 
 export function JobDetailPage(): React.ReactElement {
@@ -211,20 +250,36 @@ export function JobDetailPage(): React.ReactElement {
           <Col span={14}>
             <Card title="Record">
               <DescGrid>
+                <Item label="Job id">
+                  <Mono>{j.id}</Mono>
+                </Item>
+                <Item label="Queue">
+                  <Link to={`/queues/${encodeURIComponent(j.queue)}`}>{j.queue}</Link>
+                </Item>
                 <Item label="Status">{status}</Item>
+                <Item label="Stalled">{j.stalled ? 'Yes' : 'No'}</Item>
                 <Item label="Priority">{j.priority}</Item>
                 <Item label="Attempts">
                   {j.retryAttempt} / {j.retryMaxAttempts}
                 </Item>
-                <Item label="Processed on instance">{j.processedOnInstanceKey ?? '—'}</Item>
-                <Item label="Preferred instance pattern">
-                  {j.preferredInstanceKeyPattern ?? '—'}
+                <Item label="Processed on instance">
+                  <Maybe value={j.processedOnInstanceKey} />
                 </Item>
-                <Item label="Created">{formatDate(j.createdAt)}</Item>
-                <Item label="Start after">{formatDate(j.startAfter)}</Item>
-                <Item label="Idempotency key">{j.idempotencyKey ?? '—'}</Item>
+                <Item label="Preferred instance pattern">
+                  <Maybe value={j.preferredInstanceKeyPattern} />
+                </Item>
+                <Item label="Locked until">{formatDate(j.lockedUntil)}</Item>
+                <Item label="Idempotency key">
+                  <Maybe value={j.idempotencyKey} />
+                </Item>
                 <Item label="Schedule">
-                  {j.scheduleId ? <Link to={`/schedules`}>{j.scheduleId}</Link> : '—'}
+                  {j.scheduleId ? (
+                    <Link to="/schedules">
+                      <Mono>{j.scheduleId}</Mono>
+                    </Link>
+                  ) : (
+                    '—'
+                  )}
                 </Item>
               </DescGrid>
               {j.failureMessage && (
@@ -235,20 +290,29 @@ export function JobDetailPage(): React.ReactElement {
               )}
               <InnerCard>
                 <InnerCardTitle>Data</InnerCardTitle>
-                <Pre>{JSON.stringify(j.data, null, 2)}</Pre>
+                <Pre>{formatPayload(j.data)}</Pre>
               </InnerCard>
-              {j.returnValue !== undefined && j.returnValue !== null && (
-                <InnerCard>
-                  <InnerCardTitle>Return value</InnerCardTitle>
-                  <Pre>{JSON.stringify(j.returnValue, null, 2)}</Pre>
-                </InnerCard>
-              )}
+              <InnerCard>
+                <InnerCardTitle>Return value</InnerCardTitle>
+                <Pre>{formatPayload(j.returnValue)}</Pre>
+              </InnerCard>
             </Card>
           </Col>
           <Col span={10}>
-            <Card title="Lifecycle">
-              <LifecycleTimeline job={j} />
-            </Card>
+            <Stack gap={4}>
+              <Card title="Lifecycle">
+                <LifecycleTimeline job={j} />
+              </Card>
+              <Card title="Timestamps">
+                <DescGrid>
+                  {TIMESTAMPS.map((t) => (
+                    <Item key={t.key} label={t.label}>
+                      {formatDate(j[t.key])}
+                    </Item>
+                  ))}
+                </DescGrid>
+              </Card>
+            </Stack>
           </Col>
         </Row>
       </Content>

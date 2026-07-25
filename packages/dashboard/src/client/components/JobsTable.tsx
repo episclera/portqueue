@@ -104,15 +104,24 @@ export function JobsTable({ queue }: JobsTableProps): React.ReactElement {
         ),
     },
     {
-      title: 'Preferred Instance Pattern',
-      key: 'preferredInstanceKeyPattern',
-      render: (r) =>
-        r.preferredInstanceKeyPattern ? <Mono>{r.preferredInstanceKeyPattern}</Mono> : '—',
+      title: 'Start After',
+      key: 'startAfter',
+      render: (r) => relativeTime(r.startAfter),
     },
     {
-      title: 'Created',
+      title: 'Created At',
       key: 'createdAt',
       render: (r) => relativeTime(r.createdAt),
+    },
+    {
+      title: 'Completed At',
+      key: 'completedAt',
+      render: (r) => relativeTime(r.completedAt),
+    },
+    {
+      title: 'Failed At',
+      key: 'failedAt',
+      render: (r) => relativeTime(r.failedAt),
     },
     ...(readOnly
       ? []
