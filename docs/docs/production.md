@@ -75,14 +75,6 @@ warm cache / local data / GPU / region is"*.
   instance once it's been unseen for 30 minutes (`removeInstance` / dashboard /
   `portqueue remove-instance`).
 
-:::caution Dedup is tool-managed
-The schema is deliberately **index-free and constraint-free** for sharded/distributed databases.
-Idempotency/singleton dedup and queue-name uniqueness are enforced in the tool with a pre-insert
-lookup, not a database `UNIQUE` index. This is best-effort under a tight cross-instance race:
-two instances inserting the *same* `idempotencyKey` in the same instant can both win. Where exact
-once-only insertion is critical, also guard with your own transaction/business key.
-:::
-
 ## Observability
 
 Structured logging correlated by `job.id` / queue name; **subscribe to
