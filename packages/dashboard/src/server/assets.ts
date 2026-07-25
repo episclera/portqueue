@@ -83,7 +83,7 @@ export async function serveAsset(
     let contentType = MIME[ext] ?? 'application/octet-stream';
     let out: Buffer | string = body;
     if (ext === '.html') {
-      out = injectConfig(body.toString('utf8'), config);
+      out = injectConfig(rewriteAssetUrls(body.toString('utf8'), config.basePath), config);
       contentType = HTML_MIME;
     }
     return { status: 200, body: out, contentType };
@@ -93,11 +93,28 @@ export async function serveAsset(
   if (!extname(clean)) {
     const indexPath = join(root, 'index.html');
     if (await exists(indexPath)) {
-      const html = injectConfig((await readFile(indexPath)).toString('utf8'), config);
+      const raw = (await readFile(indexPath)).toString('utf8');
+      const html = injectConfig(rewriteAssetUrls(raw, config.basePath), config);
       return { status: 200, body: html, contentType: HTML_MIME };
     }
   }
   return { status: 404, body: 'Not found', contentType: 'text/plain; charset=utf-8' };
+}
+
+/**
+ * The client is built with Vite `base: './'`, so `index.html` references its bundle relatively
+ * (`./assets/app.js`). The browser would resolve that against the *current* URL, which breaks
+ * for every mount-relative navigation: `/portqueue` → `/assets/app.js` (outside the mount) and
+ * `/portqueue/jobs/1` → `/portqueue/jobs/assets/app.js`. Rewriting the references to absolute
+ * paths under the mount makes them resolve identically from any URL, with or without a trailing
+ * slash. A root mount (`/`) needs no prefix — `//assets/...` would read as protocol-relative.
+ */
+export function rewriteAssetUrls(html: string, basePath: string): string {
+  const prefix = basePath === '/' ? '' : basePath;
+  return html.replace(
+    /(\b(?:src|href)=")\.\/([^"]*)"/g,
+    (_match, attr: string, path: string) => `${attr}${prefix}/${path}"`,
+  );
 }
 
 /** Inject the runtime config as a global the SPA reads on boot. */
