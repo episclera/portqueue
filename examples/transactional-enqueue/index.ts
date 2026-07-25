@@ -20,7 +20,7 @@ import { PostgresDriver } from '@portqueue/core/drivers/postgres';
 import { fromPg } from '@portqueue/core/tx';
 
 const connectionString =
-  process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/portqueue_examples';
+  process.env.DATABASE_URL ?? 'postgresql://portqueue:portqueue@localhost:5432/portqueue';
 
 type QueueName = 'order-confirmations';
 

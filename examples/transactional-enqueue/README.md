@@ -24,4 +24,11 @@ DATABASE_URL=postgres://user:pass@localhost:5432/app npm run example:transaction
 DATABASE_URL=postgres://user:pass@localhost:5432/app npm start
 ```
 
-If `DATABASE_URL` is unset it defaults to `postgres://postgres:postgres@localhost:5432/portqueue_examples`.
+If `DATABASE_URL` is unset it defaults to `postgresql://portqueue:portqueue@localhost:5432/portqueue`,
+which matches the repo's dev Postgres — so from a clean checkout you can just:
+
+```bash
+npm run db:pg:up               # start the dev Postgres in Docker
+npm run example:transactional
+```
+
