@@ -27,6 +27,10 @@ type QueueName = 'emails' | 'reports';
 async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({
     driver: new PgliteDriver({ dataDir }),
+    // Naming this process registers it as an instance, so the dashboard's Instances page has a
+    // row to show — with its liveness, its own job counts, and per-instance pause/resume. Run a
+    // second copy with PORTQUEUE_INSTANCE_KEY set to a different name to see two servers.
+    instance: { instanceKey: process.env.PORTQUEUE_INSTANCE_KEY ?? 'node-example-1' },
   });
   await pq.init();
 

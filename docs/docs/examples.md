@@ -29,7 +29,9 @@ peer dependency and a `DATABASE_URL`). Each folder is a workspace package that r
 
 ## Running
 
-From the repo root (builds `@portqueue/core` and `@portqueue/dashboard` on first run). Each
+From the repo root (builds `@portqueue/core` and `@portqueue/dashboard` on first run; the two
+dashboard examples rebuild both every time, so the UI they serve always matches the working tree —
+set `PORTQUEUE_SKIP_BUILD=1` to skip that). Each
 example has a root `npm run example:*` script; if you prefer, there's an equivalent shell script
 under [`scripts/dev/examples/`](https://github.com/episclera/portqueue/tree/main/scripts/dev/examples)
 that does the same thing (some devs like running the `.sh` versions directly):
