@@ -45,9 +45,21 @@ async function main(): Promise<void> {
     data: { to: 'alan@example.com', template: 'digest' },
     schedule: { startAfter: '30s' },
   });
-  await pq.createQueue<{ kind: string }>('reports').addJob({
+
+  // Every queue with jobs needs a worker, or its jobs just sit there as PENDING — including the
+  // runs a recurring schedule keeps producing.
+  const reports = pq.createQueue<{ kind: string }>('reports');
+  pq.createWorker<{ kind: string }>({
+    queue: 'reports',
+    handler: async (job) => {
+      console.log(`📊 building the ${job.data.kind} report`);
+    },
+  });
+  await reports.addJob({
     data: { kind: 'sales' },
     schedule: { startEvery: '15s' },
+    // Keeps a single schedule across restarts of this example (the data dir is persisted).
+    idempotencyKey: 'sales-report-every-15s',
   });
 
   const app = express();
