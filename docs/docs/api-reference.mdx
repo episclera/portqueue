@@ -208,13 +208,13 @@ DB client packages (`pg`, `mysql2`, `oracledb`, `better-sqlite3`) are optional p
 install the one for your engine.
 
 To write your own driver, implement the `Driver` interface and declare a `DriverCapabilitySet`
-(built with `capabilities({ ... })`). The full method signatures, the [`DriverCapability`](#driver-authoring)
-enum, and the schema identifier enums (`TableName`, `QueueColumn`, `JobColumn`, `ScheduleColumn`,
-`InstanceColumn`, `MigrationColumn`) are documented on the [Advanced](./advanced.md) page. All of these
+(built with `capabilities({ ... })`). The full method signatures, the
+[`DriverCapability`](./advanced.md#declare-capabilities-honestly) enum, and the
+[schema identifier enums](./advanced.md#schema-identifiers) (`TableName`, `QueueColumn`, `JobColumn`,
+`ScheduleColumn`, `InstanceColumn`, `MigrationColumn`) are documented on the
+[Advanced](./advanced.md#writing-a-custom-driver) page. All of these
 types — `Driver`, `DriverProbe`, `Subscription`, `MigrationStep`, `DriverCapability`, `capabilities`,
 `DriverCapabilitySet`, and every schema identifier enum — are exported from `@portqueue/core`.
-
-<span id="driver-authoring"></span>
 
 ---
 
