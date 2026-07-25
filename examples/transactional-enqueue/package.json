@@ -1,0 +1,22 @@
+{
+  "name": "@portqueue-examples/transactional-enqueue",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Enqueue a job atomically with your own DB write via addJob({ tx }) (Postgres).",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "start": "node index.ts"
+  },
+  "dependencies": {
+    "@portqueue/core": "*",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.7.0"
+  }
+}

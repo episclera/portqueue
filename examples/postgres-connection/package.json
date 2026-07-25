@@ -1,0 +1,22 @@
+{
+  "name": "@portqueue-examples/postgres-connection",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Connect to a real Postgres server with PostgresDriver + DATABASE_URL.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "start": "node index.ts"
+  },
+  "dependencies": {
+    "@portqueue/core": "*",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.7.0"
+  }
+}

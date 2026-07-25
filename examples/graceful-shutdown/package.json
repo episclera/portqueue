@@ -1,0 +1,21 @@
+{
+  "name": "@portqueue-examples/graceful-shutdown",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Graceful shutdown that drains in-flight handlers via job.signal (PGLite).",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "start": "node index.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "@portqueue/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

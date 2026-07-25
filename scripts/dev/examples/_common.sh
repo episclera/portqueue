@@ -25,3 +25,13 @@ run_example() {
   mkdir -p "$(dirname "$PORTQUEUE_DATA_DIR")"
   exec npm --prefix "$REPO_ROOT" run "$script" --workspace "$workspace"
 }
+
+# run_example_db <workspace-name> <npm-script>
+# For examples that talk to a real database instead of file-backed PGLite. Passes DATABASE_URL
+# through from the environment (the example falls back to a localhost default if it's unset).
+run_example_db() {
+  local workspace="$1"
+  local script="$2"
+  build_if_needed
+  exec npm --prefix "$REPO_ROOT" run "$script" --workspace "$workspace"
+}

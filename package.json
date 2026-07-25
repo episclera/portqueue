@@ -35,7 +35,12 @@
     "example:dashboard-node": "bash scripts/dev/examples/dashboard-node-server.sh",
     "example:dashboard-express": "bash scripts/dev/examples/dashboard-express.sh",
     "example:schedule-delayed": "bash scripts/dev/examples/job-scheduling-delayed.sh",
-    "example:schedule-recurring": "bash scripts/dev/examples/job-scheduling-recurring.sh"
+    "example:schedule-recurring": "bash scripts/dev/examples/job-scheduling-recurring.sh",
+    "example:retries": "bash scripts/dev/examples/retries-backoff.sh",
+    "example:idempotency": "bash scripts/dev/examples/idempotency-singleton.sh",
+    "example:graceful": "bash scripts/dev/examples/graceful-shutdown.sh",
+    "example:postgres": "bash scripts/dev/examples/postgres-connection.sh",
+    "example:transactional": "bash scripts/dev/examples/transactional-enqueue.sh"
   },
   "devDependencies": {
     "@changesets/cli": "^2.27.0",

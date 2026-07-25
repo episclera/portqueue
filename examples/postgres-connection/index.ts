@@ -1,0 +1,50 @@
+/**
+ * A real Postgres connection — `PostgresDriver` + a `DATABASE_URL`.
+ *
+ * Run with: `npm run example:postgres` (from the repo root) or `npm start` here.
+ *
+ * Unlike the PGLite examples, this one talks to a **real Postgres server**, so it needs:
+ *   1. the `pg` peer dependency installed (already declared here), and
+ *   2. a reachable database — set `DATABASE_URL`, e.g.
+ *      `DATABASE_URL=postgres://user:pass@localhost:5432/app npm run example:postgres`.
+ *
+ * The database must already exist; PortQueue creates only its own tables (migrations run on init).
+ */
+import { MigrationMode, PortQueue } from '@portqueue/core';
+import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+
+const connectionString =
+  process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/portqueue_examples';
+
+type QueueName = 'welcome';
+
+async function main(): Promise<void> {
+  const pq = new PortQueue<QueueName>({
+    driver: new PostgresDriver({ connectionString }),
+    migration: MigrationMode.AUTO, // create/upgrade PortQueue's tables on init
+  });
+  await pq.init();
+  console.log(`Connected to Postgres and migrated schema (${connectionString}).`);
+
+  const welcome = pq.createQueue<{ user: string }>('welcome');
+
+  const done = new Promise<void>((resolve) => {
+    pq.createWorker<{ user: string }>({
+      queue: 'welcome',
+      handler: async (job) => {
+        console.log(`👋 welcoming ${job.data.user}`);
+        resolve();
+      },
+    });
+  });
+
+  const res = await welcome.addJob({ data: { user: 'ada' } });
+  console.log(`Enqueued job ${res.jobId}. Waiting for the worker…`);
+
+  await done;
+  await pq.shutdown();
+  console.log('Done.');
+  process.exit(0);
+}
+
+void main();
