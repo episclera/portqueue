@@ -41,13 +41,13 @@ export const COUNT_STATUSES: JobStatus[] = [
 ];
 
 /**
- * The statuses the activity cards show, in pipeline order: what is waiting, what is running,
- * and how it ended. Retry is deliberately absent — a retrying job is still in flight and is
- * covered by the row-level attempt column.
+ * The statuses the activity cards show, leading with what is running right now, then what is
+ * waiting and how work ended. Retry is deliberately absent — a retrying job is still in flight
+ * and is covered by the row-level attempt column.
  */
 export const CARD_STATUSES: JobStatus[] = [
-  JobStatus.PENDING,
   JobStatus.ACTIVE,
+  JobStatus.PENDING,
   JobStatus.FAILED,
   JobStatus.COMPLETED,
 ];
