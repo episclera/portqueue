@@ -95,6 +95,12 @@ export class Queue<TData = unknown> {
     return ok;
   }
 
+  /**
+   * Remove a single job's row. Never removes a **running** job: the driver's delete is guarded so an
+   * `ACTIVE` row is skipped and this returns `false` without touching it — cancel it first with
+   * {@link cancelJob}, then remove it once it has settled. Returns `true` when a non-active job was
+   * removed, `false` if it was ACTIVE or missing.
+   */
   async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
     const ok = await this.runtime.driver.removeJob({
       jobId: options.jobId,
@@ -142,6 +148,7 @@ export class Queue<TData = unknown> {
     return this.runtime.driver.removeJobsByStatus({
       queueName: this.name,
       statuses: options.statuses,
+      ...(options.tx ? { tx: options.tx } : {}),
     });
   }
 

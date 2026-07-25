@@ -155,7 +155,6 @@ export class PortQueue<TQueues extends string = string> {
     this.runtime.registry.define(options.queue, this.runtime.registry.getOptions(options.queue));
     const limiter = options.limiter ?? {};
     const concurrency = limiter.concurrency ?? 1;
-    const notifyCapable = this.runtime.driver.capabilities[DriverCapability.LISTEN_NOTIFY];
     const rate =
       limiter.rateMax != null && limiter.rateDuration != null
         ? { max: limiter.rateMax, duration: limiter.rateDuration }
@@ -166,7 +165,10 @@ export class PortQueue<TQueues extends string = string> {
       concurrency,
       batchSize: limiter.batchSize ?? concurrency,
       lockDurationMs: limiter.lockDurationMs ?? 30000,
-      pollIntervalMs: limiter.pollIntervalMs ?? (notifyCapable ? 5000 : 1000),
+      // Default poll cadence is 5000ms for every driver. LISTEN/NOTIFY-capable engines wake
+      // instantly on new jobs and only fall back to polling as a safety net; non-notify engines
+      // poll on this same cadence. Lower it via `limiter.pollIntervalMs` if you need snappier pickup.
+      pollIntervalMs: limiter.pollIntervalMs ?? 5000,
       ...(rate ? { limiter: rate } : {}),
       respectSystemPressure: limiter.respectSystemPressure ?? false,
       dontAutoretryFor: options.dontAutoretryFor ?? [],

@@ -94,6 +94,9 @@ export {
   DriverQueryError,
   JobNotFoundError,
   QueuePausedError,
+  QueueInUseError,
+  InstanceActiveError,
   ShutdownTimeoutError,
   MissingPeerDependencyError,
 } from './errors/errors';
+export type { ErrorContext } from './errors/errors';

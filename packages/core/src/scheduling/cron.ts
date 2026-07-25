@@ -9,6 +9,11 @@ import { InvalidOptionsError } from '../errors/errors';
  *
  * `next-run` is computed in the schedule's IANA timezone (default UTC), DST-correct because
  * each candidate instant is evaluated against the timezone's wall-clock fields via `Intl`.
+ *
+ * Catch-up on restart: recurrences are **fire-once, no backfill**. If the process was down across
+ * one or more due slots, on restart the schedule fires a single time and then advances to the next
+ * future slot — every intermediate missed occurrence is skipped, not replayed. (See
+ * `SchedulerService.fire`.)
  */
 export class CronExpression {
   private readonly seconds: number[];
