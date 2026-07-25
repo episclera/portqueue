@@ -45,8 +45,10 @@ const pq = new PortQueue({
 ```
 
 Run the **same code on every server**; only the key differs per process (derive it from the
-environment). Leaving `instance.instanceKey` unset keeps a server anonymous — it still processes
-jobs normally, but affinity patterns are rejected there and it never appears in the instances list.
+environment). Set a key from day one — **even on a single machine** — so adding a second server later
+changes nothing but the environment. Leaving `instance.instanceKey` unset keeps a server anonymous:
+it still processes jobs normally, but affinity patterns are rejected there and it never appears in
+the instances list.
 
 ### Encode capabilities in the key
 
@@ -66,13 +68,20 @@ you might want to target:
 an `instance.instanceKey`; passing a pattern from an anonymous process throws.
 
 ```ts
-// Run this job only on 4 GB or 8 GB servers.
-await queue.addJob({ data, preferredInstanceKeyPattern: 'ram-(4|8)gb' });
+// Runs only on the 8 GB servers.
+await queue.addJob({ data, preferredInstanceKeyPattern: 'ram-8gb' });
+
+// Runs only on 8 GB servers that also have 4 cores — '.*' skips whatever sits between the tags.
+await queue.addJob({ data, preferredInstanceKeyPattern: 'ram-8gb.*cpu-4cor' });
 ```
 
+The pattern is matched **unanchored** — a plain "the key contains this" test — and is
+case-sensitive, so a distinctive capability tag is usually the whole pattern you need. Add `^`/`$`
+when you want to match a key exactly, and `.*` ("anything") to require two tags in the same key.
+
 There is **no exact-key pin and no fallback tier** by design: a RegEx pattern already spans many
-servers, so the first matching server to poll takes the job. RegEx patterns are case-sensitive and
-validated (compiled) when the job is added.
+servers, so the first matching server to poll takes the job. Patterns are validated (compiled) when
+the job is added.
 
 ### How a match is decided
 
@@ -82,7 +91,7 @@ At claim time a server may take a job when:
 2. the job's pattern **matches this server's key**.
 
 If no live server matches, the job simply **waits** until one does — nothing runs it "by
-accident". Prefer broad, capability-based RegEx patterns (`ram-(4|8)gb`) over narrow host pins so
+accident". Prefer broad, capability-based RegEx patterns (`ram-8gb`) over narrow host pins so
 work is never stranded when a single server goes away.
 
 > Because affinity uses regexes and the schema is index-free, the claim path evaluates affinity

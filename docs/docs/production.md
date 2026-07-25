@@ -2,7 +2,7 @@
 id: production
 title: Going to Production
 sidebar_label: Going to Production
-description: Ship PortQueue to production — deployment topology, graceful shutdown, pool sizing, idempotency, retries, retention, and a full production checklist.
+description: Ship PortQueue to production — graceful shutdown, pool sizing, idempotency, retries, retention, and a full production checklist.
 keywords: [portqueue, production, job queue, scaling, multi-instance, node.js, monitoring, database queue]
 ---
 
@@ -10,12 +10,6 @@ keywords: [portqueue, production, job queue, scaling, multi-instance, node.js, m
 
 The one page to read before shipping. It doesn't re-teach features — it collects the
 right defaults and habits and links to the deep pages.
-
-## Deployment topology
-
-Split **producers** (API tier — no `createWorker`) from **consumers** (worker tier). Run
-critical vs bulk workloads as **separate `PortQueue` instances / pools** for hard
-isolation. Wire the **same driver configuration** across every tier so they agree on queues.
 
 ## Graceful shutdown
 
@@ -56,22 +50,30 @@ Enable the `SystemMonitor` and set a worker-local
 
 ## Execution locality
 
-For most deployments, leave `instance.instanceKey` unset — anonymous, interchangeable workers are simplest
-and most resilient. Give a server an [instance key](./scale-horizontally.md#choosing-a-preferred-server-with-regex-patterns) only when work needs
-locality (warm cache, local data, region, specialized hardware):
+**Name every process.** Set a stable
+[`instance.instanceKey`](./scale-horizontally.md#choosing-a-preferred-server-with-regex-patterns) from
+day one, even when you run a single machine: it costs nothing, and the day you add a second server
+nothing about your code has to change. Leaving it unset keeps a process anonymous — it still runs
+jobs, but it can't be listed, paused or drained individually, and **no job can ever be steered to
+it**, since `preferredInstanceKeyPattern` is rejected on a process without a key. That's the real
+reason keys are worth setting up front: without one you have no way to say *"run this job where the
+warm cache / local data / GPU / region is"*.
 
-- Give each process a **stable `instance.instanceKey`** (e.g. from your orchestrator's pod/host id, plus the
+- **Make the key stable and descriptive** (e.g. your orchestrator's pod/host id plus the
   capabilities you target — `…:ram-8gb:cpu-4cor`). Reuse the same key across restarts of the *same*
   logical instance so affinity and liveness stay meaningful.
-- Target work with a **capability pattern** (`preferredInstanceKeyPattern`, e.g. `ram-(4|8)gb`)
-  rather than pinning a host. A pattern spans many servers, so a job is never stranded when one dies
-  — any matching instance takes it, and replacing hardware needs no code change. If nothing matches,
-  the job waits.
-- Tune `instance.heartbeatIntervalMs` (default 15s) to your failover appetite: an instance is
+- **Target work with a capability pattern** (`preferredInstanceKeyPattern`, e.g. `ram-8gb`) rather
+  than pinning a host. A pattern spans many servers, so a job is never stranded when one dies — any
+  matching instance takes it, and replacing hardware needs no code change. If nothing matches, the
+  job waits.
+- **Keep most jobs unpinned.** A key makes targeting *possible*; it doesn't make it mandatory. Jobs
+  with no pattern run anywhere, which stays the right default for stateless work.
+- **Tune `instance.heartbeatIntervalMs`** (default 15s) to your failover appetite: an instance is
   "dead" after ~3 missed beats.
-- Use the dashboard **Instances** page (or `pauseInstance`/`resumeInstance`) to drain one node for
-  a deploy without touching the rest; remove a decommissioned instance once it's been unseen for
-  30 minutes (`removeInstance` / dashboard / `portqueue remove-instance`).
+- **Drain one node at a time** from the dashboard **Instances** page (or
+  `pauseInstance`/`resumeInstance`) for a deploy without touching the rest; remove a decommissioned
+  instance once it's been unseen for 30 minutes (`removeInstance` / dashboard /
+  `portqueue remove-instance`).
 
 :::caution Dedup is tool-managed
 The schema is deliberately **index-free and constraint-free** for sharded/distributed databases.
@@ -107,7 +109,7 @@ until `init()` resolved.
 - [ ] Retries with jitter + cap; `dontAutoretryFor` for non-retryable errors.
 - [ ] Retention on; failed kept longer than completed.
 - [ ] `SystemMonitor` on; worker-local rate limiter set for third-party APIs.
-- [ ] Multi-instance (if used): stable `instance.instanceKey` per process; jobs targeted by capability pattern; heartbeat interval tuned.
+- [ ] Stable `instance.instanceKey` on every process (even a single one); jobs that need locality targeted by capability pattern; heartbeat interval tuned.
 - [ ] `PortQueueEvent.ERROR` subscribed; metrics/tracing via hooks.
 - [ ] Dashboard/CLI behind auth; payloads kept small (no built-in size cap).
 - [ ] Readiness gated on `pq.isRunning` + driver ping.

@@ -49,36 +49,45 @@ prevent the next.
 It also fires on graceful-shutdown timeout, so honoring it makes your handlers both cancellable
 **and** shutdown-friendly. A few patterns:
 
-### Pattern 1 — Make a timer abortable
+### Pattern 1 — Listen for `abort`, then throw on the way out
 
-A bare `setTimeout` ignores cancellation and keeps a stopped job "running" until it fires.
-Wrap it in a promise that rejects on `job.signal`, and clear the timer at the end so it never
-leaks — whether the wait completed or the job was cancelled mid-wait:
+Some work takes no signal and offers no checkpoints — a third-party client call, one long `await`
+you don't control. Add an `abort` listener that stops whatever *you* own, throw the `AbortError`
+once the body is done, and drop the listener at the end:
 
 ```ts
 handler: async (job) => {
-  let timer: ReturnType<typeof setTimeout>;
-  try {
-    // Wait up to 30s, but bail out the instant the job is cancelled.
-    await new Promise<void>((resolve, reject) => {
-      timer = setTimeout(resolve, 30_000);
-      job.signal.addEventListener(
-        'abort',
-        () => reject(job.signal.reason), // throws the AbortError, stopping the handler
-        { once: true },
-      );
-    });
-  } finally {
-    clearTimeout(timer!); // all good (or aborted) — cancel the pending timeout
-  }
+  const client = openThirdPartyClient();
 
-  // ...continue once the wait finished normally.
+  // Stop the work from here; a `throw` inside this listener couldn't reach the handler.
+  const onAbort = () => client.cancel();
+  job.signal.addEventListener('abort', onAbort);
+
+  try {
+    const result = await client.run(job.data);
+    job.signal.throwIfAborted(); // cancelled mid-run → throws the AbortError, failing the job
+    return result;
+  } finally {
+    job.signal.removeEventListener('abort', onAbort); // body finished — drop the listener
+  }
 };
 ```
 
+`throwIfAborted()` is the throw: listener callbacks are called by the runtime, so nothing is
+awaiting them and a `throw` in there would just be an uncaught exception. Reach for
+[Pattern 2](#pattern-2--pass-it-straight-to-abortable-apis) whenever the API takes a signal itself —
+then you need neither the listener nor the check.
+
+:::info A rejected handler is a normal failure
+Throwing the `AbortError` fails the job, so your **retry policy still applies** and a cancelled job
+can come back. To make cancellation final, add it to the worker's `dontAutoretryFor`
+(`dontAutoretryFor: ['AbortError']`), or `return` early instead of throwing as in
+[Pattern 3](#pattern-3--check-between-steps-of-long-work).
+:::
+
 ### Pattern 2 — Pass it straight to abortable APIs
 
-`fetch`, many DB clients, and timers accept a signal — forward `job.signal` and they throw
+`fetch`, many DB clients, and other signal-aware APIs — forward `job.signal` and they throw
 `AbortError` the moment it fires:
 
 ```ts
@@ -120,15 +129,30 @@ handler: async (job) => {
 };
 ```
 
-The same shape works without RxJS — register a listener and clean up by hand:
+Without RxJS, use [Pattern 1](#pattern-1--listen-for-abort-then-throw-on-the-way-out): the `abort`
+listener does the teardown (`sub.unsubscribe()`, `stream.destroy()`, …) and `finally` removes it.
+
+:::warning Don't `throw` from a timer or listener callback
+The obvious-looking watchdog doesn't cancel anything — it crashes the worker:
 
 ```ts
-handler: async (job) => {
-  const sub = source.subscribe(onData);
-  job.signal.addEventListener('abort', () => sub.unsubscribe(), { once: true });
-  await sub.completed;
-};
+// ⚠️ Does NOT cancel the job — crashes the process.
+const watchdog = setInterval(() => {
+  if (job.signal.aborted) throw job.signal.reason; // uncaughtException
+}, 1_000);
+try {
+  await doLongWork(job.data);
+} finally {
+  clearInterval(watchdog);
+}
 ```
+
+The event loop calls that callback, so your handler isn't awaiting it: the throw escapes as an
+`uncaughtException` (which by default takes the whole process down) while `doLongWork` keeps
+running. Only a rejection on something the handler `await`s can fail the job — so do the throwing in
+the handler body, as in [Pattern 1](#pattern-1--listen-for-abort-then-throw-on-the-way-out). The same
+applies to `abort` listeners.
+:::
 
 ## Cancel vs. remove vs. pause
 

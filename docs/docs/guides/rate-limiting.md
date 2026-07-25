@@ -44,7 +44,7 @@ local rate cap. (Cluster-wide *pause* is still available via queue and instance 
 ```ts
 const pq = new PortQueue({
   driver,
-  monitor: { maxEventLoopDelayMs: 200, maxCpuPercent: 85, resumeHysteresis: '5s' },
+  monitor: { maxEventLoopDelayMs: 200, maxCpuPercent: 85, resumeHysteresis: 0.8 },
 });
 
 pq.createWorker({
@@ -62,16 +62,48 @@ pq.createWorker({
 
 ## System-pressure backpressure
 
-Enable the `SystemMonitor` on the client (`monitor`) and set thresholds for event-loop
-delay, CPU, and memory. When a box is under pressure, workers with
-`limiter.respectSystemPressure: true` pause claiming until pressure normalizes (with
-hysteresis to avoid flapping). It **defaults to `false`** — a worker consumes as much as it
-can unless you opt in. This composes with the rate limits above — pressure gating and rate
-limits both throttle claiming, independently.
+The client samples **this process's own** health and raises a pressure flag when a threshold you set
+is breached; workers with `limiter.respectSystemPressure: true` then stop claiming until it clears
+(with hysteresis, to avoid flapping). Sampling is **on by default** with
+`{ maxEventLoopDelayMs: 200, sampleIntervalMs: 2000 }`; `monitor: false` turns it off entirely.
+Pressure gating and the rate limits above throttle claiming independently — they compose.
 
-Observe pressure via events:
+### Every `monitor` option
+
+| Option | Type | Default | What it does |
+|---|---|---|---|
+| `sampleIntervalMs` | `number` | `2000` | How often metrics are sampled. Every threshold is checked once per sample, so this is also the worst-case reaction time. |
+| `maxEventLoopDelayMs` | `number` | `200` (default config only) | Pressure when the **mean** event-loop delay since the last sample exceeds this, in ms. The best single signal that the process is saturated. |
+| `maxCpuPercent` | `number` | unset | Pressure when this process's CPU use since the last sample exceeds this. It's process CPU summed across cores, so a busy multi-core box can read well over 100. |
+| `maxMemoryPercent` | `number` | unset | Pressure when RSS exceeds this share of **total machine memory** (`os.totalmem()`) — not of a container limit. |
+| `maxRssBytes` | `number` | unset | Pressure when RSS exceeds this absolute byte count. Use it when a cgroup/container cap is the real ceiling, since `maxMemoryPercent` can't see it. |
+| `resumeHysteresis` | `number` | `0.8` | Fraction (0–1) of the breached threshold the metric must fall back to before workers resume — `0.8` with `maxCpuPercent: 85` resumes at 68. Lower is more conservative. |
+
+Every threshold is optional and **only the ones you set are checked**. Your `monitor` object
+*replaces* the default rather than merging with it, so `monitor: { maxCpuPercent: 85 }` no longer
+watches event-loop delay, and `monitor: {}` samples but can never report pressure.
+
+Thresholds are evaluated in a fixed order — `maxEventLoopDelayMs`, `maxCpuPercent`, `maxRssBytes`,
+`maxMemoryPercent` — and the **first breach wins**: that's the metric reported on the event.
 
 ```ts
-pq.on(PortQueueEvent.SYSTEM_PRESSURE_HIGH, () => {});
+const pq = new PortQueue({
+  driver,
+  monitor: {
+    sampleIntervalMs: 2000,
+    maxEventLoopDelayMs: 200,
+    maxCpuPercent: 85,
+    maxMemoryPercent: 90,
+    maxRssBytes: 1_500_000_000,
+    resumeHysteresis: 0.8,
+  },
+});
+
+pq.on(PortQueueEvent.SYSTEM_PRESSURE_HIGH, ({ metric, value, threshold }) => {
+  // metric: 'eventLoopDelayMs' | 'cpuPercent' | 'rssBytes' | 'memoryPercent'
+});
 pq.on(PortQueueEvent.SYSTEM_PRESSURE_NORMAL, () => {});
 ```
+
+A pressure-high transition is also logged at `warn` (with the metric, value and threshold), and the
+return to normal at `info`.

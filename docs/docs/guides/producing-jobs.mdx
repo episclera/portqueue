@@ -108,20 +108,17 @@ the trade-offs.
 ## Preferred server
 
 ```ts
-await emailsQueue.addJob({ data, preferredInstanceKeyPattern: '^ram-(4|8)gb$' });
+// Runs only on 8 GB servers that also have 4 cores; '.*' skips whatever sits between the tags.
+await emailsQueue.addJob({ data, preferredInstanceKeyPattern: 'ram-8gb.*cpu-4cor' });
 ```
 
 `preferredInstanceKeyPattern` is a regular-expression **source string** matched against instance
 keys — only servers whose `instanceKey` matches will claim the job. It requires the *producing*
-process to have an `instanceKey`. Prefer broad, capability-based patterns over pinning one host.
+process to have an `instanceKey`. The match is **unanchored** (a plain "key contains this" test)
+and case-sensitive, so a single capability tag like `'ram-8gb'` is often the whole pattern you
+need; add `^`/`$` when you want to match the key exactly. Prefer broad, capability-based
+patterns over pinning one host.
 See [Multi-server / instance](./../scale-horizontally.md#choosing-a-preferred-server-with-regex-patterns).
-
-:::warning Anchor the pattern
-The source string is compiled with `new RegExp(pattern)` and matched **unanchored**, so it
-substring-matches. An unanchored `'ram-(4|8)gb'` would also match `'ram-48gb'` (the `4` matches
-inside `48`) — almost never what you want. **Anchor with `^...$`** (and escape any regex-special
-literals) so the whole key must match — e.g. `'^ram-(4|8)gb$'`.
-:::
 
 ## Retry a job
 

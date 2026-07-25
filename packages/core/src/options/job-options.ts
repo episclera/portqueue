@@ -59,7 +59,8 @@ export type AddJobOptions<TData> = JobOptions & {
   schedule?: ScheduleOptions;
   /**
    * Multi-instance affinity: run this job only on instances whose key matches this regular
-   * expression (source string, e.g. `'ram-(4|8)gb'`). Requires an `instanceKey` on the PortQueue.
+   * expression (source string, matched unanchored — e.g. `'ram-8gb'`, or `'ram-8gb.*cpu-4cor'` to
+   * require both tags). Requires an `instanceKey` on the PortQueue.
    * A pattern spans many instances by design — prefer it to pinning one server. If no live
    * instance matches, the job waits until one does. Omit to run on any instance.
    */

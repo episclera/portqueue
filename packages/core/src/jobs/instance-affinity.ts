@@ -6,8 +6,8 @@
  * Affinity is a single **preferred key pattern**. A job with no pattern runs anywhere; a job with
  * a pattern runs only on an instance whose key matches it. There is no exact-key pin and no
  * fallback tier — a pattern already spans many instances, so the first live match takes the job,
- * and if none match it simply waits. Build patterns that scale (e.g. `ram-(4|8)gb`) rather than
- * pinning to one server that might disappear.
+ * and if none match it simply waits. Build patterns that scale (e.g. `ram-8gb.*cpu-4cor`) rather
+ * than pinning to one server that might disappear.
  */
 
 // Compiled-regex cache. Patterns are developer-provided (not end-user), so the surface for

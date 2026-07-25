@@ -249,17 +249,19 @@ The single argument to `new PortQueue(...)`.
 
 ### SystemMonitorOptions
 
-Workers pause on pressure only when they opt in via `limiter.respectSystemPressure`. Pass
-`monitor: false` to turn sampling off entirely.
+Workers pause on pressure only when they opt in via `limiter.respectSystemPressure`. Omitting
+`monitor` samples with `{ maxEventLoopDelayMs: 200, sampleIntervalMs: 2000 }`; your own object
+*replaces* that default (unset thresholds are never checked), and `monitor: false` turns sampling
+off entirely. See [Rate limiting & backpressure](./guides/rate-limiting.md#every-monitor-option).
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `sampleIntervalMs` | `number` | How often to sample system metrics (ms). |
-| `maxEventLoopDelayMs` | `number` | Event-loop delay above this counts as pressure. |
-| `maxCpuPercent` | `number` | CPU usage above this counts as pressure. |
-| `maxMemoryPercent` | `number` | Memory usage above this counts as pressure. |
-| `maxRssBytes` | `number` | RSS above this counts as pressure. |
-| `resumeHysteresis` | `number` | Fraction (0–1) below the threshold metrics must fall to before resuming. |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `sampleIntervalMs` | `number` | `2000` | How often to sample system metrics (ms). |
+| `maxEventLoopDelayMs` | `number` | `200` (default config only) | Mean event-loop delay above this counts as pressure. |
+| `maxCpuPercent` | `number` | unset | Process CPU usage above this counts as pressure (summed across cores). |
+| `maxMemoryPercent` | `number` | unset | RSS above this share of total machine memory counts as pressure. |
+| `maxRssBytes` | `number` | unset | RSS above this many bytes counts as pressure. |
+| `resumeHysteresis` | `number` | `0.8` | Fraction (0–1) below the threshold metrics must fall to before resuming. |
 
 ### QueueOptions
 
