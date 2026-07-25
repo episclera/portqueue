@@ -18,6 +18,48 @@ PortQueue fixes this by letting the insert join **your own** transaction. The jo
 **iff** your business write commits. The `NOTIFY` that wakes workers fires only **after**
 commit.
 
+## The core pattern
+
+The flow is always the same four steps: **open a transaction → do your business write on it
+→ `addJob({ tx })` on the *same* transaction → commit.** Both writes land together or not at
+all. If you roll back, the job insert rolls back with your business row.
+
+```ts
+import { fromKnex } from '@portqueue/core/tx';
+
+const emailsQueue = pq.createQueue<{ to: string }>('emails');
+
+// 1. Open your own transaction.
+await knex.transaction(async (trx) => {
+  // 2. Do your business write on it.
+  const [order] = await trx('orders')
+    .insert({ customer: 'a@b.com', total: 4200 })
+    .returning('*');
+
+  // 3. Enqueue on the SAME transaction — wrap it in a PortQueue adapter.
+  await emailsQueue.addJob({
+    data: { to: order.customer },
+    tx: fromKnex(trx),
+  });
+
+  // 4. Committing the transaction (returning from the callback) makes BOTH
+  //    the order row and the job durable atomically. Throwing here rolls
+  //    back the order AND the queued job together.
+});
+```
+
+Because the job insert lives inside your transaction, workers are only told about it **after**
+the transaction commits — never before. There's no window where a worker can claim a job whose
+business row hasn't been committed yet.
+
+:::info Wake-up after commit is engine-specific
+On **Postgres / PGLite** the driver issues a `NOTIFY` immediately after your transaction commits,
+so `LISTEN`-ing workers wake and claim the job almost instantly. On engines **without
+LISTEN/NOTIFY** (**SQLite**, **MySQL**) there is no cross-process wake-up — a worker picks the job
+up on its next poll (`limiter.pollIntervalMs`, default **5000 ms** on all drivers). The job is
+durable either way the moment you commit; only the *latency* to first claim differs.
+:::
+
 ## Adapters from `@portqueue/core/tx`
 
 An adapter exists for every supported client. Pick your tab:

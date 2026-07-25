@@ -49,7 +49,18 @@ pq.once(PortQueueEvent.CLIENT_STARTED, () => {});
 **Queue & worker**
 
 - `QUEUE_PAUSED`, `QUEUE_RESUMED`
+- `QUEUE_REMOVED` — `{ queue }` — fired by `pq.removeQueue`
 - `WORKER_STARTED`, `WORKER_STOPPED`
+
+**Instances**
+
+Emitted as instances are paused, resumed, or removed from the fleet — see
+[Scale horizontally](../scale-horizontally.md), which relies on these to track fleet
+membership.
+
+- `INSTANCE_PAUSED` — `{ instanceKey }` — fired by `pq.pauseInstance`
+- `INSTANCE_RESUMED` — `{ instanceKey }` — fired by `pq.resumeInstance`
+- `INSTANCE_REMOVED` — `{ instanceKey }` — fired by `pq.removeInstance`
 
 **System pressure**
 

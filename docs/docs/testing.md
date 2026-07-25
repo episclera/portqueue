@@ -32,6 +32,14 @@ const pq = new PortQueue({ driver: new PgliteDriver() }); // in-memory by defaul
 await pq.init(); // runs migrations against the fresh database
 ```
 
+:::info Install the driver's peer dependency
+Each database driver relies on a peer package you install yourself — `@electric-sql/pglite`
+for PGLite, `better-sqlite3` for SQLite, `pg` for Postgres, `mysql2` for MySQL. If it's
+missing, the driver throws `MissingPeerDependencyError` (code `MISSING_PEER_DEPENDENCY`) as
+soon as it tries to connect. Add the matching package to your dev dependencies before
+running the suite.
+:::
+
 ## A clean database for every test
 
 Spin up a brand-new instance per test (or per suite) and you get a pristine schema every
@@ -61,13 +69,39 @@ it('processes a job', async () => {
       seen.push(job.data.to);
     },
   });
-  await queue.addJob({ data: { to: 'a@b.com' } });
-  // ...assert on `seen` once the job has run
+  const { id } = await queue.addJob({ data: { to: 'a@b.com' } });
+  await waitForStatus(queue, id, JobStatus.COMPLETED);
+  expect(seen).toEqual(['a@b.com']);
 });
 ```
 
 Because each test owns its own database, tests are fully isolated and safe to run in
 parallel.
+
+## Wait for a job to finish
+
+Jobs run asynchronously, so a test can't assert the moment after `addJob` resolves — the
+handler hasn't run yet. Instead of guessing with a fixed `setTimeout`, **poll the job's
+status** until it reaches a terminal state (`COMPLETED` or `FAILED`), with a small delay
+and an overall timeout. This is the pattern new tests most often need:
+
+```ts
+import { JobStatus } from '@portqueue/core';
+
+async function waitForStatus(queue, jobId, status, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const job = await queue.getJob({ jobId });
+    if (job?.status === status) return job;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error(`job ${jobId} did not reach ${status} in ${timeoutMs}ms`);
+}
+```
+
+Use `queue.getJob({ jobId })` (or `pq.getJob({ jobId })`) as the source of truth — it reads
+the real row through the driver, exactly as production code would. Poll for `JobStatus.FAILED`
+when you're testing the failure path.
 
 ## Nothing to mock
 
@@ -75,9 +109,8 @@ Everything you'd otherwise be tempted to fake is real here:
 
 - **The database** is real — real transactions, real constraints, real claim/lock behaviour.
 - **Producing and consuming** run through the same services as production.
-- **Time** is injectable. Pass a `clock` to the `PortQueue` constructor to control "now"
-  for delayed jobs, retries with backoff, and cron — so time-dependent tests never need
-  to actually wait.
+- **Timing** stays deterministic: rather than sleeping, poll the job's status (see
+  [Wait for a job to finish](#wait-for-a-job-to-finish)) so time-dependent tests never race.
 
 The result: your tests describe how your app uses the queue, not how the queue is wired
 internally — and they stay valid even as PortQueue's internals evolve.

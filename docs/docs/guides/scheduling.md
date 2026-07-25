@@ -28,7 +28,9 @@ recurring mode).
 
 ```ts
 const emailsQueue = pq.createQueue('emails');
-await emailsQueue.addJob({ data, schedule: { startAfter: '24h' } });
+// Duration string: '<value><unit>', units ms/s/m/h/d (case-insensitive, optional space, decimals ok e.g. '1.5h').
+// A plain number = milliseconds. Compound forms like '1d12h' are NOT supported — single value+unit only.
+await emailsQueue.addJob({ data, schedule: { startAfter: '24h' } });   // or 86400000 (ms), or '1.5h'
 await emailsQueue.addJob({ data, schedule: { startAfter: new Date('2026-08-01T09:00:00Z') } });
 ```
 
@@ -44,14 +46,23 @@ const result = await reportsQueue.addJob({
   data: { kind: 'sales' },       // template for each run
   priority: 5,                   // job options apply to each run
   retry: { maxAttempts: 3 },     // …as do retry, backoff, expireIn, retention, etc.
+  expireIn: '10m',               // Duration: units ms/s/m/h/d, decimals ok; plain number = ms; no compound '1d12h'
   schedule: { cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' } },
 });
 // Bare UTC form: schedule: { cron: '0 8 * * 1-5' }
+// Cron: 5-field (min hour dom month dow) or 6-field (leading seconds). Supports * ranges 1-5 lists 1,3,5 steps */10.
+// The specials L # W ? are NOT supported (they throw). tz is an IANA zone (default UTC), DST-correct.
 // reportsJob.jobId is absent (no concrete job yet); reportsJob.scheduleId is stamped on every produced job;
 // reportsJob.nextRunAt is the first run time.
 ```
 
-:::note Options shape the spawned jobs, not the schedule
+:::info Catch-up after downtime — fire once, no backfill
+Cron and interval recurrences are **fire-once with no backfill**. If the process was down
+across one or more due slots, on restart the schedule fires a **single** time and then advances
+to the next future slot — missed occurrences are **skipped, never replayed**.
+:::
+
+:::info Options shape the spawned jobs, not the schedule
 A schedule **spawns a new job** on each tick, and **every option** you pass to the recurring
 `addJob` — `priority`, `retry`/`backoff`, `expireIn`, `retention`, `singletonKey`,
 `preferredInstanceKeyPattern` — is carried onto each spawned job. These govern the **produced
@@ -70,8 +81,19 @@ cron), just add it twice. To keep exactly one, opt in with an `idempotencyKey` (
 
 ```ts
 const healthchecksQueue = pq.createQueue('healthchecks');
+// startEvery takes a Duration: units ms/s/m/h/d, decimals ok (e.g. '1.5h'); a plain number = ms.
+// Compound forms like '1d12h' are NOT supported — single value+unit only.
 await healthchecksQueue.addJob({ data: {}, schedule: { startEvery: '30s' } });
 ```
+
+`startEvery` schedules the **next** run at `now + interval` at the moment the current one
+**fires** (not when it completes), so runs don't drift by handler duration.
+
+:::warning Overlapping runs
+If a handler takes **longer than the interval**, the next run can start before the previous one
+finishes, so runs **overlap**. Guard against this by giving the job a `singletonKey` — only one run
+per key is active at a time.
+:::
 
 ## Deduplicating with `idempotencyKey`
 
@@ -117,6 +139,12 @@ await reportsQueue.removeSchedule({ scheduleId: reportsJob.scheduleId });
 `removeSchedule` applies **only to recurring schedules** — it stops future production but does
 **not** delete jobs already produced (remove those by id or status if you want). It is its own
 method (not `removeJob`) per the entity-naming rule: a method names the one entity it acts on.
+
+:::info Changing a schedule = remove + re-add
+There is **no "edit schedule" API**. The only way to change a schedule (a different cron pattern,
+interval, timezone, or template) is to **remove it** (`queue.removeSchedule({ scheduleId })`) and
+**add a new one** (`queue.addJob({ ..., schedule })`). Remove + re-add is the sole path.
+:::
 
 For a **one-off** job there is no schedule to remove — use the job-level methods instead:
 `queue.cancelJob({ jobId })` to cancel a not-yet-active job, or `queue.removeJob({ jobId })` to

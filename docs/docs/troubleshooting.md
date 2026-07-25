@@ -56,6 +56,38 @@ try {
 | `SHUTDOWN_TIMEOUT` | `ShutdownTimeoutError` | Graceful shutdown didn't drain within `timeoutMs`. Raise the timeout or make long handlers honor `job.signal`. |
 | `MISSING_PEER_DEPENDENCY` | `MissingPeerDependencyError` | The driver's client (e.g. `pg`, `better-sqlite3`) isn't installed. Install the peer shown in the message. |
 
+:::warning No dedicated class for some codes
+Rows with `—` in the **Error class** column have **no dedicated subclass**. They are thrown as
+the base `PortQueueError` (or a related class) carrying that `code` — there is no
+`AlreadyStartedError`, `IdempotencyConflictError`, `QueueNotFoundError`, etc. Always branch on
+`err.code`, never `instanceof` a code-specific class you'd expect to exist. (Every error is
+still `instanceof PortQueueError`.)
+:::
+
+### Exported error classes
+
+Every class below is importable from `@portqueue/core` and extends `PortQueueError`. Each
+instance carries `.code` (a `PortQueueErrorCode` string enum value) and `.context` (an object
+with the offending fields). Because some codes have no dedicated class (see the note above),
+prefer branching on `err.code`.
+
+| Class | `.code` | Meaning | Typical fix |
+|---|---|---|---|
+| `PortQueueError` | *(any)* | Base class — also thrown directly for codes without a dedicated subclass. | Branch on `err.code`. |
+| `NotStartedError` | `NOT_STARTED` | A method was called before `await pq.init()`. | Await `init()` first. |
+| `InvalidOptionsError` | `INVALID_OPTIONS` | An options object failed validation. | Read the message; it names the offending field. |
+| `UnsupportedCapabilityError` | `UNSUPPORTED_CAPABILITY` | The driver's engine can't do what was asked. | Use a capable driver or the documented fallback. |
+| `SchemaVersionMismatchError` | `SCHEMA_VERSION_MISMATCH` | DB schema version differs from the library's. | Run `portqueue migrate`. |
+| `MigrationFailedError` | `MIGRATION_FAILED` | A migration step errored. | Check DB permissions and the cause; re-run migrate. |
+| `DriverConnectionError` | `DRIVER_CONNECTION_ERROR` | Couldn't connect to the DB. | Check connection string, network, credentials, peer dep. |
+| `DriverQueryError` | `DRIVER_QUERY_ERROR` | A query failed at the engine. | Inspect the wrapped cause (permissions/schema). |
+| `JobNotFoundError` | `JOB_NOT_FOUND` | No job for the given `jobId`. | Removed by retention or wrong id — re-check the id. |
+| `QueuePausedError` | `QUEUE_PAUSED` | `add` refused because the queue is paused with `PauseMode.ALL`. | Resume the queue, or expect this during a drain. |
+| `QueueInUseError` | `QUEUE_IN_USE` | `removeQueue` refused because the queue still has jobs/workers. | Drain and stop workers before removing. |
+| `InstanceActiveError` | `INSTANCE_ACTIVE` | `removeInstance` refused because the instance is still live. | Pause/stop the instance first, then remove. |
+| `ShutdownTimeoutError` | `SHUTDOWN_TIMEOUT` | Graceful shutdown didn't finish within `timeoutMs`. | Raise the timeout or make handlers honor `job.signal`. |
+| `MissingPeerDependencyError` | `MISSING_PEER_DEPENDENCY` | The driver's client peer dep isn't installed. | Install the peer shown in the message. |
+
 ## Diagnose with events
 
 A `try/catch` only covers failures on *your* call path. Everything that happens inside the
@@ -99,6 +131,19 @@ change* an operation rather than observe it, use a [hook](./events-hooks/hooks.m
   you can inspect them and `retryJob`.
 - **Nothing is processing** — the queue may be paused (`QUEUE_PAUSED`), or no worker is
   registered on any instance. Confirm a worker tier is running the queue (watch `WORKER_STARTED`).
+- **Jobs are never picked up** — a job sits enqueued forever with no `JOB_ACTIVE`. Usual causes:
+  - **Affinity mismatch** — the job's `preferredInstanceKeyPattern` matches no *live* instance,
+    so nothing is eligible to run it. It waits indefinitely until a matching `instanceKey` comes
+    online. Widen the pattern or start an instance whose key matches.
+  - **Queue paused** — the queue is paused with `PauseMode.PROCESSING`, so `add` still succeeds
+    but nothing dequeues. Resume it.
+  - **No worker started** — no worker is registered for that queue on any running instance. Start
+    a worker (watch `WORKER_STARTED`).
+- **Schema / table-prefix mismatch** — a CLI invocation or a second app sees no queues/jobs (or
+  raises `SCHEMA_VERSION_MISMATCH`) even though the primary app is busy. This happens when the
+  `--table-prefix` / `--schema` / `--namespace` given to the CLI (or a second driver) differs
+  from what the app's driver actually uses, so they read *different tables*. Make the prefix,
+  schema, and namespace match the app's driver configuration exactly.
 - **Jobs stall or run twice** — an instance died mid-job. The lock lapses after `lockDurationMs`
   and another instance reclaims the job (`JOB_STALLED`). Make long handlers honor `job.signal`
   so they stop when their lock is lost.

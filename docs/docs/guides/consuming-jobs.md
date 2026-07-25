@@ -29,6 +29,21 @@ Every throughput and claim knob lives under one `limiter` group: `concurrency`, 
 `rateDuration`, `respectSystemPressure`, `batchSize`, `pollIntervalMs`, and `lockDurationMs`.
 Omit the group for sensible defaults.
 
+### `batchSize` vs `concurrency`
+
+These two are easy to confuse — they control different stages of the pipeline:
+
+- **`concurrency`** (default `1`) caps how many handlers may be **running at once** in this
+  worker. It's the ceiling on *in-flight execution*.
+- **`batchSize`** (defaults to `concurrency`) caps how many job rows are **claimed and locked from
+  the database in a single fetch**. It's the ceiling on rows locked per claim round-trip.
+
+So `batchSize` shapes the *claim* round-trip and `concurrency` shapes *execution*. A larger
+`batchSize` reduces DB round-trips (one fetch grabs more rows) at the cost of locking more rows at
+once — but the worker still never runs more than `concurrency` handlers simultaneously; the extra
+claimed rows simply wait their turn. Set `batchSize` above `concurrency` to amortize claim latency
+when jobs are quick and DB round-trips dominate; keep them equal (the default) otherwise.
+
 ## The Job context
 
 The object passed to a handler is a read-only view of the job row plus a few control
@@ -75,6 +90,20 @@ instances never double-process. A claim is invisible to other instances for a **
 timeout** (`lockDurationMs`, default ~30s), refreshed by an automatic heartbeat. If a
 process dies mid-job the lock lapses, the job becomes `STALLED`, and another instance
 reclaims it. This is the *acks-late* model: a job isn't "done" until its handler confirms.
+
+### Extending the lock
+
+While your handler runs, the worker **automatically renews** the lock in the background — a
+heartbeat refreshes the `lockDurationMs` window (default 30 s) for as long as the handler is
+executing. So under normal conditions you **never call `extendLock` yourself**; a handler that
+simply takes a long time keeps its lock without any effort.
+
+Manual `job.extendLock({ byMs })` is only needed for a **single long, uninterruptible unit of
+work** that could outlast the window because the automatic heartbeat can't fire in time — e.g. a
+blocking synchronous call that starves the event loop, so the heartbeat timer is delayed past
+`lockDurationMs` and the job risks being declared `STALLED` and reclaimed elsewhere. If your work
+is normal async code that yields to the event loop, the heartbeat handles it and `extendLock` is
+unnecessary.
 
 ## At-least-once & idempotency
 

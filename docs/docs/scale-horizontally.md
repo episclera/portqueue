@@ -102,6 +102,16 @@ If you did pin work to a now-gone class of servers with a narrow RegEx pattern, 
 `preferred_instance_key_pattern` on the still-pending job rows to match the replacements; matching
 servers then claim them on the next poll.
 
+:::warning No API to re-pattern already-enqueued jobs — this is raw SQL
+`preferredInstanceKeyPattern` is set once, when the job is added; there is **no PortQueue method to
+change it on jobs that are already pending**. Rerouting them means running raw SQL directly against
+the jobs table — an `UPDATE` that overwrites the `preferred_instance_key_pattern` column on the rows
+that haven't run yet (e.g. `UPDATE <jobs table> SET preferred_instance_key_pattern = '<new pattern>'
+WHERE preferred_instance_key_pattern = '<old pattern>' AND status IN ('PENDING', 'RETRY')`). Status
+values are stored uppercase; only touch not-yet-run rows, and make sure the new value is a valid regex
+source string, since PortQueue no longer validates it on this path.
+:::
+
 ## Operating individual servers
 
 ### Pausing a single server

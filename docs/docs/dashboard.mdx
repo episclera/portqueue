@@ -26,6 +26,19 @@ server.
 
 ## Mount on an existing app
 
+Install the dashboard package alongside `@portqueue/core`:
+
+```bash
+npm install @portqueue/dashboard
+```
+
+:::info Your DB driver's peer dependency is still required
+The dashboard talks to your database through a `@portqueue/core` driver, so the driver's
+client — an optional peer dependency — must be installed too: `pg` (Postgres),
+`better-sqlite3` (SQLite), `@electric-sql/pglite` (PGLite), and so on. If it's missing,
+PortQueue throws `MissingPeerDependencyError`.
+:::
+
 Create the dashboard once from your running PortQueue, then mount it with the adapter for
 your framework — Express, Koa, Fastify, NestJS, or raw Node all ship in the box:
 
@@ -35,9 +48,18 @@ import { createDashboard } from '@portqueue/dashboard';
 const dash = createDashboard({
   portQueue: pq,
   basePath: '/portqueue',
-  auth: { mode: 'basic', username, password },
+  auth: { mode: 'basic', username, password: process.env.PORTQUEUE_ROOT_PASSWORD },
 });
 ```
+
+:::info `basePath` must agree with the host framework's mount point
+`basePath` is the URL prefix the dashboard lives under (default `/portqueue`). It's how the
+dashboard knows where its own assets and API sit, so it **must match the path you mount the
+adapter at** in your framework's router. The Express, Koa, Fastify, and raw-Node adapters read
+`basePath` from the options and route themselves — just mount them at the root. NestJS is the
+exception: you pass the same prefix to `forRoutes(...)`, so keep it in sync with `basePath`
+(both `/portqueue` below).
+:::
 
 <Tabs groupId="http-framework">
   <TabItem value="express" label="Express" default>
@@ -92,23 +114,52 @@ createServer((req, res) => {
 
 ## Securing
 
-- **Basic auth** via the `auth` option (shown above).
-- **Custom auth** — provide your own middleware/guard for SSO or session checks.
-- Always mount it behind your platform's auth in production, and rely on parameterized queries.
+The `auth` option guards access to the dashboard endpoint itself (never the DB). Three modes
+are supported:
+
+- **`none`** — no auth. Only for a trusted, locked-down network; the dashboard is fully open.
+- **`basic`** — HTTP Basic auth against a fixed `username` / `password` (shown above).
+- **`custom`** — supply your own `guard` for SSO, sessions, API keys, etc. It receives a
+  framework-agnostic request (`{ method, url, headers }`) and returns either a boolean or an
+  `{ authorized, readOnly? }` result — returning `readOnly: true` lets an authorized viewer in
+  without control actions. The guard may be sync or async:
+
+```ts
+const dash = createDashboard({
+  portQueue: pq,
+  basePath: '/portqueue',
+  auth: {
+    mode: 'custom',
+    async guard(req) {
+      // `req` is { method, url, headers } — inspect a cookie, bearer token, header, etc.
+      const token = req.headers['authorization'];
+      const session = await resolveSession(token);
+      if (!session) return { authorized: false };
+      // Ops team gets full control; everyone else is read-only.
+      return { authorized: true, readOnly: session.role !== 'ops' };
+    },
+  },
+});
+```
+
+Always mount the dashboard behind your platform's auth in production, and rely on parameterized
+queries.
 
 ## Serve it from the CLI (no app changes)
 
 If you'd rather not touch your app, the CLI hosts the dashboard as a standalone process. It
 opens its own short-lived connection from `--driver` + `--connection-string` (or `DATABASE_URL`)
-and serves the same UI:
+and serves the same UI. Credentials are required: pass `--root-user` / `--root-password` or set
+`PORTQUEUE_ROOT_USER` / `PORTQUEUE_ROOT_PASSWORD`. The bind defaults are `--host 127.0.0.1`,
+`--port 4321`, and `--base-path /portqueue`:
 
 ```bash
 portqueue dashboard --driver postgres \
   --connection-string "$DATABASE_URL" --port 9000 \
-  --root-user admin --root-password ****
+  --root-user admin --root-password "$PORTQUEUE_ROOT_PASSWORD"
 ```
 
-:::note Wrap the connection in a small script
+:::info Wrap the connection in a small script
 So you don't retype the connection on every command, put it in a one-line shell script and call
 that instead — see [Reuse the connection with a script](./cli.md#reuse-the-connection-with-a-script)
 on the CLI page.
@@ -141,6 +192,6 @@ docker build -t portqueue-dashboard .
 docker run --rm -p 9000:9000 \
   -e DATABASE_URL="postgres://user:pass@db:5432/app" \
   -e PORTQUEUE_ROOT_USER="admin" \
-  -e PORTQUEUE_ROOT_PASSWORD="****" \
+  -e PORTQUEUE_ROOT_PASSWORD="<your-password>" \
   portqueue-dashboard
 ```

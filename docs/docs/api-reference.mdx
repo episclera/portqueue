@@ -93,11 +93,11 @@ accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides
   <li><span className="api-badge">getJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
   <li><span className="api-badge">getJobs(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>, scoped to this queue</span></li>
   <li><span className="api-badge">getQueueStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code></span></li>
-  <li><span className="api-badge">retryJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — re-arms the job's own row; add a new job for a fresh run</span></li>
-  <li><span className="api-badge">cancelJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort signal</span></li>
+  <li><span className="api-badge">retryJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — re-arms the job's own row; add a new job for a fresh run</span></li>
+  <li><span className="api-badge">cancelJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort signal</span></li>
   <li><span className="api-badge">removeJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — deletes the row; skips an <code>ACTIVE</code> job and returns <code>false</code> (cancel it first)</span></li>
-  <li><span className="api-badge">removeSchedule(&#123; scheduleId &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
-  <li><span className="api-badge">removeJobs(&#123; jobIds &#125; | &#123; statuses &#125;)</span> <span className="api-note">→ <code>Promise&lt;number&gt;</code> — count deleted; skips <code>ACTIVE</code> ids, and throws if <code>statuses</code> includes <code>ACTIVE</code></span></li>
+  <li><span className="api-badge">removeSchedule(&#123; scheduleId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
+  <li><span className="api-badge">removeJobs((&#123; jobIds &#125; | &#123; statuses &#125;) &amp; &#123; tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;number&gt;</code> — count deleted; skips <code>ACTIVE</code> ids, and throws if <code>statuses</code> includes <code>ACTIVE</code></span></li>
   <li><span className="api-badge">pause(&#123; mode? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
   <li><span className="api-badge">resume()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
   <li><span className="api-badge">get name</span> <span className="api-note">→ <code>string</code></span></li>
@@ -207,6 +207,15 @@ Pass one driver instance to `new PortQueue({ driver })`.
 DB client packages (`pg`, `mysql2`, `oracledb`, `better-sqlite3`) are optional peer dependencies —
 install the one for your engine.
 
+To write your own driver, implement the `Driver` interface and declare a `DriverCapabilitySet`
+(built with `capabilities({ ... })`). The full method signatures, the [`DriverCapability`](#driver-authoring)
+enum, and the schema identifier enums (`TableName`, `QueueColumn`, `JobColumn`, `ScheduleColumn`,
+`InstanceColumn`, `MigrationColumn`) are documented on the [Advanced](./advanced.md) page. All of these
+types — `Driver`, `DriverProbe`, `Subscription`, `MigrationStep`, `DriverCapability`, `capabilities`,
+`DriverCapabilitySet`, and every schema identifier enum — are exported from `@portqueue/core`.
+
+<span id="driver-authoring"></span>
+
 ---
 
 ## Options
@@ -230,7 +239,6 @@ The single argument to `new PortQueue(...)`.
 |--------|------|---------|-------------|
 | `graceful` | `boolean` | `true` | Let in-flight handlers finish before disconnecting. |
 | `timeoutMs` | `number` | `30000` | Max time to wait for a graceful drain. |
-| `drain` | `boolean` | — | Keep claiming until the queue empties before stopping. |
 
 ### InstanceOptions
 
@@ -382,3 +390,18 @@ Reads return objects, never bare ids. The main shapes:
 `MigrationMode` (`AUTO`, `MANUAL`, `VALIDATE_ONLY`) · `DeduplicationReason` (`IDEMPOTENCY`, `SINGLETON`) ·
 `DatabaseEngine` · [`PortQueueEvent`](./events-hooks/events.md) · [`HookPhase`](./events-hooks/hooks.md) ·
 [`PortQueueErrorCode`](./troubleshooting.md).
+
+---
+
+## Errors
+
+Every error thrown by `@portqueue/core` is an instance of `PortQueueError` (or a subclass) and
+carries a `.code` ([`PortQueueErrorCode`](./troubleshooting.md)) and a `.context` object. All are
+importable from `@portqueue/core`, so you can branch with `instanceof`:
+
+`PortQueueError` (base) · `NotStartedError` · `InvalidOptionsError` · `UnsupportedCapabilityError` ·
+`SchemaVersionMismatchError` · `MigrationFailedError` · `DriverConnectionError` · `DriverQueryError` ·
+`JobNotFoundError` · `QueuePausedError` · `QueueInUseError` · `InstanceActiveError` ·
+`ShutdownTimeoutError` · `MissingPeerDependencyError`.
+
+The full error table — codes, causes, and remedies — lives in [Troubleshooting](./troubleshooting.md).

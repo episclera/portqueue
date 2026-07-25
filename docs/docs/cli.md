@@ -50,7 +50,7 @@ straight to `portqueue`. Drop this next to your project and use it for every com
 
 ```bash title="pq"
 #!/usr/bin/env bash
-# Usage: ./pq <command> [flags]   e.g.  ./pq queues   ./pq retry --id abc --yes
+# Usage: ./pq <command> [flags]   e.g.  ./pq queues   ./pq retry --id abc
 set -euo pipefail
 exec portqueue \
   --driver postgres \
@@ -63,7 +63,7 @@ Make it executable once (`chmod +x pq`), then:
 ```bash
 ./pq queues
 ./pq stats --watch
-./pq retry --id <jobId> --yes
+./pq retry --id <jobId>
 ```
 
 The connection lives in one place, and `"$@"` passes the rest through — so every command is just
@@ -85,6 +85,60 @@ The `--schema`, `--table-prefix`, and `--namespace` flags must match the values 
 configures on its driver, so the CLI reads and writes the same tables and channels. (The
 `sqlite` driver has no schema, so `--schema` is ignored there.)
 
+## Commands
+
+Every command below is registered in the CLI. Run `portqueue help` (or `portqueue <command> --help`)
+for the generated usage. Global connection flags apply to all of them.
+
+### Monitoring (read-only)
+
+| Command | Usage | What it does |
+| --- | --- | --- |
+| `stats` | `[--queue <name>] [--watch]` | State counts, throughput, failure rate. `--watch` refreshes live |
+| `queues` | | List queues with counts + paused state |
+| `jobs` | `--queue <name> [--status <s>] [--schedule-id <id>] [--limit <n> --cursor <c>]` | Paged job list |
+| `job` | `--id <jobId>` | Full detail for a single job |
+| `schedules` | `--queue <name>` | List recurring definitions |
+
+### Actions
+
+| Command | Usage | What it does |
+| --- | --- | --- |
+| `add` | `--queue <name> --data <json\|@file> [--priority <n>] [--start-after <duration>] [--idempotency-key <k>] [--retry-max-attempts <n>] [--cron "<expr>" --timezone <tz> \| --every <ms>]` | Enqueue a one-off job or create a recurring schedule. `--data` is inline JSON or `@path/to/file.json` |
+| `retry` | `--id <jobId>` | Requeue a failed/completed job (re-arms its own row) |
+| `cancel` | `--id <jobId>` | Cancel a pending or active job |
+| `remove` | `(--id <jobId> \| --schedule-id <id> --queue <name>)` | Remove a single job **or** a schedule. An ACTIVE job is skipped — cancel it first |
+| `remove-queue` | `--queue <name>` | Remove a queue no longer used by any running code |
+| `remove-instance` | `--instance-key <key>` | Remove a long-inactive instance from monitoring (refused unless unseen for 30+ min) |
+| `purge` | `--queue <name> --status <status> --yes` | **Destructive** bulk delete of jobs in a state. Requires `--yes` |
+| `pause` | `--queue <name> [--mode processing\|all]` | Pause a queue (`processing` stops claiming; `all` also refuses new jobs) |
+| `resume` | `--queue <name>` | Resume a paused queue |
+
+> `--yes` exists **only** on `purge` (the one destructive bulk command). `retry`, `cancel`, and
+> `remove` act on a single id and take no confirmation flag.
+
+### Operational
+
+| Command | Usage | What it does |
+| --- | --- | --- |
+| `migrate` | `[--mode auto\|validate-only]` | Apply pending schema migrations |
+| `doctor` | | Check connectivity and schema health |
+| `listen` | `[--queue <name>]` | Stream the event feed until interrupted |
+| `dashboard` | `--port <n> --root-user <u> --root-password <p> [--host <h>] [--read-only] [--base-path <p>]` | Serve the web dashboard |
+
+### `dashboard` flags
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--port <n>` | `4321` | Port to listen on |
+| `--host <h>` | `127.0.0.1` | Interface to bind (use `0.0.0.0` in a container) |
+| `--root-user <u>` | `PORTQUEUE_ROOT_USER` env | Basic-auth username (required) |
+| `--root-password <p>` | `PORTQUEUE_ROOT_PASSWORD` env | Basic-auth password (required) |
+| `--read-only` | off | Serve read-only — hide all mutating actions |
+| `--base-path <p>` | `/portqueue` | URL prefix the dashboard is served under |
+
+Credentials are required: pass `--root-user`/`--root-password` or set the matching env vars.
+
 ## Common commands
 
 Using the `./pq` wrapper from above so the connection flags stay out of the way:
@@ -96,8 +150,8 @@ Using the `./pq` wrapper from above so the connection flags stay out of the way:
 # tail the event feed for one queue (runs until interrupted)
 ./pq listen --queue orders
 
-# retry a failed job
-./pq retry --id <jobId> --yes
+# retry a failed job (requeues its own row)
+./pq retry --id <jobId>
 
 # remove a long-inactive instance (refused unless unseen for 30+ min)
 ./pq remove-instance --instance-key 10.0.9.9:ram-2gb:cpu-1cor
@@ -105,8 +159,8 @@ Using the `./pq` wrapper from above so the connection flags stay out of the way:
 # remove an unused queue (refused if this process still declares it)
 ./pq remove-queue --queue legacy-emails
 
-# serve the dashboard (see the Dashboard page)
-./pq dashboard --port 9000 --root-user admin --root-password ****
+# serve the dashboard on all interfaces (see the Dashboard page)
+./pq dashboard --port 9000 --host 0.0.0.0 --root-user admin --root-password "$DASH_PASSWORD"
 
 # run migrations as a separate deploy step
 ./pq migrate

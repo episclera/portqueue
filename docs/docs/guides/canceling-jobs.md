@@ -26,7 +26,17 @@ await emailsQueue.cancelJob({ jobId });
 
 `cancelJob` returns `true` if it either marked a job cancelled or signalled a running one.
 
-:::note Recurring jobs
+:::warning Signalling a running job is instance-local
+`cancelJob` fires the handler's `AbortSignal` **only when the job is running on the same instance
+(this process)**. In a multi-instance fleet, if the job is currently running on a **different**
+instance, `cancelJob` **cannot** reach that remote handler — the job keeps running there until it
+finishes on its own. Remote cancellation only works on jobs that **haven't started**: a
+pending/delayed row is marked `CANCELLED` so it never starts, no matter which instance calls
+`cancelJob`. To reliably stop in-flight work across a fleet, write abort-aware handlers **and**
+don't assume `cancelJob` from another node will interrupt an already-running job.
+:::
+
+:::info Recurring jobs
 `cancelJob` cancels a single job instance, not a recurrence. To stop a **recurring schedule** from
 producing new jobs, delete the schedule with
 [`removeSchedule`](./producing-jobs.mdx#remove-a-schedule) — canceling one produced run won't

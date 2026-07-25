@@ -83,7 +83,7 @@ once-only insertion is critical, also guard with your own transaction/business k
 
 ## Observability
 
-Structured logging with correlation via `metadata`; **subscribe to
+Structured logging correlated by `job.id` / queue name; **subscribe to
 `PortQueueEvent.ERROR`** so nothing is silent; export metrics/tracing through
 [hooks](./events-hooks/hooks.md).
 
