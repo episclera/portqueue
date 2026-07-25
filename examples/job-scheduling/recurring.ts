@@ -2,7 +2,8 @@
  * Recurring jobs — `schedule.startEvery` (fixed interval) and `schedule.cron`.
  *
  * Run with: `npm run example:schedule-recurring` (from the repo root) or `npm run recurring` here.
- * Runs until you press Ctrl+C.
+ * It waits until each recurrence has fired at least 3 times (~15s), unschedules both and exits.
+ * Ctrl+C stops it earlier.
  *
  * A recurring `addJob` creates/updates a recurring producer; `data` + the job options become the
  * template for every produced run. Backed by PGLite under the repo-root `tmp/` folder, so there's
@@ -19,15 +20,37 @@ const dataDir =
 
 type QueueName = 'healthchecks' | 'reports';
 
+/** How many runs of each recurrence to wait for before shutting down. */
+const TARGET_RUNS = 3;
+/** Give up waiting after this long, so a stuck example can never hang a terminal (or CI). */
+const DEADLINE_MS = 60_000;
+
 async function main(): Promise<void> {
-  const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
+  // The scheduler materializes due runs on the client tick (default every 5s), so a recurrence can
+  // only be as precise as that tick. Dropping it to 1s here lets the 3s interval below land on
+  // time; leave it at the default for production, where a few seconds of drift is fine.
+  const pq = new PortQueue<QueueName>({
+    driver: new PgliteDriver({ dataDir }),
+    tickIntervalMs: 1_000,
+  });
   await pq.init();
+
+  // Count the runs of each recurrence, and resolve once both have fired TARGET_RUNS times.
+  const runs: Record<QueueName, number> = { healthchecks: 0, reports: 0 };
+  let markRun: (queue: QueueName) => void = () => {};
+  const sawEnoughRuns = new Promise<void>((resolveWhenDone) => {
+    markRun = (queue) => {
+      runs[queue] += 1;
+      if (runs.healthchecks >= TARGET_RUNS && runs.reports >= TARGET_RUNS) resolveWhenDone();
+    };
+  });
 
   const healthchecks = pq.createQueue<Record<string, never>>('healthchecks');
   pq.createWorker<Record<string, never>>({
     queue: 'healthchecks',
     handler: async () => {
-      console.log(`💓 [${new Date().toISOString()}] healthcheck`);
+      markRun('healthchecks');
+      console.log(`💓 [${new Date().toISOString()}] healthcheck (run ${runs.healthchecks})`);
     },
   });
 
@@ -35,7 +58,10 @@ async function main(): Promise<void> {
   pq.createWorker<{ kind: string }>({
     queue: 'reports',
     handler: async (job) => {
-      console.log(`📊 [${new Date().toISOString()}] building ${job.data.kind} report`);
+      markRun('reports');
+      console.log(
+        `📊 [${new Date().toISOString()}] building ${job.data.kind} report (run ${runs.reports})`,
+      );
     },
   });
 
@@ -47,32 +73,72 @@ async function main(): Promise<void> {
     idempotencyKey: 'healthcheck-every-3s',
   });
 
-  // Cron: every minute (6-field form with seconds would be '0 * * * * *'; this 5-field runs
-  // at the top of every minute, in UTC).
+  // Cron: the 6-field form with a leading seconds field, here every 5 seconds so the example
+  // finishes quickly. Standard 5-field expressions work too ('* * * * *' = top of every minute).
+  // Cron fields are evaluated in UTC.
   const reportSchedule = await reports.addJob({
     data: { kind: 'sales' },
-    schedule: { cron: '* * * * *' },
-    idempotencyKey: 'sales-report-every-minute',
+    schedule: { cron: '*/5 * * * * *' },
+    idempotencyKey: 'sales-report-every-5s',
   });
 
-  // A recurring add returns a `scheduleId`. Persist it somewhere durable (your own DB, config,
-  // etc.) if you might ever want to stop new runs being spawned for this interval/cron later —
-  // that's the id you pass to `queue.removeSchedule({ scheduleId })` to unschedule it. (Here we
-  // just log them; you'd normally save them alongside whatever owns the recurrence.)
+  // A recurring add returns a `scheduleId` (`AddJobResult` is one shape for both modes, so the
+  // field is optional in the type — it's always set for a recurring add). Persist it somewhere
+  // durable (your own DB, config, etc.) if you might ever want to stop new runs being spawned for
+  // this interval/cron later — that's the id you pass to `queue.removeSchedule({ scheduleId })`.
+  const healthcheckScheduleId = healthcheckSchedule.scheduleId;
+  const reportScheduleId = reportSchedule.scheduleId;
+  if (!healthcheckScheduleId || !reportScheduleId) {
+    throw new Error('Expected both recurring adds to return a scheduleId.');
+  }
   console.log('Schedule ids (save these to unschedule later):', {
-    healthcheck: healthcheckSchedule.scheduleId,
-    salesReport: reportSchedule.scheduleId,
+    healthcheck: healthcheckScheduleId,
+    salesReport: reportScheduleId,
   });
 
-  console.log('Scheduled: healthcheck every 3s, sales report every minute. Ctrl+C to stop.\n');
+  console.log(
+    `Scheduled: healthcheck every 3s, sales report every 5s. ` +
+      `Waiting for ${TARGET_RUNS} runs of each (Ctrl+C to stop earlier)…\n`,
+  );
 
+  let stopped = false;
   const shutdown = async (): Promise<void> => {
+    if (stopped) return;
+    stopped = true;
     console.log('\nShutting down…');
     await pq.shutdown();
     process.exit(0);
   };
   process.on('SIGINT', () => void shutdown());
   process.on('SIGTERM', () => void shutdown());
+
+  // PortQueue's own timers are `unref`'d, so the library never holds a process open by itself —
+  // this deadline timer is what keeps the event loop alive while we wait for the runs to land.
+  let deadline: NodeJS.Timeout | undefined;
+  const timedOut = await Promise.race([
+    sawEnoughRuns.then(() => false),
+    new Promise<boolean>((r) => {
+      deadline = setTimeout(() => r(true), DEADLINE_MS);
+    }),
+  ]);
+  if (deadline) clearTimeout(deadline);
+
+  if (timedOut) {
+    console.log(
+      `\n⚠️  Gave up after ${DEADLINE_MS / 1000}s with ` +
+        `${runs.healthchecks} healthcheck / ${runs.reports} report runs.`,
+    );
+  } else {
+    console.log(`\n✅ Saw ${TARGET_RUNS} runs of each recurrence.`);
+  }
+
+  // Stop new runs being spawned — this is what the saved `scheduleId` is for. Removing them also
+  // leaves the persisted database clean for the next run of this example.
+  await healthchecks.removeSchedule({ scheduleId: healthcheckScheduleId });
+  await reports.removeSchedule({ scheduleId: reportScheduleId });
+  console.log('Unscheduled both recurrences.');
+
+  await shutdown();
 }
 
 void main();

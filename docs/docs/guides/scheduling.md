@@ -89,6 +89,13 @@ await healthchecksQueue.addJob({ data: {}, schedule: { startEvery: '30s' } });
 `startEvery` schedules the **next** run at `now + interval` at the moment the current one
 **fires** (not when it completes), so runs don't drift by handler duration.
 
+:::info The tick sets the resolution
+Due runs are materialized on the shared maintenance tick — [`tickIntervalMs`](../api-reference.mdx),
+`5000` by default — so a recurrence fires on the first tick at or after its due time. An interval
+(or cron slot) shorter than the tick therefore can't fire more often than the tick: with the default,
+`startEvery: '3s'` effectively runs every 5s. Lower `tickIntervalMs` if you need finer resolution.
+:::
+
 :::warning Overlapping runs
 If a handler takes **longer than the interval**, the next run can start before the previous one
 finishes, so runs **overlap**. Guard against this by giving the job a `singletonKey` — only one run
