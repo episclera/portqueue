@@ -18,6 +18,12 @@ up jobs or registers as an instance; it just connects, runs one command, and dis
 Point the CLI at your database with `--driver` and a connection string. The connection
 string comes from `--connection-string` or the `DATABASE_URL` environment variable.
 
+:::info
+The CLI connects through the same `@portqueue/core` driver your app uses, so the driver's **peer
+dependency must be installed** — `pg` for Postgres, `mysql2` for MySQL, `better-sqlite3` for SQLite,
+`@electric-sql/pglite` for PGLite, `oracledb` for Oracle. Missing it raises `MISSING_PEER_DEPENDENCY`.
+:::
+
 ```bash
 # explicit driver + connection string
 portqueue queues --driver postgres --connection-string postgres://user:pass@host:5432/app
