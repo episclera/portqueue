@@ -88,7 +88,9 @@ export function OverviewPage(): React.ReactElement {
     {
       title: 'Actions',
       key: 'actions',
+      // Buttons hug the right edge; the title stays on the left, where it reads as this column's.
       align: 'right',
+      headerAlign: 'left',
       render: (r) => (
         <RowActions>
           {r.processingPaused ? (

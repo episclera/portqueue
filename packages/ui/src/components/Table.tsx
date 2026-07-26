@@ -12,6 +12,12 @@ export interface TableColumn<T> {
   dataIndex?: keyof T;
   width?: number | string;
   align?: TableAlign;
+  /**
+   * Alignment for the header cell alone, when it should differ from the body. An actions column
+   * pins its buttons to the right edge, but a title pushed out there reads as belonging to the
+   * column after it — so it keeps its label on the left.
+   */
+  headerAlign?: TableAlign;
 }
 
 /** Row-selection wiring — renders a leading checkbox column with a select-all header. */
@@ -190,7 +196,7 @@ export function Table<T>({
           {allColumns.map((column) => (
             <Th
               key={column.key}
-              $align={column.align ?? 'left'}
+              $align={column.headerAlign ?? column.align ?? 'left'}
               $size={size}
               style={{ width: sizeToPx(column.width) }}
             >
