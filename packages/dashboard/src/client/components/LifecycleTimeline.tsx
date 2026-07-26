@@ -37,7 +37,7 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
     return {
       key: `${m.label}-${m.at as string}`,
       color: m.color,
-      label: <Time value={m.at} mode="absolute" />,
+      label: <Time value={m.at} />,
       children: (
         <div>
           <Text $strong>{m.label}</Text>

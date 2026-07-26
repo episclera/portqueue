@@ -1,31 +1,47 @@
 /** @jest-environment node */
-import { absoluteTime, duration, relativeTime, totalCount, truncate } from './format';
+import { duration, formatDateTime, totalCount, truncate, utcOffsetLabel } from './format';
 
-/** A fixed instant, so the absolute formatter has something stable to render. */
-const FIXED = Date.parse('2026-07-22T00:00:00.000Z');
+/** The suite's own zone label, so the expectations hold wherever it runs. */
+const zone = (ms: number): string => utcOffsetLabel(-new Date(ms).getTimezoneOffset());
 
-describe('absoluteTime', () => {
+describe('formatDateTime', () => {
   it('returns a dash for an unparseable instant', () => {
-    expect(absoluteTime(Number.NaN)).toBe('—');
+    expect(formatDateTime(Number.NaN)).toBe('—');
   });
 
-  it('formats a valid instant and names the timezone', () => {
-    const out = absoluteTime(FIXED);
-    expect(out).not.toBe('—');
-    // The zone marker is what stops a shared screenshot being ambiguous across regions.
-    expect(out).toMatch(/\d/);
-    expect(out.length).toBeGreaterThan(10);
+  it('renders the one dashboard format, in local time, with the offset named', () => {
+    // Built from local parts, so the expectation holds whatever timezone the suite runs in.
+    const ms = new Date(2026, 2, 12, 13, 23, 1).getTime();
+    expect(formatDateTime(ms)).toBe(`12 Mar. 2026 13:23:01 ${zone(ms)}`);
+  });
+
+  it('zero-pads the day and the clock so a column of timestamps lines up', () => {
+    const ms = new Date(2026, 0, 3, 4, 5, 6).getTime();
+    expect(formatDateTime(ms)).toBe(`03 Jan. 2026 04:05:06 ${zone(ms)}`);
+  });
+
+  it('leaves May unabbreviated and keeps the period on the rest', () => {
+    const may = new Date(2026, 4, 1, 0, 0, 0).getTime();
+    const dec = new Date(2026, 11, 31, 23, 59, 59).getTime();
+    expect(formatDateTime(may)).toBe(`01 May 2026 00:00:00 ${zone(may)}`);
+    expect(formatDateTime(dec)).toBe(`31 Dec. 2026 23:59:59 ${zone(dec)}`);
   });
 });
 
-describe('relativeTime', () => {
-  it('returns a dash for an unparseable instant', () => {
-    expect(relativeTime(Number.NaN)).toBe('—');
+describe('utcOffsetLabel', () => {
+  it('spells Greenwich as plain UTC', () => {
+    expect(utcOffsetLabel(0)).toBe('UTC');
   });
 
-  it('produces a relative phrase in both directions', () => {
-    expect(relativeTime(Date.now() + 5 * 60_000)).toMatch(/minute/);
-    expect(relativeTime(Date.now() - 3 * 3_600_000)).toMatch(/hour/);
+  it('names whole-hour offsets either side of Greenwich', () => {
+    expect(utcOffsetLabel(120)).toBe('UTC+2');
+    expect(utcOffsetLabel(-300)).toBe('UTC-5');
+  });
+
+  it('keeps the minutes of an offset that is not a whole hour', () => {
+    expect(utcOffsetLabel(330)).toBe('UTC+5:30');
+    expect(utcOffsetLabel(-570)).toBe('UTC-9:30');
+    expect(utcOffsetLabel(345)).toBe('UTC+5:45');
   });
 });
 

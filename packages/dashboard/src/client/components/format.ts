@@ -1,28 +1,61 @@
 /**
- * Small formatting helpers shared across pages. The timestamp ones take epoch milliseconds and
- * are pure — `<Time>` owns deciding *when* to recompute them (see `Time.tsx`).
+ * Small formatting helpers shared across pages. The timestamp one takes epoch milliseconds and is
+ * pure — `<Time>` is the component that puts it on screen (see `Time.tsx`).
  */
 
 /**
- * The full local timestamp, with the timezone named. `toLocaleString()` alone is ambiguous the
- * moment anyone shares a screenshot across regions, so the zone is always spelled out.
+ * Month names as the dashboard's one date format spells them: abbreviated with a trailing period,
+ * except May, which isn't an abbreviation. Fixed rather than `Intl`-derived, so the same instant
+ * reads identically in every browser locale — one format for the whole UI, screenshots included.
  */
-export function absoluteTime(ms: number): string {
-  const d = new Date(ms);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString(undefined, { timeZoneName: 'short' });
+const MONTHS = [
+  'Jan.',
+  'Feb.',
+  'Mar.',
+  'Apr.',
+  'May',
+  'Jun.',
+  'Jul.',
+  'Aug.',
+  'Sep.',
+  'Oct.',
+  'Nov.',
+  'Dec.',
+] as const;
+
+const pad = (n: number): string => String(n).padStart(2, '0');
+
+/**
+ * A UTC offset as `UTC`, `UTC+2` or `UTC-5:30`, from minutes **ahead of** UTC.
+ *
+ * Spelled out from the offset rather than taken from `Intl`'s `timeZoneName`, whose wording shifts
+ * with the browser locale ("GMT+2", "CEST", "Central European Summer Time"). An offset is
+ * unambiguous everywhere, and it is the part a shared screenshot otherwise leaves the reader
+ * guessing at.
+ */
+export function utcOffsetLabel(minutesAheadOfUtc: number): string {
+  if (!minutesAheadOfUtc) return 'UTC';
+  const sign = minutesAheadOfUtc > 0 ? '+' : '-';
+  const abs = Math.abs(minutesAheadOfUtc);
+  const minutes = abs % 60;
+  return `UTC${sign}${Math.floor(abs / 60)}${minutes ? `:${pad(minutes)}` : ''}`;
 }
 
-/** "3 minutes ago" / "in 2 hours", relative to now. */
-export function relativeTime(ms: number): string {
-  if (Number.isNaN(ms)) return '—';
-  const diff = ms - Date.now();
-  const abs = Math.abs(diff);
-  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-  if (abs < 60_000) return rtf.format(Math.round(diff / 1000), 'second');
-  if (abs < 3_600_000) return rtf.format(Math.round(diff / 60_000), 'minute');
-  if (abs < 86_400_000) return rtf.format(Math.round(diff / 3_600_000), 'hour');
-  return rtf.format(Math.round(diff / 86_400_000), 'day');
+/**
+ * The dashboard's only timestamp format: `12 Mar. 2026 13:23:01 UTC+2`, in the viewer's own
+ * timezone, with that timezone's offset named.
+ *
+ * Day, hour, minute and second are zero-padded, so every timestamp is the same width and a column
+ * of them lines up. Every field is read with the local `Date` getters — no locale, no `Intl`, and
+ * nothing that varies between two people looking at the same row.
+ */
+export function formatDateTime(ms: number): string {
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return '—';
+  const date = `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  // `getTimezoneOffset()` counts minutes *behind* UTC, so east of Greenwich is negative.
+  return `${date} ${time} ${utcOffsetLabel(-d.getTimezoneOffset())}`;
 }
 
 /** Human-readable duration between two ISO timestamps. */

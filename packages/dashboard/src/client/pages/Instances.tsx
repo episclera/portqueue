@@ -88,14 +88,16 @@ export function InstancesPage(): React.ReactElement {
     {
       title: 'Last Seen',
       key: 'lastSeenAt',
-      // Relative and self-updating: how long ago an instance was last seen is the whole point of
-      // the column, and a frozen "2 minutes ago" from the last poll would be misleading.
+      // The clock time of the last heartbeat. Whether that is recent is what the Liveness column
+      // already answers, so this column doesn't need to count on its own.
       render: (r) => <Time value={r.lastSeenAt} />,
     },
     {
       title: 'Actions',
       key: 'actions',
+      // Buttons hug the right edge; the title stays on the left, where it reads as this column's.
       align: 'right',
+      headerAlign: 'left',
       render: (r: InstanceDto) => {
         const removable = Date.now() - new Date(r.lastSeenAt).getTime() > REMOVABLE_AFTER_MS;
         return (

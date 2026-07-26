@@ -349,9 +349,7 @@ export function JobDetailPage(): React.ReactElement {
                   <DescGrid>
                     {TIMESTAMPS.map((t) => (
                       <Item key={t.key} label={t.label}>
-                        {/* Absolute here: the section exists to answer "exactly when", and a
-                            hover tooltip carries the same value for the relative cells. */}
-                        <Time value={j[t.key]} mode="absolute" />
+                        <Time value={j[t.key]} />
                       </Item>
                     ))}
                   </DescGrid>
