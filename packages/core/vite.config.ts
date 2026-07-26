@@ -1,6 +1,12 @@
+import { builtinModules } from 'node:module';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
+
+// Bundled CJS deps require built-ins by their bare name (`require('buffer')`, not
+// `require('node:buffer')`). Those must be externalized too, or Vite resolves them to its
+// empty browser stub and the module blows up at import time.
+const nodeBuiltins = builtinModules.flatMap((name) => [name, `node:${name}`]);
 
 // Library build (build_plan/01.3). Emits ESM + CJS + .d.ts. Each driver is its own
 // entry so importing one driver never pulls in another engine's peer client.
@@ -26,7 +32,7 @@ export default defineConfig({
     rollupOptions: {
       // Externalize node built-ins and every optional peer DB client.
       external: [
-        /^node:/,
+        ...nodeBuiltins,
         'pg',
         '@electric-sql/pglite',
         'better-sqlite3',
