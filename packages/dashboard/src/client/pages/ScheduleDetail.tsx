@@ -31,6 +31,7 @@ import { JobsTable } from '../components/JobsTable';
 import { cadence } from '../components/SchedulesPanel';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
+import { truncate } from '../components/format';
 
 const DescGrid = styled.dl`
   display: grid;
@@ -179,7 +180,8 @@ export function ScheduleDetailPage(): React.ReactElement {
             <Title level={4} as="span">
               Schedule
             </Title>
-            <Mono>{s.scheduleId}</Mono>
+            {/* Truncated like a job id: the full value is one line down in the Definition card. */}
+            <Mono>{truncate(s.scheduleId, 14, 8)}</Mono>
           </Inline>
         }
         subtitle={

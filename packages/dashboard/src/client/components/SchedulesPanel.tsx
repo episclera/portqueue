@@ -6,6 +6,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import styled from 'styled-components';
 import { Code, Table, Tag } from '@portqueue/ui';
 import type { DropdownItem, TableColumn } from '@portqueue/ui';
 import { ActionKind, type ScheduleDto, type SchedulePageDto } from '../../shared/dto';
@@ -14,6 +15,7 @@ import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import { ACTIONS_CONFIG, SCHEDULE_STATES_CONFIG } from '../constants/labels';
+import { truncate } from './format';
 import { Time } from './Time';
 import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
@@ -24,6 +26,12 @@ export interface SchedulesPanelProps {
   /** Narrow to one queue's schedules. Omitted on the all-queues page. */
   queue?: string;
 }
+
+/** Generated schedule ids are as long as job ids, and truncate the same way. */
+const MonoLink = styled(Link)`
+  font-family: ${(p) => p.theme.font.mono};
+  font-size: 12px;
+`;
 
 const FILTER_KEYS = ['state'] as const;
 
@@ -84,7 +92,9 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
       title: 'Schedule',
       key: 'scheduleId',
       render: (r) => (
-        <Link to={`/schedules/${encodeURIComponent(r.scheduleId)}`}>{r.scheduleId}</Link>
+        <MonoLink to={`/schedules/${encodeURIComponent(r.scheduleId)}`}>
+          {truncate(r.scheduleId)}
+        </MonoLink>
       ),
     },
     {
@@ -112,7 +122,9 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
     {
       title: 'Actions',
       key: 'actions',
+      // Buttons hug the right edge; the title stays on the left, where it reads as this column's.
       align: 'right',
+      headerAlign: 'left',
       render: (r: ScheduleDto) => (
         <RowActions>
           {/* Disabling is the reversible alternative to removing: the definition stays, it just
