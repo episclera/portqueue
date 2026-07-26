@@ -129,7 +129,6 @@ export function serializeInstance(i: InstanceInfo): InstanceDto {
     lastSeenAt: i.lastSeenAt.toISOString(),
     cpuPercent: i.cpuPercent,
     memoryPercent: i.memoryPercent,
-    rssBytes: i.rssBytes,
     counts: counts(i.counts),
   };
 }

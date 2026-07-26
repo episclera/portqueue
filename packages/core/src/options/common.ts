@@ -64,7 +64,13 @@ export interface LimiterOptions {
 }
 
 /**
- * Thresholds on **this process's own** health that pause job claiming while they are breached.
+ * Thresholds on the **machine's** health that pause job claiming while they are breached.
+ *
+ * CPU and memory are read for the whole host (`os.cpus()` time deltas and
+ * `os.totalmem()`/`os.freemem()`), not for this Node process. That is deliberate: a worker that
+ * throttles on its own CPU keeps claiming while the box it shares with the database is saturated,
+ * and "30% of one core" is not a number an operator can act on. Event-loop delay is the one
+ * process-local signal here, and the best evidence that *this* process is the one in trouble.
  *
  * Passing this object is what turns system backpressure on: every worker on the client then stops
  * claiming while any threshold is over, and resumes once every watched metric has fallen to
@@ -86,12 +92,10 @@ export interface SystemLimiterOptions {
    * until you set a threshold for it (it needs a `perf_hooks` histogram kept enabled).
    */
   maxEventLoopDelaySeconds?: number;
-  /** Process CPU above this percentage counts as pressure (summed across cores). */
+  /** Machine CPU busy above this percentage of total CPU time counts as pressure (0-100). */
   maxCpuPercent?: number;
-  /** RSS above this share of total machine memory counts as pressure. */
+  /** Used machine memory above this share of total memory counts as pressure (0-100). */
   maxMemoryPercent?: number;
-  /** RSS above this many bytes counts as pressure. */
-  maxRssBytes?: number;
   /** Fraction (0-1) of its own threshold every metric must fall to before resuming (default 0.8). */
   resumeHysteresis?: number;
 }

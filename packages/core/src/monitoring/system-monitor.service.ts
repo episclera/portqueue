@@ -1,6 +1,5 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks';
-import { cpuUsage, memoryUsage } from 'node:process';
-import { totalmem } from 'node:os';
+import { cpus, freemem, totalmem } from 'node:os';
 import { PortQueueEvent } from '../events/event-name.enum';
 import type { SystemLimiterOptions } from '../options/common';
 import type { EventBusService } from '../events/event-bus.service';
@@ -8,13 +7,19 @@ import type { Logger } from '../logging/logger.interface';
 
 type EventLoopDelayMonitor = ReturnType<typeof monitorEventLoopDelay>;
 
-/** One sample of this process's own health. Percentages are 0-100; `rssBytes` is absolute. */
+/**
+ * One sample of the **machine's** health, not this process's. Both percentages are 0-100 shares of
+ * the whole host: CPU is busy time across every core, memory is used memory over total memory.
+ *
+ * Machine-wide is the reading an operator acts on. A Node process at 30% of one core tells you
+ * nothing about whether the box it shares with a database and three other services can take more
+ * work — and a queue that throttles on its own CPU keeps claiming while the host thrashes.
+ */
 export interface SystemMetrics {
-  /** Process CPU since the previous sample, summed across cores (so >100 is possible). */
+  /** Share of total CPU time the machine spent busy since the previous sample (0-100). */
   cpuPercent: number;
-  /** RSS as a share of total machine memory (`os.totalmem()`), not of a container limit. */
+  /** Used machine memory as a share of `os.totalmem()`, not of a container limit. */
   memoryPercent: number;
-  rssBytes: number;
   /** Mean event-loop delay in seconds, or null when it isn't being watched. */
   eventLoopDelaySeconds: number | null;
 }
@@ -26,31 +31,54 @@ interface Reading {
   threshold: number;
 }
 
+/** Busy and total CPU time across every core, in the units `os.cpus()` reports. */
+interface CpuTimes {
+  idle: number;
+  total: number;
+}
+
 /**
- * Samples this process's own health, and optionally throttles on it.
+ * Sum every core's time counters. These are monotonic since boot, so a percentage only means
+ * something as a difference between two reads.
+ */
+function readCpuTimes(): CpuTimes {
+  let idle = 0;
+  let total = 0;
+  for (const core of cpus()) {
+    for (const [mode, milliseconds] of Object.entries(core.times)) {
+      total += milliseconds;
+      if (mode === 'idle') idle += milliseconds;
+    }
+  }
+  return { idle, total };
+}
+
+/**
+ * Samples the **machine's** health, and optionally throttles on it.
  *
- * **Monitoring is unconditional.** CPU, memory share and RSS are sampled for as long as the client
- * runs, because the instance heartbeat persists them — that is what makes the dashboard's
- * per-instance metrics possible, so there is no option to turn it off.
+ * **Monitoring is unconditional.** Host CPU and memory are sampled for as long as the client runs,
+ * because the instance heartbeat persists them — that is what makes the dashboard's per-instance
+ * metrics possible, so there is no option to turn it off. Both numbers describe the whole host, so
+ * two PortQueue processes on one box report the same figures; the instance row says *where* the
+ * reading was taken, not whose memory it was.
  *
  * **Limiting is opt-in.** Only when the caller passes `systemLimiter` does a breached threshold
  * raise the backpressure flag that stops workers claiming (with hysteresis on the way down, so a
  * metric hovering at its limit doesn't flap). Event-loop delay is the one metric that isn't sampled
- * unless asked for: reading it means keeping a `perf_hooks` histogram enabled for the process's
- * lifetime, so it is enabled only when `maxEventLoopDelaySeconds` gives it a purpose.
+ * unless asked for — and the one that is genuinely about this process rather than the host: reading
+ * it means keeping a `perf_hooks` histogram enabled for the process's lifetime, so it is enabled
+ * only when `maxEventLoopDelaySeconds` gives it a purpose.
  *
  * Uses only Node built-ins. Pressure transitions are observed via the event bus, never a callback.
  */
 export class SystemMonitorService {
   private timer: NodeJS.Timeout | null = null;
   private histogram: EventLoopDelayMonitor | null = null;
-  private lastCpu = cpuUsage();
-  private lastSample = Date.now();
+  private lastCpuTimes = readCpuTimes();
   private _pressureHigh = false;
   private _metrics: SystemMetrics = {
     cpuPercent: 0,
     memoryPercent: 0,
-    rssBytes: 0,
     eventLoopDelaySeconds: null,
   };
 
@@ -91,9 +119,7 @@ export class SystemMonitorService {
   }
 
   private sample(): void {
-    const now = Date.now();
-    this._metrics = this.measure(now);
-    this.lastSample = now;
+    this._metrics = this.measure();
     if (!this.limiter) return; // monitoring only
 
     const readings = this.readings(this._metrics);
@@ -128,11 +154,17 @@ export class SystemMonitorService {
   }
 
   /** Read every metric, whether or not a threshold watches it. */
-  private measure(now: number): SystemMetrics {
-    const diff = cpuUsage(this.lastCpu);
-    this.lastCpu = cpuUsage();
-    const elapsedMicros = Math.max(1, (now - this.lastSample) * 1000);
-    const rssBytes = memoryUsage().rss;
+  private measure(): SystemMetrics {
+    const previous = this.lastCpuTimes;
+    const current = readCpuTimes();
+    this.lastCpuTimes = current;
+    const elapsed = current.total - previous.total;
+    const busy = elapsed - (current.idle - previous.idle);
+    // Two samples inside one clock tick leave no CPU time to divide by; keeping the previous
+    // reading is honest, where reporting 0% would claim an idle machine.
+    const cpuPercent = elapsed > 0 ? (busy / elapsed) * 100 : this._metrics.cpuPercent;
+
+    const total = totalmem();
     let eventLoopDelaySeconds: number | null = null;
     if (this.histogram) {
       // The histogram reports nanoseconds and is reset each sample, so this is the mean since the
@@ -141,9 +173,8 @@ export class SystemMonitorService {
       this.histogram.reset();
     }
     return {
-      cpuPercent: ((diff.user + diff.system) / elapsedMicros) * 100,
-      memoryPercent: (rssBytes / totalmem()) * 100,
-      rssBytes,
+      cpuPercent,
+      memoryPercent: ((total - freemem()) / total) * 100,
       eventLoopDelaySeconds,
     };
   }
@@ -168,13 +199,6 @@ export class SystemMonitorService {
         metric: 'cpuPercent',
         value: metrics.cpuPercent,
         threshold: limiter.maxCpuPercent,
-      });
-    }
-    if (limiter.maxRssBytes != null) {
-      readings.push({
-        metric: 'rssBytes',
-        value: metrics.rssBytes,
-        threshold: limiter.maxRssBytes,
       });
     }
     if (limiter.maxMemoryPercent != null) {

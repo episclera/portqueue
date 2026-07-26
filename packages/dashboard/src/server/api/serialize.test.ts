@@ -74,7 +74,6 @@ describe('serializeInstance', () => {
       lastSeenAt: new Date('2026-07-22T00:02:00.000Z'),
       cpuPercent: 42.5,
       memoryPercent: 18.25,
-      rssBytes: 1_234_567,
       counts: { COMPLETED: 3 } as never,
     };
     const dto = serializeInstance(info);
@@ -83,7 +82,6 @@ describe('serializeInstance', () => {
     expect(dto.alive).toBe(true);
     expect(dto.cpuPercent).toBe(42.5);
     expect(dto.memoryPercent).toBe(18.25);
-    expect(dto.rssBytes).toBe(1_234_567);
     expect(dto.lastSeenAt).toBe('2026-07-22T00:02:00.000Z');
     expect(dto.counts).toEqual({ COMPLETED: 3 });
   });

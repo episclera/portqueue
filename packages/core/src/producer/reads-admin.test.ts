@@ -155,23 +155,23 @@ describe('client reads & admin (sqlite)', () => {
     await h.driver.upsertInstance({
       instanceKey: 'w1',
       now,
-      metrics: { cpuPercent: 42.5, memoryPercent: 18.25, rssBytes: 1_572_864 },
+      metrics: { cpuPercent: 42.5, memoryPercent: 18.25 },
     });
     const first = await h.driver.getInstance({ instanceKey: 'w1' });
-    expect(first).toMatchObject({ cpuPercent: 42.5, memoryPercent: 18.25, rssBytes: 1_572_864 });
+    expect(first).toMatchObject({ cpuPercent: 42.5, memoryPercent: 18.25 });
 
     // A beat without a sample must bump liveness without blanking the metrics — a null there
     // would read as "this instance reports nothing" rather than "we have no fresher number".
     await h.driver.upsertInstance({ instanceKey: 'w1', now: now + 1000 });
     const second = await h.driver.getInstance({ instanceKey: 'w1' });
     expect(second!.lastSeenAt).toBe(now + 1000);
-    expect(second).toMatchObject({ cpuPercent: 42.5, memoryPercent: 18.25, rssBytes: 1_572_864 });
+    expect(second).toMatchObject({ cpuPercent: 42.5, memoryPercent: 18.25 });
   });
 
   it('reports null health for an instance that has never sent a sample', async () => {
     await h.driver.upsertInstance({ instanceKey: 'fresh', now: h.clock.now() });
     const row = await h.driver.getInstance({ instanceKey: 'fresh' });
-    expect(row).toMatchObject({ cpuPercent: null, memoryPercent: null, rssBytes: null });
+    expect(row).toMatchObject({ cpuPercent: null, memoryPercent: null });
   });
 
   it('removes a queue only when it is not registered in this process', async () => {

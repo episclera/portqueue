@@ -398,7 +398,6 @@ export class PostgresDriver implements Driver {
       lastSeenAt: Number(row[InstanceColumn.LAST_SEEN_AT]),
       cpuPercent: this.numOrNull(row[InstanceColumn.CPU_PERCENT]),
       memoryPercent: this.numOrNull(row[InstanceColumn.MEMORY_PERCENT]),
-      rssBytes: this.numOrNull(row[InstanceColumn.RSS_BYTES]),
     };
   }
 
@@ -1279,19 +1278,18 @@ export class PostgresDriver implements Driver {
     // to INSERT. A rare create race can leave two rows; listInstances dedupes by key.
     const m = options.metrics;
     const updated = await this.execute(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.LAST_SEEN_AT} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}, ${InstanceColumn.CPU_PERCENT} = COALESCE(${this.ph(2)}, ${InstanceColumn.CPU_PERCENT}), ${InstanceColumn.MEMORY_PERCENT} = COALESCE(${this.ph(3)}, ${InstanceColumn.MEMORY_PERCENT}), ${InstanceColumn.RSS_BYTES} = COALESCE(${this.ph(4)}, ${InstanceColumn.RSS_BYTES}) WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(5)} RETURNING *`,
+      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.LAST_SEEN_AT} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}, ${InstanceColumn.CPU_PERCENT} = COALESCE(${this.ph(2)}, ${InstanceColumn.CPU_PERCENT}), ${InstanceColumn.MEMORY_PERCENT} = COALESCE(${this.ph(3)}, ${InstanceColumn.MEMORY_PERCENT}) WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(4)} RETURNING *`,
       [
         options.now,
         options.now,
         m?.cpuPercent ?? null,
         m?.memoryPercent ?? null,
-        m?.rssBytes ?? null,
         options.instanceKey,
       ],
     );
     if (updated.rows[0]) return this.mapInstance(updated.rows[0]);
     const inserted = await this.execute(
-      `INSERT INTO ${this.t(TableName.INSTANCE)} (${InstanceColumn.INSTANCE_KEY}, ${InstanceColumn.PROCESSING_PAUSED}, ${InstanceColumn.CREATED_AT}, ${InstanceColumn.UPDATED_AT}, ${InstanceColumn.LAST_SEEN_AT}, ${InstanceColumn.CPU_PERCENT}, ${InstanceColumn.MEMORY_PERCENT}, ${InstanceColumn.RSS_BYTES}) VALUES (${this.ph(0)}, 0, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)}, ${this.ph(5)}, ${this.ph(6)}) RETURNING *`,
+      `INSERT INTO ${this.t(TableName.INSTANCE)} (${InstanceColumn.INSTANCE_KEY}, ${InstanceColumn.PROCESSING_PAUSED}, ${InstanceColumn.CREATED_AT}, ${InstanceColumn.UPDATED_AT}, ${InstanceColumn.LAST_SEEN_AT}, ${InstanceColumn.CPU_PERCENT}, ${InstanceColumn.MEMORY_PERCENT}) VALUES (${this.ph(0)}, 0, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)}, ${this.ph(5)}) RETURNING *`,
       [
         options.instanceKey,
         options.now,
@@ -1299,7 +1297,6 @@ export class PostgresDriver implements Driver {
         options.now,
         m?.cpuPercent ?? null,
         m?.memoryPercent ?? null,
-        m?.rssBytes ?? null,
       ],
     );
     return this.mapInstance(inserted.rows[0]!);

@@ -55,7 +55,6 @@ const DEFAULT_INSTANCE = {
   lastSeenAt: new Date('2026-07-22T00:02:00.000Z'),
   cpuPercent: 12.5,
   memoryPercent: 94.2,
-  rssBytes: 1_572_864,
   counts: { COMPLETED: 8, FAILED: 1 },
 };
 

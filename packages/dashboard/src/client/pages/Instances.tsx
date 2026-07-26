@@ -1,7 +1,7 @@
 /**
- * Instances page: every registered instance with its liveness, health at the last heartbeat, total
- * jobs processed, and per-instance pause/resume. Server-paged; only populated when instances run
- * with an `instanceKey`.
+ * Instances page: every registered instance with its liveness, the health of the machine it runs on
+ * at the last heartbeat, total jobs processed, and per-instance pause/resume. Server-paged; only
+ * populated when instances run with an `instanceKey`.
  *
  * The per-status count breakdown deliberately isn't here. Eight numeric columns beside the health
  * metrics made the row unreadable and none of them answered a question this page is for; the
@@ -9,7 +9,7 @@
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Content, Mono, PageHeader, Table, Tag } from '@portqueue/ui';
+import { Content, Mono, PageHeader, Table, Tag, Tooltip } from '@portqueue/ui';
 import type { TableColumn } from '@portqueue/ui';
 import { ActionKind, type InstanceDto, type InstancePageDto } from '../../shared/dto';
 import { api } from '../queries/api';
@@ -30,8 +30,8 @@ import { dateColumn } from '../components/table-columns';
 import {
   CPU_THRESHOLDS,
   MEMORY_THRESHOLDS,
+  METRIC_HINTS,
   MetricValue,
-  formatBytes,
   formatPercent,
   metricTone,
 } from '../components/metrics';
@@ -106,9 +106,11 @@ export function InstancesPage(): React.ReactElement {
       key: 'cpuPercent',
       align: 'right',
       render: (r) => (
-        <MetricValue tone={metricTone(r.cpuPercent, CPU_THRESHOLDS)}>
-          {formatPercent(r.cpuPercent)}
-        </MetricValue>
+        <Tooltip title={METRIC_HINTS.cpu} placement="bottom">
+          <MetricValue tone={metricTone(r.cpuPercent, CPU_THRESHOLDS)}>
+            {formatPercent(r.cpuPercent)}
+          </MetricValue>
+        </Tooltip>
       ),
     },
     {
@@ -116,21 +118,11 @@ export function InstancesPage(): React.ReactElement {
       key: 'memoryPercent',
       align: 'right',
       render: (r) => (
-        <MetricValue tone={metricTone(r.memoryPercent, MEMORY_THRESHOLDS)}>
-          {formatPercent(r.memoryPercent)}
-        </MetricValue>
-      ),
-    },
-    {
-      // RSS is the same quantity as the memory share, so it takes that reading's tone rather than
-      // an absolute byte threshold — what counts as "a lot" depends on the machine.
-      title: 'RSS',
-      key: 'rssBytes',
-      align: 'right',
-      render: (r) => (
-        <MetricValue tone={metricTone(r.memoryPercent, MEMORY_THRESHOLDS)}>
-          {formatBytes(r.rssBytes)}
-        </MetricValue>
+        <Tooltip title={METRIC_HINTS.memory} placement="bottom">
+          <MetricValue tone={metricTone(r.memoryPercent, MEMORY_THRESHOLDS)}>
+            {formatPercent(r.memoryPercent)}
+          </MetricValue>
+        </Tooltip>
       ),
     },
     {
@@ -202,7 +194,7 @@ export function InstancesPage(): React.ReactElement {
     <>
       <PageHeader
         title="Instances"
-        subtitle="Liveness, health at the last heartbeat, and jobs processed across the cluster."
+        subtitle="Liveness, the health of each machine at its last heartbeat, and jobs processed across the cluster."
       />
       <Content>
         <TableCard

@@ -66,7 +66,6 @@ const INSTANCE = {
   lastSeenAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
   cpuPercent: 12.5,
   memoryPercent: 30,
-  rssBytes: 1_572_864,
   counts: { COMPLETED: 8 },
 };
 

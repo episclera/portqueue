@@ -1,11 +1,12 @@
 /**
- * Instance detail: how this process is doing in one row of cards, every job it has processed in a
- * table below, and the same pause/resume + remove controls the instances list row carries — an
- * operator who followed a link here shouldn't have to go back to the list to act on what they see.
+ * Instance detail: the health of the machine this instance runs on in one row of cards, every job it
+ * has processed in a table below, and the same pause/resume + remove controls the instances list row
+ * carries — an operator who followed a link here shouldn't have to go back to the list to act on
+ * what they see.
  *
  * The two halves answer different questions and both need the instance as their subject. The cards
- * are the health it recorded on its last heartbeat — the instances list shows the same numbers, but
- * a row of eight columns is where you notice a number, not where you sit and read it. The table is
+ * are the host health it recorded on its last heartbeat — the instances list shows the same numbers,
+ * but a row of columns is where you notice a number, not where you sit and read it. The table is
  * filtered to the jobs this instance claimed, which is the question the instances list can't answer
  * at all: "this one looks busy — busy with what?"
  */
@@ -47,14 +48,14 @@ import { totalCount } from '../components/format';
 import {
   CPU_THRESHOLDS,
   MEMORY_THRESHOLDS,
-  formatBytes,
+  METRIC_HINTS,
   formatPercent,
   metricTone,
   type MetricTone,
 } from '../components/metrics';
 
-/** Four cards on one row: 24 columns don't divide by four evenly, so each takes six. */
-const CARD_SPAN = 6;
+/** Three cards on one row across a 24-column grid. */
+const CARD_SPAN = 8;
 
 /** The metric colouring maps onto the card component's own tones. */
 const CARD_TONE: Record<MetricTone, StatisticTone> = {
@@ -114,24 +115,16 @@ export function InstanceDetailPage(): React.ReactElement {
 
   const cards: { label: string; value: string; tone: StatisticTone; hint: string }[] = [
     {
-      label: 'CPU',
+      label: 'CPU (machine)',
       value: formatPercent(i.cpuPercent),
       tone: CARD_TONE[cpuTone],
-      hint: 'Process CPU since the previous sample, summed across cores',
+      hint: METRIC_HINTS.cpu,
     },
     {
-      label: 'Memory',
+      label: 'Memory (machine)',
       value: formatPercent(i.memoryPercent),
       tone: CARD_TONE[memoryTone],
-      hint: 'RSS as a share of total machine memory',
-    },
-    {
-      // Same quantity as the memory share, so it carries that reading's tone: what counts as "a
-      // lot" of RSS depends on the machine, which an absolute byte threshold can't know.
-      label: 'RSS',
-      value: formatBytes(i.rssBytes),
-      tone: CARD_TONE[memoryTone],
-      hint: 'Resident set size at the last heartbeat',
+      hint: METRIC_HINTS.memory,
     },
     {
       // "Processed", matching the instances table's column, so the same number isn't named two
@@ -232,9 +225,11 @@ export function InstanceDetailPage(): React.ReactElement {
             {cards.map((card) => (
               <Col key={card.label} span={CARD_SPAN}>
                 <Card>
-                  <div title={card.hint}>
+                  {/* Hover says what the number is: both health cards read the whole machine, and
+                      an operator who takes them for this process's usage misreads them. */}
+                  <Tooltip title={card.hint} placement="bottom" block>
                     <Statistic label={card.label} value={card.value} tone={card.tone} />
-                  </div>
+                  </Tooltip>
                 </Card>
               </Col>
             ))}

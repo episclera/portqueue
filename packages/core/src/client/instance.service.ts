@@ -4,13 +4,14 @@ import type { SystemMetrics } from '../monitoring/system-monitor.service';
 /**
  * Multi-instance liveness, health reporting + per-instance pause. Active only when the
  * PortQueue was given an `instanceKey`. Registers this process's `instance` row, then
- * heartbeats on a timer: each beat bumps `last_seen_at`, records this process's latest CPU / memory
- * / RSS sample alongside it, and refreshes this instance's cached `processingPaused` flag, which the
- * worker's claim loop reads on the hot path. The dashboard can pause an instance by flipping its
- * row; the next heartbeat picks it up.
+ * heartbeats on a timer: each beat bumps `last_seen_at`, records the latest CPU / memory sample for
+ * the **machine** this process runs on alongside it, and refreshes this instance's cached
+ * `processingPaused` flag, which the worker's claim loop reads on the hot path. The dashboard can
+ * pause an instance by flipping its row; the next heartbeat picks it up.
  *
  * The metrics ride along with the heartbeat rather than on their own timer: they are only useful as
- * "how was this instance doing when we last heard from it", which is exactly what a beat means.
+ * "how was this instance's host doing when we last heard from it", which is exactly what a beat
+ * means.
  */
 export class InstanceService {
   private timer: NodeJS.Timeout | null = null;
@@ -20,7 +21,7 @@ export class InstanceService {
     private readonly runtime: Runtime,
     readonly instanceKey: string,
     private readonly intervalSeconds: number,
-    /** This process's latest health sample; null before the first one lands. */
+    /** The machine's latest health sample; null before the first one lands. */
     private readonly readMetrics: () => SystemMetrics | null,
   ) {}
 
@@ -59,7 +60,6 @@ export class InstanceService {
               metrics: {
                 cpuPercent: metrics.cpuPercent,
                 memoryPercent: metrics.memoryPercent,
-                rssBytes: metrics.rssBytes,
               },
             }
           : {}),

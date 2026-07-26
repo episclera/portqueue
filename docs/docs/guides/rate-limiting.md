@@ -68,13 +68,22 @@ pq.createWorker({
 stops claiming while any threshold you set is breached, resuming once every watched metric has
 fallen back (see `resumeHysteresis`). Omit it — the default — and nothing throttles.
 
-There is deliberately no per-worker opt-in. A limiter describes the health of *the process*, and one
+There is deliberately no per-worker opt-in. A limiter describes the health of *the machine*, and one
 worker continuing to claim while its siblings back off would defeat the point; the earlier
 `limiter.respectSystemPressure` flag also made it easy to configure thresholds that silently did
 nothing.
 
+:::info CPU and memory are the machine's, not this process's
+`maxCpuPercent` and `maxMemoryPercent` read the **whole host** — CPU time across every core
+(`os.cpus()`), and used memory over `os.totalmem()`. That is the number worth throttling on: a
+worker that watches only its own CPU keeps claiming while the box it shares with the database is
+saturated, and "30% of one core" isn't a figure an operator can act on. Two PortQueue processes on
+one machine therefore report the same CPU and memory. Event-loop delay is the one threshold here
+that is about *this* process — and the best evidence that it is the one in trouble.
+:::
+
 :::info Monitoring always runs; only limiting is opt-in
-CPU, memory share and RSS are measured whether or not you set a `systemLimiter` — the instance
+Machine CPU and memory are measured whether or not you set a `systemLimiter` — the instance
 heartbeat records them, which is what the dashboard's per-instance health and the
 `portqueue instances` command read. That can't be switched off. **Event-loop delay is the
 exception**: measuring it keeps a `perf_hooks` histogram enabled for the life of the process, so it
@@ -89,16 +98,15 @@ Pressure gating and the rate limits above throttle claiming independently — th
 |---|---|---|---|
 | `sampleIntervalSeconds` | `number` | `2` | How often metrics are sampled, in seconds. Every threshold is checked once per sample, so this is also the worst-case reaction time. |
 | `maxEventLoopDelaySeconds` | `number` | unset | Pressure when the **mean** event-loop delay since the last sample exceeds this many seconds (`0.2` = 200 ms). The best single signal that the process is saturated, and the only metric not measured at all until you set it. |
-| `maxCpuPercent` | `number` | unset | Pressure when this process's CPU use since the last sample exceeds this. It's process CPU summed across cores, so a busy multi-core box can read well over 100. |
-| `maxMemoryPercent` | `number` | unset | Pressure when RSS exceeds this share of **total machine memory** (`os.totalmem()`) — not of a container limit. |
-| `maxRssBytes` | `number` | unset | Pressure when RSS exceeds this absolute byte count. Use it when a cgroup/container cap is the real ceiling, since `maxMemoryPercent` can't see it. |
+| `maxCpuPercent` | `number` | unset | Pressure when the **machine's** CPU busy share since the last sample exceeds this (0–100, across every core). |
+| `maxMemoryPercent` | `number` | unset | Pressure when the **machine's** used memory exceeds this share of `os.totalmem()` (0–100) — not of a container limit. |
 | `resumeHysteresis` | `number` | `0.8` | Fraction (0–1) of the breached threshold the metric must fall back to before workers resume — `0.8` with `maxCpuPercent: 85` resumes at 68. Lower is more conservative. |
 
 Every threshold is optional and **only the ones you set are checked**; there are no defaults to
 merge with, so `systemLimiter: {}` samples but can never report pressure.
 
 Thresholds are evaluated in a fixed order — `maxEventLoopDelaySeconds`, `maxCpuPercent`,
-`maxRssBytes`, `maxMemoryPercent` — and the **first breach wins**: that's the metric reported on the
+`maxMemoryPercent` — and the **first breach wins**: that's the metric reported on the
 event. Recovery is stricter than the breach: **every** watched metric must fall to
 `threshold × resumeHysteresis` before claiming resumes, so a metric hovering at its limit can't
 toggle pressure on alternate samples.
@@ -109,15 +117,14 @@ const pq = new PortQueue({
   systemLimiter: {
     sampleIntervalSeconds: 2,        // sampling cadence, in seconds
     maxEventLoopDelaySeconds: 0.2,   // 200 ms of mean event-loop delay
-    maxCpuPercent: 85,
-    maxMemoryPercent: 90,
-    maxRssBytes: 1_500_000_000,
+    maxCpuPercent: 85,               // machine CPU busy share
+    maxMemoryPercent: 90,            // machine memory used share
     resumeHysteresis: 0.8,
   },
 });
 
 pq.on(PortQueueEvent.SYSTEM_PRESSURE_HIGH, ({ metric, value, threshold }) => {
-  // metric: 'eventLoopDelaySeconds' | 'cpuPercent' | 'rssBytes' | 'memoryPercent'
+  // metric: 'eventLoopDelaySeconds' | 'cpuPercent' | 'memoryPercent'
 });
 pq.on(PortQueueEvent.SYSTEM_PRESSURE_NORMAL, () => {});
 ```

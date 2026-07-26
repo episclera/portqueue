@@ -92,7 +92,6 @@ export enum InstanceColumn {
   LAST_SEEN_AT = 'last_seen_at',
   CPU_PERCENT = 'cpu_percent',
   MEMORY_PERCENT = 'memory_percent',
-  RSS_BYTES = 'rss_bytes',
 }
 
 export enum MigrationColumn {

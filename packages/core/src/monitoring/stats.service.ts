@@ -104,7 +104,6 @@ export class ReadService {
       lastSeenAt: new Date(row.lastSeenAt),
       cpuPercent: row.cpuPercent,
       memoryPercent: row.memoryPercent,
-      rssBytes: row.rssBytes,
       counts: counts[row.instanceKey] ?? emptyStatusCounts(),
     }));
   }

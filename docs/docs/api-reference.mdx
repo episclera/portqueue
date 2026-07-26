@@ -679,19 +679,20 @@ Only the thresholds you set are checked, and there are no defaults to merge with
 can never throttle. Durations here may be fractional, since they are in-process sampling knobs
 rather than stored values.
 
-This process's CPU, memory share and RSS are measured **regardless** — the instance heartbeat
-records them, so the dashboard can show per-instance health, and there is no option to switch that
-off. Event-loop delay is the exception: measuring it means keeping a `perf_hooks` histogram enabled,
-so it is only sampled once `maxEventLoopDelaySeconds` gives it a purpose. See
+The **machine's** CPU and memory are measured **regardless** — the instance heartbeat records them,
+so the dashboard can show the health of each host, and there is no option to switch that off. Both
+are host-wide shares (`os.cpus()` time deltas and `os.totalmem()`/`os.freemem()`), not this Node
+process's usage, so two instances on one box report the same figures. Event-loop delay is the
+exception on both counts — it is this process's, and measuring it means keeping a `perf_hooks`
+histogram enabled, so it is only sampled once `maxEventLoopDelaySeconds` gives it a purpose. See
 [Rate limiting & backpressure](./guides/rate-limiting.md#every-systemlimiter-option).
 
 | Option                     | Type     | Default                     | Description                                                              |
 | -------------------------- | -------- | --------------------------- | ------------------------------------------------------------------------ |
 | `sampleIntervalSeconds`    | `number` | `2`                         | How often to sample system metrics, in seconds.                          |
 | `maxEventLoopDelaySeconds` | `number` | `0.2` (default config only) | Mean event-loop delay above this, in seconds, counts as pressure.        |
-| `maxCpuPercent`            | `number` | unset                       | Process CPU usage above this counts as pressure (summed across cores).   |
-| `maxMemoryPercent`         | `number` | unset                       | RSS above this share of total machine memory counts as pressure.         |
-| `maxRssBytes`              | `number` | unset                       | RSS above this many bytes counts as pressure.                            |
+| `maxCpuPercent`            | `number` | unset                       | Machine CPU busy share (0–100) above this counts as pressure.            |
+| `maxMemoryPercent`         | `number` | unset                       | Machine used memory (0–100 of total) above this counts as pressure.      |
 | `resumeHysteresis`         | `number` | `0.8`                       | Fraction (0–1) below the threshold metrics must fall to before resuming. |
 
 ### QueueOptions

@@ -86,8 +86,7 @@ function v1(t: PhysicalName): string[] {
       updated_at INTEGER NOT NULL,
       last_seen_at INTEGER NOT NULL,
       cpu_percent REAL,
-      memory_percent REAL,
-      rss_bytes INTEGER
+      memory_percent REAL
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.MIGRATION)} (
       version INTEGER NOT NULL,

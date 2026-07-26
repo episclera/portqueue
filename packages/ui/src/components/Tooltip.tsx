@@ -7,12 +7,18 @@ export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 export interface TooltipProps {
   title: React.ReactNode;
   placement?: TooltipPlacement;
+  /**
+   * Fill the width of the parent instead of hugging the child. For a block-level trigger — a card
+   * body, a whole row — where an inline wrapper would shrink the content it wraps.
+   */
+  block?: boolean;
   children: React.ReactElement;
 }
 
-const Wrapper = styled.span`
+const Wrapper = styled.span<{ $block: boolean }>`
   position: relative;
-  display: inline-flex;
+  display: ${(p) => (p.$block ? 'flex' : 'inline-flex')};
+  ${(p) => (p.$block ? 'width: 100%;' : '')}
 `;
 
 /**
@@ -80,6 +86,7 @@ function position(
 export const Tooltip = ({
   title,
   placement = 'top',
+  block = false,
   children,
 }: TooltipProps): React.ReactElement => {
   const [coords, setCoords] = React.useState<{ top: number; left: number } | null>(null);
@@ -114,6 +121,7 @@ export const Tooltip = ({
     <>
       <Wrapper
         ref={triggerRef}
+        $block={block}
         onMouseEnter={show}
         onMouseLeave={hide}
         onFocus={show}

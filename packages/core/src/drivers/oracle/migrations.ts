@@ -111,8 +111,7 @@ function v1(t: PhysicalName): string[] {
         updated_at NUMBER(19) NOT NULL,
         last_seen_at NUMBER(19) NOT NULL,
         cpu_percent BINARY_DOUBLE,
-        memory_percent BINARY_DOUBLE,
-        rss_bytes NUMBER(19)
+        memory_percent BINARY_DOUBLE
       )`,
     ),
     createIfAbsent(

@@ -103,12 +103,13 @@ describe('schedulesCommand', () => {
 });
 
 describe('instancesCommand', () => {
-  it('lists liveness, health and a processed total', async () => {
+  it('lists liveness, host health and a processed total', async () => {
     const { stdout } = await run(instancesCommand, {});
     expect(stdout).toContain('worker-eu-1');
+    // Machine CPU and memory shares — there is no per-process byte figure any more.
     expect(stdout).toContain('12.5%');
     expect(stdout).toContain('94.2%');
-    expect(stdout).toContain('1.5 MiB');
+    expect(stdout).not.toContain('RSS');
     // 8 completed + 1 failed, as one number rather than a column per status.
     expect(stdout).toContain('9');
   });
@@ -128,7 +129,6 @@ describe('instancesCommand', () => {
             lastSeenAt: new Date(),
             cpuPercent: null,
             memoryPercent: null,
-            rssBytes: null,
             counts: {},
           },
         ],
