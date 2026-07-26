@@ -63,9 +63,12 @@ async function main(): Promise<void> {
   });
   await reports.addJob({
     data: { kind: 'sales' },
-    schedule: { startEvery: '15s' },
+    // Deliberately unhurried: a schedule that fires every few seconds fills the dashboard with
+    // near-identical rows faster than you can read one. Five minutes is enough to watch a run
+    // appear, and `startAfter` above gives you something arriving sooner.
+    schedule: { startEvery: '5m' },
     // Keeps a single schedule across restarts of this example (the data dir is persisted).
-    idempotencyKey: 'sales-report-every-15s',
+    idempotencyKey: 'sales-report-every-5m',
   });
 
   // Mount the dashboard and serve it from a bare node:http server.
