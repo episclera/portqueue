@@ -1,27 +1,31 @@
 /** @jest-environment node */
-import { duration, formatDate, relativeTime, totalCount, truncate } from './format';
+import { absoluteTime, duration, relativeTime, totalCount, truncate } from './format';
 
-describe('formatDate', () => {
-  it('returns a dash for empty or invalid input', () => {
-    expect(formatDate(null)).toBe('—');
-    expect(formatDate(undefined)).toBe('—');
-    expect(formatDate('not-a-date')).toBe('—');
+/** A fixed instant, so the absolute formatter has something stable to render. */
+const FIXED = Date.parse('2026-07-22T00:00:00.000Z');
+
+describe('absoluteTime', () => {
+  it('returns a dash for an unparseable instant', () => {
+    expect(absoluteTime(Number.NaN)).toBe('—');
   });
 
-  it('formats a valid ISO string', () => {
-    expect(formatDate('2026-07-22T00:00:00.000Z')).not.toBe('—');
+  it('formats a valid instant and names the timezone', () => {
+    const out = absoluteTime(FIXED);
+    expect(out).not.toBe('—');
+    // The zone marker is what stops a shared screenshot being ambiguous across regions.
+    expect(out).toMatch(/\d/);
+    expect(out.length).toBeGreaterThan(10);
   });
 });
 
 describe('relativeTime', () => {
-  it('returns a dash for empty/invalid input', () => {
-    expect(relativeTime(null)).toBe('—');
-    expect(relativeTime('nope')).toBe('—');
+  it('returns a dash for an unparseable instant', () => {
+    expect(relativeTime(Number.NaN)).toBe('—');
   });
 
-  it('produces a relative phrase for a valid time', () => {
-    const soon = new Date(Date.now() + 5 * 60_000).toISOString();
-    expect(relativeTime(soon)).toMatch(/minute/);
+  it('produces a relative phrase in both directions', () => {
+    expect(relativeTime(Date.now() + 5 * 60_000)).toMatch(/minute/);
+    expect(relativeTime(Date.now() - 3 * 3_600_000)).toMatch(/hour/);
   });
 });
 

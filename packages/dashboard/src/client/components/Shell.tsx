@@ -1,9 +1,9 @@
 /**
  * App chrome: a top bar (logo, live-updates control, theme toggle) over a left sidebar of
  * navigation items and the routed page. Below the `md` breakpoint the sidebar collapses behind
- * a burger button and opens as an overlay drawer.
+ * a burger button and opens as a focus-trapped overlay drawer.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import {
@@ -12,13 +12,12 @@ import {
   Header,
   Inline,
   Logo,
-  Text,
   ThemeSwitcher,
   Tooltip,
   type ThemeMode,
 } from '@portqueue/ui';
-import { config } from '../queries/api';
 import { useLive } from './LiveProvider';
+import { useRefreshAll } from '../queries/use-queries';
 import { ACTIONS_CONFIG, LIVE_TOGGLE_CONFIG } from '../constants/labels';
 
 export interface ShellProps {
@@ -55,6 +54,12 @@ const Body = styled.div`
   width: 100%;
 `;
 
+/**
+ * Off-canvas below `md`. `visibility: hidden` matters as much as the transform: a translated
+ * element is still focusable and still reachable by a screen reader, so a "closed" drawer would
+ * otherwise keep every nav link in the tab order behind the page. `visibility` transitions
+ * discretely (it flips at the end), so the slide-out animation still plays.
+ */
 const Nav = styled.nav<{ $open: boolean }>`
   flex: 0 0 ${SIDEBAR_WIDTH}px;
   width: ${SIDEBAR_WIDTH}px;
@@ -75,7 +80,10 @@ const Nav = styled.nav<{ $open: boolean }>`
     z-index: ${(p) => p.theme.zIndex.drawer};
     box-shadow: ${(p) => p.theme.shadow.lg};
     transform: translateX(${(p) => (p.$open ? '0' : '-100%')});
-    transition: transform ${(p) => p.theme.motion.base};
+    visibility: ${(p) => (p.$open ? 'visible' : 'hidden')};
+    transition:
+      transform ${(p) => p.theme.motion.base},
+      visibility ${(p) => p.theme.motion.base};
   }
 `;
 
@@ -188,15 +196,55 @@ const Burger = styled.button`
   }
 `;
 
-const ReadOnlyBanner = styled.div`
-  text-align: center;
-  padding: 6px 0;
-  background: ${(p) => p.theme.color.warning}22;
-`;
+/** Everything that can hold focus inside the drawer. */
+const FOCUSABLE = 'a[href], button:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
-/** Pause / resume the 30s polling + SSE stream. Icon + label, tooltip below the button. */
+/**
+ * Trap Tab inside the open drawer, close it on Escape, and restore focus to the trigger on close.
+ * A modal overlay without this leaves a keyboard user tabbing through the page behind it, which
+ * is invisible while the scrim is up.
+ */
+function useFocusTrap(open: boolean, ref: React.RefObject<HTMLElement>, onClose: () => void): void {
+  useEffect(() => {
+    if (!open) return;
+    const node = ref.current;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    // Move focus into the drawer so the next Tab continues from inside it.
+    node?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !node) return;
+      const focusable = [...node.querySelectorAll<HTMLElement>(FOCUSABLE)];
+      if (!focusable.length) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      // Wrap at both ends rather than letting focus escape the overlay.
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [open, ref, onClose]);
+}
+
+/** Pause / resume the interval polling, and refresh on demand. */
 function LiveToggle(): React.ReactElement {
-  const { live, setLive, refreshNow } = useLive();
+  const { live, setLive } = useLive();
+  const refresh = useRefreshAll();
   const state = live ? LIVE_TOGGLE_CONFIG.live : LIVE_TOGGLE_CONFIG.paused;
   return (
     <Inline gap={2} align="center">
@@ -210,16 +258,16 @@ function LiveToggle(): React.ReactElement {
           {state.label}
         </Button>
       </Tooltip>
-      {!live && (
-        <Tooltip title="Fetch the latest data once" placement="bottom">
-          <Button
-            size="sm"
-            icon={ACTIONS_CONFIG.refresh.icon}
-            onClick={refreshNow}
-            aria-label="Refresh now"
-          />
-        </Tooltip>
-      )}
+      {/* Always offered, not only while paused: wanting the freshest data right now is
+          independent of whether a 30s interval happens to also be running. */}
+      <Tooltip title="Fetch the latest data now" placement="bottom">
+        <Button
+          size="sm"
+          icon={ACTIONS_CONFIG.refresh.icon}
+          onClick={refresh}
+          aria-label="Refresh now"
+        />
+      </Tooltip>
     </Inline>
   );
 }
@@ -227,18 +275,14 @@ function LiveToggle(): React.ReactElement {
 export function Shell({ onThemeChange, children }: ShellProps): React.ReactElement {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
+  const navRef = useRef<HTMLElement>(null);
+
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   // Navigating closes the mobile drawer.
   useEffect(() => setDrawerOpen(false), [location.pathname]);
 
-  useEffect(() => {
-    if (!drawerOpen) return;
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setDrawerOpen(false);
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [drawerOpen]);
+  useFocusTrap(drawerOpen, navRef, closeDrawer);
 
   return (
     <AppShell>
@@ -249,6 +293,7 @@ export function Shell({ onThemeChange, children }: ShellProps): React.ReactEleme
               type="button"
               aria-label="Toggle navigation"
               aria-expanded={drawerOpen}
+              aria-controls="portqueue-nav"
               onClick={() => setDrawerOpen((open) => !open)}
             >
               <span aria-hidden>☰</span>
@@ -266,15 +311,16 @@ export function Shell({ onThemeChange, children }: ShellProps): React.ReactEleme
         }
       />
 
-      {config.readOnly ? (
-        <ReadOnlyBanner>
-          <Text $tone="muted">Read-only mode — mutating actions are disabled.</Text>
-        </ReadOnlyBanner>
-      ) : null}
-
       <Body>
-        {drawerOpen ? <Scrim onClick={() => setDrawerOpen(false)} /> : null}
-        <Nav $open={drawerOpen} aria-label="Main navigation">
+        {drawerOpen ? <Scrim onClick={closeDrawer} /> : null}
+        <Nav
+          ref={navRef}
+          id="portqueue-nav"
+          $open={drawerOpen}
+          aria-label="Main navigation"
+          // Only a dialog while it is an overlay; on desktop it is ordinary page furniture.
+          {...(drawerOpen ? { 'aria-modal': true, role: 'dialog' } : {})}
+        >
           <NavList>
             {NAV_ITEMS.map((item) => (
               <li key={item.to}>

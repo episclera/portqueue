@@ -1,16 +1,16 @@
 /**
- * Overview (home) page: the activity cards row, then the queues table — nothing else. The
- * table is searchable by queue name, filterable by state, and paged 20 rows at a time.
+ * Overview (home) page: the activity cards row, then the queues table. Both are server-paged and
+ * poll on the shared interval — they are the two things this page exists to keep current.
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Content, PageHeader, Stack, Table, Tag, Text } from '@portqueue/ui';
+import { Content, PageHeader, Stack, Table, Tag } from '@portqueue/ui';
 import type { TableColumn } from '@portqueue/ui';
-import type { QueueDto, StatsDto } from '../../shared/dto';
-import { api, config } from '../queries/api';
-import { usePoll } from '../queries/use-poll';
+import { ActionKind, type QueuePageDto, type QueueDto, type StatsDto } from '../../shared/dto';
+import { api } from '../queries/api';
+import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
-import { filterAndPage, useTableParams } from '../queries/use-table-params';
+import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import {
   ACTIONS_CONFIG,
   PAUSE_STATE_FILTER_OPTIONS,
@@ -21,6 +21,7 @@ import { KpiCards } from '../components/KpiCards';
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
 import { countColumns } from '../components/table-columns';
+import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
 
 const FILTER_KEYS = ['state', 'usage'] as const;
@@ -41,22 +42,25 @@ export function OverviewPage(): React.ReactElement {
   const { run } = useAction();
   const params = useTableParams('queues', FILTER_KEYS);
 
-  const stats = usePoll<StatsDto>(() => api.getStats(), []);
-  const queues = usePoll<QueueDto[]>(() => api.getQueues(), []);
-
   const state = params.filters.state?.[0];
   const usage = params.filters.usage?.[0];
 
-  const page = filterAndPage(queues.data ?? [], params, {
-    matches: (queue, term) => queue.name.toLowerCase().includes(term),
-    keep: (queue) => {
-      if (state === 'running' && queue.processingPaused) return false;
-      if (state === 'paused' && !queue.processingPaused) return false;
-      if (usage === 'inUse' && !queue.inUse) return false;
-      if (usage === 'unused' && queue.inUse) return false;
-      return true;
-    },
-  });
+  // Both filters are tri-state on the wire: an absent key means "don't narrow".
+  const queueParams = {
+    limit: PAGE_SIZE,
+    offset: params.offset,
+    ...(params.search ? { search: params.search } : {}),
+    ...(state ? { processingPaused: state === 'paused' } : {}),
+    ...(usage ? { inUse: usage === 'inUse' } : {}),
+  };
+
+  const stats = usePolledQuery<StatsDto>(queryKeys.stats(), () => api.getStats());
+  const queues = usePolledQuery<QueuePageDto>(queryKeys.queues(queueParams), () =>
+    api.getQueues(queueParams),
+  );
+
+  const rows = queues.data?.items ?? [];
+  const total = queues.data?.total ?? 0;
 
   const columns: TableColumn<QueueDto>[] = [
     {
@@ -85,27 +89,24 @@ export function OverviewPage(): React.ReactElement {
       title: 'Actions',
       key: 'actions',
       align: 'right',
-      render: (r) =>
-        config.readOnly ? (
-          <Link to={`/queues/${encodeURIComponent(r.name)}`}>{ACTIONS_CONFIG.open.label}</Link>
-        ) : (
-          <RowActions>
-            {r.processingPaused ? (
-              <RowAction
-                icon={ACTIONS_CONFIG.resume.icon}
-                label={ACTIONS_CONFIG.resume.label}
-                onClick={() => void run({ kind: 'resume', queue: r.name }, 'Resumed')}
-              />
-            ) : (
-              <RowAction
-                icon={ACTIONS_CONFIG.pause.icon}
-                label={ACTIONS_CONFIG.pause.label}
-                confirm={{ title: 'Pause processing on this queue?' }}
-                onClick={() => void run({ kind: 'pause', queue: r.name }, 'Paused')}
-              />
-            )}
-          </RowActions>
-        ),
+      render: (r) => (
+        <RowActions>
+          {r.processingPaused ? (
+            <RowAction
+              icon={ACTIONS_CONFIG.resume.icon}
+              label={ACTIONS_CONFIG.resume.label}
+              onClick={() => void run({ kind: ActionKind.RESUME, queue: r.name }, 'Resumed')}
+            />
+          ) : (
+            <RowAction
+              icon={ACTIONS_CONFIG.pause.icon}
+              label={ACTIONS_CONFIG.pause.label}
+              confirm={{ title: 'Pause processing on this queue?' }}
+              onClick={() => void run({ kind: ActionKind.PAUSE, queue: r.name }, 'Paused')}
+            />
+          )}
+        </RowActions>
+      ),
     },
   ];
 
@@ -114,13 +115,21 @@ export function OverviewPage(): React.ReactElement {
       <PageHeader title="Overview" subtitle="Live queue health across every queue." />
       <Content>
         <Stack gap={4}>
-          <KpiCards stats={stats.data} loading={stats.loading} />
+          <KpiCards
+            stats={stats.data}
+            loading={stats.isLoading}
+            error={stats.error}
+            onRetry={() => void stats.refetch()}
+          />
 
           <TableCard
-            total={page.total}
-            page={params.page}
+            total={total}
+            page={clampedPage(params.page, total)}
             onPageChange={params.setPage}
-            loading={queues.loading && !queues.data}
+            loading={queues.isLoading}
+            error={queues.error}
+            errorTitle="Could not load queues"
+            onRetry={() => void queues.refetch()}
             paginationLabel="Queues pagination"
             search={{
               value: params.search,
@@ -131,13 +140,26 @@ export function OverviewPage(): React.ReactElement {
               defs: FILTER_DEFS,
               values: params.filters,
               onChange: params.setFilters,
+              onClear: (key, value) =>
+                params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
             }}
           >
             <Table<QueueDto>
               rowKey={(r) => r.name}
               columns={columns}
-              data={page.rows}
-              empty={<Text $tone="muted">No queues yet.</Text>}
+              data={rows}
+              empty={
+                params.search ? (
+                  <EmptyState message={`No queues match “${params.search}”.`} />
+                ) : (
+                  <EmptyState
+                    message="No queues yet."
+                    hint="A queue appears here the first time your app adds a job to it — here's how to add your first one."
+                    docsHref={DOCS.firstQueue}
+                    docsLabel="Getting started"
+                  />
+                )
+              }
             />
           </TableCard>
         </Stack>

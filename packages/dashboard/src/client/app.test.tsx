@@ -1,32 +1,35 @@
 /**
- * Render smoke tests for the SPA shell and the two table-heavy pages. They assert the chrome
- * (sidebar nav, theme toggle, live control) and the table-card contract every table shares:
- * a "Results (n)" count, a Filters button, a search box and always-present pagination.
+ * Render tests for the SPA shell and the table-heavy pages. They assert the chrome (sidebar nav,
+ * theme toggle, live control) and the table-card contract every table shares: a "Results (n)"
+ * count, a Filters button, a search box and always-present pagination.
+ *
+ * They also cover the two states a data view has besides "showing rows" — a failed query must
+ * show an error with a retry, not an empty table, and an empty one must teach rather than dead-end.
  * @jest-environment jsdom
  */
-import React from 'react';
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { ThemeProvider, ToastProvider } from '@portqueue/ui';
-import { App } from './App';
-import { LiveProvider } from './components/LiveProvider';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { createHarness, page, type StubOptions } from '../test-support/render';
 
-const QUEUES = [
-  {
-    name: 'emails',
-    processingPaused: false,
-    acceptingPaused: false,
-    inUse: true,
-    counts: { PENDING: 1, ACTIVE: 2, COMPLETED: 3, FAILED: 0, RETRY: 0 },
-  },
-  {
-    name: 'reports',
-    processingPaused: true,
-    acceptingPaused: false,
-    inUse: false,
-    counts: { PENDING: 0, ACTIVE: 0, COMPLETED: 5, FAILED: 1, RETRY: 0 },
-  },
-];
+const QUEUES = page(
+  [
+    {
+      name: 'emails',
+      processingPaused: false,
+      acceptingPaused: false,
+      inUse: true,
+      counts: { PENDING: 1, ACTIVE: 2, COMPLETED: 3, FAILED: 0, RETRY: 0 },
+    },
+    {
+      name: 'reports',
+      processingPaused: true,
+      acceptingPaused: false,
+      inUse: false,
+      counts: { PENDING: 0, ACTIVE: 0, COMPLETED: 5, FAILED: 1, RETRY: 0 },
+    },
+  ],
+  2,
+);
 
 const JOB = {
   id: 'job-abcdef123456',
@@ -44,57 +47,41 @@ const JOB = {
   processedOnInstanceKey: 'worker-eu-1',
   preferredInstanceKeyPattern: 'worker-eu-*',
   failureMessage: 'smtp timeout',
+  scheduleId: 'sch-nightly',
   stalled: false,
 };
 
-const STATS = {
-  counts: { ACTIVE: 2, RETRY: 0, FAILED: 1, COMPLETED: 8, STALLED: 0 },
-  throughputPerMinute: 1.5,
-  failureRate: 0.1,
+const SCHEDULE = {
+  scheduleId: 'sch-nightly',
+  queue: 'emails',
+  cron: '0 0 * * *',
+  every: null,
+  timezone: 'UTC',
+  nextRunAt: '2026-07-23T00:00:00.000Z',
+  lastRunAt: '2026-07-22T00:00:00.000Z',
+  enabled: true,
 };
 
-/** Route every dashboard GET to a canned payload. */
-function stubFetch(): void {
-  global.fetch = (async (input: unknown) => {
-    const url = String(input);
-    const body = url.includes('/api/queues')
-      ? QUEUES
-      : url.includes('/api/stats')
-        ? STATS
-        : /\/api\/jobs\/[^?]/.test(url)
-          ? JOB
-          : url.includes('/api/jobs')
-            ? { items: [JOB], cursor: null, hasMore: false, total: 42 }
-            : url.includes('/api/schedules')
-              ? []
-              : url.includes('/api/instances')
-                ? []
-                : {};
-    return { ok: true, status: 200, json: async () => body };
-  }) as never;
-}
+const STATS = { counts: { ACTIVE: 2, RETRY: 0, FAILED: 1, COMPLETED: 8, STALLED: 0 } };
 
-function renderApp(hash: string): void {
-  window.location.hash = hash;
-  render(
-    <ThemeProvider mode="light">
-      <ToastProvider>
-        <LiveProvider>
-          <App onThemeChange={() => {}} />
-        </LiveProvider>
-      </ToastProvider>
-    </ThemeProvider>,
-  );
-}
+const RESPONSES: Record<string, unknown> = {
+  '/queues': QUEUES,
+  '/stats': STATS,
+  '/jobs': { items: [JOB], cursor: null, hasMore: false, total: 42 },
+  [`/jobs/${JOB.id}`]: JOB,
+  '/schedules': page([SCHEDULE]),
+  [`/schedules/${SCHEDULE.scheduleId}`]: SCHEDULE,
+  '/instances': page([]),
+};
 
-beforeEach(() => {
-  stubFetch();
-  window.localStorage.clear();
-});
+const harness = (over: StubOptions = {}) =>
+  createHarness({ responses: RESPONSES, ...over });
+
+beforeEach(() => window.localStorage.clear());
 
 describe('app shell', () => {
-  it('renders the sidebar navigation, the live control and the theme toggle', async () => {
-    renderApp('#/');
+  it('renders the sidebar navigation, the live control and the theme toggle', () => {
+    harness().renderApp('#/');
 
     const nav = screen.getByRole('navigation', { name: 'Main navigation' });
     expect(within(nav).getByRole('link', { name: /Overview/ })).toBeInTheDocument();
@@ -103,17 +90,28 @@ describe('app shell', () => {
 
     expect(screen.getByRole('button', { name: /Pause auto-updates/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Switch to dark theme/ })).toBeInTheDocument();
-    // The burger exists but CSS hides it above the md breakpoint (jsdom is 1024px wide).
     expect(screen.getByLabelText('Toggle navigation')).toBeInTheDocument();
+  });
+
+  it('offers Refresh now even while live updates are running', () => {
+    // It used to appear only when polling was paused, which conflated "I want it now" with
+    // "I don't want it automatically".
+    harness().renderApp('#/');
+    expect(screen.getByRole('button', { name: 'Refresh now' })).toBeInTheDocument();
+  });
+
+  it('never renders a read-only banner — the mode no longer exists', () => {
+    harness().renderApp('#/');
+    expect(screen.queryByText(/Read-only mode/)).not.toBeInTheDocument();
   });
 });
 
 describe('overview page', () => {
   it('shows the activity cards and the queues table with a result count and pagination', async () => {
-    renderApp('#/');
+    harness().renderApp('#/');
 
     expect(await screen.findByRole('heading', { name: 'Overview' })).toBeInTheDocument();
-    // Activity cards only — no throughput / failure-rate cards.
+    // Activity cards only — throughput and failure rate are gone from the whole stack.
     expect((await screen.findAllByText('Completed')).length).toBeGreaterThan(0);
     expect(screen.queryByText('Jobs / min')).not.toBeInTheDocument();
     expect(screen.queryByText('Failure rate')).not.toBeInTheDocument();
@@ -128,19 +126,54 @@ describe('overview page', () => {
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
   });
 
+  it('pages the queues table on the server rather than fetching every row', async () => {
+    const h = harness();
+    h.renderApp('#/');
+    await screen.findByText('Results (2)');
+    const queueRequest = h.requests.find((r) => r.url === '/queues');
+    expect(queueRequest?.params).toMatchObject({ limit: 20, offset: 0 });
+  });
+
   it('opens the filters dialog with the state and usage pickers', async () => {
-    renderApp('#/');
+    harness().renderApp('#/');
 
     fireEvent.click(await screen.findByRole('button', { name: /Filters/ }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('State')).toBeInTheDocument();
     expect(within(dialog).getByText('Usage')).toBeInTheDocument();
   });
+
+  it('shows an error with a retry when the queues query fails, not an empty table', async () => {
+    harness({
+      failures: { '/queues': { status: 500, body: { error: 'database is unavailable' } } },
+    }).renderApp('#/');
+
+    expect(await screen.findByText('Could not load queues')).toBeInTheDocument();
+    // The server's own message, not axios' "Request failed with status code 500".
+    expect(screen.getByText('database is unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    // Crucially not the empty state, which would read as "you have no queues".
+    expect(screen.queryByText('No queues yet.')).not.toBeInTheDocument();
+  });
+
+  it('replaces the activity cards with an error when the stats query fails', async () => {
+    // Rendering zeros here would read as "the queue is idle", the opposite of "we don't know".
+    harness({ failures: { '/stats': { status: 503 } } }).renderApp('#/');
+    expect(await screen.findByText('Could not load activity')).toBeInTheDocument();
+  });
+
+  it('teaches on the empty state instead of dead-ending', async () => {
+    harness({ responses: { ...RESPONSES, '/queues': page([]) } }).renderApp('#/');
+
+    expect(await screen.findByText('No queues yet.')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /Getting started/ });
+    expect(link.getAttribute('href')).toContain('/getting-started/first-queue');
+  });
 });
 
 describe('queue detail page', () => {
   it('renders the jobs table with the instance columns, actions and a server-side total', async () => {
-    renderApp('#/queues/emails');
+    harness().renderApp('#/queues/emails');
 
     expect(await screen.findByRole('heading', { name: 'emails' })).toBeInTheDocument();
     expect(await screen.findByText('Results (42)')).toBeInTheDocument();
@@ -148,7 +181,6 @@ describe('queue detail page', () => {
     expect(await screen.findByText('Processed On Instance')).toBeInTheDocument();
     // The preferred-instance pattern is detail-page material, not a jobs-table column.
     expect(screen.queryByText('Preferred Instance Pattern')).not.toBeInTheDocument();
-    // Timing columns, in pipeline order.
     expect(screen.getByText('Start After')).toBeInTheDocument();
     expect(screen.getByText('Created At')).toBeInTheDocument();
     expect(screen.getByText('Completed At')).toBeInTheDocument();
@@ -164,7 +196,7 @@ describe('queue detail page', () => {
   });
 
   it('reveals bulk actions only once a row is selected', async () => {
-    renderApp('#/queues/emails');
+    harness().renderApp('#/queues/emails');
 
     await screen.findByText('Results (42)');
     expect(screen.queryByRole('button', { name: /Bulk actions/ })).not.toBeInTheDocument();
@@ -172,11 +204,19 @@ describe('queue detail page', () => {
     fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
     expect(await screen.findByRole('button', { name: /Bulk actions \(1\)/ })).toBeInTheDocument();
   });
+
+  it('shows an error state when the jobs query fails', async () => {
+    harness({
+      failures: { '/jobs': { status: 500, body: { error: 'query timed out' } } },
+    }).renderApp('#/queues/emails');
+    expect(await screen.findByText('Could not load jobs')).toBeInTheDocument();
+    expect(screen.getByText('query timed out')).toBeInTheDocument();
+  });
 });
 
 describe('job detail page', () => {
   it('shows the whole record, both payloads and every lifecycle timestamp', async () => {
-    renderApp(`#/jobs/${JOB.id}`);
+    harness().renderApp(`#/jobs/${JOB.id}`);
 
     expect(await screen.findByText('Details')).toBeInTheDocument();
     expect(screen.getByText('Preferred instance pattern')).toBeInTheDocument();
@@ -190,7 +230,6 @@ describe('job detail page', () => {
     expect(screen.getByText('Return value')).toBeInTheDocument();
     expect(screen.getByText(JOB.returnValue)).toBeInTheDocument();
 
-    // Every timestamp is listed, including the ones this job never reached.
     expect(screen.getByText('Timestamps')).toBeInTheDocument();
     for (const label of [
       'Created at',
@@ -206,5 +245,73 @@ describe('job detail page', () => {
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+  });
+
+  it('never prints a raw enum, including on the lifecycle timeline', async () => {
+    // The timeline head used to render `job.status` directly — "Now: FAILED".
+    harness().renderApp(`#/jobs/${JOB.id}`);
+    await screen.findByText('Details');
+    expect(screen.getByText(/^Now:/)).toHaveTextContent('Now: Failed');
+    expect(screen.queryByText(/Now: FAILED/)).not.toBeInTheDocument();
+  });
+
+  it('links a job’s schedule to that schedule’s own page', async () => {
+    // It used to link to the bare /schedules list, which answered nothing about this job.
+    harness().renderApp(`#/jobs/${JOB.id}`);
+    await screen.findByText('Details');
+    const link = screen.getByRole('link', { name: JOB.scheduleId });
+    expect(link).toHaveAttribute('href', `#/schedules/${JOB.scheduleId}`);
+  });
+
+  it('shows an error with a retry when the job cannot be loaded', async () => {
+    harness({
+      failures: { [`/jobs/${JOB.id}`]: { status: 404, body: { error: 'Job not found' } } },
+    }).renderApp(`#/jobs/${JOB.id}`);
+
+    expect(await screen.findByText('Could not load this job')).toBeInTheDocument();
+    expect(screen.getByText('Job not found')).toBeInTheDocument();
+  });
+});
+
+describe('schedule detail page', () => {
+  it('shows the definition and the jobs that schedule produced', async () => {
+    const h = harness();
+    h.renderApp(`#/schedules/${SCHEDULE.scheduleId}`);
+
+    expect(await screen.findByText('Definition')).toBeInTheDocument();
+    expect(screen.getByText('Jobs produced')).toBeInTheDocument();
+    expect(screen.getAllByText(SCHEDULE.cron).length).toBeGreaterThan(0);
+
+    // The jobs table is narrowed to this schedule — the whole point of the page.
+    await waitFor(() => {
+      const jobsRequest = h.requests.find((r) => r.url === '/jobs');
+      expect(jobsRequest?.params).toMatchObject({ scheduleId: SCHEDULE.scheduleId });
+    });
+  });
+});
+
+describe('schedules page', () => {
+  it('links each schedule id to its detail page', async () => {
+    harness().renderApp('#/schedules');
+    const link = await screen.findByRole('link', { name: SCHEDULE.scheduleId });
+    expect(link).toHaveAttribute('href', `#/schedules/${SCHEDULE.scheduleId}`);
+  });
+
+  it('shows an error state when the schedules query fails', async () => {
+    harness({ failures: { '/schedules': { status: 500 } } }).renderApp('#/schedules');
+    expect(await screen.findByText('Could not load schedules')).toBeInTheDocument();
+  });
+});
+
+describe('instances page', () => {
+  it('teaches how to name an instance when none are registered', async () => {
+    harness().renderApp('#/instances');
+    expect(await screen.findByText('No instances registered.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Scaling horizontally/ })).toBeInTheDocument();
+  });
+
+  it('shows an error state when the instances query fails', async () => {
+    harness({ failures: { '/instances': { status: 500 } } }).renderApp('#/instances');
+    expect(await screen.findByText('Could not load instances')).toBeInTheDocument();
   });
 });

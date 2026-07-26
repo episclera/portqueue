@@ -34,6 +34,13 @@ export default defineConfig({
     target: 'es2020',
     rollupOptions: {
       input: resolve(__dirname, 'index.html'),
+      onwarn(warning, warn) {
+        // React Query ships `"use client"` directives for RSC. This is a plain browser bundle
+        // with no server components, so the directive is correctly ignored — but Rollup warns
+        // about it once per module, burying anything worth reading.
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return;
+        warn(warning);
+      },
     },
   },
 });

@@ -1,9 +1,12 @@
 /**
  * Job detail page: the full record (payloads and every timestamp) beside the lifecycle timeline,
- * plus actions — retry (re-arm the job), clone (prefilled add form), remove, cancel. Terminal
- * records refetch on-demand rather than on the 30s poll.
+ * plus actions — retry (re-arm the job), clone (prefilled add form), remove, cancel.
+ *
+ * A job that is still in flight polls; a settled one doesn't. Its row can't change again once it
+ * has reached a terminal status, so there is nothing to reconcile — but an ACTIVE or RETRY job
+ * used to sit frozen here too, which was simply wrong.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   Button,
@@ -23,13 +26,27 @@ import {
 import styled from 'styled-components';
 import { JobStatus } from '../queries/enums';
 import type { JobDto } from '../../shared/dto';
-import { api, config } from '../queries/api';
-import { useQuery } from '../queries/use-poll';
+import { ActionKind } from '../../shared/dto';
+import { api } from '../queries/api';
+import { queryKeys, usePolledQuery, useOneShotQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
 import { ACTIONS_CONFIG, STALLED, statusLabel } from '../constants/labels';
 import { LifecycleTimeline } from '../components/LifecycleTimeline';
 import { AddJobForm } from '../components/AddJobForm';
-import { formatDate, truncate } from '../components/format';
+import { ErrorState } from '../components/states';
+import { Time } from '../components/Time';
+import { truncate } from '../components/format';
+
+/**
+ * Statuses a job can never leave. Everything else — PENDING, ACTIVE, RETRY — can still change
+ * underneath the page, so those keep polling.
+ */
+const TERMINAL: string[] = [
+  JobStatus.COMPLETED,
+  JobStatus.FAILED,
+  JobStatus.CANCELLED,
+  JobStatus.EXPIRED,
+];
 
 const MonoTitle = styled(Title)`
   font-family: ${(p) => p.theme.font.mono};
@@ -146,23 +163,39 @@ export function JobDetailPage(): React.ReactElement {
   const jobId = decodeURIComponent(id);
   const { run } = useAction();
 
-  const job = useQuery<JobDto>(() => api.getJob(jobId), [jobId]);
+  // Poll only while the record can still change. TanStack keeps the previous data across the
+  // switch, so a job settling mid-view simply stops refetching rather than remounting.
+  const [terminal, setTerminal] = useState(false);
+  const polled = usePolledQuery<JobDto>(queryKeys.job(jobId), () => api.getJob(jobId));
+  const once = useOneShotQuery<JobDto>(queryKeys.job(jobId), () => api.getJob(jobId));
+  const job = terminal ? once : polled;
 
   const [cloneOpen, setCloneOpen] = useState(false);
+
+  // A settled job needs no further reconciliation; stop the interval the moment it settles.
+  useEffect(() => {
+    const status = job.data?.status;
+    if (status && TERMINAL.includes(status)) setTerminal(true);
+  }, [job.data?.status]);
 
   if (job.error) {
     return (
       <>
-        <PageHeader title="Job not found" subtitle="This job id is not in the database." />
+        <PageHeader title="Job" subtitle="This job could not be loaded." />
         <Content>
-          <Card>
+          <Stack gap={3}>
+            <ErrorState
+              title="Could not load this job"
+              error={job.error}
+              onRetry={() => void job.refetch()}
+            />
             <Link to="/">Back to overview</Link>
-          </Card>
+          </Stack>
         </Content>
       </>
     );
   }
-  if (job.loading && !job.data) {
+  if (job.isLoading && !job.data) {
     return (
       <>
         <PageHeader title="Job" subtitle="Loading the record…" />
@@ -192,12 +225,14 @@ export function JobDetailPage(): React.ReactElement {
   const rawStatus = j.stalled ? STALLED : j.status;
   const status = statusLabel(rawStatus);
 
-  const actions = !config.readOnly ? (
+  const actions = (
     <Inline gap={2} wrap>
       <Button
         icon={ACTIONS_CONFIG.retry.icon}
         disabled={!isFailed && j.status === JobStatus.ACTIVE}
-        onClick={() => void run({ kind: 'retry', queue: j.queue, jobId: j.id }, 'Retry queued')}
+        onClick={() =>
+          void run({ kind: ActionKind.RETRY, queue: j.queue, jobId: j.id }, 'Retry queued')
+        }
       >
         {ACTIONS_CONFIG.retry.label}
       </Button>
@@ -207,7 +242,9 @@ export function JobDetailPage(): React.ReactElement {
       {j.status === JobStatus.ACTIVE && (
         <Popconfirm
           title="Cancel this job?"
-          onConfirm={() => void run({ kind: 'cancel', queue: j.queue, jobId: j.id }, 'Cancelled')}
+          onConfirm={() =>
+            void run({ kind: ActionKind.CANCEL, queue: j.queue, jobId: j.id }, 'Cancelled')
+          }
         >
           <Button icon={ACTIONS_CONFIG.cancel.icon}>{ACTIONS_CONFIG.cancel.label}</Button>
         </Popconfirm>
@@ -215,14 +252,16 @@ export function JobDetailPage(): React.ReactElement {
       <Popconfirm
         title="Remove this job permanently?"
         okDanger
-        onConfirm={() => void run({ kind: 'remove', queue: j.queue, jobId: j.id }, 'Removed')}
+        onConfirm={() =>
+          void run({ kind: ActionKind.REMOVE, queue: j.queue, jobId: j.id }, 'Removed')
+        }
       >
         <Button variant="danger" icon={ACTIONS_CONFIG.remove.icon}>
           {ACTIONS_CONFIG.remove.label}
         </Button>
       </Popconfirm>
     </Inline>
-  ) : undefined;
+  );
 
   return (
     <>
@@ -272,13 +311,17 @@ export function JobDetailPage(): React.ReactElement {
                 <Item label="Preferred instance pattern">
                   <Maybe value={j.preferredInstanceKeyPattern} />
                 </Item>
-                <Item label="Locked until">{formatDate(j.lockedUntil)}</Item>
+                <Item label="Locked until">
+                  <Time value={j.lockedUntil} />
+                </Item>
                 <Item label="Idempotency key">
                   <Maybe value={j.idempotencyKey} />
                 </Item>
                 <Item label="Schedule">
+                  {/* Straight to that schedule's own page, which lists the jobs it produced —
+                      the bare schedules list answered nothing about this job. */}
                   {j.scheduleId ? (
-                    <Link to="/schedules">
+                    <Link to={`/schedules/${encodeURIComponent(j.scheduleId)}`}>
                       <Mono>{j.scheduleId}</Mono>
                     </Link>
                   ) : (
@@ -306,7 +349,9 @@ export function JobDetailPage(): React.ReactElement {
                   <DescGrid>
                     {TIMESTAMPS.map((t) => (
                       <Item key={t.key} label={t.label}>
-                        {formatDate(j[t.key])}
+                        {/* Absolute here: the section exists to answer "exactly when", and a
+                            hover tooltip carries the same value for the relative cells. */}
+                        <Time value={j[t.key]} mode="absolute" />
                       </Item>
                     ))}
                   </DescGrid>

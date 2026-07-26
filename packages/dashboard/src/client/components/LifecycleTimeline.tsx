@@ -1,13 +1,15 @@
 /**
- * Job lifecycle timeline: a compact vertical timeline from the job's
- * lifecycle timestamps, showing the current status at the head and the duration between
- * transitions. Renders for every job (single-function or multi-step).
+ * Job lifecycle timeline: a compact vertical timeline from the job's lifecycle timestamps,
+ * showing the current status at the head and the duration between transitions. Renders for
+ * every job (single-function or multi-step).
  */
 import React from 'react';
 import { Tag, Text, Timeline, tokens } from '@portqueue/ui';
 import type { TimelineItem } from '@portqueue/ui';
 import type { JobDto } from '../../shared/dto';
-import { duration, formatDate } from './format';
+import { STALLED, statusLabel } from '../constants/labels';
+import { duration } from './format';
+import { Time } from './Time';
 
 interface Milestone {
   label: string;
@@ -28,16 +30,14 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
   ].filter((m) => m.at) as Milestone[];
 
   // Sort by time so out-of-declaration-order events (e.g. retried before completed) line up.
-  milestones.sort(
-    (a, b) => new Date(a.at as string).getTime() - new Date(b.at as string).getTime(),
-  );
+  milestones.sort((a, b) => new Date(a.at as string).getTime() - new Date(b.at as string).getTime());
 
   const items: TimelineItem[] = milestones.map((m, i) => {
     const prev = i > 0 ? milestones[i - 1] : undefined;
     return {
       key: `${m.label}-${m.at as string}`,
       color: m.color,
-      label: formatDate(m.at),
+      label: <Time value={m.at} mode="absolute" />,
       children: (
         <div>
           <Text $strong>{m.label}</Text>
@@ -53,15 +53,23 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
     };
   });
 
+  // Never a raw enum: the head reads "Now: Failed", not "Now: FAILED", and honours the stalled
+  // pseudo-status the same way the page header does.
+  const rawStatus = job.stalled ? STALLED : job.status;
+
   return (
     <div>
       <div style={{ marginBottom: 12 }}>
-        <Tag tone="info">Now: {job.status}</Tag>{' '}
+        <Tag tone="info">Now: {statusLabel(rawStatus)}</Tag>{' '}
         <Text $tone="muted">
           Attempt {job.retryAttempt} / {job.retryMaxAttempts}
         </Text>
       </div>
-      {items.length ? <Timeline items={items} /> : <Text $tone="muted">No lifecycle events yet.</Text>}
+      {items.length ? (
+        <Timeline items={items} />
+      ) : (
+        <Text $tone="muted">No lifecycle events yet.</Text>
+      )}
     </div>
   );
 }

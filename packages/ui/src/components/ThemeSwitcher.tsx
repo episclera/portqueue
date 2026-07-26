@@ -33,15 +33,19 @@ export function ThemeSwitcher({ onChange }: ThemeSwitcherProps): React.ReactElem
 /**
  * Resolves the effective theme, following the OS preference by default and resetting a
  * manual override back to "system" when the OS theme changes.
+ *
+ * @param defaultMode - what to use when the visitor has never chosen a theme here. This is how a
+ * host application's configured preference (`DashboardOptions.theme`) takes effect. A stored
+ * choice always wins over it: the setting names the *default*, not a lock.
  */
-export function useThemeMode(): {
+export function useThemeMode(defaultMode: ThemeMode = 'system'): {
   mode: ThemeMode;
   effective: 'light' | 'dark';
   setMode: (m: ThemeMode) => void;
 } {
   const [mode, setModeState] = useState<ThemeMode>(() => {
-    if (typeof localStorage === 'undefined') return 'system';
-    return (localStorage.getItem(STORAGE_KEY) as ThemeMode) ?? 'system';
+    if (typeof localStorage === 'undefined') return defaultMode;
+    return (localStorage.getItem(STORAGE_KEY) as ThemeMode) ?? defaultMode;
   });
   const [systemDark, setSystemDark] = useState<boolean>(
     () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: dark)').matches,

@@ -1,28 +1,39 @@
 /**
- * The jobs table for a queue: server-paged (20 rows a page) with the page, the search term and
- * the status filter all held in the URL. Rows are selectable for bulk retry / cancel / remove,
- * and every row carries the same three actions as icon buttons.
+ * The jobs table: server-paged (20 rows a page) with the page, the search term and the status
+ * filter all held in the URL. Rows are selectable for bulk retry / cancel / remove — each of
+ * which is **one** transactional request, not a fan-out — and every row carries the same three
+ * actions as icon buttons.
+ *
+ * Reused by the queue detail page and the schedule detail page; `scheduleId` narrows it to the
+ * jobs one schedule produced.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { Mono, StatusTag, Table, Text, Tooltip } from '@portqueue/ui';
 import type { DropdownItem, TableColumn } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums';
-import type { JobDto, JobPageDto } from '../../shared/dto';
-import { api, config } from '../queries/api';
-import { usePoll } from '../queries/use-poll';
+import { ActionKind, type JobDto, type JobPageDto } from '../../shared/dto';
+import { api } from '../queries/api';
+import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
-import { PAGE_SIZE, useTableParams } from '../queries/use-table-params';
+import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import { ACTIONS_CONFIG, STALLED, STATUSES_CONFIG, statusLabel } from '../constants/labels';
 import { JOB_SEARCH_SCAN_LIMIT } from '../../shared/constants';
-import { relativeTime, truncate } from './format';
+import { truncate } from './format';
+import { Time } from './Time';
 import { TableCard } from './TableCard';
+import { DOCS, EmptyState } from './states';
 import type { FilterDef } from './FiltersModal';
 import { BulkActionsButton, ConfirmModal, RowAction, RowActions } from './RowActions';
 
 export interface JobsTableProps {
-  queue: string;
+  /** Narrow to one queue. Omitted on views that span queues. */
+  queue?: string;
+  /** Narrow to the jobs one schedule produced. */
+  scheduleId?: string;
+  /** URL param prefix, so two job tables on one page don't share state. */
+  prefix?: string;
 }
 
 const MonoLink = styled(Link)`
@@ -44,32 +55,42 @@ const FILTER_DEFS: FilterDef[] = [
 /** A job can be cancelled while it is still on its way through the queue. */
 const CANCELLABLE: JobStatus[] = [JobStatus.PENDING, JobStatus.ACTIVE, JobStatus.RETRY];
 
-export function JobsTable({ queue }: JobsTableProps): React.ReactElement {
-  const { run, refresh } = useAction();
-  const readOnly = config.readOnly;
-  const params = useTableParams('jobs', FILTER_KEYS);
+export function JobsTable({ queue, scheduleId, prefix = 'jobs' }: JobsTableProps): React.ReactElement {
+  const { run, runBatch } = useAction();
+  const params = useTableParams(prefix, FILTER_KEYS);
   const statusesKey = (params.filters.status ?? []).join(',');
 
   const [selected, setSelected] = useState<string[]>([]);
   const [confirmBulkRemove, setConfirmBulkRemove] = useState(false);
 
-  const jobs = usePoll<JobPageDto>(
-    () =>
-      api.getJobs({
-        queue,
-        statuses: statusesKey || undefined,
-        search: params.search || undefined,
-        offset: String(params.offset),
-        limit: String(PAGE_SIZE),
-        order: 'desc',
-      }),
-    [queue, statusesKey, params.search, params.offset],
-  );
+  const listParams = {
+    ...(queue ? { queue } : {}),
+    ...(scheduleId ? { scheduleId } : {}),
+    ...(statusesKey ? { statuses: statusesKey } : {}),
+    ...(params.search ? { search: params.search } : {}),
+    offset: params.offset,
+    limit: PAGE_SIZE,
+    order: 'desc',
+  };
 
-  const rows = jobs.data?.items ?? [];
+  const jobs = usePolledQuery<JobPageDto>(queryKeys.jobs(listParams), () => api.getJobs(listParams));
+
+  const rows = useMemo(() => jobs.data?.items ?? [], [jobs.data]);
+  const total = jobs.data?.total ?? 0;
 
   // A different page / filter / search means a different row set; drop the stale selection.
-  useEffect(() => setSelected([]), [queue, statusesKey, params.search, params.offset]);
+  useEffect(() => setSelected([]), [queue, scheduleId, statusesKey, params.search, params.offset]);
+
+  // A poll can also remove rows underneath the selection — a completed job retained out, another
+  // operator's removal. Intersecting after every fetch keeps a bulk action from targeting ids
+  // that are no longer on screen (and no longer in the database).
+  useEffect(() => {
+    const visible = new Set(rows.map((r) => r.id));
+    setSelected((current) => {
+      const next = current.filter((id) => visible.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [rows]);
 
   const columns: TableColumn<JobDto>[] = [
     {
@@ -103,69 +124,61 @@ export function JobsTable({ queue }: JobsTableProps): React.ReactElement {
           '—'
         ),
     },
+    { title: 'Created At', key: 'createdAt', render: (r) => <Time value={r.createdAt} /> },
+    { title: 'Start After', key: 'startAfter', render: (r) => <Time value={r.startAfter} /> },
+    { title: 'Completed At', key: 'completedAt', render: (r) => <Time value={r.completedAt} /> },
+    { title: 'Failed At', key: 'failedAt', render: (r) => <Time value={r.failedAt} /> },
     {
-      title: 'Created At',
-      key: 'createdAt',
-      render: (r) => relativeTime(r.createdAt),
+      title: 'Actions',
+      key: 'actions',
+      align: 'right',
+      render: (r: JobDto) => (
+        <RowActions>
+          <RowAction
+            icon={ACTIONS_CONFIG.retry.icon}
+            label={ACTIONS_CONFIG.retry.label}
+            disabled={r.status === JobStatus.ACTIVE}
+            onClick={() =>
+              void run({ kind: ActionKind.RETRY, queue: r.queue, jobId: r.id }, 'Retry queued')
+            }
+          />
+          <RowAction
+            icon={ACTIONS_CONFIG.cancel.icon}
+            label={ACTIONS_CONFIG.cancel.label}
+            disabled={!CANCELLABLE.includes(r.status as JobStatus)}
+            confirm={{ title: 'Cancel this job?' }}
+            onClick={() =>
+              void run({ kind: ActionKind.CANCEL, queue: r.queue, jobId: r.id }, 'Cancelled')
+            }
+          />
+          <RowAction
+            danger
+            icon={ACTIONS_CONFIG.remove.icon}
+            label={ACTIONS_CONFIG.remove.label}
+            confirm={{ title: 'Remove this job permanently?' }}
+            onClick={() =>
+              void run({ kind: ActionKind.REMOVE, queue: r.queue, jobId: r.id }, 'Removed')
+            }
+          />
+        </RowActions>
+      ),
     },
-    {
-      title: 'Start After',
-      key: 'startAfter',
-      render: (r) => relativeTime(r.startAfter),
-    },
-    {
-      title: 'Completed At',
-      key: 'completedAt',
-      render: (r) => relativeTime(r.completedAt),
-    },
-    {
-      title: 'Failed At',
-      key: 'failedAt',
-      render: (r) => relativeTime(r.failedAt),
-    },
-    ...(readOnly
-      ? []
-      : [
-          {
-            title: 'Actions',
-            key: 'actions',
-            align: 'right',
-            render: (r: JobDto) => (
-              <RowActions>
-                <RowAction
-                  icon={ACTIONS_CONFIG.retry.icon}
-                  label={ACTIONS_CONFIG.retry.label}
-                  disabled={r.status === JobStatus.ACTIVE}
-                  onClick={() => void run({ kind: 'retry', queue, jobId: r.id }, 'Retry queued')}
-                />
-                <RowAction
-                  icon={ACTIONS_CONFIG.cancel.icon}
-                  label={ACTIONS_CONFIG.cancel.label}
-                  disabled={!CANCELLABLE.includes(r.status as JobStatus)}
-                  confirm={{ title: 'Cancel this job?' }}
-                  onClick={() => void run({ kind: 'cancel', queue, jobId: r.id }, 'Cancelled')}
-                />
-                <RowAction
-                  danger
-                  icon={ACTIONS_CONFIG.remove.icon}
-                  label={ACTIONS_CONFIG.remove.label}
-                  confirm={{ title: 'Remove this job permanently?' }}
-                  onClick={() => void run({ kind: 'remove', queue, jobId: r.id }, 'Removed')}
-                />
-              </RowActions>
-            ),
-          } satisfies TableColumn<JobDto>,
-        ]),
   ];
 
-  const runBulk = async (kind: 'retry' | 'remove' | 'cancel'): Promise<void> => {
-    const jobIds = [...selected];
-    if (kind === 'remove') {
-      await run({ kind: 'remove', queue, jobIds }, `Removed ${jobIds.length} job(s)`);
-    } else {
-      // retry/cancel are per-job in core; fan out quietly, then refresh + report once.
-      for (const jobId of jobIds) await run({ kind, queue, jobId }, undefined, { silent: true });
-      refresh();
+  /**
+   * Every bulk action is one request carrying every id, applied in a single server-side
+   * transaction. A batch that spans queues is grouped by queue, since each action names one.
+   */
+  const runBulk = async (kind: ActionKind, verb: string): Promise<void> => {
+    const byQueue = new Map<string, string[]>();
+    for (const row of rows) {
+      if (!selected.includes(row.id)) continue;
+      const list = byQueue.get(row.queue) ?? [];
+      list.push(row.id);
+      byQueue.set(row.queue, list);
+    }
+    for (const [queueName, jobIds] of byQueue) {
+      await runBatch({ kind, queue: queueName, jobIds }, { verb, noun: 'job' });
     }
     setSelected([]);
   };
@@ -175,13 +188,13 @@ export function JobsTable({ queue }: JobsTableProps): React.ReactElement {
       key: 'retry',
       label: `${ACTIONS_CONFIG.retry.label} selected`,
       icon: ACTIONS_CONFIG.retry.icon,
-      onClick: () => void runBulk('retry'),
+      onClick: () => void runBulk(ActionKind.RETRY, 'Requeued'),
     },
     {
       key: 'cancel',
       label: `${ACTIONS_CONFIG.cancel.label} selected`,
       icon: ACTIONS_CONFIG.cancel.icon,
-      onClick: () => void runBulk('cancel'),
+      onClick: () => void runBulk(ActionKind.CANCEL, 'Cancelled'),
     },
     {
       key: 'remove',
@@ -192,41 +205,63 @@ export function JobsTable({ queue }: JobsTableProps): React.ReactElement {
     },
   ];
 
-  const empty = params.search ? (
-    <Text $tone="muted">No jobs match “{params.search}”.</Text>
-  ) : undefined;
+  // The scan-window notice belongs beside the result count, where someone reading "Results (12)"
+  // will see why it might not be all of them — not below the card where it is easy to miss.
+  const truncatedNotice = jobs.data?.searchTruncated ? (
+    <Tooltip
+      title={`Only the most recent ${JOB_SEARCH_SCAN_LIMIT} jobs were searched. Add a status filter to reach older ones.`}
+      placement="bottom"
+    >
+      <Text $tone="muted" $small>
+        ⚠️ Partial search
+      </Text>
+    </Tooltip>
+  ) : null;
 
   return (
     <>
       <TableCard
-        total={jobs.data?.total ?? 0}
-        page={params.page}
+        total={total}
+        page={clampedPage(params.page, total)}
         onPageChange={params.setPage}
-        loading={jobs.loading && !jobs.data}
+        loading={jobs.isLoading}
+        error={jobs.error}
+        errorTitle="Could not load jobs"
+        onRetry={() => void jobs.refetch()}
         paginationLabel="Jobs pagination"
         search={{
           value: params.search,
           onChange: params.setSearch,
-          placeholder: 'Search job id or status',
+          placeholder: 'Search id, status, key, error or payload',
         }}
-        filters={{ defs: FILTER_DEFS, values: params.filters, onChange: params.setFilters }}
+        filters={{
+          defs: FILTER_DEFS,
+          values: params.filters,
+          onChange: params.setFilters,
+          onClear: (key, value) => params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
+        }}
         toolbarLeading={<BulkActionsButton count={selected.length} items={bulkItems} />}
+        toolbarNotice={truncatedNotice}
       >
         <Table<JobDto>
           rowKey={(r) => r.id}
           columns={columns}
           data={rows}
-          empty={empty}
-          {...(readOnly ? {} : { rowSelection: { selectedKeys: selected, onChange: setSelected } })}
+          empty={
+            params.search ? (
+              <EmptyState message={`No jobs match “${params.search}”.`} />
+            ) : (
+              <EmptyState
+                message="No jobs yet."
+                hint="Jobs appear here as your app produces them — here's how to add one."
+                docsHref={DOCS.producing}
+                docsLabel="Producing jobs"
+              />
+            )
+          }
+          rowSelection={{ selectedKeys: selected, onChange: setSelected }}
         />
       </TableCard>
-
-      {jobs.data?.searchTruncated ? (
-        <Text $tone="muted">
-          Search scanned the most recent {JOB_SEARCH_SCAN_LIMIT} jobs — narrow it with a status
-          filter to reach older jobs.
-        </Text>
-      ) : null}
 
       <ConfirmModal
         open={confirmBulkRemove}
@@ -235,7 +270,7 @@ export function JobsTable({ queue }: JobsTableProps): React.ReactElement {
         okText={ACTIONS_CONFIG.remove.label}
         okDanger
         onClose={() => setConfirmBulkRemove(false)}
-        onConfirm={() => void runBulk('remove')}
+        onConfirm={() => void runBulk(ActionKind.REMOVE, 'Removed')}
       />
     </>
   );

@@ -9,6 +9,13 @@ export interface StatisticProps {
   prefix?: React.ReactNode;
   suffix?: React.ReactNode;
   tone?: StatisticTone;
+  /**
+   * An explicit colour for the value, overriding `tone`. For palettes a tone can't express —
+   * the per-status job colours, which are arbitrary hexes rather than semantic roles. Having it
+   * here means callers never reach into this component's DOM to colour the number, which a
+   * markup change would silently break.
+   */
+  valueColor?: string;
   /** Place the label below the value instead of above. */
   labelBelow?: boolean;
 }
@@ -51,7 +58,7 @@ const Label = styled.div`
   color: ${(p) => p.theme.color.textMuted};
 `;
 
-const Value = styled.div<{ $tone: StatisticTone }>`
+const Value = styled.div<{ $tone: StatisticTone; $color?: string }>`
   display: inline-flex;
   align-items: baseline;
   gap: ${(p) => p.theme.space(1)};
@@ -61,6 +68,7 @@ const Value = styled.div<{ $tone: StatisticTone }>`
   letter-spacing: -0.02em;
   line-height: 1.1;
   ${(p) => toneColor(p.$tone)}
+  ${(p) => (p.$color ? `color: ${p.$color};` : '')}
 `;
 
 const Affix = styled.span`
@@ -76,12 +84,13 @@ export function Statistic({
   prefix,
   suffix,
   tone = 'default',
+  valueColor,
   labelBelow = false,
 }: StatisticProps): React.ReactElement {
   return (
     <Root $below={labelBelow}>
       <Label>{label}</Label>
-      <Value $tone={tone}>
+      <Value $tone={tone} $color={valueColor}>
         {prefix !== undefined ? <Affix>{prefix}</Affix> : null}
         <span>{value}</span>
         {suffix !== undefined ? <Affix>{suffix}</Affix> : null}

@@ -1,17 +1,22 @@
-/** Small formatting helpers shared across pages. */
+/**
+ * Small formatting helpers shared across pages. The timestamp ones take epoch milliseconds and
+ * are pure — `<Time>` owns deciding *when* to recompute them (see `Time.tsx`).
+ */
 
-export function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
+/**
+ * The full local timestamp, with the timezone named. `toLocaleString()` alone is ambiguous the
+ * moment anyone shares a screenshot across regions, so the zone is always spelled out.
+ */
+export function absoluteTime(ms: number): string {
+  const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString();
+  return d.toLocaleString(undefined, { timeZoneName: 'short' });
 }
 
-export function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '—';
-  const diff = then - Date.now();
+/** "3 minutes ago" / "in 2 hours", relative to now. */
+export function relativeTime(ms: number): string {
+  if (Number.isNaN(ms)) return '—';
+  const diff = ms - Date.now();
   const abs = Math.abs(diff);
   const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
   if (abs < 60_000) return rtf.format(Math.round(diff / 1000), 'second');

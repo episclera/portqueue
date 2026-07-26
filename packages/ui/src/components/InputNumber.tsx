@@ -2,7 +2,13 @@ import React from 'react';
 import styled from 'styled-components';
 import { fieldBaseStyles, INPUT_SIZES, type InputSize } from './Input';
 
-export interface InputNumberProps {
+/**
+ * Extends the native input props so a caller can pass `id`, `name` and any `aria-*`. A
+ * `<Field htmlFor>` label needs the `id` to reach the element it names; without one the label is
+ * orphaned — clicking it focuses nothing and a screen reader announces an unlabelled spinbutton.
+ */
+export interface InputNumberProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'size'> {
   value?: number | null;
   onChange?: (value: number | null) => void;
   min?: number;
@@ -32,6 +38,7 @@ export function InputNumber({
   disabled = false,
   invalid = false,
   inputSize = 'md',
+  ...rest
 }: InputNumberProps): React.ReactElement {
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const raw = event.target.value;
@@ -45,6 +52,7 @@ export function InputNumber({
 
   return (
     <StyledInput
+      {...rest}
       type="number"
       value={value ?? ''}
       onChange={handleChange}

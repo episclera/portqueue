@@ -1,12 +1,11 @@
 /** @jest-environment node */
-import { rewriteAssetUrls, serveAsset } from './assets';
+import { rewriteAssetUrls, safeResolve, serializeConfig, serveAsset } from './assets';
 import type { DashboardConfigDto } from '../shared/dto';
 
 const config: DashboardConfigDto = {
   basePath: '/portqueue',
   title: 'My Dashboard',
   theme: 'system',
-  readOnly: false,
 };
 
 // In tests the module resolves to src/server/, so no built client bundle is present:
@@ -26,6 +25,72 @@ describe('serveAsset (no built client)', () => {
   it('404s for an asset-looking path when no bundle is present', async () => {
     const asset = await serveAsset('/assets/app.js', config);
     expect(asset.status).toBe(404);
+  });
+
+  it('sends a CSP whose nonce matches the one on the injected script', async () => {
+    const asset = await serveAsset('/', config);
+    const csp = asset.headers?.['content-security-policy'] ?? '';
+    const fromHeader = /'nonce-([^']+)'/.exec(csp)?.[1];
+    const fromScript = /<script nonce="([^"]+)"/.exec(String(asset.body))?.[1];
+    expect(fromHeader).toBeTruthy();
+    // A mismatch means the browser refuses the config blob and the SPA boots with defaults.
+    expect(fromScript).toBe(fromHeader);
+  });
+
+  it('issues a fresh nonce per response', async () => {
+    const a = await serveAsset('/', config);
+    const b = await serveAsset('/', config);
+    expect(a.headers?.['content-security-policy']).not.toBe(
+      b.headers?.['content-security-policy'],
+    );
+  });
+
+  it('never caches HTML, since the injected config rides along with it', async () => {
+    const asset = await serveAsset('/', config);
+    expect(asset.headers?.['cache-control']).toBe('no-cache');
+  });
+});
+
+// A developer-supplied title is not attacker input, but it reaches an inline <script> verbatim.
+describe('serializeConfig', () => {
+  it('escapes `<` so a title cannot close the script element', () => {
+    const title = '</script><script>alert(1)</script>';
+    const out = serializeConfig({ ...config, title });
+    expect(out).not.toContain('</script>');
+    expect(out).toContain('\\u003c');
+    // Still valid JSON: the escapes sit inside the string literal, not around it.
+    expect((JSON.parse(out) as DashboardConfigDto).title).toBe(title);
+  });
+
+  it('escapes the line terminators that are legal in JSON but not in JS source', () => {
+    const out = serializeConfig({ ...config, title: 'a b c' });
+    expect(out).toContain('\\u2028');
+    expect(out).toContain('\\u2029');
+  });
+});
+
+// The guard has to reject more than a leading `../`: a sibling directory whose name merely
+// starts with the root's would pass a naive `startsWith` prefix test.
+describe('safeResolve', () => {
+  const root = '/srv/app/dist/client';
+
+  it('resolves an ordinary asset path inside the root', () => {
+    expect(safeResolve(root, '/assets/app.js')).toBe(`${root}/assets/app.js`);
+  });
+
+  it('rejects traversal, however it is spelled', () => {
+    expect(safeResolve(root, '/../secrets.env')).toBeNull();
+    expect(safeResolve(root, '/../../etc/passwd')).toBeNull();
+    expect(safeResolve(root, '/assets/../../secrets.env')).toBeNull();
+  });
+
+  it('rejects a sibling directory that shares the root as a name prefix', () => {
+    expect(safeResolve(root, '/../client-evil/x.js')).toBeNull();
+  });
+
+  it('treats an absolute-looking request path as relative to the root', () => {
+    // The leading slash is the URL's, not the filesystem's — it must not escape the bundle dir.
+    expect(safeResolve(root, '/etc/passwd')).toBe(`${root}/etc/passwd`);
   });
 });
 

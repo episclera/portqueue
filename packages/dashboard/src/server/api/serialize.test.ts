@@ -37,40 +37,31 @@ describe('serializeJob', () => {
 
 describe('serializeStats', () => {
   it('omits queue when undefined and copies counts', () => {
-    const dto = serializeStats({
-      counts: { PENDING: 1 },
-      throughputPerMinute: 2,
-      failureRate: 0.5,
-    } as never);
+    const dto = serializeStats({ counts: { PENDING: 1 } } as never);
     expect('queue' in dto).toBe(false);
     expect(dto.counts).toEqual({ PENDING: 1 });
   });
 
   it('includes queue when present', () => {
-    const dto = serializeStats({
-      queue: 'emails',
-      counts: {},
-      throughputPerMinute: 0,
-      failureRate: 0,
-    } as never);
+    const dto = serializeStats({ queue: 'emails', counts: {} } as never);
     expect(dto.queue).toBe('emails');
   });
 });
 
 describe('serializeSchedule', () => {
   it('stamps the queue and ISO-formats dates', () => {
-    const dto = serializeSchedule(
-      {
-        scheduleId: 'sch-1',
-        cron: '0 0 * * *',
-        every: null,
-        timezone: 'UTC',
-        nextRunAt: new Date('2026-07-23T00:00:00.000Z'),
-        lastRunAt: null,
-        enabled: true,
-      } as never,
-      'reports',
-    );
+    // The queue rides on the schedule itself now: core's dashboard facade returns it, so the
+    // serializer no longer has to be told which queue a schedule belongs to.
+    const dto = serializeSchedule({
+      scheduleId: 'sch-1',
+      queue: 'reports',
+      cron: '0 0 * * *',
+      every: null,
+      timezone: 'UTC',
+      nextRunAt: new Date('2026-07-23T00:00:00.000Z'),
+      lastRunAt: null,
+      enabled: true,
+    });
     expect(dto.queue).toBe('reports');
     expect(dto.nextRunAt).toBe('2026-07-23T00:00:00.000Z');
     expect(dto.lastRunAt).toBeNull();

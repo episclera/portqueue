@@ -1,9 +1,14 @@
 /**
- * Table state that lives in the URL: page number, search term and applied filters. Keeping
- * them in the query string (`#/queues/emails?jobs.page=3&jobs.status=FAILED`) makes a table
- * view linkable and survives a reload or a back/forward step.
+ * Table state that lives in the URL: page number, search term and applied filters. Keeping them
+ * in the query string (`#/queues/emails?jobs.page=3&jobs.status=FAILED`) makes a table view
+ * linkable and survives a reload or a back/forward step.
  *
  * Each table on a page owns a `prefix` so two tables never collide.
+ *
+ * Every table is server-paged, so this hook only carries the state — it never slices rows. The
+ * one derived value it owns is the clamp in {@link clampedPage}: a filter that shrinks the result
+ * set below the current page must not leave the user staring at an empty table that claims a
+ * non-zero result count.
  */
 import { useCallback, useMemo, useRef } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
@@ -12,7 +17,7 @@ import { useHistory, useLocation } from 'react-router-dom';
 export const PAGE_SIZE = 20;
 
 export interface TableParams<K extends string = string> {
-  /** 1-based page number. */
+  /** 1-based page number, as it appears in the URL. */
   page: number;
   search: string;
   /** Applied filter values by filter key; absent keys mean "no filter". */
@@ -20,6 +25,8 @@ export interface TableParams<K extends string = string> {
   setPage: (page: number) => void;
   setSearch: (search: string) => void;
   setFilters: (filters: Partial<Record<K, string[]>>) => void;
+  /** Clear one filter key — what a dismissible chip in the toolbar does. */
+  clearFilter: (key: K, value?: string) => void;
   /** Row offset for the current page — what the API's `offset` wants. */
   offset: number;
 }
@@ -38,7 +45,7 @@ export function useTableParams<K extends string>(
 
   const pageKey = `${prefix}.page`;
   const searchKey = `${prefix}.q`;
-  const filterKey = (key: string): string => `${prefix}.${key}`;
+  const filterKey = useCallback((key: string): string => `${prefix}.${key}`, [prefix]);
 
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
 
@@ -53,7 +60,7 @@ export function useTableParams<K extends string>(
       if (values.length) out[key] = values;
     }
     return out;
-  }, [params, filterKeys]);
+  }, [params, filterKeys, filterKey]);
 
   // The setters read the live location through a ref, so they keep a stable identity — a URL
   // change must not restart the debounce timer that owns `setSearch`.
@@ -97,32 +104,42 @@ export function useTableParams<K extends string>(
       }
       write(updates, false);
     },
-    [write, pageKey, filterKeys],
+    [write, pageKey, filterKeys, filterKey],
   );
 
-  return { page, search, filters, setPage, setSearch, setFilters, offset: (page - 1) * PAGE_SIZE };
-}
+  /** Drop one filter value, or the whole key when no value is named. */
+  const clearFilter = useCallback(
+    (key: K, value?: string) => {
+      const current = filters[key] ?? [];
+      const next = value === undefined ? [] : current.filter((v) => v !== value);
+      write(
+        { [filterKey(key)]: next.length ? next.join(',') : undefined, [pageKey]: undefined },
+        false,
+      );
+    },
+    [write, filters, filterKey, pageKey],
+  );
 
-export interface FilterAndPageSpec<T> {
-  /** Lower-cased search term match; only called when a term is present. */
-  matches: (row: T, term: string) => boolean;
-  /** Extra predicate for the applied filters. */
-  keep?: (row: T) => boolean;
+  return {
+    page,
+    search,
+    filters,
+    setPage,
+    setSearch,
+    setFilters,
+    clearFilter,
+    offset: (page - 1) * PAGE_SIZE,
+  };
 }
 
 /**
- * Narrow a fully-loaded list, then slice the current page. Returns both the page rows and the
- * pre-slice total, so a table's "Results (n)" and its rows can never disagree.
+ * The page actually worth requesting, given how many rows the query matched.
+ *
+ * Sitting on page 3 and typing a search that narrows the set to five rows would otherwise request
+ * offset 40 of 5 and render an empty table under a "Results (5)" heading. Clamping to the last
+ * page that holds rows keeps the two consistent.
  */
-export function filterAndPage<T>(
-  rows: T[],
-  params: { page: number; search: string },
-  spec: FilterAndPageSpec<T>,
-): { rows: T[]; total: number } {
-  const term = params.search.trim().toLowerCase();
-  const filtered = rows.filter(
-    (row) => (spec.keep?.(row) ?? true) && (!term || spec.matches(row, term)),
-  );
-  const start = (params.page - 1) * PAGE_SIZE;
-  return { rows: filtered.slice(start, start + PAGE_SIZE), total: filtered.length };
+export function clampedPage(page: number, total: number): number {
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  return Math.min(Math.max(page, 1), lastPage);
 }

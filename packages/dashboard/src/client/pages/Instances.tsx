@@ -1,15 +1,15 @@
 /**
  * Instances page: every registered instance with liveness, per-instance job attribution, and
- * per-instance pause/resume. Only populated when instances run with an `instanceKey`.
+ * per-instance pause/resume. Server-paged; only populated when instances run with an `instanceKey`.
  */
 import React from 'react';
-import { Content, Mono, PageHeader, Table, Tag, Text } from '@portqueue/ui';
+import { Content, Mono, PageHeader, Table, Tag } from '@portqueue/ui';
 import type { TableColumn } from '@portqueue/ui';
-import type { InstanceDto } from '../../shared/dto';
-import { api, config } from '../queries/api';
-import { usePoll } from '../queries/use-poll';
+import { ActionKind, type InstanceDto, type InstancePageDto } from '../../shared/dto';
+import { api } from '../queries/api';
+import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
-import { filterAndPage, useTableParams } from '../queries/use-table-params';
+import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import {
   ACTIONS_CONFIG,
   LIVENESS_CONFIG,
@@ -19,8 +19,9 @@ import {
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
 import { countColumns } from '../components/table-columns';
+import { DOCS, EmptyState } from '../components/states';
+import { Time } from '../components/Time';
 import type { FilterDef } from '../components/FiltersModal';
-import { formatDate } from '../components/format';
 
 const FILTER_KEYS = ['liveness', 'state'] as const;
 
@@ -36,30 +37,30 @@ const FILTER_DEFS: FilterDef[] = [
   { key: 'state', label: 'State', options: PAUSE_STATE_FILTER_OPTIONS },
 ];
 
-const EMPTY_TEXT =
-  'No instances registered. Set an `instanceKey` on the PortQueue to attribute jobs per instance.';
-
 /** Core only lets an instance be removed once it has been unseen for 30 minutes. */
 const REMOVABLE_AFTER_MS = 30 * 60 * 1000;
 
 export function InstancesPage(): React.ReactElement {
   const { run } = useAction();
-  const instances = usePoll<InstanceDto[]>(() => api.getInstances(), []);
   const params = useTableParams('instances', FILTER_KEYS);
 
   const liveness = params.filters.liveness?.[0];
   const state = params.filters.state?.[0];
 
-  const page = filterAndPage(instances.data ?? [], params, {
-    matches: (row, term) => row.instanceKey.toLowerCase().includes(term),
-    keep: (row) => {
-      if (liveness === 'alive' && !row.alive) return false;
-      if (liveness === 'stale' && row.alive) return false;
-      if (state === 'running' && row.processingPaused) return false;
-      if (state === 'paused' && !row.processingPaused) return false;
-      return true;
-    },
-  });
+  const listParams = {
+    limit: PAGE_SIZE,
+    offset: params.offset,
+    ...(params.search ? { search: params.search } : {}),
+    ...(liveness ? { alive: liveness === 'alive' } : {}),
+    ...(state ? { processingPaused: state === 'paused' } : {}),
+  };
+
+  const instances = usePolledQuery<InstancePageDto>(queryKeys.instances(listParams), () =>
+    api.getInstances(listParams),
+  );
+
+  const rows = instances.data?.items ?? [];
+  const total = instances.data?.total ?? 0;
 
   const columns: TableColumn<InstanceDto>[] = [
     {
@@ -87,60 +88,59 @@ export function InstancesPage(): React.ReactElement {
     {
       title: 'Last Seen',
       key: 'lastSeenAt',
-      render: (r) => formatDate(r.lastSeenAt),
+      // Relative and self-updating: how long ago an instance was last seen is the whole point of
+      // the column, and a frozen "2 minutes ago" from the last poll would be misleading.
+      render: (r) => <Time value={r.lastSeenAt} />,
     },
-    ...(config.readOnly
-      ? []
-      : [
-          {
-            title: 'Actions',
-            key: 'actions',
-            align: 'right',
-            render: (r: InstanceDto) => {
-              const removable = Date.now() - new Date(r.lastSeenAt).getTime() > REMOVABLE_AFTER_MS;
-              return (
-                <RowActions>
-                  {r.processingPaused ? (
-                    <RowAction
-                      icon={ACTIONS_CONFIG.resume.icon}
-                      label={ACTIONS_CONFIG.resume.label}
-                      onClick={() =>
-                        void run({ kind: 'resumeInstance', instanceKey: r.instanceKey }, 'Resumed')
-                      }
-                    />
-                  ) : (
-                    <RowAction
-                      icon={ACTIONS_CONFIG.pause.icon}
-                      label={ACTIONS_CONFIG.pause.label}
-                      confirm={{ title: 'Pause job processing on this instance?' }}
-                      onClick={() =>
-                        void run({ kind: 'pauseInstance', instanceKey: r.instanceKey }, 'Paused')
-                      }
-                    />
-                  )}
-                  <RowAction
-                    danger
-                    disabled={!removable}
-                    icon={ACTIONS_CONFIG.remove.icon}
-                    label={
-                      removable ? ACTIONS_CONFIG.remove.label : 'Removable after 30 minutes unseen'
-                    }
-                    confirm={{
-                      title: 'Remove this inactive instance from monitoring?',
-                      description: 'Only tidies the instances list; job history is untouched.',
-                    }}
-                    onClick={() =>
-                      void run(
-                        { kind: 'removeInstance', instanceKey: r.instanceKey },
-                        'Instance removed',
-                      )
-                    }
-                  />
-                </RowActions>
-              );
-            },
-          } satisfies TableColumn<InstanceDto>,
-        ]),
+    {
+      title: 'Actions',
+      key: 'actions',
+      align: 'right',
+      render: (r: InstanceDto) => {
+        const removable = Date.now() - new Date(r.lastSeenAt).getTime() > REMOVABLE_AFTER_MS;
+        return (
+          <RowActions>
+            {r.processingPaused ? (
+              <RowAction
+                icon={ACTIONS_CONFIG.resume.icon}
+                label={ACTIONS_CONFIG.resume.label}
+                onClick={() =>
+                  void run(
+                    { kind: ActionKind.RESUME_INSTANCE, instanceKey: r.instanceKey },
+                    'Resumed',
+                  )
+                }
+              />
+            ) : (
+              <RowAction
+                icon={ACTIONS_CONFIG.pause.icon}
+                label={ACTIONS_CONFIG.pause.label}
+                confirm={{ title: 'Pause job processing on this instance?' }}
+                onClick={() =>
+                  void run({ kind: ActionKind.PAUSE_INSTANCE, instanceKey: r.instanceKey }, 'Paused')
+                }
+              />
+            )}
+            <RowAction
+              danger
+              disabled={!removable}
+              icon={ACTIONS_CONFIG.remove.icon}
+              label={removable ? ACTIONS_CONFIG.remove.label : 'Removable after 30 minutes unseen'}
+              confirm={{
+                title: 'Remove this inactive instance from monitoring?',
+                description: 'Only tidies the instances list; job history is untouched.',
+              }}
+              onClick={() =>
+                void run(
+                  { kind: ActionKind.REMOVE_INSTANCE, instanceKey: r.instanceKey },
+                  'Instance removed',
+                )
+              }
+            />
+          </RowActions>
+        );
+      },
+    },
   ];
 
   return (
@@ -151,23 +151,42 @@ export function InstancesPage(): React.ReactElement {
       />
       <Content>
         <TableCard
-          total={page.total}
-          page={params.page}
+          total={total}
+          page={clampedPage(params.page, total)}
           onPageChange={params.setPage}
-          loading={instances.loading && !instances.data}
+          loading={instances.isLoading}
+          error={instances.error}
+          errorTitle="Could not load instances"
+          onRetry={() => void instances.refetch()}
           paginationLabel="Instances pagination"
           search={{
             value: params.search,
             onChange: params.setSearch,
             placeholder: 'Search instance key',
           }}
-          filters={{ defs: FILTER_DEFS, values: params.filters, onChange: params.setFilters }}
+          filters={{
+            defs: FILTER_DEFS,
+            values: params.filters,
+            onChange: params.setFilters,
+            onClear: (key, value) => params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
+          }}
         >
           <Table<InstanceDto>
             rowKey={(r) => r.instanceKey}
             columns={columns}
-            data={page.rows}
-            empty={<Text $tone="muted">{EMPTY_TEXT}</Text>}
+            data={rows}
+            empty={
+              params.search ? (
+                <EmptyState message={`No instances match “${params.search}”.`} />
+              ) : (
+                <EmptyState
+                  message="No instances registered."
+                  hint="Give each process an `instanceKey` to attribute jobs to it and control it from here — here's how."
+                  docsHref={DOCS.scaleHorizontally}
+                  docsLabel="Scaling horizontally"
+                />
+              )
+            }
           />
         </TableCard>
       </Content>

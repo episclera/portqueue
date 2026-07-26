@@ -3,16 +3,17 @@
  * action must reach `POST /api/actions` with the right body — and, since the overlays render
  * through body portals, the confirmation and menu layers must be reachable from `document.body`
  * rather than from inside the (clipped, scrollable) table.
+ *
+ * The bulk cases matter most here: a batch is now **one** request carrying every id, so the
+ * server can apply it in a single transaction. It used to be N sequential requests.
  * @jest-environment jsdom
  */
-import React from 'react';
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { ThemeProvider, ToastProvider } from '@portqueue/ui';
-import { App } from './App';
-import { LiveProvider } from './components/LiveProvider';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { ActionKind } from '../shared/dto';
+import { createHarness, page, type StubOptions } from '../test-support/render';
 
-const QUEUES = [
+const QUEUES = page([
   {
     name: 'emails',
     processingPaused: false,
@@ -20,13 +21,9 @@ const QUEUES = [
     inUse: true,
     counts: { PENDING: 1, ACTIVE: 0, COMPLETED: 3, FAILED: 1, RETRY: 0 },
   },
-];
+]);
 
-const STATS = {
-  counts: { ACTIVE: 0, RETRY: 0, FAILED: 1, COMPLETED: 8, STALLED: 0 },
-  throughputPerMinute: 1.5,
-  failureRate: 0.1,
-};
+const STATS = { counts: { ACTIVE: 0, RETRY: 0, FAILED: 1, COMPLETED: 8, STALLED: 0 } };
 
 /** PENDING so both Cancel and Retry are enabled on the row. */
 const JOB = {
@@ -45,75 +42,55 @@ const JOB = {
   stalled: false,
 };
 
-interface Posted {
-  url: string;
-  body: unknown;
-}
+const SCHEDULE = {
+  scheduleId: 'sch-1',
+  queue: 'emails',
+  cron: '0 0 * * *',
+  every: null,
+  timezone: 'UTC',
+  nextRunAt: '2026-07-23T00:00:00.000Z',
+  lastRunAt: null,
+  enabled: true,
+};
 
-let posted: Posted[] = [];
+const RESPONSES: Record<string, unknown> = {
+  '/queues': QUEUES,
+  '/stats': STATS,
+  '/jobs': { items: [JOB], cursor: null, hasMore: false, total: 1 },
+  '/schedules': page([SCHEDULE]),
+  '/instances': page([]),
+};
 
-function stubFetch(): void {
-  global.fetch = (async (input: unknown, init?: RequestInit) => {
-    const url = String(input);
-    if (init?.method === 'POST') {
-      posted.push({ url, body: JSON.parse(String(init.body)) });
-      return { ok: true, status: 200, json: async () => ({ ok: true }) };
-    }
-    const body = url.includes('/api/queues')
-      ? QUEUES
-      : url.includes('/api/stats')
-        ? STATS
-        : url.includes('/api/jobs')
-          ? { items: [JOB], cursor: null, hasMore: false, total: 1 }
-          : url.includes('/api/schedules')
-            ? []
-            : url.includes('/api/instances')
-              ? []
-              : {};
-    return { ok: true, status: 200, json: async () => body };
-  }) as never;
-}
-
-function renderApp(hash: string): void {
-  window.location.hash = hash;
-  render(
-    <ThemeProvider mode="light">
-      <ToastProvider>
-        <LiveProvider>
-          <App onThemeChange={() => {}} />
-        </LiveProvider>
-      </ToastProvider>
-    </ThemeProvider>,
-  );
-}
+const harness = (over: StubOptions = {}) => createHarness({ responses: RESPONSES, ...over });
 
 /** The row-action icon button (its label lives in `aria-label`, not in the glyph). */
 function rowAction(name: string): HTMLElement {
   return screen.getByRole('button', { name });
 }
 
-const lastAction = (): unknown => posted.at(-1)?.body;
-
-beforeEach(() => {
-  posted = [];
-  stubFetch();
-  window.localStorage.clear();
-});
+beforeEach(() => window.localStorage.clear());
 
 describe('job row actions', () => {
   it('retries a job straight away (no confirmation)', async () => {
-    renderApp('#/queues/emails');
+    const h = harness();
+    h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Retry'));
 
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]?.url).toContain('/api/actions');
-    expect(lastAction()).toEqual({ kind: 'retry', queue: 'emails', jobId: JOB.id });
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.posts[0]?.url).toBe('/actions');
+    // A single id travels the same batch path as a bulk action — one is the trivial case.
+    expect(h.lastAction()).toEqual({
+      kind: ActionKind.RETRY,
+      queue: 'emails',
+      jobId: JOB.id,
+    });
   });
 
   it('cancels a job through its confirmation popover, which renders in a body portal', async () => {
-    renderApp('#/queues/emails');
+    const h = harness();
+    h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Cancel'));
@@ -125,12 +102,17 @@ describe('job row actions', () => {
 
     fireEvent.click(within(popover).getByRole('button', { name: 'Cancel' }));
 
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(lastAction()).toEqual({ kind: 'cancel', queue: 'emails', jobId: JOB.id });
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toEqual({
+      kind: ActionKind.CANCEL,
+      queue: 'emails',
+      jobId: JOB.id,
+    });
   });
 
   it('dismisses the confirmation popover without acting when the user backs out', async () => {
-    renderApp('#/queues/emails');
+    const h = harness();
+    h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Remove'));
@@ -138,11 +120,12 @@ describe('job row actions', () => {
     fireEvent.click(within(popover).getByRole('button', { name: 'Keep' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(posted).toHaveLength(0);
+    expect(h.posts).toHaveLength(0);
   });
 
   it('removes a job through its confirmation popover', async () => {
-    renderApp('#/queues/emails');
+    const h = harness();
+    h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Remove'));
@@ -151,12 +134,17 @@ describe('job row actions', () => {
 
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(lastAction()).toEqual({ kind: 'remove', queue: 'emails', jobId: JOB.id });
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toEqual({
+      kind: ActionKind.REMOVE,
+      queue: 'emails',
+      jobId: JOB.id,
+    });
   });
 
   it('closes the popover on Escape and on an outside click', async () => {
-    renderApp('#/queues/emails');
+    const h = harness();
+    h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Remove'));
@@ -168,13 +156,14 @@ describe('job row actions', () => {
     await screen.findByRole('dialog');
     fireEvent.mouseDown(document.body);
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(posted).toHaveLength(0);
+    expect(h.posts).toHaveLength(0);
   });
 });
 
 describe('bulk job actions', () => {
-  it('runs a bulk retry from the portalled dropdown menu', async () => {
-    renderApp('#/queues/emails');
+  it('sends one request carrying every selected id, not one request per job', async () => {
+    const h = harness();
+    h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
@@ -185,12 +174,17 @@ describe('bulk job actions', () => {
 
     fireEvent.click(within(menu).getByRole('menuitem', { name: /Retry selected/ }));
 
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(lastAction()).toEqual({ kind: 'retry', queue: 'emails', jobId: JOB.id });
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toEqual({
+      kind: ActionKind.RETRY,
+      queue: 'emails',
+      jobIds: [JOB.id],
+    });
   });
 
   it('asks for confirmation in a modal before a bulk remove', async () => {
-    renderApp('#/queues/emails');
+    const h = harness();
+    h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
@@ -200,18 +194,50 @@ describe('bulk job actions', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Remove 1 job(s)?');
-    expect(posted).toHaveLength(0);
+    expect(h.posts).toHaveLength(0);
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(lastAction()).toEqual({ kind: 'remove', queue: 'emails', jobIds: [JOB.id] });
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toEqual({
+      kind: ActionKind.REMOVE,
+      queue: 'emails',
+      jobIds: [JOB.id],
+    });
+  });
+
+  it('reports a partial batch once, naming both numbers', async () => {
+    // The server acted on fewer rows than were asked for — a settled job, a vanished one, an
+    // ACTIVE row a removal refuses. One summary beats N toasts and beats claiming all succeeded.
+    const h = harness({ actionResult: { ok: true, affected: 1, requested: 3 } });
+    h.renderApp('#/queues/emails');
+    await screen.findByText('Results (1)');
+
+    fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
+    fireEvent.click(await screen.findByRole('button', { name: /Bulk actions \(1\)/ }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Retry selected/ }));
+
+    expect(await screen.findByText('Requeued 1 of 3 jobs.')).toBeInTheDocument();
+  });
+
+  it('surfaces the server’s own message when a batch fails', async () => {
+    const h = harness({
+      failures: { '/actions': { status: 409, body: { error: 'queue is paused' } } },
+    });
+    h.renderApp('#/queues/emails');
+    await screen.findByText('Results (1)');
+
+    fireEvent.click(rowAction('Retry'));
+
+    expect(await screen.findByText('queue is paused')).toBeInTheDocument();
   });
 });
 
 describe('queue row actions', () => {
   it('pauses a queue from the overview table, after its confirmation popover', async () => {
-    renderApp('#/');
+    const h = harness();
+    h.renderApp('#/');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Pause'));
@@ -220,7 +246,133 @@ describe('queue row actions', () => {
 
     fireEvent.click(within(popover).getByRole('button', { name: 'Pause' }));
 
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(lastAction()).toMatchObject({ kind: 'pause', queue: 'emails' });
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toMatchObject({ kind: ActionKind.PAUSE, queue: 'emails' });
+  });
+});
+
+describe('schedule actions', () => {
+  it('disables a schedule rather than only offering removal', async () => {
+    // Disabling is the reversible alternative; remove was previously the only action available.
+    const h = harness();
+    h.renderApp('#/schedules');
+    await screen.findByText('Results (1)');
+
+    fireEvent.click(rowAction('Disable'));
+    const popover = await screen.findByRole('dialog');
+    fireEvent.click(within(popover).getByRole('button', { name: 'Disable' }));
+
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toEqual({
+      kind: ActionKind.SET_SCHEDULE_ENABLED,
+      queue: 'emails',
+      scheduleId: SCHEDULE.scheduleId,
+      enabled: false,
+    });
+  });
+
+  it('removes selected schedules in one request', async () => {
+    const h = harness();
+    h.renderApp('#/schedules');
+    await screen.findByText('Results (1)');
+
+    fireEvent.click(screen.getByLabelText(`Select row ${SCHEDULE.scheduleId}`));
+    fireEvent.click(await screen.findByRole('button', { name: /Bulk actions \(1\)/ }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Remove selected/ }));
+
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toEqual({
+      kind: ActionKind.REMOVE_SCHEDULE,
+      scheduleIds: [SCHEDULE.scheduleId],
+    });
+  });
+});
+
+describe('add job form', () => {
+  /**
+   * Open the modal and return it, so every query scopes to the dialog: the page header's
+   * "Add job" trigger shares its accessible name with the modal's submit button.
+   */
+  const openForm = async (h: ReturnType<typeof harness>): Promise<HTMLElement> => {
+    h.renderApp('#/queues/emails');
+    await screen.findByText('Results (1)');
+    const [trigger] = screen.getAllByRole('button', { name: /Add job/ });
+    fireEvent.click(trigger!);
+    return screen.findByRole('dialog');
+  };
+
+  it('refuses to submit invalid JSON, without a round trip', async () => {
+    const h = harness();
+    const modal = await openForm(h);
+
+    fireEvent.change(within(modal).getByLabelText(/Data \(JSON\)/), {
+      target: { value: '{oops' },
+    });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Add job' }));
+
+    await waitFor(() => expect(within(modal).getAllByRole('alert').length).toBeGreaterThan(0));
+    expect(h.posts).toHaveLength(0);
+  });
+
+  it('requires a cadence in recurring mode instead of quietly adding a one-off job', async () => {
+    // The old form attached no schedule fields when both were empty: the button said "Create
+    // schedule", the toast said "Schedule created", and a plain job was added.
+    const h = harness();
+    const modal = await openForm(h);
+
+    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
+    fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
+
+    expect(await within(modal).findByText(/cron expression is required/i)).toBeInTheDocument();
+    expect(h.posts).toHaveLength(0);
+  });
+
+  it('rejects a malformed cron expression at the field', async () => {
+    const h = harness();
+    const modal = await openForm(h);
+
+    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
+    fireEvent.change(within(modal).getByLabelText(/Cron expression/), {
+      target: { value: '0 0 *' },
+    });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
+
+    expect(await within(modal).findByText(/has 3/)).toBeInTheDocument();
+    expect(h.posts).toHaveLength(0);
+  });
+
+  it('submits a cron schedule once the cadence is valid', async () => {
+    const h = harness();
+    const modal = await openForm(h);
+
+    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
+    fireEvent.change(within(modal).getByLabelText(/Cron expression/), {
+      target: { value: '0 * * * *' },
+    });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
+
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toMatchObject({
+      kind: ActionKind.ADD,
+      queue: 'emails',
+      add: { cron: '0 * * * *' },
+    });
+  });
+
+  it('shows only the chosen cadence field, so both can never be empty at once', async () => {
+    const h = harness();
+    const modal = await openForm(h);
+
+    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
+    expect(within(modal).getByLabelText(/Cron expression/)).toBeInTheDocument();
+    expect(within(modal).queryByLabelText(/Every \(ms\)/)).not.toBeInTheDocument();
+
+    fireEvent.click(within(modal).getByRole('tab', { name: 'Fixed interval' }));
+    expect(within(modal).getByLabelText(/Every \(ms\)/)).toBeInTheDocument();
+    expect(within(modal).queryByLabelText(/Cron expression/)).not.toBeInTheDocument();
   });
 });

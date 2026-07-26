@@ -1,10 +1,14 @@
 /**
- * The jobs route: numbered pagination (an `offset` forwarded to core plus the `total` core
- * reports) and the bounded search that filters a scanned window by job id / status.
+ * The jobs route: what it forwards to core's dashboard facade, and how it shapes the reply.
+ *
+ * The search *filtering* itself lives in core now (`pq._dashboard.getJobs`), so these cover the
+ * route's own job: parsing and clamping the query string, passing the scan-window limit through,
+ * and serializing the page — including the `searchTruncated` flag the UI depends on.
  * @jest-environment node
  */
-import type { GetJobsQuery, JobSnapshot, PortQueue } from '@portqueue/core';
+import type { JobSnapshot, PortQueue } from '@portqueue/core';
 import { createRouter } from './routes';
+import { JOB_SEARCH_SCAN_LIMIT } from '../../shared/constants';
 import type { JobPageDto } from '../../shared/dto';
 
 const job = (id: string, status = 'COMPLETED'): JobSnapshot =>
@@ -22,26 +26,43 @@ const job = (id: string, status = 'COMPLETED'): JobSnapshot =>
     stalled: false,
   }) as unknown as JobSnapshot;
 
-/** A PortQueue whose getJobs records the query it was handed and replays a fixed page. */
+/** The shape the route hands to `pq._dashboard.getJobs`. */
+interface FacadeQuery {
+  queue?: string;
+  statuses?: string[];
+  scheduleId?: string;
+  limit?: number;
+  offset?: number;
+  order?: string;
+  search?: string;
+  searchScanLimit?: number;
+}
+
+/** A PortQueue whose facade records the query it was handed and replays a fixed page. */
 function fakePq(
   items: JobSnapshot[],
-  total = items.length,
-): {
-  pq: PortQueue;
-  queries: GetJobsQuery[];
-} {
-  const queries: GetJobsQuery[] = [];
+  extra: { total?: number; searchTruncated?: boolean } = {},
+): { pq: PortQueue; queries: FacadeQuery[] } {
+  const queries: FacadeQuery[] = [];
   const pq = {
-    getJobs: async (query: GetJobsQuery) => {
-      queries.push(query);
-      return { items, cursor: null, hasMore: false, total };
+    _dashboard: {
+      getJobs: async (query: FacadeQuery) => {
+        queries.push(query);
+        return {
+          items,
+          cursor: null,
+          hasMore: false,
+          total: extra.total ?? items.length,
+          searchTruncated: extra.searchTruncated ?? false,
+        };
+      },
     },
   } as unknown as PortQueue;
   return { pq, queries };
 }
 
 const read = async (pq: PortQueue, url: string): Promise<JobPageDto> => {
-  const router = createRouter({ portQueue: pq, basePath: '/portqueue', readOnly: false });
+  const router = createRouter({ portQueue: pq, basePath: '/portqueue' });
   const res = await router.handle({ method: 'GET', url, body: undefined, headers: {} });
   expect(res.status).toBe(200);
   return JSON.parse(res.body) as JobPageDto;
@@ -49,7 +70,7 @@ const read = async (pq: PortQueue, url: string): Promise<JobPageDto> => {
 
 describe('GET /api/jobs', () => {
   it('forwards limit + offset to core and returns the total for numbered pagination', async () => {
-    const { pq, queries } = fakePq([job('a'), job('b')], 47);
+    const { pq, queries } = fakePq([job('a'), job('b')], { total: 47 });
     const page = await read(pq, '/portqueue/api/jobs?queue=emails&limit=20&offset=40');
 
     expect(queries[0]).toMatchObject({ queue: 'emails', limit: 20, offset: 40 });
@@ -57,45 +78,41 @@ describe('GET /api/jobs', () => {
     expect(page.items.map((j) => j.id)).toEqual(['a', 'b']);
   });
 
-  it('clamps a negative offset to zero', async () => {
+  it('clamps a negative offset to zero and an absurd limit to the ceiling', async () => {
     const { pq, queries } = fakePq([]);
-    await read(pq, '/portqueue/api/jobs?offset=-5');
+    await read(pq, '/portqueue/api/jobs?offset=-5&limit=100000');
     expect(queries[0]?.offset).toBe(0);
+    expect(queries[0]?.limit).toBe(200);
   });
 
-  describe('search', () => {
-    const scanned = [job('alpha-1'), job('beta-2', 'FAILED'), job('alpha-3')];
+  it('parses the status filter into an array, dropping values that are not statuses', async () => {
+    const { pq, queries } = fakePq([]);
+    await read(pq, '/portqueue/api/jobs?statuses=failed,bogus,ACTIVE');
+    expect(queries[0]?.statuses).toEqual(['FAILED', 'ACTIVE']);
+  });
 
-    it('matches on job id and reports the matched total, not the scanned total', async () => {
-      const { pq, queries } = fakePq(scanned, 999);
-      const page = await read(pq, '/portqueue/api/jobs?search=alpha&limit=20&offset=0');
+  it('forwards a scheduleId filter, which the schedule detail page relies on', async () => {
+    const { pq, queries } = fakePq([]);
+    await read(pq, '/portqueue/api/jobs?scheduleId=sch-1');
+    expect(queries[0]?.scheduleId).toBe('sch-1');
+  });
 
-      // The scan ignores the requested offset and widens the limit to the scan window.
-      expect(queries[0]).toMatchObject({ offset: 0 });
-      expect(queries[0]?.limit).toBeGreaterThan(20);
-      expect(page.items.map((j) => j.id)).toEqual(['alpha-1', 'alpha-3']);
-      expect(page.total).toBe(2);
-      expect(page.hasMore).toBe(false);
-    });
+  it('passes the search term through with the scan-window limit', async () => {
+    const { pq, queries } = fakePq([job('alpha-1')]);
+    await read(pq, '/portqueue/api/jobs?search=alpha');
+    expect(queries[0]?.search).toBe('alpha');
+    expect(queries[0]?.searchScanLimit).toBe(JOB_SEARCH_SCAN_LIMIT);
+  });
 
-    it('matches on status too', async () => {
-      const { pq } = fakePq(scanned);
-      const page = await read(pq, '/portqueue/api/jobs?search=failed');
-      expect(page.items.map((j) => j.id)).toEqual(['beta-2']);
-    });
+  it('surfaces searchTruncated so the UI can warn that older jobs went unscanned', async () => {
+    const { pq } = fakePq([job('alpha-1')], { searchTruncated: true });
+    const page = await read(pq, '/portqueue/api/jobs?search=alpha');
+    expect(page.searchTruncated).toBe(true);
+  });
 
-    it('pages within the matched set', async () => {
-      const { pq } = fakePq(scanned);
-      const page = await read(pq, '/portqueue/api/jobs?search=alpha&limit=1&offset=1');
-      expect(page.items.map((j) => j.id)).toEqual(['alpha-3']);
-      expect(page.total).toBe(2);
-      expect(page.hasMore).toBe(false);
-    });
-
-    it('flags hasMore while matches remain after the requested page', async () => {
-      const { pq } = fakePq(scanned);
-      const page = await read(pq, '/portqueue/api/jobs?search=alpha&limit=1&offset=0');
-      expect(page.hasMore).toBe(true);
-    });
+  it('omits searchTruncated entirely when the scan was complete', async () => {
+    const { pq } = fakePq([job('alpha-1')]);
+    const page = await read(pq, '/portqueue/api/jobs?search=alpha');
+    expect('searchTruncated' in page).toBe(false);
   });
 });

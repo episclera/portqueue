@@ -73,10 +73,16 @@ export function FiltersModal({
 }: FiltersModalProps): React.ReactElement {
   const [draft, setDraft] = useState<Record<string, string[]>>(() => seed(values));
 
-  // Re-seed from the applied values every time the dialog opens.
+  // Re-seed whenever the dialog opens *or* the applied values change while it is open — a chip
+  // dismissed in the toolbar behind the dialog must not leave the draft holding a stale filter.
+  // `serialized` compares by content: `values` is a fresh object every render, so depending on
+  // the object itself would re-seed on each keystroke and fight the user's edits.
+  const serialized = JSON.stringify(values);
   useEffect(() => {
     if (open) setDraft(seed(values));
-  }, [open]);
+    // `serialized` stands in for `values` here, deliberately: `values` is a fresh object every
+    // render, so depending on it directly would re-seed constantly and fight the user's edits.
+  }, [open, serialized]);
 
   const toggle = (key: string, value: string): void => {
     setDraft((prev) => {
