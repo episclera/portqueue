@@ -56,6 +56,20 @@ const SCHEDULE = {
 /** The clone the server hands back — a second record, with its own detail page. */
 const CLONE = { ...JOB, id: 'job-cloned-999' };
 
+/** Unseen for an hour, so core would accept a removal — "removable" is a question about now. */
+const INSTANCE = {
+  instanceKey: 'worker-eu-1',
+  processingPaused: false,
+  alive: true,
+  createdAt: '2026-07-22T00:00:00.000Z',
+  updatedAt: '2026-07-22T00:02:00.000Z',
+  lastSeenAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  cpuPercent: 12.5,
+  memoryPercent: 30,
+  rssBytes: 1_572_864,
+  counts: { COMPLETED: 8 },
+};
+
 const RESPONSES: Record<string, unknown> = {
   '/queues': QUEUES,
   '/stats': STATS,
@@ -68,6 +82,15 @@ const RESPONSES: Record<string, unknown> = {
 };
 
 const harness = (over: StubOptions = {}) => createHarness({ responses: RESPONSES, ...over });
+
+/** Open one instance's detail page, optionally overriding the record it shows. */
+const openInstance = (over: Partial<typeof INSTANCE> = {}): ReturnType<typeof harness> => {
+  const h = harness({
+    responses: { ...RESPONSES, [`/instances/${INSTANCE.instanceKey}`]: { ...INSTANCE, ...over } },
+  });
+  h.renderApp(`#/instances/${INSTANCE.instanceKey}`);
+  return h;
+};
 
 /** The row-action icon button (its label lives in `aria-label`, not in the glyph). */
 function rowAction(name: string): HTMLElement {
@@ -370,6 +393,22 @@ describe('detail page redirects', () => {
 
     await waitFor(() => expect(window.location.hash).toBe('#/schedules'));
   });
+
+  it('leaves for the instances list after the instance is removed', async () => {
+    const h = openInstance();
+    const [remove] = await screen.findAllByRole('button', { name: /^Remove$/ });
+
+    fireEvent.click(remove!);
+    const popover = await screen.findByRole('dialog');
+    expect(popover).toHaveTextContent('Remove this inactive instance from monitoring?');
+    fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(window.location.hash).toBe('#/instances'));
+    expect(h.lastAction()).toMatchObject({
+      kind: ActionKind.REMOVE_INSTANCE,
+      instanceKey: INSTANCE.instanceKey,
+    });
+  });
 });
 
 describe('add job form', () => {
@@ -483,5 +522,44 @@ describe('add job form', () => {
     fireEvent.click(within(modal).getByRole('tab', { name: 'Fixed interval' }));
     expect(within(modal).getByLabelText(/Every \(seconds\)/)).toBeInTheDocument();
     expect(within(modal).queryByLabelText(/Cron expression/)).not.toBeInTheDocument();
+  });
+});
+
+describe('instance detail actions', () => {
+  it('pauses this instance from the header, after its confirmation popover', async () => {
+    const h = openInstance();
+    // Exact names: the shell's live control is also called "Pause auto-updates".
+    fireEvent.click(await screen.findByRole('button', { name: 'Pause' }));
+
+    const popover = await screen.findByRole('dialog');
+    expect(popover).toHaveTextContent('Pause job processing on this instance?');
+    fireEvent.click(within(popover).getByRole('button', { name: 'Pause' }));
+
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toMatchObject({
+      kind: ActionKind.PAUSE_INSTANCE,
+      instanceKey: INSTANCE.instanceKey,
+    });
+  });
+
+  it('resumes a paused instance straight away (no confirmation)', async () => {
+    const h = openInstance({ processingPaused: true });
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume' }));
+
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toMatchObject({
+      kind: ActionKind.RESUME_INSTANCE,
+      instanceKey: INSTANCE.instanceKey,
+    });
+  });
+
+  it('keeps remove disabled while the instance is still being seen', async () => {
+    // Core refuses one it heard from in the last half hour, so the button never offers it.
+    const h = openInstance({ lastSeenAt: new Date().toISOString() });
+    const [remove] = await screen.findAllByRole('button', { name: /^Remove$/ });
+
+    expect(remove).toBeDisabled();
+    fireEvent.click(remove!);
+    expect(h.posts).toHaveLength(0);
   });
 });

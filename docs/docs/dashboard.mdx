@@ -55,7 +55,11 @@ servers that set an [instance key](./scale-horizontally.md#give-each-server-an-i
 
 Each instance key links to its own page: health cards for CPU, memory and RSS, the total processed,
 and below them the jobs that instance claimed — which is the question a list of instances can't
-answer ("this one looks busy — busy with what?").
+answer ("this one looks busy — busy with what?"). That page's subheader carries the same two
+controls as the row here — pause/resume, and remove once the instance has been unseen for 30
+minutes (until then the button says so rather than disappearing). A removal returns to this list.
+Every job's **Processed on instance** — in the jobs table and on the job detail record — links here
+too, so "which server ran this?" is one click.
 
 Health metrics are recorded whether or not you configure a
 [`systemLimiter`](./guides/rate-limiting.md#system-pressure-backpressure); that option decides

@@ -18,8 +18,10 @@ import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import {
   ACTIONS_CONFIG,
+  INSTANCE_ACTIONS_COPY,
   LIVENESS_CONFIG,
   PAUSE_STATE_FILTER_OPTIONS,
+  instanceRemovable,
   pauseStateLabel,
 } from '../constants/labels';
 import { TableCard } from '../components/TableCard';
@@ -50,9 +52,6 @@ const FILTER_DEFS: FilterDef[] = [
   },
   { key: 'state', label: 'State', options: PAUSE_STATE_FILTER_OPTIONS },
 ];
-
-/** Core only lets an instance be removed once it has been unseen for 30 minutes. */
-const REMOVABLE_AFTER_MS = 30 * 60 * 1000;
 
 export function InstancesPage(): React.ReactElement {
   const { run } = useAction();
@@ -150,7 +149,7 @@ export function InstancesPage(): React.ReactElement {
       align: 'right',
       headerAlign: 'left',
       render: (r: InstanceDto) => {
-        const removable = Date.now() - new Date(r.lastSeenAt).getTime() > REMOVABLE_AFTER_MS;
+        const removable = instanceRemovable(r);
         return (
           <RowActions>
             {r.processingPaused ? (
@@ -168,7 +167,7 @@ export function InstancesPage(): React.ReactElement {
               <RowAction
                 icon={ACTIONS_CONFIG.pause.icon}
                 label={ACTIONS_CONFIG.pause.label}
-                confirm={{ title: 'Pause job processing on this instance?' }}
+                confirm={{ title: INSTANCE_ACTIONS_COPY.pauseConfirm }}
                 onClick={() =>
                   void run(
                     { kind: ActionKind.PAUSE_INSTANCE, instanceKey: r.instanceKey },
@@ -181,10 +180,10 @@ export function InstancesPage(): React.ReactElement {
               danger
               disabled={!removable}
               icon={ACTIONS_CONFIG.remove.icon}
-              label={removable ? ACTIONS_CONFIG.remove.label : 'Removable after 30 minutes unseen'}
+              label={removable ? ACTIONS_CONFIG.remove.label : INSTANCE_ACTIONS_COPY.removeBlocked}
               confirm={{
-                title: 'Remove this inactive instance from monitoring?',
-                description: 'Only tidies the instances list; job history is untouched.',
+                title: INSTANCE_ACTIONS_COPY.removeConfirm,
+                description: INSTANCE_ACTIONS_COPY.removeConfirmDescription,
               }}
               onClick={() =>
                 void run(

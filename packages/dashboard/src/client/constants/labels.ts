@@ -141,3 +141,22 @@ export const PAUSE_STATE_FILTER_OPTIONS = [
   { label: PAUSE_STATES_CONFIG.running.label, value: 'running' },
   { label: PAUSE_STATES_CONFIG.processingPaused.label, value: 'paused' },
 ];
+
+/** Core only lets an instance be removed once it has been unseen for 30 minutes. */
+const INSTANCE_REMOVABLE_AFTER_MS = 30 * 60 * 1000;
+
+/**
+ * Whether core would accept a remove for this instance. Shared by the instances table and the
+ * instance detail page so both gate the action on the same rule core enforces.
+ */
+export function instanceRemovable(row: { lastSeenAt: string }): boolean {
+  return Date.now() - new Date(row.lastSeenAt).getTime() > INSTANCE_REMOVABLE_AFTER_MS;
+}
+
+/** The instance actions both the table row and the detail header offer, worded once. */
+export const INSTANCE_ACTIONS_COPY = {
+  removeBlocked: 'Removable after 30 minutes unseen',
+  pauseConfirm: 'Pause job processing on this instance?',
+  removeConfirm: 'Remove this inactive instance from monitoring?',
+  removeConfirmDescription: 'Only tidies the instances list; job history is untouched.',
+};

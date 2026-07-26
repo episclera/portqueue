@@ -1,6 +1,7 @@
 /**
- * Instance detail: how this process is doing in one row of cards, and every job it has processed in
- * a table below.
+ * Instance detail: how this process is doing in one row of cards, every job it has processed in a
+ * table below, and the same pause/resume + remove controls the instances list row carries — an
+ * operator who followed a link here shouldn't have to go back to the list to act on what they see.
  *
  * The two halves answer different questions and both need the instance as their subject. The cards
  * are the health it recorded on its last heartbeat — the instances list shows the same numbers, but
@@ -9,26 +10,36 @@
  * at all: "this one looks busy — busy with what?"
  */
 import React from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useHistory, useParams } from 'react-router-dom';
 import {
+  Button,
   Card,
   Col,
   Content,
   Inline,
   Mono,
   PageHeader,
+  Popconfirm,
   Row,
   Skeleton,
   Stack,
   Statistic,
   Tag,
   Title,
+  Tooltip,
 } from '@portqueue/ui';
 import type { StatisticTone } from '@portqueue/ui';
-import type { InstanceDto } from '../../shared/dto';
+import { ActionKind, type InstanceDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
-import { LIVENESS_CONFIG, pauseStateLabel } from '../constants/labels';
+import { useAction } from '../queries/use-action';
+import {
+  ACTIONS_CONFIG,
+  INSTANCE_ACTIONS_COPY,
+  LIVENESS_CONFIG,
+  instanceRemovable,
+  pauseStateLabel,
+} from '../constants/labels';
 import { JobsTable } from '../components/JobsTable';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
@@ -55,6 +66,8 @@ const CARD_TONE: Record<MetricTone, StatisticTone> = {
 export function InstanceDetailPage(): React.ReactElement {
   const { key } = useParams<{ key: string }>();
   const instanceKey = decodeURIComponent(key);
+  const { run } = useAction();
+  const history = useHistory();
 
   // Polled: every heartbeat moves `lastSeenAt` and the health numbers.
   const instance = usePolledQuery<InstanceDto>(queryKeys.instance(instanceKey), () =>
@@ -130,6 +143,65 @@ export function InstanceDetailPage(): React.ReactElement {
     },
   ];
 
+  /** Removing the instance leaves this URL with no record to show, so a success leaves for the list. */
+  const remove = async (): Promise<void> => {
+    const result = await run(
+      { kind: ActionKind.REMOVE_INSTANCE, instanceKey: i.instanceKey },
+      'Instance removed',
+    );
+    if (result) history.push('/instances');
+  };
+
+  /**
+   * The same two actions the instances table row offers, on the same rules — pause is confirmed,
+   * and remove stays disabled (saying why) until core would accept it.
+   */
+  const removable = instanceRemovable(i);
+  const actions = (
+    <Inline gap={2} align="center" wrap>
+      {i.processingPaused ? (
+        <Button
+          icon={ACTIONS_CONFIG.resume.icon}
+          onClick={() =>
+            void run({ kind: ActionKind.RESUME_INSTANCE, instanceKey: i.instanceKey }, 'Resumed')
+          }
+        >
+          {ACTIONS_CONFIG.resume.label}
+        </Button>
+      ) : (
+        <Popconfirm
+          title={INSTANCE_ACTIONS_COPY.pauseConfirm}
+          okText={ACTIONS_CONFIG.pause.label}
+          cancelText="Keep"
+          onConfirm={() =>
+            void run({ kind: ActionKind.PAUSE_INSTANCE, instanceKey: i.instanceKey }, 'Paused')
+          }
+        >
+          <Button icon={ACTIONS_CONFIG.pause.icon}>{ACTIONS_CONFIG.pause.label}</Button>
+        </Popconfirm>
+      )}
+      {/* Disabled rather than hidden, as in the table: a button that materialises half an hour
+          later is worse than one that says what it is waiting for. */}
+      <Tooltip
+        title={removable ? ACTIONS_CONFIG.remove.label : INSTANCE_ACTIONS_COPY.removeBlocked}
+        placement="bottom"
+      >
+        <Popconfirm
+          title={INSTANCE_ACTIONS_COPY.removeConfirm}
+          description={INSTANCE_ACTIONS_COPY.removeConfirmDescription}
+          okText={ACTIONS_CONFIG.remove.label}
+          cancelText="Keep"
+          okDanger
+          onConfirm={() => void remove()}
+        >
+          <Button variant="danger" icon={ACTIONS_CONFIG.remove.icon} disabled={!removable}>
+            {ACTIONS_CONFIG.remove.label}
+          </Button>
+        </Popconfirm>
+      </Tooltip>
+    </Inline>
+  );
+
   return (
     <>
       <PageHeader
@@ -152,6 +224,7 @@ export function InstanceDetailPage(): React.ReactElement {
             </span>
           </Inline>
         }
+        extra={actions}
       />
       <Content>
         <Stack gap={4}>

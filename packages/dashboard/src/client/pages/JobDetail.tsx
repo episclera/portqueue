@@ -143,9 +143,26 @@ function Item({
   );
 }
 
-/** A value that may be absent — renders the em dash the rest of the UI uses for "nothing". */
-function Maybe({ value }: { value: string | null | undefined }): React.ReactElement {
-  return value ? <Mono>{value}</Mono> : <>—</>;
+/**
+ * A value that may be absent — renders the em dash the rest of the UI uses for "nothing". Given
+ * `to`, it links the value to the page for the record it names, which is where a reader who
+ * recognises an instance key or a schedule id wants to go next.
+ */
+function Maybe({
+  value,
+  to,
+}: {
+  value: string | null | undefined;
+  to?: (value: string) => string;
+}): React.ReactElement {
+  if (!value) return <>—</>;
+  return to ? (
+    <Link to={to(value)}>
+      <Mono>{value}</Mono>
+    </Link>
+  ) : (
+    <Mono>{value}</Mono>
+  );
 }
 
 /**
@@ -338,7 +355,10 @@ export function JobDetailPage(): React.ReactElement {
                   {j.retryAttempt} / {j.retryMaxAttempts}
                 </Item>
                 <Item label="Processed on instance">
-                  <Maybe value={j.processedOnInstanceKey} />
+                  <Maybe
+                    value={j.processedOnInstanceKey}
+                    to={(v) => `/instances/${encodeURIComponent(v)}`}
+                  />
                 </Item>
                 <Item label="Preferred instance pattern">
                   <Maybe value={j.preferredInstanceKeyPattern} />
@@ -352,13 +372,7 @@ export function JobDetailPage(): React.ReactElement {
                 <Item label="Schedule">
                   {/* Straight to that schedule's own page, which lists the jobs it produced —
                       the bare schedules list answered nothing about this job. */}
-                  {j.scheduleId ? (
-                    <Link to={`/schedules/${encodeURIComponent(j.scheduleId)}`}>
-                      <Mono>{j.scheduleId}</Mono>
-                    </Link>
-                  ) : (
-                    '—'
-                  )}
+                  <Maybe value={j.scheduleId} to={(v) => `/schedules/${encodeURIComponent(v)}`} />
                 </Item>
               </DescGrid>
               {j.failureMessage && (

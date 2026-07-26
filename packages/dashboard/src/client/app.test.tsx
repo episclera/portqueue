@@ -214,6 +214,14 @@ describe('queue detail page', () => {
     expect(await screen.findByRole('button', { name: /Bulk actions \(1\)/ })).toBeInTheDocument();
   });
 
+  it('links the instance that claimed a row to that instance’s page', async () => {
+    harness().renderApp('#/queues/emails');
+
+    await screen.findByText('Results (42)');
+    const link = screen.getByRole('link', { name: JOB.processedOnInstanceKey });
+    expect(link).toHaveAttribute('href', `#/instances/${JOB.processedOnInstanceKey}`);
+  });
+
   it('shows an error state when the jobs query fails', async () => {
     harness({
       failures: { '/jobs': { status: 500, body: { error: 'query timed out' } } },
@@ -270,6 +278,13 @@ describe('job detail page', () => {
     await screen.findByText('Details');
     const link = screen.getByRole('link', { name: JOB.scheduleId });
     expect(link).toHaveAttribute('href', `#/schedules/${JOB.scheduleId}`);
+  });
+
+  it('links the instance that processed the job to that instance’s page', async () => {
+    harness().renderApp(`#/jobs/${JOB.id}`);
+    await screen.findByText('Details');
+    const link = screen.getByRole('link', { name: JOB.processedOnInstanceKey });
+    expect(link).toHaveAttribute('href', `#/instances/${JOB.processedOnInstanceKey}`);
   });
 
   it('shows an error with a retry when the job cannot be loaded', async () => {

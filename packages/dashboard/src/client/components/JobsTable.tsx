@@ -10,7 +10,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { Mono, StatusTag, Table, Tooltip } from '@portqueue/ui';
+import { StatusTag, Table, Tooltip } from '@portqueue/ui';
 import type { DropdownItem, TableColumn } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums';
 import { ActionKind, type JobDto, type JobPageDto } from '../../shared/dto';
@@ -123,10 +123,13 @@ export function JobsTable({
     {
       title: 'Processed On Instance',
       key: 'processedOnInstanceKey',
+      // Linked: "what else was that process doing?" is the next question, one click away.
       render: (r) =>
         r.processedOnInstanceKey ? (
           <Tooltip title={r.processedOnInstanceKey} placement="bottom">
-            <Mono>{truncate(r.processedOnInstanceKey, 8, 4)}</Mono>
+            <MonoLink to={`/instances/${encodeURIComponent(r.processedOnInstanceKey)}`}>
+              {truncate(r.processedOnInstanceKey, 8, 4)}
+            </MonoLink>
           </Tooltip>
         ) : (
           '—'
