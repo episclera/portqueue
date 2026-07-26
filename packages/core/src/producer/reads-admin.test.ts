@@ -84,7 +84,11 @@ describe('client reads & admin (sqlite)', () => {
 
   it('re-runs a finished single-function job by re-arming its own row', async () => {
     const q = h.pq.createQueue('re');
-    h.pq.createWorker({ queue: 're', limiter: { pollIntervalMs: 20 }, handler: async () => 'ok' });
+    h.pq.createWorker({
+      queue: 're',
+      limiter: { pollIntervalSeconds: 0.02 },
+      handler: async () => 'ok',
+    });
     const res = await q.addJob({ data: { v: 1 } });
     await waitFor(
       async () => (await q.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
@@ -119,7 +123,7 @@ describe('client reads & admin (sqlite)', () => {
     await h.driver.claimJobs({
       queueName: 'rm-active',
       limit: 1,
-      lockDurationMs: 30_000,
+      lockDurationSeconds: 30_000,
       now: h.clock.now(),
     });
     expect((await q.getJob({ jobId }))!.status).toBe(JobStatus.ACTIVE);

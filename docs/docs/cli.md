@@ -110,7 +110,7 @@ for the generated usage. Global connection flags apply to all of them.
 
 | Command | Usage | What it does |
 | --- | --- | --- |
-| `add` | `--queue <name> --data <json\|@file> [--priority <n>] [--start-after <duration>] [--idempotency-key <k>] [--retry-max-attempts <n>] [--cron "<expr>" --timezone <tz> \| --every <ms>]` | Enqueue a one-off job or create a recurring schedule. `--data` is inline JSON or `@path/to/file.json` |
+| `add` | `--queue <name> --data <json\|@file> [--priority <n>] [--start-after <seconds\|ISO date>] [--idempotency-key <k>] [--retry-max-attempts <n>] [--cron "<expr>" --timezone <tz> \| --every <seconds>]` | Enqueue a one-off job or create a recurring schedule. `--data` is inline JSON or `@path/to/file.json`. `--start-after` and `--every` are in **seconds** |
 | `retry` | `--id <jobId>` | Requeue a failed/completed job (re-arms its own row) |
 | `cancel` | `--id <jobId>` | Cancel a pending or active job |
 | `remove` | `(--id <jobId> \| --schedule-id <id>)` | Remove a single job **or** a schedule. An ACTIVE job is skipped — cancel it first |

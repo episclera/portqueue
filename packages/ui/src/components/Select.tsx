@@ -49,7 +49,9 @@ const Trigger = styled.button<{ $size: SelectSize; $open: boolean; $placeholder:
   border-radius: ${(p) => p.theme.radii.md}px;
   cursor: pointer;
   box-sizing: border-box;
-  transition: border-color ${(p) => p.theme.motion.fast}, box-shadow ${(p) => p.theme.motion.fast};
+  transition:
+    border-color ${(p) => p.theme.motion.fast},
+    box-shadow ${(p) => p.theme.motion.fast};
 
   ${(p) =>
     p.$open &&

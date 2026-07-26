@@ -3,7 +3,8 @@ id: api-reference
 title: API Reference
 sidebar_label: API Reference
 description: Complete PortQueue API reference — every class, method, option, result type, and enum in @portqueue/core for building type-safe job queues in Node.js.
-keywords: [portqueue, api reference, job queue, task queue, node.js, typescript, drivers, background jobs]
+keywords:
+  [portqueue, api reference, job queue, task queue, node.js, typescript, drivers, background jobs]
 ---
 
 # API Reference
@@ -27,52 +28,178 @@ only; no I/O until `init()`.
     <span className="api-badge">new PortQueue&lt;TQueues&gt;</span>
     <span className="api-note">— create the client</span>
     <ul>
-      <li><a href="#portqueueoptions">PortQueueOptions</a> <span className="api-note">the only argument</span></li>
-    </ul>
-  </li>
-  <li><span className="api-badge">init()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — connect, migrate, start services (idempotent)</span></li>
-  <li>
-    <span className="api-badge">shutdown(options?)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — drain workers and disconnect</span>
-    <ul>
-      <li><a href="#shutdownoptions">ShutdownOptions</a></li>
-    </ul>
-  </li>
-  <li><span className="api-badge">get isRunning</span> <span className="api-note">→ <code>boolean</code></span></li>
-  <li><span className="api-badge">migrate()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — force-apply pending migrations (the programmatic MANUAL path)</span></li>
-  <li>
-    <span className="api-badge">createQueue&lt;TData&gt;(name, options?)</span> <span className="api-note">→ <a href="#queue"><code>Queue&lt;TData&gt;</code></a></span>
-    <ul>
-      <li><span className="api-badge is-opt">name</span> <span className="api-note"><code>TQueues</code> — the queue name</span></li>
-      <li><a href="#queueoptions">QueueOptions</a></li>
+      <li>
+        <a href="#portqueueoptions">PortQueueOptions</a>{' '}
+        <span className="api-note">the only argument</span>
+      </li>
     </ul>
   </li>
   <li>
-    <span className="api-badge">createWorker&lt;TData, TResult&gt;(options)</span> <span className="api-note">→ <a href="#worker"><code>Worker</code></a></span>
-    <ul>
-      <li><a href="#workeroptions">WorkerOptions</a></li>
-    </ul>
+    <span className="api-badge">init()</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code> — connect, migrate, start services (idempotent)
+    </span>
   </li>
-  <li><span className="api-badge">getQueues()</span> <span className="api-note">→ <code>Promise&lt;QueueInfo[]&gt;</code></span></li>
-  <li><span className="api-badge">getQueueStats(&#123; queue? &#125;)</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code> — omit <code>queue</code> for client-wide</span></li>
-  <li><span className="api-badge">getStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code> — all queues combined</span></li>
-  <li><span className="api-badge">getJob&lt;TData&gt;(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
   <li>
-    <span className="api-badge">getJobs&lt;TData&gt;(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code></span>
+    <span className="api-badge">shutdown(options?)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code> — drain workers and disconnect
+    </span>
     <ul>
-      <li><a href="#getjobsquery">GetJobsQuery</a></li>
+      <li>
+        <a href="#shutdownoptions">ShutdownOptions</a>
+      </li>
     </ul>
   </li>
-  <li><span className="api-badge">on(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code> — see <a href="./events-hooks/events.md">Events</a></span></li>
-  <li><span className="api-badge">once(event, listener, filter?)</span> <span className="api-note">→ <code>Unsubscribe</code></span></li>
-  <li><span className="api-badge">off(event, listener)</span> <span className="api-note">→ <code>void</code></span></li>
-  <li><span className="api-badge">useHook(hook)</span> <span className="api-note">→ <code>Unsubscribe</code> — see <a href="./events-hooks/hooks.md">Hooks</a></span></li>
-  <li><span className="api-badge">pauseQueue(&#123; queue, mode? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — <code>mode</code> is a <a href="#enums">PauseMode</a></span></li>
-  <li><span className="api-badge">resumeQueue(&#123; queue &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge">removeQueue(&#123; name &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — refused while the queue is declared in this process</span></li>
-  <li><span className="api-badge">getInstances()</span> <span className="api-note">→ <code>Promise&lt;InstanceInfo[]&gt;</code> — see <a href="./scale-horizontally.md">Scaling</a></span></li>
-  <li><span className="api-badge">pauseInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge">resumeInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge">removeInstance(&#123; instanceKey &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — refused until the instance is unseen for 30 min</span></li>
+  <li>
+    <span className="api-badge">get isRunning</span>{' '}
+    <span className="api-note">
+      → <code>boolean</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">migrate()</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code> — force-apply pending migrations (the programmatic MANUAL
+      path)
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">createQueue&lt;TData&gt;(name, options?)</span>{' '}
+    <span className="api-note">
+      →{' '}
+      <a href="#queue">
+        <code>Queue&lt;TData&gt;</code>
+      </a>
+    </span>
+    <ul>
+      <li>
+        <span className="api-badge is-opt">name</span>{' '}
+        <span className="api-note">
+          <code>TQueues</code> — the queue name
+        </span>
+      </li>
+      <li>
+        <a href="#queueoptions">QueueOptions</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge">createWorker&lt;TData, TResult&gt;(options)</span>{' '}
+    <span className="api-note">
+      →{' '}
+      <a href="#worker">
+        <code>Worker</code>
+      </a>
+    </span>
+    <ul>
+      <li>
+        <a href="#workeroptions">WorkerOptions</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge">getQueues()</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;QueueInfo[]&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">getQueueStats(&#123; queue? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;QueueStats&gt;</code> — omit <code>queue</code> for client-wide
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">getStats()</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;QueueStats&gt;</code> — all queues combined
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">getJob&lt;TData&gt;(&#123; jobId &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;JobSnapshot | null&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">getJobs&lt;TData&gt;(query?)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>
+    </span>
+    <ul>
+      <li>
+        <a href="#getjobsquery">GetJobsQuery</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge">on(event, listener, filter?)</span>{' '}
+    <span className="api-note">
+      → <code>Unsubscribe</code> — see <a href="./events-hooks/events.md">Events</a>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">once(event, listener, filter?)</span>{' '}
+    <span className="api-note">
+      → <code>Unsubscribe</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">off(event, listener)</span>{' '}
+    <span className="api-note">
+      → <code>void</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">useHook(hook)</span>{' '}
+    <span className="api-note">
+      → <code>Unsubscribe</code> — see <a href="./events-hooks/hooks.md">Hooks</a>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">pauseQueue(&#123; queue, mode? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code> — <code>mode</code> is a <a href="#enums">PauseMode</a>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">resumeQueue(&#123; queue &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">removeQueue(&#123; name &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;boolean&gt;</code> — refused while the queue is declared in this process
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">getInstances()</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;InstanceInfo[]&gt;</code> — see{' '}
+      <a href="./scale-horizontally.md">Scaling</a>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">pauseInstance(&#123; instanceKey &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">resumeInstance(&#123; instanceKey &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">removeInstance(&#123; instanceKey &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;boolean&gt;</code> — refused until the instance is unseen for 30 min
+    </span>
+  </li>
 </ul>
 
 ---
@@ -84,23 +211,94 @@ accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides
 
 <ul className="api-tree">
   <li>
-    <span className="api-badge">addJob(options)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code></span>
+    <span className="api-badge">addJob(options)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;AddJobResult&gt;</code>
+    </span>
     <ul>
-      <li><a href="#addjoboptions">AddJobOptions&lt;TData&gt;</a></li>
+      <li>
+        <a href="#addjoboptions">AddJobOptions&lt;TData&gt;</a>
+      </li>
     </ul>
   </li>
-  <li><span className="api-badge">getSchedules()</span> <span className="api-note">→ <code>Promise&lt;ScheduleInfo[]&gt;</code></span></li>
-  <li><span className="api-badge">getJob(&#123; jobId &#125;)</span> <span className="api-note">→ <code>Promise&lt;JobSnapshot | null&gt;</code></span></li>
-  <li><span className="api-badge">getJobs(query?)</span> <span className="api-note">→ <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>, scoped to this queue</span></li>
-  <li><span className="api-badge">getQueueStats()</span> <span className="api-note">→ <code>Promise&lt;QueueStats&gt;</code></span></li>
-  <li><span className="api-badge">retryJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;AddJobResult&gt;</code> — re-arms the job's own row; add a new job for a fresh run</span></li>
-  <li><span className="api-badge">cancelJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort signal</span></li>
-  <li><span className="api-badge">removeJob(&#123; jobId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code> — deletes the row; skips an <code>ACTIVE</code> job and returns <code>false</code> (cancel it first)</span></li>
-  <li><span className="api-badge">removeSchedule(&#123; scheduleId, tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;boolean&gt;</code></span></li>
-  <li><span className="api-badge">removeJobs((&#123; jobIds &#125; | &#123; statuses &#125;) &amp; &#123; tx? &#125;)</span> <span className="api-note">→ <code>Promise&lt;number&gt;</code> — count deleted; skips <code>ACTIVE</code> ids, and throws if <code>statuses</code> includes <code>ACTIVE</code></span></li>
-  <li><span className="api-badge">pause(&#123; mode? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge">resume()</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code></span></li>
-  <li><span className="api-badge">get name</span> <span className="api-note">→ <code>string</code></span></li>
+  <li>
+    <span className="api-badge">getSchedules()</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;ScheduleInfo[]&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">getJob(&#123; jobId &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;JobSnapshot | null&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">getJobs(query?)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>, scoped to this queue
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">getQueueStats()</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;QueueStats&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">retryJob(&#123; jobId, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;AddJobResult&gt;</code> — re-arms the job's own row; add a new job for a
+      fresh run
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">cancelJob(&#123; jobId, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort
+      signal
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">removeJob(&#123; jobId, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;boolean&gt;</code> — deletes the row; skips an <code>ACTIVE</code> job and
+      returns <code>false</code> (cancel it first)
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">removeSchedule(&#123; scheduleId, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;boolean&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">
+      removeJobs((&#123; jobIds &#125; | &#123; statuses &#125;) &amp; &#123; tx? &#125;)
+    </span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;number&gt;</code> — count deleted; skips <code>ACTIVE</code> ids, and
+      throws if <code>statuses</code> includes <code>ACTIVE</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">pause(&#123; mode? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">resume()</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">get name</span>{' '}
+    <span className="api-note">
+      → <code>string</code>
+    </span>
+  </li>
 </ul>
 
 ---
@@ -114,9 +312,14 @@ the `Queue` (`pause`/`resume`) and observe it through `pq.on(...)`. All consumer
 
 <ul className="api-tree">
   <li>
-    <span className="api-badge">Worker</span> <span className="api-note">created via <code>createWorker</code></span>
+    <span className="api-badge">Worker</span>{' '}
+    <span className="api-note">
+      created via <code>createWorker</code>
+    </span>
     <ul>
-      <li><a href="#workeroptions">WorkerOptions</a></li>
+      <li>
+        <a href="#workeroptions">WorkerOptions</a>
+      </li>
     </ul>
   </li>
 </ul>
@@ -128,18 +331,78 @@ the `Queue` (`pause`/`resume`) and observe it through `pq.on(...)`. All consumer
 The read-only view handed to a handler.
 
 <ul className="api-tree">
-  <li><span className="api-badge is-opt">id</span> <span className="api-note"><code>string</code></span></li>
-  <li><span className="api-badge is-opt">queue</span> <span className="api-note"><code>string</code></span></li>
-  <li><span className="api-badge is-opt">data</span> <span className="api-note"><code>TData</code> — the payload you enqueued</span></li>
-  <li><span className="api-badge is-opt">retryAttempt</span> <span className="api-note"><code>number</code></span></li>
-  <li><span className="api-badge is-opt">retryMaxAttempts</span> <span className="api-note"><code>number</code></span></li>
-  <li><span className="api-badge is-opt">priority</span> <span className="api-note"><code>number</code></span></li>
-  <li><span className="api-badge is-opt">createdAt</span> <span className="api-note"><code>Date</code></span></li>
-  <li><span className="api-badge is-opt">startAfter</span> <span className="api-note"><code>Date</code></span></li>
-  <li><span className="api-badge is-opt">scheduleId?</span> <span className="api-note"><code>string</code></span></li>
-  <li><span className="api-badge is-opt">idempotencyKey?</span> <span className="api-note"><code>string</code></span></li>
-  <li><span className="api-badge is-opt">signal</span> <span className="api-note"><code>AbortSignal</code> — aborts on graceful-shutdown timeout / cooperative cancel</span></li>
-  <li><span className="api-badge">extendLock(&#123; byMs? &#125;)</span> <span className="api-note">→ <code>Promise&lt;void&gt;</code> — extend the visibility timeout mid-handler</span></li>
+  <li>
+    <span className="api-badge is-opt">id</span>{' '}
+    <span className="api-note">
+      <code>string</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">queue</span>{' '}
+    <span className="api-note">
+      <code>string</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">data</span>{' '}
+    <span className="api-note">
+      <code>TData</code> — the payload you enqueued
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">retryAttempt</span>{' '}
+    <span className="api-note">
+      <code>number</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">retryMaxAttempts</span>{' '}
+    <span className="api-note">
+      <code>number</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">priority</span>{' '}
+    <span className="api-note">
+      <code>number</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">createdAt</span>{' '}
+    <span className="api-note">
+      <code>Date</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">startAfter</span>{' '}
+    <span className="api-note">
+      <code>Date</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">scheduleId?</span>{' '}
+    <span className="api-note">
+      <code>string</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">idempotencyKey?</span>{' '}
+    <span className="api-note">
+      <code>string</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge is-opt">signal</span>{' '}
+    <span className="api-note">
+      <code>AbortSignal</code> — aborts on graceful-shutdown timeout / cooperative cancel
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">extendLock(&#123; bySeconds? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;void&gt;</code> — extend the visibility timeout mid-handler, in seconds
+    </span>
+  </li>
 </ul>
 
 ---
@@ -152,54 +415,199 @@ Pass one driver instance to `new PortQueue({ driver })`.
 
 <ul className="api-tree">
   <li>
-    <span className="api-badge">new PostgresDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/postgres</code></span>
+    <span className="api-badge">new PostgresDriver(options?)</span>{' '}
+    <span className="api-note">
+      <code>@portqueue/core/drivers/postgres</code>
+    </span>
     <ul>
-      <li><span className="api-badge is-opt">connectionString?</span> <span className="api-note"><code>string</code></span></li>
-      <li><span className="api-badge is-opt">pool?</span> <span className="api-note">an existing <code>pg.Pool</code> to share</span></li>
-      <li><span className="api-badge is-opt">config?</span> <span className="api-note">any <code>pg.PoolConfig</code></span></li>
-      <li><span className="api-badge is-opt">schema?</span> <span className="api-note"><code>string</code></span></li>
-      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
-      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+      <li>
+        <span className="api-badge is-opt">connectionString?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">pool?</span>{' '}
+        <span className="api-note">
+          an existing <code>pg.Pool</code> to share
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">config?</span>{' '}
+        <span className="api-note">
+          any <code>pg.PoolConfig</code>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">schema?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">tablePrefix?</span>{' '}
+        <span className="api-note">
+          <code>string</code> · <span className="api-default">'pq_'</span>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">namespace?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
     </ul>
   </li>
   <li>
-    <span className="api-badge">new MysqlDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/mysql</code></span>
+    <span className="api-badge">new MysqlDriver(options?)</span>{' '}
+    <span className="api-note">
+      <code>@portqueue/core/drivers/mysql</code>
+    </span>
     <ul>
-      <li><span className="api-badge is-opt">connectionString?</span> <span className="api-note"><code>mysql://…</code></span></li>
-      <li><span className="api-badge is-opt">pool?</span> <span className="api-note">an existing <code>mysql2</code> pool</span></li>
-      <li><span className="api-badge is-opt">config?</span> <span className="api-note">any <code>mysql2</code> pool config</span></li>
-      <li><span className="api-badge is-opt">schema?</span> <span className="api-note"><code>string</code> — database name</span></li>
-      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
-      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+      <li>
+        <span className="api-badge is-opt">connectionString?</span>{' '}
+        <span className="api-note">
+          <code>mysql://…</code>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">pool?</span>{' '}
+        <span className="api-note">
+          an existing <code>mysql2</code> pool
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">config?</span>{' '}
+        <span className="api-note">
+          any <code>mysql2</code> pool config
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">schema?</span>{' '}
+        <span className="api-note">
+          <code>string</code> — database name
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">tablePrefix?</span>{' '}
+        <span className="api-note">
+          <code>string</code> · <span className="api-default">'pq_'</span>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">namespace?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
     </ul>
   </li>
   <li>
-    <span className="api-badge">new OracleDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/oracle</code></span>
+    <span className="api-badge">new OracleDriver(options?)</span>{' '}
+    <span className="api-note">
+      <code>@portqueue/core/drivers/oracle</code>
+    </span>
     <ul>
-      <li><span className="api-badge is-opt">user?</span> <span className="api-note"><code>string</code></span></li>
-      <li><span className="api-badge is-opt">password?</span> <span className="api-note"><code>string</code></span></li>
-      <li><span className="api-badge is-opt">connectString?</span> <span className="api-note"><code>string</code></span></li>
-      <li><span className="api-badge is-opt">maxIdentifierLen?</span> <span className="api-note"><code>number</code> — Oracle's identifier byte limit</span></li>
-      <li><span className="api-badge is-opt">schema?</span> <span className="api-note"><code>string</code></span></li>
-      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
-      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+      <li>
+        <span className="api-badge is-opt">user?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">password?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">connectString?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">maxIdentifierLen?</span>{' '}
+        <span className="api-note">
+          <code>number</code> — Oracle's identifier byte limit
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">schema?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">tablePrefix?</span>{' '}
+        <span className="api-note">
+          <code>string</code> · <span className="api-default">'pq_'</span>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">namespace?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
     </ul>
   </li>
   <li>
-    <span className="api-badge">new SqliteDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/sqlite</code></span>
+    <span className="api-badge">new SqliteDriver(options?)</span>{' '}
+    <span className="api-note">
+      <code>@portqueue/core/drivers/sqlite</code>
+    </span>
     <ul>
-      <li><span className="api-badge is-opt">path?</span> <span className="api-note"><code>string</code> · <span className="api-default">':memory:'</span></span></li>
-      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
-      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+      <li>
+        <span className="api-badge is-opt">path?</span>{' '}
+        <span className="api-note">
+          <code>string</code> · <span className="api-default">':memory:'</span>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">tablePrefix?</span>{' '}
+        <span className="api-note">
+          <code>string</code> · <span className="api-default">'pq_'</span>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">namespace?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
     </ul>
   </li>
   <li>
-    <span className="api-badge">new PgliteDriver(options?)</span> <span className="api-note"><code>@portqueue/core/drivers/pglite</code></span>
+    <span className="api-badge">new PgliteDriver(options?)</span>{' '}
+    <span className="api-note">
+      <code>@portqueue/core/drivers/pglite</code>
+    </span>
     <ul>
-      <li><span className="api-badge is-opt">dataDir?</span> <span className="api-note"><code>string</code> — omit for in-memory</span></li>
-      <li><span className="api-badge is-opt">schema?</span> <span className="api-note"><code>string</code></span></li>
-      <li><span className="api-badge is-opt">tablePrefix?</span> <span className="api-note"><code>string</code> · <span className="api-default">'pq_'</span></span></li>
-      <li><span className="api-badge is-opt">namespace?</span> <span className="api-note"><code>string</code></span></li>
+      <li>
+        <span className="api-badge is-opt">dataDir?</span>{' '}
+        <span className="api-note">
+          <code>string</code> — omit for in-memory
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">schema?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">tablePrefix?</span>{' '}
+        <span className="api-note">
+          <code>string</code> · <span className="api-default">'pq_'</span>
+        </span>
+      </li>
+      <li>
+        <span className="api-badge is-opt">namespace?</span>{' '}
+        <span className="api-note">
+          <code>string</code>
+        </span>
+      </li>
     </ul>
   </li>
 </ul>
@@ -220,154 +628,160 @@ types — `Driver`, `DriverProbe`, `Subscription`, `MigrationStep`, `DriverCapab
 
 ## Options
 
+Every duration in every options bag below is a **number of seconds** — there is no duration string
+to parse and no other unit anywhere in the API. Names carry the unit (`expireInSeconds`,
+`lockDurationSeconds`, …) so a call site can't be misread; fractions are allowed where sub-second
+values make sense (`0.5`).
+
 ### PortQueueOptions
 
 The single argument to `new PortQueue(...)`.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `driver` | `Driver` | — **required** | A driver instance (see [Drivers](#drivers)). |
-| `logger` | `Logger \| LoggerOptions` | console logger | A logger you supply, or `{ level?, pretty? }` for the built-in one. |
-| `migration` | `MigrationMode` | `AUTO` | `AUTO` (apply pending on init), `MANUAL` (call `migrate()` yourself), or `VALIDATE_ONLY` (fail if pending). |
-| `instance` | [`InstanceOptions`](#instanceoptions) | — | This process's identity & heartbeat. |
-| `monitor` | [`SystemMonitorOptions`](#systemmonitoroptions) `\| false` | — | System-pressure thresholds; `false` disables sampling. |
-| `tickIntervalMs` | `number` | `5000` | Scheduler / retention / monitor tick interval (ms). |
+| Option                | Type                                                       | Default        | Description                                                                                                 |
+| --------------------- | ---------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------- |
+| `driver`              | `Driver`                                                   | — **required** | A driver instance (see [Drivers](#drivers)).                                                                |
+| `logger`              | `Logger \| LoggerOptions`                                  | console logger | A logger you supply, or `{ level?, pretty? }` for the built-in one.                                         |
+| `migration`           | `MigrationMode`                                            | `AUTO`         | `AUTO` (apply pending on init), `MANUAL` (call `migrate()` yourself), or `VALIDATE_ONLY` (fail if pending). |
+| `instance`            | [`InstanceOptions`](#instanceoptions)                      | —              | This process's identity & heartbeat.                                                                        |
+| `monitor`             | [`SystemMonitorOptions`](#systemmonitoroptions) `\| false` | —              | System-pressure thresholds; `false` disables sampling.                                                      |
+| `tickIntervalSeconds` | `number`                                                   | `5`            | Scheduler / retention / monitor tick interval, in seconds.                                                  |
 
 ### ShutdownOptions
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `graceful` | `boolean` | `true` | Let in-flight handlers finish before disconnecting. |
-| `timeoutMs` | `number` | `30000` | Max time to wait for a graceful drain, and for background work (maintenance tick, heartbeat, notify) to finish before the driver disconnects. |
+| Option           | Type      | Default | Description                                                                                                                                                |
+| ---------------- | --------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `graceful`       | `boolean` | `true`  | Let in-flight handlers finish before disconnecting.                                                                                                        |
+| `timeoutSeconds` | `number`  | `30`    | Max time, in seconds, to wait for a graceful drain, and for background work (maintenance tick, heartbeat, notify) to finish before the driver disconnects. |
 
 ### InstanceOptions
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `instanceKey` | `string` | anonymous | Stable, human-meaningful name for this process (e.g. `'worker-eu-1'`). Naming it lets you target, list, and pause it; unnamed processes still run jobs. |
-| `heartbeatIntervalMs` | `number` | `15000` | How often the instance row's `last_seen_at` is refreshed (ms). |
+| Option                     | Type     | Default   | Description                                                                                                                                             |
+| -------------------------- | -------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `instanceKey`              | `string` | anonymous | Stable, human-meaningful name for this process (e.g. `'worker-eu-1'`). Naming it lets you target, list, and pause it; unnamed processes still run jobs. |
+| `heartbeatIntervalSeconds` | `number` | `15`      | How often the instance row's `last_seen_at` is refreshed, in seconds.                                                                                   |
 
 ### SystemMonitorOptions
 
 Workers pause on pressure only when they opt in via `limiter.respectSystemPressure`. Omitting
-`monitor` samples with `{ maxEventLoopDelayMs: 200, sampleIntervalMs: 2000 }`; your own object
-*replaces* that default (unset thresholds are never checked), and `monitor: false` turns sampling
+`monitor` samples with `{ maxEventLoopDelaySeconds: 0.2, sampleIntervalSeconds: 2 }`; your own object
+_replaces_ that default (unset thresholds are never checked), and `monitor: false` turns sampling
 off entirely. See [Rate limiting & backpressure](./guides/rate-limiting.md#every-monitor-option).
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `sampleIntervalMs` | `number` | `2000` | How often to sample system metrics (ms). |
-| `maxEventLoopDelayMs` | `number` | `200` (default config only) | Mean event-loop delay above this counts as pressure. |
-| `maxCpuPercent` | `number` | unset | Process CPU usage above this counts as pressure (summed across cores). |
-| `maxMemoryPercent` | `number` | unset | RSS above this share of total machine memory counts as pressure. |
-| `maxRssBytes` | `number` | unset | RSS above this many bytes counts as pressure. |
-| `resumeHysteresis` | `number` | `0.8` | Fraction (0–1) below the threshold metrics must fall to before resuming. |
+| Option                     | Type     | Default                     | Description                                                              |
+| -------------------------- | -------- | --------------------------- | ------------------------------------------------------------------------ |
+| `sampleIntervalSeconds`    | `number` | `2`                         | How often to sample system metrics, in seconds.                          |
+| `maxEventLoopDelaySeconds` | `number` | `0.2` (default config only) | Mean event-loop delay above this, in seconds, counts as pressure.        |
+| `maxCpuPercent`            | `number` | unset                       | Process CPU usage above this counts as pressure (summed across cores).   |
+| `maxMemoryPercent`         | `number` | unset                       | RSS above this share of total machine memory counts as pressure.         |
+| `maxRssBytes`              | `number` | unset                       | RSS above this many bytes counts as pressure.                            |
+| `resumeHysteresis`         | `number` | `0.8`                       | Fraction (0–1) below the threshold metrics must fall to before resuming. |
 
 ### QueueOptions
 
 The second argument to `createQueue`.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `defaultJobOptions` | [`JobOptions`](#joboptions) | — | Defaults every job on this queue inherits; a per-job option overrides. |
-| `retention` | [`RetentionOptions`](#retentionoptions) | keep forever | Queue default retention; resolved per-job and frozen onto each row. |
-| `hooks` | `HookRegistration[]` | `[]` | Queue-scoped [participation hooks](./events-hooks/hooks.md). |
+| Option              | Type                                    | Default      | Description                                                            |
+| ------------------- | --------------------------------------- | ------------ | ---------------------------------------------------------------------- |
+| `defaultJobOptions` | [`JobOptions`](#joboptions)             | —            | Defaults every job on this queue inherits; a per-job option overrides. |
+| `retention`         | [`RetentionOptions`](#retentionoptions) | keep forever | Queue default retention; resolved per-job and frozen onto each row.    |
+| `hooks`             | `HookRegistration[]`                    | `[]`         | Queue-scoped [participation hooks](./events-hooks/hooks.md).           |
 
 ### JobOptions
 
 Per-job settings (highest precedence). Also the base of [`AddJobOptions`](#addjoboptions).
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `priority` | `number` | `0` | Higher runs first. |
-| `retry` | [`RetryOptions`](#retryoptions) | run once | How the job retries on failure. |
-| `expireIn` | `Duration` | — | Expire the job if it hasn't started within this window. |
-| `retention` | [`RetentionOptions`](#retentionoptions) | inherit queue | Per-job retention override. |
-| `idempotencyKey` | `string` | — | A second enqueue with the same key returns the existing job. |
-| `singletonKey` | `string` | — | At most one active job per key at a time. |
-| `tx` | `TransactionHandle` | — | Transactional enqueue: your own transaction, wrapped by an adapter. |
+| Option            | Type                                    | Default       | Description                                                         |
+| ----------------- | --------------------------------------- | ------------- | ------------------------------------------------------------------- |
+| `priority`        | `number`                                | `0`           | Higher runs first.                                                  |
+| `retry`           | [`RetryOptions`](#retryoptions)         | run once      | How the job retries on failure.                                     |
+| `expireInSeconds` | `number`                                | —             | Expire the job if it hasn't started within this many seconds.       |
+| `retention`       | [`RetentionOptions`](#retentionoptions) | inherit queue | Per-job retention override.                                         |
+| `idempotencyKey`  | `string`                                | —             | A second enqueue with the same key returns the existing job.        |
+| `singletonKey`    | `string`                                | —             | At most one active job per key at a time.                           |
+| `tx`              | `TransactionHandle`                     | —             | Transactional enqueue: your own transaction, wrapped by an adapter. |
 
 ### AddJobOptions
 
 `JobOptions` plus the fields below — the argument to `addJob`.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `data` | `TData` | — **required** | The job payload (a named key, never positional). |
-| `schedule` | [`ScheduleOptions`](#scheduleoptions) | run now | One-off delay, fixed interval, or cron. |
-| `preferredInstanceKeyPattern` | `string` | any | Regex source matching instance keys this job may run on. See [Scaling](./scale-horizontally.md). |
+| Option                        | Type                                  | Default        | Description                                                                                      |
+| ----------------------------- | ------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+| `data`                        | `TData`                               | — **required** | The job payload (a named key, never positional).                                                 |
+| `schedule`                    | [`ScheduleOptions`](#scheduleoptions) | run now        | One-off delay, fixed interval, or cron.                                                          |
+| `preferredInstanceKeyPattern` | `string`                              | any            | Regex source matching instance keys this job may run on. See [Scaling](./scale-horizontally.md). |
 
 ### RetryOptions
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `maxAttempts` | `number` | `1` | Total attempts including the first (`1` = no retry). |
-| `delay` | `Duration` | — | Delay before a retry. |
-| `backoff` | [`BackoffOptions`](#backoffoptions) | — | Backoff applied to `delay`. |
+| Option         | Type                                | Default | Description                                          |
+| -------------- | ----------------------------------- | ------- | ---------------------------------------------------- |
+| `maxAttempts`  | `number`                            | `1`     | Total attempts including the first (`1` = no retry). |
+| `delaySeconds` | `number`                            | —       | Delay before a retry, in seconds.                    |
+| `backoff`      | [`BackoffOptions`](#backoffoptions) | —       | Backoff applied to `delaySeconds`.                   |
 
 ### BackoffOptions
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `strategy` | `BackoffStrategy` | — **required** | `FIXED` or `EXPONENTIAL`. |
-| `factor` | `number` | `2` | Growth factor for `EXPONENTIAL`; ignored for `FIXED`. |
-| `maxDelay` | `Duration` | — | Cap on the computed delay. |
-| `jitter` | `boolean` | `false` | Randomize the delay to spread retries across instances. |
+| Option            | Type              | Default        | Description                                             |
+| ----------------- | ----------------- | -------------- | ------------------------------------------------------- |
+| `strategy`        | `BackoffStrategy` | — **required** | `FIXED` or `EXPONENTIAL`.                               |
+| `factor`          | `number`          | `2`            | Growth factor for `EXPONENTIAL`; ignored for `FIXED`.   |
+| `maxDelaySeconds` | `number`          | —              | Cap on the computed delay, in seconds.                  |
+| `jitter`          | `boolean`         | `false`        | Randomize the delay to spread retries across instances. |
 
 ### RetentionOptions
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `mode` | `RetentionMode` | — **required** | `KEEP_FOREVER` or `DELETE_AFTER`. |
-| `ttl` | `Duration` | — | How long after finishing before deletion is allowed (required for `DELETE_AFTER`). |
-| `statuses` | `JobStatus[]` | `[COMPLETED]` | Which finished statuses the policy applies to. |
+| Option       | Type            | Default        | Description                                                                                |
+| ------------ | --------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| `mode`       | `RetentionMode` | — **required** | `KEEP_FOREVER` or `DELETE_AFTER`.                                                          |
+| `ttlSeconds` | `number`        | —              | How many seconds after finishing before deletion is allowed (required for `DELETE_AFTER`). |
+| `statuses`   | `JobStatus[]`   | `[COMPLETED]`  | Which finished statuses the policy applies to.                                             |
 
 ### ScheduleOptions
 
 Exactly one timing mode may be set.
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `startAfter` | `Date \| Duration` | One-off: run not before this time. |
-| `startEvery` | `Duration` | Recurring: a fixed interval between runs, e.g. `'30s'`. |
-| `cron` | `CronSpec` | Recurring: a cron string, or `{ pattern, tz }`. |
+| Option              | Type       | Description                                     |
+| ------------------- | ---------- | ----------------------------------------------- |
+| `startAfterSeconds` | `number`   | One-off: delay this many seconds from now.      |
+| `startAfter`        | `Date`     | One-off: run not before this absolute instant.  |
+| `startEverySeconds` | `number`   | Recurring: seconds between runs, e.g. `30`.     |
+| `cron`              | `CronSpec` | Recurring: a cron string, or `{ pattern, tz }`. |
 
 ### WorkerOptions
 
 The argument to `createWorker`.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `queue` | `TQueues` | — **required** | The queue this worker claims from. |
-| `handler` | `JobHandler` | — **required** | A single processor function. |
-| `limiter` | [`LimiterOptions`](#limiteroptions) | defaults | Throughput & claim tuning. |
-| `dontAutoretryFor` | `Array<ErrorClass \| string>` | `[]` | Non-retryable errors, matched by `instanceof` or `error.name`. |
+| Option             | Type                                | Default        | Description                                                    |
+| ------------------ | ----------------------------------- | -------------- | -------------------------------------------------------------- |
+| `queue`            | `TQueues`                           | — **required** | The queue this worker claims from.                             |
+| `handler`          | `JobHandler`                        | — **required** | A single processor function.                                   |
+| `limiter`          | [`LimiterOptions`](#limiteroptions) | defaults       | Throughput & claim tuning.                                     |
+| `dontAutoretryFor` | `Array<ErrorClass \| string>`       | `[]`           | Non-retryable errors, matched by `instanceof` or `error.name`. |
 
 ### LimiterOptions
 
 All **worker-local** — no cluster-wide coordination.
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `concurrency` | `number` | `1` | Max handlers running at once in this worker. |
-| `rateMax` | `number` | — | Max jobs started per `rateDuration` window (set with `rateDuration`). |
-| `rateDuration` | `Duration` | — | The window for `rateMax`, e.g. `'1m'`. |
-| `respectSystemPressure` | `boolean` | `false` | Pause claiming while system pressure is high. |
-| `batchSize` | `number` | `concurrency` | Max jobs claimed per fetch. |
-| `pollIntervalMs` | `number` | `5000` | Poll cadence when `LISTEN`/`NOTIFY` is unavailable (ms). |
-| `lockDurationMs` | `number` | `30000` | Visibility timeout / heartbeat window for a claimed job (ms). |
+| Option                  | Type      | Default       | Description                                                                         |
+| ----------------------- | --------- | ------------- | ----------------------------------------------------------------------------------- |
+| `concurrency`           | `number`  | `1`           | Max handlers running at once in this worker.                                        |
+| `rateMax`               | `number`  | —             | Max jobs started per `rateDurationSeconds` window (set with `rateDurationSeconds`). |
+| `rateDurationSeconds`   | `number`  | —             | The window for `rateMax`, in seconds — e.g. `60`.                                   |
+| `respectSystemPressure` | `boolean` | `false`       | Pause claiming while system pressure is high.                                       |
+| `batchSize`             | `number`  | `concurrency` | Max jobs claimed per fetch.                                                         |
+| `pollIntervalSeconds`   | `number`  | `5`           | Poll cadence when `LISTEN`/`NOTIFY` is unavailable, in seconds.                     |
+| `lockDurationSeconds`   | `number`  | `30`          | Visibility timeout / heartbeat window for a claimed job, in seconds.                |
 
 ### GetJobsQuery
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `queue` | `string` | Filter to one queue (implicit on `Queue.getJobs`). |
-| `statuses` | `JobStatus[]` | Filter by status. |
-| `scheduleId` | `string` | Jobs minted by one schedule. |
-| `limit` | `number` | Page size. |
-| `cursor` | `string` | Opaque cursor from the previous page. |
-| `offset` | `number` | Row offset, for numbered pagination. Wins over `cursor` when both are given. |
-| `order` | `'asc' \| 'desc'` | Sort direction. |
+| Option       | Type              | Description                                                                  |
+| ------------ | ----------------- | ---------------------------------------------------------------------------- |
+| `queue`      | `string`          | Filter to one queue (implicit on `Queue.getJobs`).                           |
+| `statuses`   | `JobStatus[]`     | Filter by status.                                                            |
+| `scheduleId` | `string`          | Jobs minted by one schedule.                                                 |
+| `limit`      | `number`          | Page size.                                                                   |
+| `cursor`     | `string`          | Opaque cursor from the previous page.                                        |
+| `offset`     | `number`          | Row offset, for numbered pagination. Wins over `cursor` when both are given. |
+| `order`      | `'asc' \| 'desc'` | Sort direction.                                                              |
 
 ---
 
@@ -377,7 +791,7 @@ Reads return objects, never bare ids. The main shapes:
 
 - **AddJobResult** — `jobId?`, `scheduleId?`, `nextRunAt?`, `queue`, `status?`, `deduplicated`, `deduplicationReason?`, `startAfter?`.
 - **JobSnapshot** — the full read-side view of a job (all timestamps as `Date`, plus a derived `stalled` flag).
-- **ScheduleInfo** — `scheduleId`, `cron?`, `every?`, `timezone?`, `nextRunAt?`, `lastRunAt?`, `enabled`, `idempotencyKey?`.
+- **ScheduleInfo** — `scheduleId`, `cron?`, `everySeconds?`, `timezone?`, `nextRunAt?`, `lastRunAt?`, `enabled`, `idempotencyKey?`.
 - **QueueInfo** — `name`, `processingPaused`, `acceptingPaused`, `counts`, `inUse`.
 - **InstanceInfo** — `instanceKey`, `processingPaused`, `alive`, `createdAt`, `updatedAt`, `lastSeenAt`, `counts`.
 - **QueueStats** — `queue?`, `counts` (a `JobStatus` → count map).

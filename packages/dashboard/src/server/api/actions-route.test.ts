@@ -262,7 +262,7 @@ describe('POST /api/actions — add', () => {
         singletonKey: 's1',
         retryMaxAttempts: 7,
         preferredInstanceKeyPattern: '^eu-',
-        startAfter: '30s',
+        startAfterSeconds: 30,
       },
     });
     expect(rec.adds[0]).toMatchObject({
@@ -272,7 +272,7 @@ describe('POST /api/actions — add', () => {
       singletonKey: 's1',
       retry: { maxAttempts: 7 },
       preferredInstanceKeyPattern: '^eu-',
-      schedule: { startAfter: '30s' },
+      schedule: { startAfterSeconds: 30 },
     });
   });
 
@@ -281,21 +281,23 @@ describe('POST /api/actions — add', () => {
     const res = await post(pq, {
       kind: ActionKind.ADD,
       queue: 'reports',
-      add: { data: {}, cron: '0 0 * * *', startEvery: 60000 },
+      add: { data: {}, cron: '0 0 * * *', startEverySeconds: 60 },
     });
     expect(res.body.scheduleId).toBe('sch-9');
     expect(rec.adds[0]).toMatchObject({ schedule: { cron: '0 0 * * *' } });
-    expect((rec.adds[0] as { schedule: Record<string, unknown> }).schedule.startEvery).toBeUndefined();
+    expect(
+      (rec.adds[0] as { schedule: Record<string, unknown> }).schedule.startEverySeconds,
+    ).toBeUndefined();
   });
 
-  it('builds an interval schedule when only startEvery is given', async () => {
+  it('builds an interval schedule when only startEverySeconds is given', async () => {
     const { pq, rec } = fakePq({ addResult: { scheduleId: 'sch-8' } });
     await post(pq, {
       kind: ActionKind.ADD,
       queue: 'reports',
-      add: { data: {}, startEvery: 60000 },
+      add: { data: {}, startEverySeconds: 60 },
     });
-    expect(rec.adds[0]).toMatchObject({ schedule: { startEvery: 60000 } });
+    expect(rec.adds[0]).toMatchObject({ schedule: { startEverySeconds: 60 } });
   });
 
   it('reports a rejected add as a 400 with core’s message, not a 500', async () => {
@@ -341,12 +343,14 @@ describe('POST /api/actions — malformed input', () => {
         .status,
     ).toBe(404);
     expect(
-      (await router.handle({
-        method: 'DELETE',
-        url: '/portqueue/api/jobs',
-        body: undefined,
-        headers,
-      })).status,
+      (
+        await router.handle({
+          method: 'DELETE',
+          url: '/portqueue/api/jobs',
+          body: undefined,
+          headers,
+        })
+      ).status,
     ).toBe(404);
   });
 });

@@ -29,11 +29,11 @@ export class BackgroundWork {
 
   /**
    * Wait for everything in flight — and anything those tasks start in turn — to settle.
-   * Resolves `true` when the set emptied, `false` when `timeoutMs` elapsed first, so the caller
-   * can carry on with a shutdown it must not abandon.
+   * Resolves `true` when the set emptied, `false` when `timeoutSeconds` elapsed first, so the
+   * caller can carry on with a shutdown it must not abandon.
    */
-  async drain(timeoutMs: number): Promise<boolean> {
-    const expired = expiresIn(timeoutMs);
+  async drain(timeoutSeconds: number): Promise<boolean> {
+    const expired = expiresIn(timeoutSeconds * 1000);
     while (this.pending.size > 0) {
       const settled = await Promise.race([
         Promise.all([...this.pending]).then(() => true),

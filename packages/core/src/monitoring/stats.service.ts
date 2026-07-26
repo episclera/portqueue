@@ -84,7 +84,7 @@ export class ReadService {
     const rows = await this.runtime.driver.listInstances();
     if (!rows.length) return [];
     const now = this.runtime.clock.now();
-    const staleAfter = (this.runtime.options.instance?.heartbeatIntervalMs ?? 15000) * 3;
+    const staleAfter = (this.runtime.options.instance?.heartbeatIntervalSeconds ?? 15) * 3 * 1000;
     const counts = await this.runtime.driver.countJobsByStatusPerInstance({
       instanceKeys: rows.map((r) => r.instanceKey),
     });

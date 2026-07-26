@@ -27,10 +27,12 @@ export interface AddJobRequestDto {
   retryMaxAttempts?: number;
   /** Regex matching the instance keys this job may run on. */
   preferredInstanceKeyPattern?: string;
-  /** One-off delay (a Duration string, ms number, or ISO date string). */
-  startAfter?: number | string;
-  /** Recurring: fixed interval (a Duration string or ms number). */
-  startEvery?: number | string;
+  /** One-off: run at this absolute instant (an ISO date string). */
+  startAfter?: string;
+  /** One-off: delay this many **seconds** from now. */
+  startAfterSeconds?: number;
+  /** Recurring: fixed interval, in **seconds**. */
+  startEverySeconds?: number;
   /** Recurring: cron expression, optionally with a timezone. */
   cron?: string | { pattern: string; tz?: string };
 }

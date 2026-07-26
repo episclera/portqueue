@@ -10,7 +10,7 @@ export interface ExecutionConfig {
   queueName: string;
   handler: JobHandler;
   dontAutoretryFor: Array<ErrorClass | string>;
-  lockDurationMs: number;
+  lockDurationSeconds: number;
   queueOptions: QueueOptions;
 }
 
@@ -66,7 +66,7 @@ export class ExecutionService {
 
   private buildJob(record: JobRecord, signal: AbortSignal): Job {
     const runtime = this.runtime;
-    const lockDurationMs = this.config.lockDurationMs;
+    const lockDurationSeconds = this.config.lockDurationSeconds;
     return {
       id: record.id,
       queue: this.config.queueName,
@@ -82,7 +82,7 @@ export class ExecutionService {
       async extendLock(options = {}) {
         await runtime.driver.extendLock({
           jobId: record.id,
-          lockDurationMs: options.byMs ?? lockDurationMs,
+          lockDurationSeconds: options.bySeconds ?? lockDurationSeconds,
           now: runtime.clock.now(),
         });
       },
@@ -90,19 +90,20 @@ export class ExecutionService {
   }
 
   private startHeartbeat(jobId: string, controller: AbortController): NodeJS.Timeout {
-    const interval = Math.max(1000, Math.floor(this.config.lockDurationMs / 3));
+    // Beat at a third of the lock window, never faster than once a second.
+    const intervalMs = Math.max(1000, Math.floor((this.config.lockDurationSeconds * 1000) / 3));
     const timer = setInterval(async () => {
       try {
         const held = await this.runtime.driver.extendLock({
           jobId,
-          lockDurationMs: this.config.lockDurationMs,
+          lockDurationSeconds: this.config.lockDurationSeconds,
           now: this.runtime.clock.now(),
         });
         if (!held && !controller.signal.aborted) controller.abort();
       } catch {
         /* transient DB error — next tick retries */
       }
-    }, interval);
+    }, intervalMs);
     timer.unref?.();
     return timer;
   }

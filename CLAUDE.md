@@ -11,6 +11,21 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
 - **Keep the examples list in sync.** Every time you add a new example under `examples/`, list it (with a link) on the Examples docs page (`docs/docs/examples.md`) and in the examples index (`examples/README.md`). Add a launcher under `scripts/dev/examples/` and a matching `example:*` script in the root `package.json`.
 
 ## Design invariants
+- **Seconds are the only unit of time in the API, and the smallest one.** Every duration a caller
+  can set — public option, internal option, DB column, DTO field, CLI flag, dashboard field, event
+  payload — is a **number of seconds** and its name says so (`expireInSeconds`,
+  `lockDurationSeconds`, `retry_delay_seconds`, `--every <seconds>`, `durationSeconds`). There is no
+  duration-string parsing anywhere: `'1m'` reads as a month to some people and a minute to others,
+  so it is a type error rather than a silent misconfiguration. Fractions are legal where sub-second
+  values are meaningful (`pollIntervalSeconds: 0.5`), which is why the persisted duration columns
+  are float types. The one place seconds meet milliseconds is `util/seconds.ts` — the clock,
+  `setTimeout`/`setInterval` and every stored *instant* are epoch-ms, so a duration is multiplied by
+  1000 exactly once, at the boundary, by `secondsToMs`. **Never** add a `*Ms` option, column, or
+  payload field; never accept a unit string. Instants stay `Date` on the public surface.
+- **Cron parsing is `cron-parser`'s job, not ours.** `scheduling/cron.ts` is a thin wrapper that
+  adds eager `InvalidOptionsError` validation and an epoch-ms `next()`; the syntax we support is
+  whatever that package supports (5- and 6-field, ranges, lists, steps, names, `L`/`#`/`W`/`?`).
+  Don't hand-roll calendar walking or field parsing again.
 - **The public API is for developers only — the dashboard and CLI never widen it.** `PortQueue`
   exposes two internal facades, `pq._dashboard` and `pq._cli`, backed by
   `packages/core/src/dashboard/` and `packages/core/src/cli/`. Those two packages consume **only**

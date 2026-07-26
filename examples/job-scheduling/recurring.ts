@@ -1,5 +1,5 @@
 /**
- * Recurring jobs — `schedule.startEvery` (fixed interval) and `schedule.cron`.
+ * Recurring jobs — `schedule.startEverySeconds` (fixed interval) and `schedule.cron`.
  *
  * Run with: `npm run example:schedule-recurring` (from the repo root) or `npm run recurring` here.
  * It waits until each recurrence has fired at least 3 times (~15s), unschedules both and exits.
@@ -31,7 +31,7 @@ async function main(): Promise<void> {
   // time; leave it at the default for production, where a few seconds of drift is fine.
   const pq = new PortQueue<QueueName>({
     driver: new PgliteDriver({ dataDir }),
-    tickIntervalMs: 1_000,
+    tickIntervalSeconds: 1, // tick cadence in seconds
   });
   await pq.init();
 
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   // script is run repeatedly against the same (persisted) database.
   const healthcheckSchedule = await healthchecks.addJob({
     data: {},
-    schedule: { startEvery: '3s' },
+    schedule: { startEverySeconds: 3 }, // interval in seconds
     idempotencyKey: 'healthcheck-every-3s',
   });
 

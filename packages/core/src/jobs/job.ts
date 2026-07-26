@@ -15,8 +15,11 @@ export interface Job<TData = unknown> {
   readonly idempotencyKey?: string;
   /** Aborts on graceful-shutdown timeout / cooperative cancel. */
   readonly signal: AbortSignal;
-  /** Manually extend the visibility timeout for a long unit of work. */
-  extendLock(options?: { byMs?: number }): Promise<void>;
+  /**
+   * Manually extend the visibility timeout for a long unit of work. `bySeconds` defaults to the
+   * worker's `limiter.lockDurationSeconds`.
+   */
+  extendLock(options?: { bySeconds?: number }): Promise<void>;
 }
 
 /** A single-function job handler. */

@@ -1,22 +1,24 @@
 import { BackoffStrategy, RetentionMode } from './enums';
 import type { JobOptions } from './job-options';
 import type { RetentionOptions } from './common';
-import type { Duration } from '../util/duration';
-import { toMs } from '../util/duration';
+import { assertSeconds, secondsToMs } from '../util/seconds';
 
-/** The fully-resolved per-job settings frozen onto a `job` row. */
+/**
+ * The fully-resolved per-job settings frozen onto a `job` row. Instants (`startAfter`, `expireAt`)
+ * are epoch ms; every duration is seconds, exactly as the caller gave it.
+ */
 export interface ResolvedJobOptions {
   priority: number;
   startAfter: number;
   expireAt: number | null;
   retryMaxAttempts: number;
-  retryDelayMs: number;
+  retryDelaySeconds: number;
   retryBackoff: BackoffStrategy;
   retryBackoffFactor: number | null;
-  retryMaxDelayMs: number | null;
+  retryMaxDelaySeconds: number | null;
   retryJitter: boolean;
   retentionMode: RetentionMode;
-  retentionTtlMs: number | null;
+  retentionTtlSeconds: number | null;
   idempotencyKey: string | null;
   singletonKey: string | null;
 }
@@ -31,15 +33,20 @@ export class OptionResolver {
     job: JobOptions;
     queueDefaults?: JobOptions;
     queueRetention?: RetentionOptions;
-    /** One-off start delay from the job's `schedule` group (not a mergeable default). */
-    startAfter?: Date | Duration;
+    /** One-off start instant from the job's `schedule` group (not a mergeable default). */
+    startAfter?: Date;
+    /** One-off start delay in seconds from the job's `schedule` group. */
+    startAfterSeconds?: number;
     now: number;
   }): ResolvedJobOptions {
     const { job, queueDefaults, queueRetention, now } = options;
     const merged: JobOptions = { ...queueDefaults, ...job };
 
-    const startAfter = this.resolveStartAfter(options.startAfter, now);
-    const expireAt = merged.expireIn != null ? startAfter + toMs(merged.expireIn) : null;
+    const startAfter = this.resolveStartAfter(options.startAfter, options.startAfterSeconds, now);
+    const expireAt =
+      merged.expireInSeconds != null
+        ? startAfter + secondsToMs(merged.expireInSeconds, 'expireInSeconds')
+        : null;
 
     const backoff = merged.retry?.backoff;
     const retention = merged.retention ?? queueRetention;
@@ -49,22 +56,35 @@ export class OptionResolver {
       startAfter,
       expireAt,
       retryMaxAttempts: merged.retry?.maxAttempts ?? 1,
-      retryDelayMs: merged.retry?.delay != null ? toMs(merged.retry.delay) : 0,
+      retryDelaySeconds:
+        merged.retry?.delaySeconds != null
+          ? assertSeconds(merged.retry.delaySeconds, 'retry.delaySeconds')
+          : 0,
       retryBackoff: backoff?.strategy ?? BackoffStrategy.FIXED,
       retryBackoffFactor: backoff?.factor ?? null,
-      retryMaxDelayMs: backoff?.maxDelay != null ? toMs(backoff.maxDelay) : null,
+      retryMaxDelaySeconds:
+        backoff?.maxDelaySeconds != null
+          ? assertSeconds(backoff.maxDelaySeconds, 'retry.backoff.maxDelaySeconds')
+          : null,
       retryJitter: backoff?.jitter ?? false,
       retentionMode: retention?.mode ?? RetentionMode.KEEP_FOREVER,
-      retentionTtlMs: retention?.ttl != null ? toMs(retention.ttl) : null,
+      retentionTtlSeconds:
+        retention?.ttlSeconds != null
+          ? assertSeconds(retention.ttlSeconds, 'retention.ttlSeconds')
+          : null,
       idempotencyKey: merged.idempotencyKey ?? null,
       singletonKey: merged.singletonKey ?? null,
     };
   }
 
-  private resolveStartAfter(startAfter: Date | Duration | undefined, now: number): number {
-    if (startAfter != null) {
-      if (startAfter instanceof Date) return startAfter.getTime();
-      return now + toMs(startAfter);
+  private resolveStartAfter(
+    startAfter: Date | undefined,
+    startAfterSeconds: number | undefined,
+    now: number,
+  ): number {
+    if (startAfter != null) return startAfter.getTime();
+    if (startAfterSeconds != null) {
+      return now + secondsToMs(startAfterSeconds, 'schedule.startAfterSeconds');
     }
     return now;
   }

@@ -20,20 +20,20 @@ Everything you can set on `createWorker({ limiter })`, all scoped to that single
 | Option | What it does |
 |---|---|
 | `concurrency` | Max handlers running **in parallel** in this worker (default 1). |
-| `rateMax` | Token-bucket cap: max jobs started per window. Requires `rateDuration`. |
-| `rateDuration` | The window for `rateMax`, a `Duration` like `'1m'`. Requires `rateMax`. |
+| `rateMax` | Token-bucket cap: max jobs started per window. Requires `rateDurationSeconds`. |
+| `rateDurationSeconds` | The window for `rateMax`, in seconds — e.g. `60`. Requires `rateMax`. |
 | `respectSystemPressure` | Pause claiming while system pressure is high (default **`false`**). |
 | `batchSize` | Max jobs claimed per fetch (defaults to `concurrency`). |
-| `pollIntervalMs` | Poll cadence when LISTEN/NOTIFY is unavailable. |
-| `lockDurationMs` | Visibility timeout / heartbeat window for a claimed job (default 30000). |
+| `pollIntervalSeconds` | Poll cadence when LISTEN/NOTIFY is unavailable, in seconds. |
+| `lockDurationSeconds` | Visibility timeout / heartbeat window for a claimed job, in seconds (default 30). |
 
 None of these are persisted or shared: they tune how hard *this* process pulls from the queue.
 To change fleet-wide throughput, add or remove workers/instances.
 
 ## Worker-local rate cap
 
-- **Worker rate cap** — `rateMax` + `rateDuration` form a **worker-local**, in-process token
-  bucket (exact for that worker): at most `rateMax` jobs started per `rateDuration` window. Both
+- **Worker rate cap** — `rateMax` + `rateDurationSeconds` form a **worker-local**, in-process token
+  bucket (exact for that worker): at most `rateMax` jobs started per `rateDurationSeconds` window. Both
   are required together. Use it to bound one process's throughput, e.g. to protect a third-party API.
 
 PortQueue has **no cluster-wide job-rate cap** — there is no shared DB counter throttling how
@@ -44,7 +44,7 @@ local rate cap. (Cluster-wide *pause* is still available via queue and instance 
 ```ts
 const pq = new PortQueue({
   driver,
-  monitor: { maxEventLoopDelayMs: 200, maxCpuPercent: 85, resumeHysteresis: 0.8 },
+  monitor: { maxEventLoopDelaySeconds: 0.2, maxCpuPercent: 85, resumeHysteresis: 0.8 }, // delay threshold in seconds
 });
 
 pq.createWorker({
@@ -52,28 +52,28 @@ pq.createWorker({
   limiter: {
     concurrency: 10,
     rateMax: 50,                       // this worker's local cap…
-    rateDuration: '1m',                // …per window
+    rateDurationSeconds: 60,           // …per 60-second window
     respectSystemPressure: true,       // opt in — default is false
   },
 });
 ```
 
-`rateMax` and `rateDuration` must be set together; `rateDuration` is a `Duration` string like `'1m'`.
+`rateMax` and `rateDurationSeconds` must be set together; the window is a plain number of seconds.
 
 ## System-pressure backpressure
 
 The client samples **this process's own** health and raises a pressure flag when a threshold you set
 is breached; workers with `limiter.respectSystemPressure: true` then stop claiming until it clears
 (with hysteresis, to avoid flapping). Sampling is **on by default** with
-`{ maxEventLoopDelayMs: 200, sampleIntervalMs: 2000 }`; `monitor: false` turns it off entirely.
+`{ maxEventLoopDelaySeconds: 0.2, sampleIntervalSeconds: 2 }`; `monitor: false` turns it off entirely.
 Pressure gating and the rate limits above throttle claiming independently — they compose.
 
 ### Every `monitor` option
 
 | Option | Type | Default | What it does |
 |---|---|---|---|
-| `sampleIntervalMs` | `number` | `2000` | How often metrics are sampled. Every threshold is checked once per sample, so this is also the worst-case reaction time. |
-| `maxEventLoopDelayMs` | `number` | `200` (default config only) | Pressure when the **mean** event-loop delay since the last sample exceeds this, in ms. The best single signal that the process is saturated. |
+| `sampleIntervalSeconds` | `number` | `2` | How often metrics are sampled, in seconds. Every threshold is checked once per sample, so this is also the worst-case reaction time. |
+| `maxEventLoopDelaySeconds` | `number` | `0.2` (default config only) | Pressure when the **mean** event-loop delay since the last sample exceeds this many seconds (`0.2` = 200 ms). The best single signal that the process is saturated. |
 | `maxCpuPercent` | `number` | unset | Pressure when this process's CPU use since the last sample exceeds this. It's process CPU summed across cores, so a busy multi-core box can read well over 100. |
 | `maxMemoryPercent` | `number` | unset | Pressure when RSS exceeds this share of **total machine memory** (`os.totalmem()`) — not of a container limit. |
 | `maxRssBytes` | `number` | unset | Pressure when RSS exceeds this absolute byte count. Use it when a cgroup/container cap is the real ceiling, since `maxMemoryPercent` can't see it. |
@@ -83,15 +83,15 @@ Every threshold is optional and **only the ones you set are checked**. Your `mon
 *replaces* the default rather than merging with it, so `monitor: { maxCpuPercent: 85 }` no longer
 watches event-loop delay, and `monitor: {}` samples but can never report pressure.
 
-Thresholds are evaluated in a fixed order — `maxEventLoopDelayMs`, `maxCpuPercent`, `maxRssBytes`,
+Thresholds are evaluated in a fixed order — `maxEventLoopDelaySeconds`, `maxCpuPercent`, `maxRssBytes`,
 `maxMemoryPercent` — and the **first breach wins**: that's the metric reported on the event.
 
 ```ts
 const pq = new PortQueue({
   driver,
   monitor: {
-    sampleIntervalMs: 2000,
-    maxEventLoopDelayMs: 200,
+    sampleIntervalSeconds: 2,        // sampling cadence, in seconds
+    maxEventLoopDelaySeconds: 0.2,   // 200 ms of mean event-loop delay
     maxCpuPercent: 85,
     maxMemoryPercent: 90,
     maxRssBytes: 1_500_000_000,
@@ -100,7 +100,7 @@ const pq = new PortQueue({
 });
 
 pq.on(PortQueueEvent.SYSTEM_PRESSURE_HIGH, ({ metric, value, threshold }) => {
-  // metric: 'eventLoopDelayMs' | 'cpuPercent' | 'rssBytes' | 'memoryPercent'
+  // metric: 'eventLoopDelaySeconds' | 'cpuPercent' | 'rssBytes' | 'memoryPercent'
 });
 pq.on(PortQueueEvent.SYSTEM_PRESSURE_NORMAL, () => {});
 ```

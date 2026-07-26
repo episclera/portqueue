@@ -4,7 +4,6 @@ import type { FlavourMigration, PhysicalName } from '../shared/migration';
 // by the drivers. A migration is a frozen record of a schema that has already been applied;
 // renaming an enum member must never retroactively rewrite a past migration's DDL.
 
-
 /**
  * Predefined SQLite DDL, version by version. SQLite has no dedicated `BIGINT`/`SMALLINT` — every
  * integer-family column maps to its native `INTEGER` storage class (a 64-bit signed value), string
@@ -48,14 +47,14 @@ function v1(t: PhysicalName): string[] {
       processed_on_instance_key TEXT,
       retry_attempt INTEGER NOT NULL DEFAULT 0,
       retry_max_attempts INTEGER NOT NULL DEFAULT 1,
-      retry_delay_ms INTEGER NOT NULL DEFAULT 0,
+      retry_delay_seconds REAL NOT NULL DEFAULT 0,
       retry_backoff TEXT NOT NULL DEFAULT 'FIXED',
       retry_backoff_factor REAL,
-      retry_max_delay_ms INTEGER,
+      retry_max_delay_seconds REAL,
       retry_jitter INTEGER NOT NULL DEFAULT 0,
       failure_message TEXT,
       retention_mode TEXT NOT NULL DEFAULT 'KEEP_FOREVER',
-      retention_ttl_ms INTEGER,
+      retention_ttl_seconds REAL,
       idempotency_key TEXT,
       schedule_id TEXT,
       singleton_key TEXT
@@ -64,13 +63,13 @@ function v1(t: PhysicalName): string[] {
       id TEXT NOT NULL,
       queue_name TEXT NOT NULL,
       cron TEXT,
-      every_ms INTEGER,
+      every_seconds REAL,
       timezone TEXT,
       data TEXT,
       job_options TEXT,
       priority INTEGER,
       retry_max_attempts INTEGER,
-      retry_delay_ms INTEGER,
+      retry_delay_seconds REAL,
       next_run_at INTEGER,
       last_run_at INTEGER,
       enabled INTEGER NOT NULL DEFAULT 1,

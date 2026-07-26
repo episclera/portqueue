@@ -62,7 +62,8 @@ export interface JobSnapshot<TData = unknown> {
 export interface ScheduleInfo {
   scheduleId: string;
   cron?: string | null;
-  every?: number | null;
+  /** For an interval schedule: the seconds between runs. */
+  everySeconds?: number | null;
   timezone?: string | null;
   nextRunAt?: Date | null;
   lastRunAt?: Date | null;

@@ -16,6 +16,7 @@
  * can reach these routes can perform every action.
  */
 import {
+  InvalidOptionsError,
   JobBatchAction,
   JobStatus,
   PauseMode,
@@ -81,7 +82,10 @@ function paging(params: URLSearchParams): { limit: number; offset: number } {
   const rawLimit = Number(params.get('limit'));
   const rawOffset = Number(params.get('offset'));
   return {
-    limit: Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.trunc(rawLimit), 200) : DEFAULT_LIMIT,
+    limit:
+      Number.isFinite(rawLimit) && rawLimit > 0
+        ? Math.min(Math.trunc(rawLimit), 200)
+        : DEFAULT_LIMIT,
     offset: Number.isFinite(rawOffset) && rawOffset > 0 ? Math.trunc(rawOffset) : 0,
   };
 }
@@ -132,9 +136,20 @@ function buildAddOptions(add: NonNullable<ActionRequestDto['add']>): AddJobOptio
     opts.preferredInstanceKeyPattern = add.preferredInstanceKeyPattern;
   }
   const schedule: NonNullable<AddJobOptions<unknown>['schedule']> = {};
-  if (add.startAfter != null) schedule.startAfter = add.startAfter as never;
+  // `startAfter` arrives as an ISO instant; `startAfterSeconds` as a delay. Core rejects both at
+  // once, so pass through whatever the form sent and let it own that validation.
+  if (add.startAfter != null) {
+    const at = new Date(add.startAfter);
+    if (Number.isNaN(at.getTime())) {
+      throw new InvalidOptionsError(
+        `Invalid 'startAfter' value '${add.startAfter}': expected an ISO date string.`,
+      );
+    }
+    schedule.startAfter = at;
+  }
+  if (add.startAfterSeconds != null) schedule.startAfterSeconds = add.startAfterSeconds;
   if (add.cron != null) schedule.cron = add.cron;
-  else if (add.startEvery != null) schedule.startEvery = add.startEvery as never;
+  else if (add.startEverySeconds != null) schedule.startEverySeconds = add.startEverySeconds;
   if (Object.keys(schedule).length > 0) opts.schedule = schedule;
   return opts;
 }
@@ -379,9 +394,7 @@ async function runAction(portQueue: PortQueue, action: ActionRequestDto): Promis
       try {
         // Adding is the one action that legitimately produces onto a queue, so it uses the
         // public producer path — and with it every validation core already enforces.
-        const result = await portQueue
-          .createQueue(queueName)
-          .addJob(buildAddOptions(action.add));
+        const result = await portQueue.createQueue(queueName).addJob(buildAddOptions(action.add));
         return json(200, {
           ok: true,
           ...(result.jobId ? { jobId: result.jobId } : {}),

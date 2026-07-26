@@ -5,7 +5,8 @@ export type ButtonVariant = 'primary' | 'default' | 'ghost' | 'danger' | 'text';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
     Pick<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'target' | 'rel'> {
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -89,8 +90,11 @@ const StyledButton = styled.button<{
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
-  transition: background ${(p) => p.theme.motion.fast}, border-color ${(p) => p.theme.motion.fast},
-    color ${(p) => p.theme.motion.fast}, filter ${(p) => p.theme.motion.fast};
+  transition:
+    background ${(p) => p.theme.motion.fast},
+    border-color ${(p) => p.theme.motion.fast},
+    color ${(p) => p.theme.motion.fast},
+    filter ${(p) => p.theme.motion.fast};
   ${(p) => variantStyles(p.$variant)}
   &:disabled {
     opacity: 0.55;
@@ -104,7 +108,17 @@ const StyledButton = styled.button<{
 
 /** Bespoke button — variants, sizes, optional emoji icon, and link mode via `href`. */
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'default', size = 'md', block = false, loading = false, icon, href, children, disabled, ...rest },
+  {
+    variant = 'default',
+    size = 'md',
+    block = false,
+    loading = false,
+    icon,
+    href,
+    children,
+    disabled,
+    ...rest
+  },
   ref,
 ) {
   return (

@@ -75,11 +75,7 @@ export function SkeletonText({ rows = 3, width }: SkeletonTextProps): React.Reac
   return (
     <TextRoot aria-hidden>
       {Array.from({ length: count }, (_, i) => (
-        <Skeleton
-          key={i}
-          height={12}
-          width={i === count - 1 ? '60%' : toDim(width, '100%')}
-        />
+        <Skeleton key={i} height={12} width={i === count - 1 ? '60%' : toDim(width, '100%')} />
       ))}
     </TextRoot>
   );

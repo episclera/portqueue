@@ -86,7 +86,11 @@ const ItemIcon = styled.span`
 `;
 
 /** Bespoke dropdown menu, portalled to the body and anchored to its trigger child. */
-export const Dropdown = ({ items, children, align = 'left' }: DropdownProps): React.ReactElement => {
+export const Dropdown = ({
+  items,
+  children,
+  align = 'left',
+}: DropdownProps): React.ReactElement => {
   const [open, setOpen] = React.useState(false);
   const { triggerRef, layerRef, position } = useAnchoredLayer<HTMLSpanElement, HTMLDivElement>({
     open,

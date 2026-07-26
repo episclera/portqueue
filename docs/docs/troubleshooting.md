@@ -41,7 +41,7 @@ try {
 | `NOT_STARTED` | `NotStartedError` | You called a method before `await pq.init()`. Await `init()` first. |
 | `ALREADY_STARTED` | — | `init()` called twice with intervening state change. `init()` is idempotent; call it once. |
 | `ALREADY_STOPPED` | — | Operation after `shutdown()`. Create a new client or don't use it post-shutdown. |
-| `INVALID_OPTIONS` | `InvalidOptionsError` | An options object failed validation (e.g. both `schedule.cron` and `schedule.startEvery`, or `schedule.startAfter` combined with a recurring mode). Read the message; it names the offending field. |
+| `INVALID_OPTIONS` | `InvalidOptionsError` | An options object failed validation (e.g. both `schedule.cron` and `schedule.startEverySeconds`, a one-off delay combined with a recurring mode, or a duration that isn't a non-negative number of seconds). Read the message; it names the offending field. |
 | `UNSUPPORTED_CAPABILITY` | `UnsupportedCapabilityError` | The driver's engine can't do what you asked. Use a driver that supports it or the documented fallback. |
 | `IDEMPOTENCY_CONFLICT` | — | An `idempotencyKey` matched an existing job. Usually expected — inspect `result.deduplicated` instead of catching. |
 | `SINGLETON_CONFLICT` | — | A `singletonKey` already has an active job. Expected under contention; retry later or rely on dedup. |
@@ -53,7 +53,7 @@ try {
 | `JOB_NOT_FOUND` | `JobNotFoundError` | No job for the given `jobId` (removed by retention, or wrong id). |
 | `QUEUE_NOT_FOUND` | — | Referenced a queue that was never ensured. Call `createQueue` first. |
 | `QUEUE_PAUSED` | `QueuePausedError` | `add` refused because the queue is paused with `PauseMode.ALL`. Resume it, or expect this during a drain. |
-| `SHUTDOWN_TIMEOUT` | `ShutdownTimeoutError` | Graceful shutdown didn't drain within `timeoutMs`. Raise the timeout or make long handlers honor `job.signal`. |
+| `SHUTDOWN_TIMEOUT` | `ShutdownTimeoutError` | Graceful shutdown didn't drain within `timeoutSeconds`. Raise the timeout or make long handlers honor `job.signal`. |
 | `MISSING_PEER_DEPENDENCY` | `MissingPeerDependencyError` | The driver's client (e.g. `pg`, `better-sqlite3`) isn't installed. Install the peer shown in the message. |
 
 :::warning No dedicated class for some codes
@@ -85,7 +85,7 @@ prefer branching on `err.code`.
 | `QueuePausedError` | `QUEUE_PAUSED` | `add` refused because the queue is paused with `PauseMode.ALL`. | Resume the queue, or expect this during a drain. |
 | `QueueInUseError` | `QUEUE_IN_USE` | `removeQueue` refused because the queue still has jobs/workers. | Drain and stop workers before removing. |
 | `InstanceActiveError` | `INSTANCE_ACTIVE` | `removeInstance` refused because the instance is still live. | Pause/stop the instance first, then remove. |
-| `ShutdownTimeoutError` | `SHUTDOWN_TIMEOUT` | Graceful shutdown didn't finish within `timeoutMs`. | Raise the timeout or make handlers honor `job.signal`. |
+| `ShutdownTimeoutError` | `SHUTDOWN_TIMEOUT` | Graceful shutdown didn't finish within `timeoutSeconds`. | Raise the timeout or make handlers honor `job.signal`. |
 | `MissingPeerDependencyError` | `MISSING_PEER_DEPENDENCY` | The driver's client peer dep isn't installed. | Install the peer shown in the message. |
 
 ## Diagnose with events
@@ -115,7 +115,7 @@ When a symptom is fuzzy, the fastest diagnosis is to watch the right event:
 |---|---|---|
 | Something "just doesn't work" but nothing throws | `ERROR` | A swallowed internal error — the single most valuable subscription. |
 | A handler keeps re-running | `JOB_FAILED`, `JOB_RETRYING` | The handler is throwing; inspect `error` and `retryAttempt`. |
-| Jobs go quiet, then reappear | `JOB_STALLED` | A lock lapsed (instance died or the handler ran past `lockDurationMs`); another instance reclaims it. |
+| Jobs go quiet, then reappear | `JOB_STALLED` | A lock lapsed (instance died or the handler ran past `lockDurationSeconds`); another instance reclaims it. |
 | An enqueue seems to do nothing | `JOB_ADDED` (`deduplicated: true`) | The job was deduped by `idempotencyKey` / `singletonKey`. |
 | Throughput collapses under load | `SYSTEM_PRESSURE_HIGH` / `_NORMAL` | Backpressure engaged — see [Rate limiting](./guides/rate-limiting.md). |
 | A schedule never fires | `SCHEDULE_FIRED` (absent) | The definition isn't active, or no instance is running the queue. |
@@ -144,7 +144,7 @@ change* an operation rather than observe it, use a [hook](./events-hooks/hooks.m
   `--table-prefix` / `--schema` / `--namespace` given to the CLI (or a second driver) differs
   from what the app's driver actually uses, so they read *different tables*. Make the prefix,
   schema, and namespace match the app's driver configuration exactly.
-- **Jobs stall or run twice** — an instance died mid-job. The lock lapses after `lockDurationMs`
+- **Jobs stall or run twice** — an instance died mid-job. The lock lapses after `lockDurationSeconds`
   and another instance reclaims the job (`JOB_STALLED`). Make long handlers honor `job.signal`
   so they stop when their lock is lost.
 - **Silent failures** — always subscribe to `PortQueueEvent.ERROR`; swallowed internal errors

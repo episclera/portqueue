@@ -170,7 +170,7 @@ mechanisms let many instances share one database with no double-processing and n
   locking/polling fallback.
 - **Per-queue claim loops** — each queue has its own `queue_name`-scoped claim loop, so a
   job never waits on another queue and busy `orders` traffic can't starve `emails`.
-- **Visibility timeout** — a claim is invisible to others for `lockDurationMs`, refreshed
+- **Visibility timeout** — a claim is invisible to others for `lockDurationSeconds`, refreshed
   by an automatic heartbeat. If an instance dies, the lock lapses and the job becomes
   `STALLED` and reclaimable by another instance.
 - **Cluster-coordinated scheduling & retention** — schedule ticks and retention are

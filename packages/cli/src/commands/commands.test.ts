@@ -22,7 +22,9 @@ beforeEach(() => setColorEnabled(false));
 
 /** Run a command against a fresh fake pq, capturing its output and calls. */
 async function run(
-  command: { run: (ctx: { pq: ReturnType<typeof makeFakePq>['pq']; flags: Flags }) => Promise<void> },
+  command: {
+    run: (ctx: { pq: ReturnType<typeof makeFakePq>['pq']; flags: Flags }) => Promise<void>;
+  },
   flags: Flags,
   overrides?: Parameters<typeof makeFakePq>[0],
 ) {
@@ -136,13 +138,39 @@ describe('addCommand', () => {
     });
   });
 
-  it('creates an interval schedule when --every is given', async () => {
+  it('creates an interval schedule in seconds when --every is given', async () => {
     const { calls } = await run(
       addCommand,
-      { queue: 'emails', data: '{"x":1}', every: '30000' },
+      { queue: 'emails', data: '{"x":1}', every: '30' },
       { addResult: { scheduleId: 'sch-3', nextRunAt: null } },
     );
-    expect(calls.addJob[0]).toMatchObject({ schedule: { startEvery: 30000 } });
+    expect(calls.addJob[0]).toMatchObject({ schedule: { startEverySeconds: 30 } });
+  });
+
+  it('reads --start-after as a delay in seconds', async () => {
+    const { calls } = await run(addCommand, {
+      queue: 'emails',
+      data: '{"x":1}',
+      'start-after': '45',
+    });
+    expect(calls.addJob[0]).toMatchObject({ schedule: { startAfterSeconds: 45 } });
+  });
+
+  it('reads --start-after as an absolute instant when it is a date', async () => {
+    const { calls } = await run(addCommand, {
+      queue: 'emails',
+      data: '{"x":1}',
+      'start-after': '2026-01-01T00:00:00Z',
+    });
+    expect(calls.addJob[0]).toMatchObject({
+      schedule: { startAfter: new Date('2026-01-01T00:00:00Z') },
+    });
+  });
+
+  it('rejects a --start-after that is neither seconds nor a date', async () => {
+    await expect(
+      run(addCommand, { queue: 'emails', data: '{"x":1}', 'start-after': '5 fortnights' }),
+    ).rejects.toThrow(/neither a number of seconds nor an ISO date/);
   });
 });
 
@@ -245,7 +273,19 @@ describe('migrate/doctor', () => {
     const { stdout } = await run(
       doctorCommand,
       {},
-      { doctor: { ...{ engine: 'sqlite', serverVersion: '3.45.0', verifiedCapabilities: [], queueCount: 0, instanceCount: 0 }, schemaVersion: 1, latestVersion: 3 } },
+      {
+        doctor: {
+          ...{
+            engine: 'sqlite',
+            serverVersion: '3.45.0',
+            verifiedCapabilities: [],
+            queueCount: 0,
+            instanceCount: 0,
+          },
+          schemaVersion: 1,
+          latestVersion: 3,
+        },
+      },
     );
     expect(stdout).toContain('Schema is at v1 but this driver ships v3');
   });
@@ -254,7 +294,17 @@ describe('migrate/doctor', () => {
     const { stdout } = await run(
       doctorCommand,
       {},
-      { doctor: { engine: 'sqlite', serverVersion: '3.45.0', verifiedCapabilities: [], queueCount: 0, instanceCount: 0, schemaVersion: null, latestVersion: 2 } },
+      {
+        doctor: {
+          engine: 'sqlite',
+          serverVersion: '3.45.0',
+          verifiedCapabilities: [],
+          queueCount: 0,
+          instanceCount: 0,
+          schemaVersion: null,
+          latestVersion: 2,
+        },
+      },
     );
     expect(stdout).toContain('never been migrated');
   });

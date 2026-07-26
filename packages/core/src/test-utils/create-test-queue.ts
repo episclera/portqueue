@@ -37,7 +37,7 @@ export async function createTestQueue(
     logger: new NoopLogger(),
     monitor: false,
     clock,
-    tickIntervalMs: 50,
+    tickIntervalSeconds: 0.05,
     ...options,
   });
   await pq.init();
@@ -46,7 +46,7 @@ export async function createTestQueue(
     clock,
     driver,
     cleanup: async () => {
-      await pq.shutdown({ graceful: false, timeoutMs: 0 });
+      await pq.shutdown({ graceful: false, timeoutSeconds: 0 });
     },
   };
 }

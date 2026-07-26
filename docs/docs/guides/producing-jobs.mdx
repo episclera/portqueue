@@ -3,7 +3,17 @@ id: producing-jobs
 title: Producing jobs
 sidebar_label: Producing jobs
 description: Add, schedule, prioritize, retry, and deduplicate jobs with PortQueue — one options object, typed payloads, idempotency keys, and transactional enqueue.
-keywords: [portqueue, job queue, background jobs, priorities, retries, idempotency, delayed jobs, transactions]
+keywords:
+  [
+    portqueue,
+    job queue,
+    background jobs,
+    priorities,
+    retries,
+    idempotency,
+    delayed jobs,
+    transactions,
+  ]
 ---
 
 import TxTabs from '@site/src/components/TxTabs';
@@ -32,23 +42,27 @@ the rest are optional and default sensibly.
 
 ## Scheduling
 
-All timing lives under the `schedule` group — pass exactly one mode:
+All timing lives under the `schedule` group — pass exactly one mode. Durations are **seconds**:
 
 ```ts
-await emailsQueue.addJob({ data, schedule: { startAfter: '24h' } });                 // Duration string
+await emailsQueue.addJob({ data, schedule: { startAfterSeconds: 86_400 } }); // 24 h, in seconds
 await emailsQueue.addJob({ data, schedule: { startAfter: new Date('2026-08-01T09:00:00Z') } });
-await emailsQueue.addJob({ data, schedule: { startEvery: '30s' } });                 // recurring interval
-await emailsQueue.addJob({ data, schedule: { cron: '0 8 * * 1-5' } });               // recurring cron (UTC)
-await emailsQueue.addJob({ data, schedule: { cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' } } });
+await emailsQueue.addJob({ data, schedule: { startEverySeconds: 30 } }); // recurring interval, in seconds
+await emailsQueue.addJob({ data, schedule: { cron: '0 8 * * 1-5' } }); // recurring cron (UTC)
+await emailsQueue.addJob({
+  data,
+  schedule: { cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' } },
+});
 ```
 
-- `schedule.startAfter` — delay a **one-off** job: a `Duration` from now, or an absolute `Date`.
-- `schedule.startEvery` — a **recurring** fixed interval (a `Duration` between runs).
+- `schedule.startAfterSeconds` — delay a **one-off** job by N seconds from now.
+- `schedule.startAfter` — delay a **one-off** job until an absolute `Date`.
+- `schedule.startEverySeconds` — a **recurring** fixed interval, in seconds between runs.
 - `schedule.cron` — a **recurring** cron expression, a bare string (UTC) or `{ pattern, tz }`.
 
-Pick **exactly one** recurring mode, and `startAfter` can't be combined with a recurring mode.
+Pick **exactly one** recurring mode; a one-off delay can't be combined with a recurring mode.
 Omit `schedule` to run immediately. For a recurring mode, **every option on the add** (priority,
-retry/backoff, `expireIn`, `retention`, …) becomes the template stamped onto each spawned run — it
+retry/backoff, `expireInSeconds`, `retention`, …) becomes the template stamped onto each spawned run — it
 shapes the produced jobs, not the schedule. See [Delayed & recurring jobs](./scheduling.md) for the
 full recurring story (dedup, timezones, unscheduling).
 
@@ -59,7 +73,7 @@ await emailsQueue.addJob({ data, priority: 10 }); // higher values are claimed f
 ```
 
 `priority` orders ready jobs — higher values run sooner (default `0`). It composes with
-scheduling: a job becomes eligible at its `schedule.startAfter` time, then priority breaks ties
+scheduling: a job becomes eligible at its scheduled start time, then priority breaks ties
 among the ready set.
 
 ## Automatic retries
@@ -70,25 +84,30 @@ among the ready set.
 await emailsQueue.addJob({
   data,
   retry: {
-    maxAttempts: 5,                                    // total attempts incl. the first (default 1 = no retry)
-    delay: '2s',                                       // base delay before a retry
-    backoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2, maxDelay: '5m', jitter: true },
+    maxAttempts: 5, // total attempts incl. the first (default 1 = no retry)
+    delaySeconds: 2, // base delay before a retry, in seconds
+    backoff: {
+      strategy: BackoffStrategy.EXPONENTIAL,
+      factor: 2,
+      maxDelaySeconds: 300,
+      jitter: true,
+    },
   },
 });
 ```
 
 A throwing handler is retried per this policy until attempts are exhausted, then the job goes
-`FAILED`. *Which* thrown errors skip retry is a **consumer** concern (`dontAutoretryFor`) — see
+`FAILED`. _Which_ thrown errors skip retry is a **consumer** concern (`dontAutoretryFor`) — see
 [Consuming jobs → error handling](./consuming-jobs.md#error-handling--retries). Full field list in the
 [API reference](../api-reference.mdx#retryoptions).
 
 ## Expiry
 
 ```ts
-await emailsQueue.addJob({ data, expireIn: '1h' }); // give up if it hasn't started in time
+await emailsQueue.addJob({ data, expireInSeconds: 3600 }); // give up if it hasn't started within an hour
 ```
 
-`expireIn` (a `Duration`) drops the job to `EXPIRED` if it hasn't **started** within the window —
+`expireInSeconds` drops the job to `EXPIRED` if it hasn't **started** within that many seconds —
 useful for time-sensitive work that's worthless if delayed. It bounds the wait to start, not the
 handler's own run time.
 
@@ -97,7 +116,7 @@ handler's own run time.
 ```ts
 await emailsQueue.addJob({
   data,
-  retention: { mode: RetentionMode.DELETE_AFTER, ttl: '7d' },
+  retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 604_800 }, // 7 days, in seconds
 });
 ```
 
@@ -113,7 +132,7 @@ await emailsQueue.addJob({ data, preferredInstanceKeyPattern: 'ram-8gb.*cpu-4cor
 ```
 
 `preferredInstanceKeyPattern` is a regular-expression **source string** matched against instance
-keys — only servers whose `instanceKey` matches will claim the job. It requires the *producing*
+keys — only servers whose `instanceKey` matches will claim the job. It requires the _producing_
 process to have an `instanceKey`. The match is **unanchored** (a plain "key contains this" test)
 and case-sensitive, so a single capability tag like `'ram-8gb'` is often the whole pattern you
 need; add `^`/`$` when you want to match the key exactly. Prefer broad, capability-based
@@ -159,7 +178,7 @@ remove its **schedule** instead — see [Remove a schedule](#remove-a-schedule) 
 await emailsQueue.removeSchedule({ scheduleId }); // delete a schedule row
 ```
 
-`removeSchedule` deletes a row from the **schedule** table, so no *new* jobs are produced from
+`removeSchedule` deletes a row from the **schedule** table, so no _new_ jobs are produced from
 that recurrence — this is how you **stop a recurring (interval/cron) job**. Jobs it has already
 produced are untouched; remove those separately with `removeJob` / `removeJobs` if you want them
 gone too.
@@ -169,8 +188,8 @@ gone too.
 Removal **deletes rows** — it is for cleanup, not for stopping work:
 
 ```ts
-await emailsQueue.removeJob({ jobId });                            // delete one job row (accepts tx)
-await emailsQueue.removeJobs({ jobIds: [a, b] });                 // delete several job rows by id
+await emailsQueue.removeJob({ jobId }); // delete one job row (accepts tx)
+await emailsQueue.removeJobs({ jobIds: [a, b] }); // delete several job rows by id
 await emailsQueue.removeJobs({ statuses: [JobStatus.COMPLETED] }); // bulk-delete job rows by status
 ```
 
@@ -188,7 +207,7 @@ A job that is currently **`ACTIVE`** (being processed) is never deleted — **ca
 - `removeJobs({ jobIds })` **skips any active ids** and returns a count that excludes them.
 - `removeJobs({ statuses })` **throws** if you pass `JobStatus.ACTIVE` — you can't bulk-delete
   running jobs by status.
-:::
+  :::
 
 :::warning Prefer retention over manual deletes
 Hand-deleting rows is easy to get wrong — you can lose failures you'd have wanted to triage.
@@ -202,7 +221,7 @@ Persisted and cluster-wide — every instance honours it:
 
 ```ts
 await emailsQueue.pause({ mode: PauseMode.PROCESSING }); // stop claiming; still accepts adds (default)
-await emailsQueue.pause({ mode: PauseMode.ALL });        // also refuse new adds (drain)
+await emailsQueue.pause({ mode: PauseMode.ALL }); // also refuse new adds (drain)
 await emailsQueue.resume();
 ```
 
@@ -210,20 +229,23 @@ await emailsQueue.resume();
 
 Both keys are **queue-scoped**, but they solve different problems:
 
-- **`idempotencyKey`** — a *first-writer-wins dedup identity*. The first add with a given key
+- **`idempotencyKey`** — a _first-writer-wins dedup identity_. The first add with a given key
   creates the job (or schedule); any later add with the same key on that queue returns the
   **existing** entity **unchanged** (`deduplicated: true`, `deduplicationReason: 'IDEMPOTENCY'`)
   and creates nothing. Dedup is **per entity**: a one-off add is matched against the jobs table, a
   recurring add against the schedule table (they never dedup against each other). Use it to
   guarantee an operation is enqueued **at most once ever** (per key).
-- **`singletonKey`** — *at most one active/pending job at a time* for that key. Unlike
+- **`singletonKey`** — _at most one active/pending job at a time_ for that key. Unlike
   `idempotencyKey`, it does not pin a permanent identity: once the job finishes, a new add with
   the same key can enqueue again. Use it to prevent a **second concurrent** run (e.g. one reindex
   per tenant at a time), while still allowing the next run later.
 
 ```ts
 const paymentsQueue = pq.createQueue('payments');
-const paymentsJob = await paymentsQueue.addJob({ data: { orderId }, idempotencyKey: `charge:${orderId}` });
+const paymentsJob = await paymentsQueue.addJob({
+  data: { orderId },
+  idempotencyKey: `charge:${orderId}`,
+});
 if (paymentsJob.deduplicated) logger.info('already queued', { jobId: paymentsJob.jobId }); // charged at most once
 
 const reindexQueue = pq.createQueue('reindex');
@@ -254,8 +276,8 @@ the design.
 Read-side views of what you've produced (all scoped to this queue):
 
 ```ts
-const emailsJob = await emailsQueue.getJob({ jobId });                    // JobSnapshot | null
+const emailsJob = await emailsQueue.getJob({ jobId }); // JobSnapshot | null
 const emailsPage = await emailsQueue.getJobs({ statuses: [JobStatus.FAILED] }); // cursor- or offset-paged; carries `total`
-const emailsStats = await emailsQueue.getQueueStats();                    // per-status counts
-const emailsSchedules = await emailsQueue.getSchedules();                 // recurring definitions
+const emailsStats = await emailsQueue.getQueueStats(); // per-status counts
+const emailsSchedules = await emailsQueue.getSchedules(); // recurring definitions
 ```

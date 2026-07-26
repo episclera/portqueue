@@ -4,7 +4,8 @@ import { BackoffStrategy, DeduplicationReason, RetentionMode } from '../options/
 /**
  * The normalized in-memory shape of a `job` row. Drivers own the
  * mapping between engine storage (timestamps, JSON, enums) and this record; core only
- * ever sees this shape. All keys camelCase; timestamps are epoch ms or null.
+ * ever sees this shape. All keys camelCase; timestamps are epoch ms or null, and every
+ * configured duration is seconds.
  */
 export interface JobRecord {
   id: string;
@@ -31,14 +32,14 @@ export interface JobRecord {
   processedOnInstanceKey: string | null;
   retryAttempt: number;
   retryMaxAttempts: number;
-  retryDelayMs: number;
+  retryDelaySeconds: number;
   retryBackoff: BackoffStrategy;
   retryBackoffFactor: number | null;
-  retryMaxDelayMs: number | null;
+  retryMaxDelaySeconds: number | null;
   retryJitter: boolean;
   failureMessage: string | null;
   retentionMode: RetentionMode;
-  retentionTtlMs: number | null;
+  retentionTtlSeconds: number | null;
   idempotencyKey: string | null;
   scheduleId: string | null;
   singletonKey: string | null;
@@ -55,13 +56,13 @@ export interface NewJobRecord {
   expireAt: number | null;
   retryAttempt: number;
   retryMaxAttempts: number;
-  retryDelayMs: number;
+  retryDelaySeconds: number;
   retryBackoff: BackoffStrategy;
   retryBackoffFactor: number | null;
-  retryMaxDelayMs: number | null;
+  retryMaxDelaySeconds: number | null;
   retryJitter: boolean;
   retentionMode: RetentionMode;
-  retentionTtlMs: number | null;
+  retentionTtlSeconds: number | null;
   idempotencyKey: string | null;
   scheduleId: string | null;
   singletonKey: string | null;
@@ -100,12 +101,12 @@ export interface ScheduleRow {
   id: string;
   queueName: string;
   cron: string | null;
-  everyMs: number | null;
+  everySeconds: number | null;
   timezone: string | null;
   data: unknown;
   priority: number | null;
   retryMaxAttempts: number | null;
-  retryDelayMs: number | null;
+  retryDelaySeconds: number | null;
   nextRunAt: number | null;
   lastRunAt: number | null;
   enabled: boolean;
@@ -122,18 +123,18 @@ export interface ScheduleRow {
 /**
  * The per-run job template a recurring schedule carries — every option passed to the recurring
  * `addJob` that shapes the *spawned jobs* (not the schedule itself), beyond the fields the schedule
- * already stores as columns (`priority`, `retryMaxAttempts`, `retryDelayMs`). `expireInMs` is a
+ * already stores as columns (`priority`, `retryMaxAttempts`, `retryDelaySeconds`). `expireInSeconds` is a
  * duration re-applied relative to each run's fire time. Persisted as one JSON column so new options
  * don't need a schema change.
  */
 export interface ScheduledJobOptions {
-  expireInMs: number | null;
+  expireInSeconds: number | null;
   retryBackoff: BackoffStrategy;
   retryBackoffFactor: number | null;
-  retryMaxDelayMs: number | null;
+  retryMaxDelaySeconds: number | null;
   retryJitter: boolean;
   retentionMode: RetentionMode;
-  retentionTtlMs: number | null;
+  retentionTtlSeconds: number | null;
   singletonKey: string | null;
   preferredInstanceKeyPattern: string | null;
 }
@@ -143,12 +144,12 @@ export interface NewScheduleRow {
   id?: string;
   queueName: string;
   cron: string | null;
-  everyMs: number | null;
+  everySeconds: number | null;
   timezone: string | null;
   data: unknown;
   priority: number | null;
   retryMaxAttempts: number | null;
-  retryDelayMs: number | null;
+  retryDelaySeconds: number | null;
   nextRunAt: number | null;
   enabled: boolean;
   startAt: number | null;
@@ -158,4 +159,3 @@ export interface NewScheduleRow {
   /** The resolved per-run job template stamped onto every job this schedule spawns. */
   jobOptions: ScheduledJobOptions | null;
 }
-

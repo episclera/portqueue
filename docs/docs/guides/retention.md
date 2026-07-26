@@ -22,25 +22,25 @@ nothing is silently inherited) and override per job when a specific job needs to
 | `RetentionMode` | Meaning |
 |---|---|
 | `KEEP_FOREVER` | **Default.** Finished jobs are never pruned. |
-| `DELETE_AFTER` | Finished jobs become eligible for deletion once their `ttl` has elapsed. |
+| `DELETE_AFTER` | Finished jobs become eligible for deletion once their `ttlSeconds` has elapsed. |
 
 ```ts
 import { RetentionMode } from '@portqueue/core';
 
 // per-queue default
 const emailsQueue = pq.createQueue('emails', {
-  retention: { mode: RetentionMode.DELETE_AFTER, ttl: '3d' },
+  retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 259_200 }, // 3 days, in seconds
 });
 
 // per-job override (highest precedence) — keep this one longer
-await emailsQueue.addJob({ data, retention: { mode: RetentionMode.DELETE_AFTER, ttl: '30d' } });
+await emailsQueue.addJob({ data, retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 2_592_000 } }); // 30 days
 ```
 
-`RetentionOptions` is `{ mode: RetentionMode; ttl?: Duration; statuses?: JobStatus[] }`:
+`RetentionOptions` is `{ mode: RetentionMode; ttlSeconds?: number; statuses?: JobStatus[] }`:
 
-- **`ttl`** — how long after a job **finishes** before it may be deleted. **Required** for
-  `DELETE_AFTER`; ignored for `KEEP_FOREVER`. It's a `Duration` (units `ms`/`s`/`m`/`h`/`d`,
-  decimals ok, or a plain number of milliseconds).
+- **`ttlSeconds`** — how many **seconds** after a job **finishes** before it may be deleted. **Required** for
+  `DELETE_AFTER`; ignored for `KEEP_FOREVER`. Like every PortQueue duration it is a plain number of
+  seconds — `604_800` for a week — so there is no unit string to misread.
 - **`statuses`** — which finished statuses the policy applies to. **Defaults to `[COMPLETED]`**,
   so failed/cancelled/expired jobs are kept unless you list them explicitly.
 
@@ -66,8 +66,8 @@ inspect and re-run with `retryJob`.
 
 ## When pruning runs
 
-Retention sweeps run on the shared **maintenance tick**, controlled by `tickIntervalMs`
-(default **5000ms**). Each sweep hard-deletes finished, TTL-elapsed jobs in **bounded batches**
+Retention sweeps run on the shared **maintenance tick**, controlled by `tickIntervalSeconds`
+(default **5 seconds**). Each sweep hard-deletes finished, TTL-elapsed jobs in **bounded batches**
 (500 rows per iteration, up to 20 iterations per sweep) so the `job` table is never long-locked.
 The sweep is **cluster-coordinated** — it runs on the same tick across instances rather than once
 per process. **In-flight / unfinished jobs are never removed** by retention.

@@ -13,7 +13,9 @@ export const removeCommand: Command = {
     const id = flagString(flags, 'id');
     const scheduleId = flagString(flags, 'schedule-id');
     if ((id && scheduleId) || (!id && !scheduleId)) {
-      throw new CliError('remove requires exactly one of --id (a job) or --schedule-id (a schedule).');
+      throw new CliError(
+        'remove requires exactly one of --id (a job) or --schedule-id (a schedule).',
+      );
     }
     if (id) {
       const snap = await pq.getJob({ jobId: id });

@@ -70,7 +70,7 @@ export interface PortQueueEventPayloads {
     jobId: string;
     queue: string;
     returnValue: unknown;
-    durationMs: number;
+    durationSeconds: number;
   };
   [PortQueueEvent.JOB_FAILED]: {
     jobId: string;
@@ -84,7 +84,11 @@ export interface PortQueueEventPayloads {
     retryAttempt: number;
     nextRunAt: Date;
   };
-  [PortQueueEvent.JOB_STALLED]: { jobId: string; queue: string; previousInstanceKey: string | null };
+  [PortQueueEvent.JOB_STALLED]: {
+    jobId: string;
+    queue: string;
+    previousInstanceKey: string | null;
+  };
   [PortQueueEvent.JOB_EXPIRED]: { jobId: string; queue: string };
   [PortQueueEvent.JOB_CANCELLED]: { jobId: string; queue: string };
   [PortQueueEvent.JOB_REMOVED]: { jobId: string; queue: string };

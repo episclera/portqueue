@@ -112,14 +112,14 @@ const JOB_COLUMNS = [
   JobColumn.PROCESSED_ON_INSTANCE_KEY,
   JobColumn.RETRY_ATTEMPT,
   JobColumn.RETRY_MAX_ATTEMPTS,
-  JobColumn.RETRY_DELAY_MS,
+  JobColumn.RETRY_DELAY_SECONDS,
   JobColumn.RETRY_BACKOFF,
   JobColumn.RETRY_BACKOFF_FACTOR,
-  JobColumn.RETRY_MAX_DELAY_MS,
+  JobColumn.RETRY_MAX_DELAY_SECONDS,
   JobColumn.RETRY_JITTER,
   JobColumn.FAILURE_MESSAGE,
   JobColumn.RETENTION_MODE,
-  JobColumn.RETENTION_TTL_MS,
+  JobColumn.RETENTION_TTL_SECONDS,
   JobColumn.IDEMPOTENCY_KEY,
   JobColumn.SCHEDULE_ID,
   JobColumn.SINGLETON_KEY,
@@ -360,14 +360,14 @@ export class MysqlDriver implements Driver {
       processedOnInstanceKey: this.strOrNull(row[JobColumn.PROCESSED_ON_INSTANCE_KEY]),
       retryAttempt: Number(row[JobColumn.RETRY_ATTEMPT]),
       retryMaxAttempts: Number(row[JobColumn.RETRY_MAX_ATTEMPTS]),
-      retryDelayMs: Number(row[JobColumn.RETRY_DELAY_MS]),
+      retryDelaySeconds: Number(row[JobColumn.RETRY_DELAY_SECONDS]),
       retryBackoff: row[JobColumn.RETRY_BACKOFF] as BackoffStrategy,
       retryBackoffFactor: this.numOrNull(row[JobColumn.RETRY_BACKOFF_FACTOR]),
-      retryMaxDelayMs: this.numOrNull(row[JobColumn.RETRY_MAX_DELAY_MS]),
+      retryMaxDelaySeconds: this.numOrNull(row[JobColumn.RETRY_MAX_DELAY_SECONDS]),
       retryJitter: this.boolOut(row[JobColumn.RETRY_JITTER]),
       failureMessage: this.strOrNull(row[JobColumn.FAILURE_MESSAGE]),
       retentionMode: row[JobColumn.RETENTION_MODE] as RetentionMode,
-      retentionTtlMs: this.numOrNull(row[JobColumn.RETENTION_TTL_MS]),
+      retentionTtlSeconds: this.numOrNull(row[JobColumn.RETENTION_TTL_SECONDS]),
       idempotencyKey: this.strOrNull(row[JobColumn.IDEMPOTENCY_KEY]),
       scheduleId: this.strOrNull(row[JobColumn.SCHEDULE_ID]),
       singletonKey: this.strOrNull(row[JobColumn.SINGLETON_KEY]),
@@ -399,14 +399,14 @@ export class MysqlDriver implements Driver {
       id: String(row[ScheduleColumn.ID]),
       queueName: String(row[ScheduleColumn.QUEUE_NAME]),
       cron: this.strOrNull(row[ScheduleColumn.CRON]),
-      everyMs: this.numOrNull(row[ScheduleColumn.EVERY_MS]),
+      everySeconds: this.numOrNull(row[ScheduleColumn.EVERY_SECONDS]),
       timezone: this.strOrNull(row[ScheduleColumn.TIMEZONE]),
       data: this.fromJson(row[ScheduleColumn.DATA]),
       jobOptions:
         (this.fromJson(row[ScheduleColumn.JOB_OPTIONS]) as ScheduledJobOptions | null) ?? null,
       priority: this.numOrNull(row[ScheduleColumn.PRIORITY]),
       retryMaxAttempts: this.numOrNull(row[ScheduleColumn.RETRY_MAX_ATTEMPTS]),
-      retryDelayMs: this.numOrNull(row[ScheduleColumn.RETRY_DELAY_MS]),
+      retryDelaySeconds: this.numOrNull(row[ScheduleColumn.RETRY_DELAY_SECONDS]),
       nextRunAt: this.numOrNull(row[ScheduleColumn.NEXT_RUN_AT]),
       lastRunAt: this.numOrNull(row[ScheduleColumn.LAST_RUN_AT]),
       enabled: this.boolOut(row[ScheduleColumn.ENABLED]),
@@ -446,14 +446,14 @@ export class MysqlDriver implements Driver {
       null, // processed_on_instance_key (set at claim time)
       job.retryAttempt,
       job.retryMaxAttempts,
-      job.retryDelayMs,
+      job.retryDelaySeconds,
       job.retryBackoff,
       job.retryBackoffFactor,
-      job.retryMaxDelayMs,
+      job.retryMaxDelaySeconds,
       this.boolIn(job.retryJitter),
       null, // failure_message
       job.retentionMode,
-      job.retentionTtlMs,
+      job.retentionTtlSeconds,
       job.idempotencyKey,
       job.scheduleId,
       job.singletonKey,
@@ -589,13 +589,13 @@ export class MysqlDriver implements Driver {
       ScheduleColumn.ID,
       ScheduleColumn.QUEUE_NAME,
       ScheduleColumn.CRON,
-      ScheduleColumn.EVERY_MS,
+      ScheduleColumn.EVERY_SECONDS,
       ScheduleColumn.TIMEZONE,
       ScheduleColumn.DATA,
       ScheduleColumn.JOB_OPTIONS,
       ScheduleColumn.PRIORITY,
       ScheduleColumn.RETRY_MAX_ATTEMPTS,
-      ScheduleColumn.RETRY_DELAY_MS,
+      ScheduleColumn.RETRY_DELAY_SECONDS,
       ScheduleColumn.NEXT_RUN_AT,
       ScheduleColumn.ENABLED,
       ScheduleColumn.START_AT,
@@ -608,13 +608,13 @@ export class MysqlDriver implements Driver {
       id,
       schedule.queueName,
       schedule.cron,
-      schedule.everyMs,
+      schedule.everySeconds,
       schedule.timezone,
       this.toJson(schedule.data),
       this.toJson(schedule.jobOptions),
       schedule.priority,
       schedule.retryMaxAttempts,
-      schedule.retryDelayMs,
+      schedule.retryDelaySeconds,
       schedule.nextRunAt,
       this.boolIn(schedule.enabled),
       schedule.startAt,
@@ -665,12 +665,12 @@ export class MysqlDriver implements Driver {
   async claimJobs(options: {
     queueName: string;
     limit: number;
-    lockDurationMs: number;
+    lockDurationSeconds: number;
     now: number;
     instanceKey?: string | null;
   }): Promise<JobRecord[]> {
-    const { queueName, limit, lockDurationMs, now, instanceKey } = options;
-    const lockedUntil = now + lockDurationMs;
+    const { queueName, limit, lockDurationSeconds, now, instanceKey } = options;
+    const lockedUntil = now + lockDurationSeconds * 1000;
 
     // Select claimable ids highest-priority-first, locking them for the transaction with SKIP
     // LOCKED so concurrent claimers never contend. Affinity (a preferred key pattern) can't be
@@ -741,12 +741,12 @@ export class MysqlDriver implements Driver {
 
   async extendLock(options: {
     jobId: string;
-    lockDurationMs: number;
+    lockDurationSeconds: number;
     now: number;
   }): Promise<boolean> {
     const res = await this.execute(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.LOCKED_UNTIL} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} = '${JobStatus.ACTIVE}'`,
-      [options.now + options.lockDurationMs, options.now, options.jobId],
+      [options.now + options.lockDurationSeconds * 1000, options.now, options.jobId],
     );
     return res.rowCount > 0;
   }
@@ -854,7 +854,11 @@ export class MysqlDriver implements Driver {
     });
   }
 
-  async requeueJob(options: { jobId: string; now: number; tx?: TransactionHandle }): Promise<InsertedJobRow> {
+  async requeueJob(options: {
+    jobId: string;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<InsertedJobRow> {
     // On the caller's transaction when there is one. A read issued outside an in-flight
     // transaction blocks behind it on a single-connection engine — a deadlock, not a slow query.
     const job = await this.getJob({
@@ -1144,7 +1148,11 @@ export class MysqlDriver implements Driver {
   }
 
   // --- Job control ---
-  async cancelJob(options: { jobId: string; now: number; tx?: TransactionHandle }): Promise<boolean> {
+  async cancelJob(options: {
+    jobId: string;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<boolean> {
     const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.CANCELLED}', ${JobColumn.CANCELLED_AT} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}')`,
       [options.now, options.now, options.jobId],
@@ -1295,7 +1303,9 @@ export class MysqlDriver implements Driver {
   private instanceFilterClauses(options: InstanceListFilter, params: unknown[]): string {
     const clauses: string[] = [];
     if (options.search) {
-      clauses.push(`LOWER(${InstanceColumn.INSTANCE_KEY}) LIKE ${this.ph(params.length)} ESCAPE '!'`);
+      clauses.push(
+        `LOWER(${InstanceColumn.INSTANCE_KEY}) LIKE ${this.ph(params.length)} ESCAPE '!'`,
+      );
       params.push(likePattern(options.search));
     }
     if (options.processingPaused !== undefined) {
@@ -1378,8 +1388,8 @@ export class MysqlDriver implements Driver {
     // MySQL forbids LIMIT inside an `IN (SELECT ... LIMIT)` subquery, so wrap it one level deeper.
     const res = await this.execute(
       `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${statusPh}) ` +
-        `AND ${JobColumn.RETENTION_MODE} = 'DELETE_AFTER' AND ${JobColumn.RETENTION_TTL_MS} IS NOT NULL ` +
-        `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_MS}) <= ${cutoffPh} LIMIT ${limitPh}) AS victims)`,
+        `AND ${JobColumn.RETENTION_MODE} = 'DELETE_AFTER' AND ${JobColumn.RETENTION_TTL_SECONDS} IS NOT NULL ` +
+        `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_SECONDS} * 1000) <= ${cutoffPh} LIMIT ${limitPh}) AS victims)`,
       [...options.statuses, options.olderThan, options.limit],
     );
     return res.rowCount;

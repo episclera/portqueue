@@ -44,7 +44,6 @@ export type {
   SystemMonitorOptions,
   Page,
 } from './options/common';
-export type { Duration } from './util/duration';
 
 // Result & snapshot types
 export type {

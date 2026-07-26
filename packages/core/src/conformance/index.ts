@@ -41,13 +41,13 @@ function newJob(
     expireAt: null,
     retryAttempt: 0,
     retryMaxAttempts: 3,
-    retryDelayMs: 100,
+    retryDelaySeconds: 0.1,
     retryBackoff: BackoffStrategy.FIXED,
     retryBackoffFactor: null,
-    retryMaxDelayMs: null,
+    retryMaxDelaySeconds: null,
     retryJitter: false,
     retentionMode: RetentionMode.KEEP_FOREVER,
-    retentionTtlMs: null,
+    retentionTtlSeconds: null,
     idempotencyKey: null,
     scheduleId: null,
     singletonKey: null,
@@ -85,7 +85,7 @@ export function runConformance(options: ConformanceOptions): void {
       const claimed = await driver.claimJobs({
         queueName,
         limit: 10,
-        lockDurationMs: 30000,
+        lockDurationSeconds: 30,
         now: now + 1,
       });
       expect(claimed).toHaveLength(2);
@@ -100,7 +100,7 @@ export function runConformance(options: ConformanceOptions): void {
         driver.claimJobs({
           queueName,
           limit: 20,
-          lockDurationMs: 30000,
+          lockDurationSeconds: 30,
           now: now + 1,
         });
       const [a, b] = await Promise.all([claimOnce(), claimOnce()]);
@@ -114,7 +114,7 @@ export function runConformance(options: ConformanceOptions): void {
       const claimed = await driver.claimJobs({
         queueName,
         limit: 10,
-        lockDurationMs: 30000,
+        lockDurationSeconds: 30,
         now: now + 1,
       });
       expect(claimed).toHaveLength(0);
@@ -125,7 +125,7 @@ export function runConformance(options: ConformanceOptions): void {
       await driver.claimJobs({
         queueName,
         limit: 1,
-        lockDurationMs: 30000,
+        lockDurationSeconds: 30,
         now: now + 1,
       });
       await driver.completeJob({ jobId: inserted.id, returnValue: { ok: true }, now: now + 2 });
@@ -139,7 +139,7 @@ export function runConformance(options: ConformanceOptions): void {
       await driver.claimJobs({
         queueName,
         limit: 1,
-        lockDurationMs: 1000,
+        lockDurationSeconds: 1,
         now,
       });
       const reclaimed = await driver.reclaimStalledJobs({ now: now + 5000 });
@@ -160,12 +160,12 @@ export function runConformance(options: ConformanceOptions): void {
       const base = {
         queueName,
         cron: '0 0 * * *',
-        everyMs: null,
+        everySeconds: null,
         timezone: 'UTC',
         data: {},
         priority: null,
         retryMaxAttempts: null,
-        retryDelayMs: null,
+        retryDelaySeconds: null,
         nextRunAt: now + 1000,
         enabled: true,
         startAt: null,
@@ -264,7 +264,7 @@ export function runConformance(options: ConformanceOptions): void {
       const us = await driver.claimJobs({
         queueName,
         limit: 10,
-        lockDurationMs: 30000,
+        lockDurationSeconds: 30,
         now: now + 1,
         instanceKey: 'worker-us-1',
       });
@@ -273,7 +273,7 @@ export function runConformance(options: ConformanceOptions): void {
       const eu = await driver.claimJobs({
         queueName,
         limit: 10,
-        lockDurationMs: 30000,
+        lockDurationSeconds: 30,
         now: now + 2,
         instanceKey: 'worker-eu-1',
       });
@@ -286,7 +286,7 @@ export function runConformance(options: ConformanceOptions): void {
       const claim = await driver.claimJobs({
         queueName,
         limit: 10,
-        lockDurationMs: 30000,
+        lockDurationSeconds: 30,
         now: now + 1,
         instanceKey: 'worker-any-1',
       });
@@ -301,12 +301,15 @@ export function runConformance(options: ConformanceOptions): void {
         });
       }
       await driver.insertJob({
-        job: newJob(queueName, now, { data: { mine: true }, preferredInstanceKeyPattern: '^worker-us-' }),
+        job: newJob(queueName, now, {
+          data: { mine: true },
+          preferredInstanceKeyPattern: '^worker-us-',
+        }),
       });
       const claim = await driver.claimJobs({
         queueName,
         limit: 5,
-        lockDurationMs: 30000,
+        lockDurationSeconds: 30,
         now: now + 1,
         instanceKey: 'worker-us-1',
       });

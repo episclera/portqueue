@@ -45,7 +45,10 @@ export async function buildPortQueue(flags: DriverFlags): Promise<PortQueue> {
 }
 
 /** Determines the engine from `--driver`, else infers it from the connection string scheme. */
-function resolveEngine(driver: string | undefined, connectionString: string | undefined): CliEngine {
+function resolveEngine(
+  driver: string | undefined,
+  connectionString: string | undefined,
+): CliEngine {
   if (driver) {
     const normalized = driver.toLowerCase();
     if (!KNOWN_ENGINES.has(normalized)) {
@@ -86,10 +89,7 @@ function storageOptions(flags: DriverFlags): {
   };
 }
 
-function requireConnectionString(
-  engine: CliEngine,
-  connectionString: string | undefined,
-): string {
+function requireConnectionString(engine: CliEngine, connectionString: string | undefined): string {
   if (!connectionString) {
     throw new CliError(
       `The ${engine} driver needs a connection string. Pass --connection-string <url> ` +

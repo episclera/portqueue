@@ -43,10 +43,15 @@ type Mode = 'once' | 'recurring';
 type Cadence = 'cron' | 'every';
 
 /** Field-level messages, keyed by the field they belong under. */
-type Errors = Partial<Record<'data' | 'cron' | 'every' | 'priority' | 'retry' | 'pattern', string>>;
+type Errors = Partial<
+  Record<'data' | 'cron' | 'every' | 'priority' | 'retry' | 'pattern' | 'startAfter', string>
+>;
 
-/** The shortest interval worth scheduling; below this the scheduler poll dominates anyway. */
-const MIN_INTERVAL_MS = 1000;
+/**
+ * The shortest interval worth scheduling, in seconds; below this the scheduler poll dominates
+ * anyway. Durations in PortQueue are always seconds, so this field is a plain number of them.
+ */
+const MIN_INTERVAL_SECONDS = 1;
 
 /**
  * A standard 5-field cron expression, validated well enough to catch typos client-side. Core
@@ -103,9 +108,10 @@ export function AddJobForm({
   const [singletonKey, setSingletonKey] = useState<string>('');
   const [retryMaxAttempts, setRetryMaxAttempts] = useState<number | null>(null);
   const [instancePattern, setInstancePattern] = useState<string>('');
-  const [startAfter, setStartAfter] = useState<string>('');
+  const [startAfterSeconds, setStartAfterSeconds] = useState<number | null>(null);
+  const [startAt, setStartAt] = useState<string>('');
   const [cron, setCron] = useState<string>('');
-  const [everyMs, setEveryMs] = useState<number | null>(null);
+  const [everySeconds, setEverySeconds] = useState<number | null>(null);
   const [timezone, setTimezone] = useState<string>('');
 
   const [errors, setErrors] = useState<Errors>({});
@@ -119,9 +125,10 @@ export function AddJobForm({
     setSingletonKey('');
     setRetryMaxAttempts(null);
     setInstancePattern('');
-    setStartAfter('');
+    setStartAfterSeconds(null);
+    setStartAt('');
     setCron('');
-    setEveryMs(null);
+    setEverySeconds(null);
     setTimezone('');
     setErrors({});
     setMode('once');
@@ -148,7 +155,10 @@ export function AddJobForm({
     if (priority !== null && !Number.isInteger(priority)) {
       next.priority = 'Priority must be a whole number.';
     }
-    if (retryMaxAttempts !== null && (!Number.isInteger(retryMaxAttempts) || retryMaxAttempts < 0)) {
+    if (
+      retryMaxAttempts !== null &&
+      (!Number.isInteger(retryMaxAttempts) || retryMaxAttempts < 0)
+    ) {
       next.retry = 'Max attempts must be a whole number of 0 or more.';
     }
     if (instancePattern) {
@@ -159,14 +169,24 @@ export function AddJobForm({
       }
     }
 
+    if (mode === 'once') {
+      if (startAfterSeconds !== null && startAt) {
+        next.startAfter = 'Set a delay in seconds or an exact date — not both.';
+      } else if (startAfterSeconds !== null && startAfterSeconds < 0) {
+        next.startAfter = 'A delay cannot be negative.';
+      } else if (startAt && Number.isNaN(new Date(startAt).getTime())) {
+        next.startAfter = 'Not a date the browser understands (try 2026-01-01T00:00:00Z).';
+      }
+    }
+
     if (mode === 'recurring') {
       if (cadence === 'cron') {
         if (!cron.trim()) next.cron = 'A cron expression is required for this cadence.';
         else next.cron = validateCron(cron);
-      } else if (everyMs === null) {
+      } else if (everySeconds === null) {
         next.every = 'An interval is required for this cadence.';
-      } else if (!Number.isInteger(everyMs) || everyMs < MIN_INTERVAL_MS) {
-        next.every = `The interval must be a whole number of at least ${MIN_INTERVAL_MS}ms.`;
+      } else if (everySeconds < MIN_INTERVAL_SECONDS) {
+        next.every = `The interval must be at least ${MIN_INTERVAL_SECONDS} second.`;
       }
     }
 
@@ -189,12 +209,13 @@ export function AddJobForm({
       ...(singletonKey ? { singletonKey } : {}),
       ...(typeof retryMaxAttempts === 'number' ? { retryMaxAttempts } : {}),
       ...(instancePattern ? { preferredInstanceKeyPattern: instancePattern } : {}),
-      ...(mode === 'once' && startAfter ? { startAfter } : {}),
+      ...(mode === 'once' && startAfterSeconds !== null ? { startAfterSeconds } : {}),
+      ...(mode === 'once' && startAt ? { startAfter: new Date(startAt).toISOString() } : {}),
       ...(mode === 'recurring' && cadence === 'cron'
         ? { cron: timezone ? { pattern: cron, tz: timezone } : cron }
         : {}),
-      ...(mode === 'recurring' && cadence === 'every' && everyMs !== null
-        ? { startEvery: everyMs }
+      ...(mode === 'recurring' && cadence === 'every' && everySeconds !== null
+        ? { startEverySeconds: everySeconds }
         : {}),
     };
 
@@ -310,18 +331,36 @@ export function AddJobForm({
           </Field>
 
           {mode === 'once' ? (
-            <Field
-              label="Start after"
-              hint="Optional delay — a duration like '30s' or an ISO date"
-              htmlFor="add-job-start-after"
-            >
-              <Input
-                id="add-job-start-after"
-                placeholder="e.g. 30s, 5m, 2026-01-01T00:00:00Z"
-                value={startAfter}
-                onChange={(e) => setStartAfter(e.target.value)}
-              />
-            </Field>
+            <>
+              <Field
+                label="Start after (seconds)"
+                hint="Optional delay from now. Every duration in PortQueue is seconds."
+                error={errors.startAfter}
+                htmlFor="add-job-start-after"
+              >
+                <InputNumber
+                  id="add-job-start-after"
+                  min={0}
+                  placeholder="e.g. 30"
+                  invalid={errors.startAfter !== undefined}
+                  value={startAfterSeconds}
+                  onChange={setStartAfterSeconds}
+                />
+              </Field>
+              <Field
+                label="…or start at"
+                hint="An exact instant instead of a delay — an ISO date"
+                htmlFor="add-job-start-at"
+              >
+                <Input
+                  id="add-job-start-at"
+                  placeholder="e.g. 2026-01-01T00:00:00Z"
+                  invalid={errors.startAfter !== undefined}
+                  value={startAt}
+                  onChange={(e) => setStartAt(e.target.value)}
+                />
+              </Field>
+            </>
           ) : (
             <>
               {/* One cadence, picked explicitly, and only the chosen field is rendered — so
@@ -365,13 +404,19 @@ export function AddJobForm({
                   </Field>
                 </>
               ) : (
-                <Field label="Every (ms)" required error={errors.every} htmlFor="add-job-every">
+                <Field
+                  label="Every (seconds)"
+                  required
+                  hint="Seconds between runs"
+                  error={errors.every}
+                  htmlFor="add-job-every"
+                >
                   <InputNumber
                     id="add-job-every"
-                    min={MIN_INTERVAL_MS}
-                    value={everyMs}
-                    onChange={setEveryMs}
-                    placeholder="e.g. 60000"
+                    min={MIN_INTERVAL_SECONDS}
+                    value={everySeconds}
+                    onChange={setEverySeconds}
+                    placeholder="e.g. 60"
                     invalid={errors.every !== undefined}
                   />
                 </Field>

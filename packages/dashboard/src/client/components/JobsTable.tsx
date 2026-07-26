@@ -53,7 +53,11 @@ const FILTER_DEFS: FilterDef[] = [
 /** A job can be cancelled while it is still on its way through the queue. */
 const CANCELLABLE: JobStatus[] = [JobStatus.PENDING, JobStatus.ACTIVE, JobStatus.RETRY];
 
-export function JobsTable({ queue, scheduleId, prefix = 'jobs' }: JobsTableProps): React.ReactElement {
+export function JobsTable({
+  queue,
+  scheduleId,
+  prefix = 'jobs',
+}: JobsTableProps): React.ReactElement {
   const { run, runBatch } = useAction();
   const params = useTableParams(prefix, FILTER_KEYS);
   const statusesKey = (params.filters.status ?? []).join(',');
@@ -71,7 +75,9 @@ export function JobsTable({ queue, scheduleId, prefix = 'jobs' }: JobsTableProps
     order: 'desc',
   };
 
-  const jobs = usePolledQuery<JobPageDto>(queryKeys.jobs(listParams), () => api.getJobs(listParams));
+  const jobs = usePolledQuery<JobPageDto>(queryKeys.jobs(listParams), () =>
+    api.getJobs(listParams),
+  );
 
   const rows = useMemo(() => jobs.data?.items ?? [], [jobs.data]);
   const total = jobs.data?.total ?? 0;

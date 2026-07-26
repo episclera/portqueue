@@ -86,7 +86,8 @@ export class MigrationRunner {
     }
   }
 
-  private async waitForVersion(target: number, timeoutMs = 30000): Promise<void> {
+  private async waitForVersion(target: number, timeoutSeconds = 30): Promise<void> {
+    const timeoutMs = timeoutSeconds * 1000;
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       const v = await this.driver.getSchemaVersion();

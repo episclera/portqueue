@@ -179,24 +179,30 @@ describe('adapters', () => {
 
       let hijacked = false;
       const ownedRes = makeRes();
-      onRequest({ raw: makeReq({ url: '/portqueue' }) as never }, {
-        raw: ownedRes as never,
-        hijack: () => {
-          hijacked = true;
+      onRequest(
+        { raw: makeReq({ url: '/portqueue' }) as never },
+        {
+          raw: ownedRes as never,
+          hijack: () => {
+            hijacked = true;
+          },
         },
-      });
+      );
       await until(() => ownedRes.ended);
       expect(hijacked).toBe(true);
       expect(ownedRes.statusCode).toBe(200);
 
       let otherHijacked = false;
       const otherRes = makeRes();
-      onRequest({ raw: makeReq({ url: '/other' }) as never }, {
-        raw: otherRes as never,
-        hijack: () => {
-          otherHijacked = true;
+      onRequest(
+        { raw: makeReq({ url: '/other' }) as never },
+        {
+          raw: otherRes as never,
+          hijack: () => {
+            otherHijacked = true;
+          },
         },
-      });
+      );
       expect(otherHijacked).toBe(false);
       expect(otherRes.ended).toBe(false);
     });

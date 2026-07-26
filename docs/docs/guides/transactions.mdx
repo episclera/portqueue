@@ -3,7 +3,17 @@ id: transactions
 title: Transactional enqueue
 sidebar_label: Transactions
 description: Enqueue jobs inside your own database transaction with PortQueue — close the dual-write gap using Knex, Kysely, Drizzle, Prisma, TypeORM, and raw drivers.
-keywords: [portqueue, transactions, transactional outbox, postgres queue, database queue, job queue, idempotency, node.js]
+keywords:
+  [
+    portqueue,
+    transactions,
+    transactional outbox,
+    postgres queue,
+    database queue,
+    job queue,
+    idempotency,
+    node.js,
+  ]
 ---
 
 import TxTabs from '@site/src/components/TxTabs';
@@ -21,7 +31,7 @@ commit.
 ## The core pattern
 
 The flow is always the same four steps: **open a transaction → do your business write on it
-→ `addJob({ tx })` on the *same* transaction → commit.** Both writes land together or not at
+→ `addJob({ tx })` on the _same_ transaction → commit.** Both writes land together or not at
 all. If you roll back, the job insert rolls back with your business row.
 
 ```ts
@@ -32,9 +42,7 @@ const emailsQueue = pq.createQueue<{ to: string }>('emails');
 // 1. Open your own transaction.
 await knex.transaction(async (trx) => {
   // 2. Do your business write on it.
-  const [order] = await trx('orders')
-    .insert({ customer: 'a@b.com', total: 4200 })
-    .returning('*');
+  const [order] = await trx('orders').insert({ customer: 'a@b.com', total: 4200 }).returning('*');
 
   // 3. Enqueue on the SAME transaction — wrap it in a PortQueue adapter.
   await emailsQueue.addJob({
@@ -56,8 +64,8 @@ business row hasn't been committed yet.
 On **Postgres / PGLite** the driver issues a `NOTIFY` immediately after your transaction commits,
 so `LISTEN`-ing workers wake and claim the job almost instantly. On engines **without
 LISTEN/NOTIFY** (**SQLite**, **MySQL**) there is no cross-process wake-up — a worker picks the job
-up on its next poll (`limiter.pollIntervalMs`, default **5000 ms** on all drivers). The job is
-durable either way the moment you commit; only the *latency* to first claim differs.
+up on its next poll (`limiter.pollIntervalSeconds`, default **5 seconds** on all drivers). The job is
+durable either way the moment you commit; only the _latency_ to first claim differs.
 :::
 
 ## Adapters from `@portqueue/core/tx`

@@ -114,7 +114,10 @@ export function InstancesPage(): React.ReactElement {
                 label={ACTIONS_CONFIG.pause.label}
                 confirm={{ title: 'Pause job processing on this instance?' }}
                 onClick={() =>
-                  void run({ kind: ActionKind.PAUSE_INSTANCE, instanceKey: r.instanceKey }, 'Paused')
+                  void run(
+                    { kind: ActionKind.PAUSE_INSTANCE, instanceKey: r.instanceKey },
+                    'Paused',
+                  )
                 }
               />
             )}

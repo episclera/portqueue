@@ -30,7 +30,9 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
   ].filter((m) => m.at) as Milestone[];
 
   // Sort by time so out-of-declaration-order events (e.g. retried before completed) line up.
-  milestones.sort((a, b) => new Date(a.at as string).getTime() - new Date(b.at as string).getTime());
+  milestones.sort(
+    (a, b) => new Date(a.at as string).getTime() - new Date(b.at as string).getTime(),
+  );
 
   const items: TimelineItem[] = milestones.map((m, i) => {
     const prev = i > 0 ? milestones[i - 1] : undefined;

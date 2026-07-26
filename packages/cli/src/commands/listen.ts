@@ -1,7 +1,4 @@
-import {
-  PortQueueEvent,
-  type PortQueueEventPayloads,
-} from '@portqueue/core';
+import { PortQueueEvent, type PortQueueEventPayloads } from '@portqueue/core';
 import { flagBool, flagString } from '../args';
 import { color, heading, printJson } from '../output';
 import { CommandGroup, type Command } from './types';

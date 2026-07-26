@@ -137,12 +137,18 @@ export interface Driver {
   claimJobs(options: {
     queueName: string;
     limit: number;
-    lockDurationMs: number;
+    /** Visibility window for the claimed rows, in seconds. */
+    lockDurationSeconds: number;
     now: number;
     /** This instance's multi-instance key, or null when the process is unnamed. */
     instanceKey?: string | null;
   }): Promise<JobRecord[]>;
-  extendLock(options: { jobId: string; lockDurationMs: number; now: number }): Promise<boolean>;
+  /** Push a claimed job's lock out by `lockDurationSeconds` seconds; a negative value releases it. */
+  extendLock(options: {
+    jobId: string;
+    lockDurationSeconds: number;
+    now: number;
+  }): Promise<boolean>;
   completeJob(options: {
     jobId: string;
     returnValue?: unknown;
@@ -160,7 +166,11 @@ export interface Driver {
   reclaimStalledJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
   expireDueJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]>;
   /** Re-arm a failed/completed job's own row so it runs again (manual retry). */
-  requeueJob(options: { jobId: string; now: number; tx?: TransactionHandle }): Promise<InsertedJobRow>;
+  requeueJob(options: {
+    jobId: string;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<InsertedJobRow>;
 
   // Reading
   /**

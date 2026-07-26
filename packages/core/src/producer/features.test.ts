@@ -36,7 +36,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
         throw new NonRetryableError();
       },
     });
-    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 5, delay: 0 } });
+    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 5, delaySeconds: 0 } });
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED,
     );
@@ -56,7 +56,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
         throw e;
       },
     });
-    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 5, delay: 0 } });
+    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 5, delaySeconds: 0 } });
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED,
     );
@@ -69,7 +69,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
       data: {},
       retry: {
         maxAttempts: 3,
-        delay: 1000,
+        delaySeconds: 1,
         backoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2 },
       },
     });
@@ -104,20 +104,20 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     const done: string[] = [];
     h.pq.createWorker({
       queue: 'delayed',
-      limiter: { pollIntervalMs: 20 },
+      limiter: { pollIntervalSeconds: 0.02 },
       handler: async (job) => void done.push(job.id),
     });
-    const res = await queue.addJob({ data: {}, schedule: { startAfter: 60_000 } });
+    const res = await queue.addJob({ data: {}, schedule: { startAfterSeconds: 60 } });
     await new Promise((r) => setTimeout(r, 120));
     expect(done).toHaveLength(0);
     h.clock.advance(61_000);
     await waitFor(() => done.includes(res.jobId!));
   });
 
-  it('expires a PENDING job past its expireIn deadline', async () => {
+  it('expires a PENDING job past its expireInSeconds deadline', async () => {
     const queue = h.pq.createQueue('exp');
     // No worker — it must expire before ever running.
-    const res = await queue.addJob({ data: {}, expireIn: 1000 });
+    const res = await queue.addJob({ data: {}, expireInSeconds: 1 });
     h.clock.advance(2000);
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.EXPIRED,
@@ -126,7 +126,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
 
   it('cancels a not-yet-active job', async () => {
     const queue = h.pq.createQueue('cancel');
-    const res = await queue.addJob({ data: {}, schedule: { startAfter: 60_000 } });
+    const res = await queue.addJob({ data: {}, schedule: { startAfterSeconds: 60 } });
     const ok = await queue.cancelJob({ jobId: res.jobId! });
     expect(ok).toBe(true);
     expect((await queue.getJob({ jobId: res.jobId! }))?.status).toBe(JobStatus.CANCELLED);
@@ -137,7 +137,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     let aborted = false;
     h.pq.createWorker({
       queue: 'coop',
-      limiter: { pollIntervalMs: 20 },
+      limiter: { pollIntervalSeconds: 0.02 },
       handler: async (job) => {
         await new Promise<void>((resolve) => {
           job.signal.addEventListener('abort', () => {
@@ -226,7 +226,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     const started: string[] = [];
     h.pq.createWorker({
       queue: 'rate',
-      limiter: { concurrency: 5, pollIntervalMs: 20, rateMax: 2, rateDuration: 10_000 },
+      limiter: { concurrency: 5, pollIntervalSeconds: 0.02, rateMax: 2, rateDurationSeconds: 10 },
       handler: async (job) => {
         started.push(job.id);
         await new Promise((r) => setTimeout(r, 50));

@@ -44,8 +44,14 @@ async function main(): Promise<void> {
   console.log(`same job?  → ${first.jobId === second.jobId}\n`);
 
   // Singleton: at most one in-flight job per key. The second add dedups while the first is pending.
-  const a = await emails.addJob({ data: { to: 'grace@example.com' }, singletonKey: 'digest:grace' });
-  const b = await emails.addJob({ data: { to: 'grace@example.com' }, singletonKey: 'digest:grace' });
+  const a = await emails.addJob({
+    data: { to: 'grace@example.com' },
+    singletonKey: 'digest:grace',
+  });
+  const b = await emails.addJob({
+    data: { to: 'grace@example.com' },
+    singletonKey: 'digest:grace',
+  });
   console.log(`singleton first  → jobId=${a.jobId} deduplicated=${a.deduplicated}`);
   console.log(`singleton second → jobId=${b.jobId} deduplicated=${b.deduplicated}`);
 

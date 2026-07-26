@@ -6,16 +6,16 @@ import type { JobHandler } from '../jobs/job';
 import type { ErrorClass } from '../options/worker-options';
 import type { QueueOptions } from '../options/queue-options';
 import type { Runtime } from '../client/runtime';
-import type { Duration } from '../util/duration';
 
+/** Worker wiring, resolved from `WorkerOptions`. Every duration is seconds. */
 export interface WorkerConfig {
   queue: string;
   handler: JobHandler;
   concurrency: number;
   batchSize: number;
-  lockDurationMs: number;
-  pollIntervalMs: number;
-  limiter?: { max: number; duration: Duration };
+  lockDurationSeconds: number;
+  pollIntervalSeconds: number;
+  limiter?: { max: number; durationSeconds: number };
   respectSystemPressure: boolean;
   dontAutoretryFor: Array<ErrorClass | string>;
   queueOptions: QueueOptions;
@@ -48,7 +48,7 @@ export class Worker {
       queueName: config.queue,
       handler: config.handler,
       dontAutoretryFor: config.dontAutoretryFor,
-      lockDurationMs: config.lockDurationMs,
+      lockDurationSeconds: config.lockDurationSeconds,
       queueOptions: config.queueOptions,
     };
     this.execution = new ExecutionService(runtime, completion, execConfig);
@@ -67,7 +67,7 @@ export class Worker {
     );
     this.pollTimer = setInterval(
       () => this.runtime.background.run(() => this.pump()),
-      this.config.pollIntervalMs,
+      this.config.pollIntervalSeconds * 1000,
     );
     this.pollTimer.unref?.();
     this.runtime.events.emit(PortQueueEvent.WORKER_STARTED, { queue: this.config.queue });
@@ -109,7 +109,7 @@ export class Worker {
         const jobs = await this.runtime.driver.claimJobs({
           queueName: this.queueName!,
           limit: want,
-          lockDurationMs: this.config.lockDurationMs,
+          lockDurationSeconds: this.config.lockDurationSeconds,
           now: this.runtime.clock.now(),
           instanceKey: this.runtime.instanceKey,
         });
@@ -138,12 +138,12 @@ export class Worker {
   }
 
   /** @internal Stop claiming; drain in-flight up to timeout, then abort + release locks. */
-  async stop(options: { timeoutMs: number; graceful: boolean }): Promise<void> {
+  async stop(options: { timeoutSeconds: number; graceful: boolean }): Promise<void> {
     this.stopping = true;
     if (this.unsubscribeWakeup) this.unsubscribeWakeup();
     if (this.pollTimer) clearInterval(this.pollTimer);
 
-    const deadline = this.runtime.clock.now() + options.timeoutMs;
+    const deadline = this.runtime.clock.now() + options.timeoutSeconds * 1000;
     if (options.graceful) {
       while (this.activeCount > 0 && this.runtime.clock.now() < deadline) {
         await sleep(25);
@@ -155,7 +155,7 @@ export class Worker {
       this.runtime.background.run(() =>
         this.runtime.driver.extendLock({
           jobId,
-          lockDurationMs: -1,
+          lockDurationSeconds: -1,
           now: this.runtime.clock.now(),
         }),
       );

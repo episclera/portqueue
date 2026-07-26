@@ -51,7 +51,7 @@ describe('PgliteDriver extends PostgresDriver', () => {
       expect(b.deduplicated).toBe(true);
       expect(b.jobId).toBe(a.jobId);
     } finally {
-      await pq.shutdown({ graceful: false, timeoutMs: 0 });
+      await pq.shutdown({ graceful: false, timeoutSeconds: 0 });
     }
   }, 30000);
 });

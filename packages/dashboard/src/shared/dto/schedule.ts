@@ -5,7 +5,8 @@ export interface ScheduleDto {
   scheduleId: string;
   queue: string;
   cron?: string | null;
-  every?: number | null;
+  /** For an interval schedule: the seconds between runs. */
+  everySeconds?: number | null;
   timezone?: string | null;
   nextRunAt?: string | null;
   lastRunAt?: string | null;

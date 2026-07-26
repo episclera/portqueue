@@ -49,7 +49,7 @@ const FILTER_DEFS: FilterDef[] = [
 /** The human cadence of a schedule — a cron pattern or a fixed interval. */
 export function cadence(row: ScheduleDto): string {
   if (row.cron) return row.cron;
-  if (row.every) return `every ${Math.round(row.every / 1000)}s`;
+  if (row.everySeconds) return `every ${row.everySeconds}s`;
   return '—';
 }
 
@@ -232,7 +232,7 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
             ) : (
               <EmptyState
                 message="No recurring schedules."
-                hint="Pass `schedule: { cron }` or `schedule: { startEvery }` to addJob to create one — here's how."
+                hint="Pass `schedule: { cron }` or `schedule: { startEverySeconds }` to addJob to create one — here's how."
                 docsHref={DOCS.scheduling}
                 docsLabel="Scheduling guide"
               />

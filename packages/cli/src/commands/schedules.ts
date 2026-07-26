@@ -20,7 +20,7 @@ export const schedulesCommand: Command = {
       list.map((s) => [
         s.scheduleId,
         s.queue,
-        s.cron ?? `every ${s.every}ms`,
+        s.cron ?? `every ${s.everySeconds}s`,
         relativeTime(s.nextRunAt ?? null),
         s.enabled ? 'yes' : 'no',
       ]),

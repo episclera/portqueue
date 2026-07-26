@@ -23,7 +23,9 @@ describe('command registry', () => {
   });
 
   it('marks only long-running commands persistent', () => {
-    const persistent = COMMANDS.filter((c) => c.persistent).map((c) => c.name).sort();
+    const persistent = COMMANDS.filter((c) => c.persistent)
+      .map((c) => c.name)
+      .sort();
     expect(persistent).toEqual(['dashboard', 'listen']);
   });
 });

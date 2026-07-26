@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   await emails.addJob({ data: { to: 'ada@example.com', template: 'welcome' } });
   await emails.addJob({
     data: { to: 'alan@example.com', template: 'digest' },
-    schedule: { startAfter: '30s' },
+    schedule: { startAfterSeconds: 30 }, // a delay, in seconds
   });
 
   // Every queue with jobs needs a worker, or its jobs just sit there as PENDING — including the
@@ -63,8 +63,8 @@ async function main(): Promise<void> {
     data: { kind: 'sales' },
     // Deliberately unhurried: a schedule that fires every few seconds fills the dashboard with
     // near-identical rows faster than you can read one. Five minutes is enough to watch a run
-    // appear, and `startAfter` above gives you something arriving sooner.
-    schedule: { startEvery: '5m' },
+    // appear, and `startAfterSeconds` above gives you something arriving sooner.
+    schedule: { startEverySeconds: 300 }, // every 5 minutes, expressed in seconds
     // Keeps a single schedule across restarts of this example (the data dir is persisted).
     idempotencyKey: 'sales-report-every-5m',
   });

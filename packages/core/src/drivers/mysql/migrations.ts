@@ -4,7 +4,6 @@ import type { FlavourMigration, PhysicalName } from '../shared/migration';
 // by the drivers. A migration is a frozen record of a schema that has already been applied;
 // renaming an enum member must never retroactively rewrite a past migration's DDL.
 
-
 /**
  * Predefined MySQL DDL, authored in full for this engine. It differs from the Postgres flavour in
  * two engine-specific ways: MySQL forbids a `DEFAULT` on `TEXT`/`BLOB` columns, so the two
@@ -48,14 +47,14 @@ function v1(t: PhysicalName): string[] {
       processed_on_instance_key TEXT,
       retry_attempt INTEGER NOT NULL DEFAULT 0,
       retry_max_attempts INTEGER NOT NULL DEFAULT 1,
-      retry_delay_ms BIGINT NOT NULL DEFAULT 0,
+      retry_delay_seconds DOUBLE NOT NULL DEFAULT 0,
       retry_backoff VARCHAR(32) NOT NULL DEFAULT 'FIXED',
       retry_backoff_factor REAL,
-      retry_max_delay_ms BIGINT,
+      retry_max_delay_seconds DOUBLE,
       retry_jitter SMALLINT NOT NULL DEFAULT 0,
       failure_message TEXT,
       retention_mode VARCHAR(32) NOT NULL DEFAULT 'KEEP_FOREVER',
-      retention_ttl_ms BIGINT,
+      retention_ttl_seconds DOUBLE,
       idempotency_key TEXT,
       schedule_id TEXT,
       singleton_key TEXT
@@ -64,13 +63,13 @@ function v1(t: PhysicalName): string[] {
       id TEXT NOT NULL,
       queue_name TEXT NOT NULL,
       cron TEXT,
-      every_ms BIGINT,
+      every_seconds DOUBLE,
       timezone TEXT,
       data TEXT,
       job_options TEXT,
       priority INTEGER,
       retry_max_attempts INTEGER,
-      retry_delay_ms BIGINT,
+      retry_delay_seconds DOUBLE,
       next_run_at BIGINT,
       last_run_at BIGINT,
       enabled SMALLINT NOT NULL DEFAULT 1,

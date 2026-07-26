@@ -83,8 +83,8 @@ caller's transaction. The interface groups its methods by concern:
 
 **Claiming & completing (hot path)**
 
-- `claimJobs({ queueName, limit, lockDurationMs, now, instanceKey? }): Promise<JobRecord[]>`
-- `extendLock({ jobId, lockDurationMs, now }): Promise<boolean>`
+- `claimJobs({ queueName, limit, lockDurationSeconds, now, instanceKey? }): Promise<JobRecord[]>`
+- `extendLock({ jobId, lockDurationSeconds, now }): Promise<boolean>`
 - `completeJob({ jobId, returnValue?, now, tx? }): Promise<void>`
 - `retryJob({ jobId, nextRunAt, retryAttempt, lastError, now }): Promise<void>`
 - `failJob({ jobId, lastError, now }): Promise<void>`
@@ -173,7 +173,7 @@ version can be swapped for a PGLite-specific one without touching Postgres. If y
 Core branches on `DriverCapability`, never on driver identity. Build the set with
 `capabilities({ ... })` — any flag you omit defaults to `false`. Each flag gates a behaviour:
 
-- `LISTEN_NOTIFY` — cross-connection pub/sub. If `false`, core polls at `pollIntervalMs` instead
+- `LISTEN_NOTIFY` — cross-connection pub/sub. If `false`, core polls at `pollIntervalSeconds` instead
   of waking on `notify`.
 - `SKIP_LOCKED` — claim rows without blocking on ones another worker already locked. If `false`,
   core uses a polling/locking fallback for `claimJobs`.

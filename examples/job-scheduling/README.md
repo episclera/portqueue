@@ -9,8 +9,9 @@ set under the `schedule` group selects the mode:
 | `schedule` prop | Mode |
 | --- | --- |
 | _(omit `schedule`)_ | one-off, runs immediately |
-| `schedule.startAfter` | one-off, delayed (`Duration` or `Date`) |
-| `schedule.startEvery` | recurring, fixed interval |
+| `schedule.startAfterSeconds` | one-off, delayed by N seconds |
+| `schedule.startAfter` | one-off, delayed until an absolute `Date` |
+| `schedule.startEverySeconds` | recurring, fixed interval in seconds |
 | `schedule.cron` | recurring, cron expression |
 
 ## Delayed (one-off) — [`delayed.ts`](./delayed.ts)
@@ -25,14 +26,14 @@ npm run delayed
 
 ## Recurring — [`recurring.ts`](./recurring.ts)
 
-A healthcheck every 3 seconds (`startEvery`) and a sales report every 5 seconds (`cron`, 6-field
+A healthcheck every 3 seconds (`startEverySeconds`) and a sales report every 5 seconds (`cron`, 6-field
 form with a leading seconds field). It waits until **each** recurrence has fired at least 3 times
 (~15s), unschedules both and exits; Ctrl+C stops it earlier. Each schedule uses an `idempotencyKey`
 so re-running the script against the same persisted database keeps exactly one schedule.
 
 Two details the example makes visible:
 
-- **The tick sets the resolution.** Due runs are materialized on the client tick (`tickIntervalMs`,
+- **The tick sets the resolution.** Due runs are materialized on the client tick (`tickIntervalSeconds`,
   5s by default), so the example lowers it to 1s for the 3s interval to land on time. Production
   rarely needs that.
 - **PortQueue never holds your process open.** Every internal timer is `unref`'d, so a script with

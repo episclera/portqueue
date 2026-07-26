@@ -46,7 +46,7 @@ const SCHEDULE = {
   scheduleId: 'sch-1',
   queue: 'emails',
   cron: '0 0 * * *',
-  every: null,
+  everySeconds: null,
   timezone: 'UTC',
   nextRunAt: '2026-07-23T00:00:00.000Z',
   lastRunAt: null,
@@ -329,9 +329,7 @@ describe('detail page redirects', () => {
     });
     fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
 
-    await waitFor(() =>
-      expect(window.location.hash).toBe(`#/schedules/${SCHEDULE.scheduleId}`),
-    );
+    await waitFor(() => expect(window.location.hash).toBe(`#/schedules/${SCHEDULE.scheduleId}`));
   });
 
   it('leaves for the queue after the job is removed', async () => {
@@ -413,6 +411,35 @@ describe('add job form', () => {
     expect(h.posts).toHaveLength(0);
   });
 
+  it('sends a one-off delay as a plain number of seconds', async () => {
+    const h = harness();
+    const modal = await openForm(h);
+
+    fireEvent.change(within(modal).getByLabelText(/Start after \(seconds\)/), {
+      target: { value: '30' },
+    });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Add job' }));
+
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+    expect(h.lastAction()).toMatchObject({ add: { startAfterSeconds: 30 } });
+  });
+
+  it('refuses a delay and an exact date at once, rather than letting core pick', async () => {
+    const h = harness();
+    const modal = await openForm(h);
+
+    fireEvent.change(within(modal).getByLabelText(/Start after \(seconds\)/), {
+      target: { value: '30' },
+    });
+    fireEvent.change(within(modal).getByLabelText(/start at/i), {
+      target: { value: '2026-01-01T00:00:00Z' },
+    });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Add job' }));
+
+    expect(await within(modal).findByText(/not both/i)).toBeInTheDocument();
+    expect(h.posts).toHaveLength(0);
+  });
+
   it('rejects a malformed cron expression at the field', async () => {
     const h = harness();
     const modal = await openForm(h);
@@ -451,10 +478,10 @@ describe('add job form', () => {
 
     fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
     expect(within(modal).getByLabelText(/Cron expression/)).toBeInTheDocument();
-    expect(within(modal).queryByLabelText(/Every \(ms\)/)).not.toBeInTheDocument();
+    expect(within(modal).queryByLabelText(/Every \(seconds\)/)).not.toBeInTheDocument();
 
     fireEvent.click(within(modal).getByRole('tab', { name: 'Fixed interval' }));
-    expect(within(modal).getByLabelText(/Every \(ms\)/)).toBeInTheDocument();
+    expect(within(modal).getByLabelText(/Every \(seconds\)/)).toBeInTheDocument();
     expect(within(modal).queryByLabelText(/Cron expression/)).not.toBeInTheDocument();
   });
 });

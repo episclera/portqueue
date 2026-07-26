@@ -149,9 +149,9 @@ export class InstanceActiveError extends PortQueueError {
 }
 
 export class ShutdownTimeoutError extends PortQueueError {
-  constructor(timeoutMs: number) {
+  constructor(timeoutSeconds: number) {
     super(
-      `Graceful shutdown timed out after ${timeoutMs}ms; in-flight handlers were aborted and their locks released for reclaim.`,
+      `Graceful shutdown timed out after ${timeoutSeconds}s; in-flight handlers were aborted and their locks released for reclaim.`,
       { code: PortQueueErrorCode.SHUTDOWN_TIMEOUT },
     );
   }

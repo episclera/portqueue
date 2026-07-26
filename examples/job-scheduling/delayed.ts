@@ -1,10 +1,11 @@
 /**
- * Delayed (one-off) jobs — `schedule.startAfter`.
+ * Delayed (one-off) jobs — `schedule.startAfterSeconds` and `schedule.startAfter`.
  *
  * Run with: `npm run example:schedule-delayed` (from the repo root) or `npm run delayed` here.
  *
- * Scheduling lives on `addJob` itself; there is no separate `schedule()` method. `startAfter`
- * takes a relative `Duration` (e.g. `'3s'`) or an absolute `Date`. Backed by PGLite under the
+ * Scheduling lives on `addJob` itself; there is no separate `schedule()` method. A delay is
+ * `startAfterSeconds` (seconds from now — every PortQueue duration is seconds) or `startAfter`
+ * (an absolute `Date`). Backed by PGLite under the
  * repo-root `tmp/` folder, so there's no external database to install or start.
  */
 import { dirname, resolve } from 'node:path';
@@ -34,10 +35,10 @@ async function main(): Promise<void> {
   // Runs immediately.
   await reminders.addJob({ data: { message: 'this one runs now' } });
 
-  // Runs ~3 seconds from now (relative Duration).
+  // Runs ~3 seconds from now. Durations are always seconds — no unit strings to get wrong.
   await reminders.addJob({
     data: { message: 'this one runs in 3s' },
-    schedule: { startAfter: '3s' },
+    schedule: { startAfterSeconds: 3 },
   });
 
   // Runs at an absolute time (5 seconds from now, computed here as a Date).

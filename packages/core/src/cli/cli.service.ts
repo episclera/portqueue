@@ -61,7 +61,7 @@ export class CliService {
       scheduleId: s.id,
       queue: s.queueName,
       cron: s.cron,
-      every: s.everyMs,
+      everySeconds: s.everySeconds,
       timezone: s.timezone,
       nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
       lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,

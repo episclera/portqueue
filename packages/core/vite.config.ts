@@ -30,9 +30,10 @@ export default defineConfig({
       fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'mjs' : 'cjs'}`,
     },
     rollupOptions: {
-      // Externalize node built-ins and every optional peer DB client.
+      // Externalize node built-ins, the real runtime deps, and every optional peer DB client.
       external: [
         ...nodeBuiltins,
+        'cron-parser',
         'pg',
         '@electric-sql/pglite',
         'better-sqlite3',

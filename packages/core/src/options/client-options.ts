@@ -15,8 +15,8 @@ export interface InstanceOptions {
    * Leave unset to stay anonymous — the process still runs jobs, but can't be targeted or listed.
    */
   instanceKey?: string;
-  /** Heartbeat cadence for the instance row's `last_seen_at` (ms). Default 15000. */
-  heartbeatIntervalMs?: number;
+  /** Heartbeat cadence for the instance row's `last_seen_at`, **in seconds**. Default 15. */
+  heartbeatIntervalSeconds?: number;
 }
 
 /** Top-level client options. Construction wires DI only — no I/O. */
@@ -29,8 +29,8 @@ export interface PortQueueOptions {
   instance?: InstanceOptions;
   /** System-pressure backpressure; `false` disables. */
   monitor?: SystemMonitorOptions | false;
-  /** Interval for scheduler/retention/monitor ticks (ms). Default 5000. */
-  tickIntervalMs?: number;
+  /** Interval for scheduler/retention/monitor ticks, **in seconds**. Default 5. */
+  tickIntervalSeconds?: number;
   /** @internal Inject a clock for deterministic tests. */
   clock?: import('../util/clock').Clock;
 }
@@ -38,6 +38,7 @@ export interface PortQueueOptions {
 /** Options for `pq.shutdown`. */
 export interface ShutdownOptions {
   graceful?: boolean;
-  timeoutMs?: number;
+  /** How long to wait for in-flight handlers and background work, **in seconds**. Default 30. */
+  timeoutSeconds?: number;
   drain?: boolean;
 }

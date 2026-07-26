@@ -1,37 +1,37 @@
-import { computeBackoffMs } from './backoff';
+import { computeBackoffSeconds } from './backoff';
 import { BackoffStrategy } from '../options/enums';
 
-describe('computeBackoffMs', () => {
+describe('computeBackoffSeconds', () => {
   it('returns the base delay for FIXED', () => {
     expect(
-      computeBackoffMs({ strategy: BackoffStrategy.FIXED, attempt: 3, baseDelayMs: 500 }),
+      computeBackoffSeconds({ strategy: BackoffStrategy.FIXED, attempt: 3, baseDelaySeconds: 500 }),
     ).toBe(500);
   });
 
   it('grows geometrically for EXPONENTIAL', () => {
-    const base = { strategy: BackoffStrategy.EXPONENTIAL, baseDelayMs: 100, factor: 2 };
-    expect(computeBackoffMs({ ...base, attempt: 1 })).toBe(100);
-    expect(computeBackoffMs({ ...base, attempt: 2 })).toBe(200);
-    expect(computeBackoffMs({ ...base, attempt: 3 })).toBe(400);
+    const base = { strategy: BackoffStrategy.EXPONENTIAL, baseDelaySeconds: 100, factor: 2 };
+    expect(computeBackoffSeconds({ ...base, attempt: 1 })).toBe(100);
+    expect(computeBackoffSeconds({ ...base, attempt: 2 })).toBe(200);
+    expect(computeBackoffSeconds({ ...base, attempt: 3 })).toBe(400);
   });
 
-  it('caps at maxDelayMs', () => {
+  it('caps at maxDelaySeconds', () => {
     expect(
-      computeBackoffMs({
+      computeBackoffSeconds({
         strategy: BackoffStrategy.EXPONENTIAL,
         attempt: 10,
-        baseDelayMs: 100,
+        baseDelaySeconds: 100,
         factor: 2,
-        maxDelayMs: 1000,
+        maxDelaySeconds: 1000,
       }),
     ).toBe(1000);
   });
 
   it('applies full jitter with an injected random source', () => {
-    const delay = computeBackoffMs({
+    const delay = computeBackoffSeconds({
       strategy: BackoffStrategy.FIXED,
       attempt: 1,
-      baseDelayMs: 1000,
+      baseDelaySeconds: 1000,
       jitter: true,
       random: () => 0.5,
     });

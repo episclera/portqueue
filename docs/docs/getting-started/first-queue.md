@@ -94,6 +94,6 @@ await emailsQueue.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
   `pq.createQueue(QueueName.Emails).pause()` / `.resume()`. There is no per-worker start/stop.
 - **Observe** — subscribe on the **client**:
   `pq.on(PortQueueEvent.JOB_COMPLETED, cb, { queue: QueueName.Emails })`.
-- **Shut down** — `pq.shutdown({ graceful: true, timeoutMs: 30_000 })` drains every worker on the instance.
+- **Shut down** — `pq.shutdown({ graceful: true, timeoutSeconds: 30 })` drains every worker on the instance.
 
 See [Consuming Jobs](../guides/consuming-jobs.md) for concurrency, batching, and error handling.

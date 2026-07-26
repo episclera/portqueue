@@ -40,11 +40,11 @@ async function main(): Promise<void> {
     data: { id: 'ch_123' },
     retry: {
       maxAttempts: 3, // total attempts including the first
-      delay: '500ms', // Duration: base delay before a retry ('500ms', '1s', '2m', or a number of ms)
+      delaySeconds: 0.5, // base delay before a retry — like every duration, in seconds
       backoff: {
         strategy: BackoffStrategy.EXPONENTIAL, // FIXED or EXPONENTIAL
         factor: 2, // each retry waits factor× the previous (500ms → 1s → 2s …)
-        maxDelay: '10s', // Duration cap on the computed delay
+        maxDelaySeconds: 10, // cap on the computed delay, in seconds
         jitter: true, // spread retries across instances
       },
     },

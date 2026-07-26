@@ -2,7 +2,7 @@ import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { DeduplicationReason } from '../options/enums';
 import { InvalidOptionsError, QueuePausedError } from '../errors/errors';
-import { toMs } from '../util/duration';
+import { assertSeconds, secondsToMs } from '../util/seconds';
 import { CronExpression } from '../scheduling/cron';
 import type { AddJobOptions, CronSpec, ScheduleOptions } from '../options/job-options';
 import type { AddJobResult, ScheduleInfo } from './results';
@@ -24,11 +24,20 @@ export class ProducerService {
     const merged = await hooks.runBeforeAdd(queue, options as AddJobOptions<unknown>);
     const opts = merged as AddJobOptions<TData>;
 
-    const isRecurring = opts.schedule?.startEvery != null || opts.schedule?.cron != null;
-    if (isRecurring && opts.schedule?.startAfter != null) {
+    const isRecurring = opts.schedule?.startEverySeconds != null || opts.schedule?.cron != null;
+    const oneOffDelay = opts.schedule?.startAfter ?? opts.schedule?.startAfterSeconds;
+    if (isRecurring && oneOffDelay != null) {
       throw new InvalidOptionsError(
-        `Cannot combine 'schedule.startAfter' with a recurring 'schedule.startEvery'/'schedule.cron' on queue '${queue}'. ` +
-          `'startAfter' delays a one-off job; recurring modes schedule repeated runs.`,
+        `Cannot combine 'schedule.startAfter'/'schedule.startAfterSeconds' with a recurring ` +
+          `'schedule.startEverySeconds'/'schedule.cron' on queue '${queue}'. ` +
+          `A start delay applies to a one-off job; recurring modes schedule repeated runs.`,
+        { queue },
+      );
+    }
+    if (opts.schedule?.startAfter != null && opts.schedule?.startAfterSeconds != null) {
+      throw new InvalidOptionsError(
+        `A one-off job on queue '${queue}' must set at most one of 'schedule.startAfter' (an ` +
+          `absolute Date) or 'schedule.startAfterSeconds' (a delay in seconds) — not both.`,
         { queue },
       );
     }
@@ -76,6 +85,9 @@ export class ProducerService {
       ...(queueOptions.defaultJobOptions ? { queueDefaults: queueOptions.defaultJobOptions } : {}),
       ...(queueOptions.retention ? { queueRetention: queueOptions.retention } : {}),
       ...(opts.schedule?.startAfter != null ? { startAfter: opts.schedule.startAfter } : {}),
+      ...(opts.schedule?.startAfterSeconds != null
+        ? { startAfterSeconds: opts.schedule.startAfterSeconds }
+        : {}),
       now,
     });
 
@@ -88,13 +100,13 @@ export class ProducerService {
       expireAt: resolved.expireAt,
       retryAttempt: 0,
       retryMaxAttempts: resolved.retryMaxAttempts,
-      retryDelayMs: resolved.retryDelayMs,
+      retryDelaySeconds: resolved.retryDelaySeconds,
       retryBackoff: resolved.retryBackoff,
       retryBackoffFactor: resolved.retryBackoffFactor,
-      retryMaxDelayMs: resolved.retryMaxDelayMs,
+      retryMaxDelaySeconds: resolved.retryMaxDelaySeconds,
       retryJitter: resolved.retryJitter,
       retentionMode: resolved.retentionMode,
-      retentionTtlMs: resolved.retentionTtlMs,
+      retentionTtlSeconds: resolved.retentionTtlSeconds,
       idempotencyKey: resolved.idempotencyKey,
       scheduleId: null,
       singletonKey: resolved.singletonKey,
@@ -230,7 +242,10 @@ export class ProducerService {
       now,
     });
     const cron = opts.schedule?.cron != null ? normalizeCron(opts.schedule.cron) : null;
-    const everyMs = opts.schedule?.startEvery != null ? toMs(opts.schedule.startEvery) : null;
+    const everySeconds =
+      opts.schedule?.startEverySeconds != null
+        ? assertSeconds(opts.schedule.startEverySeconds, 'schedule.startEverySeconds')
+        : null;
     // No pattern-based dedup: identical recurrences on a queue are allowed to coexist. When the
     // caller wants exactly one, they pass an idempotencyKey — that dedup ran in addJob() above, so
     // reaching here means the key was free (or absent) and we always insert a fresh schedule.
@@ -238,16 +253,19 @@ export class ProducerService {
 
     // Every option that shapes the *produced* jobs (beyond the columns below) rides along with the
     // schedule and is stamped onto each run — the schedule row itself is never expired/retained by
-    // these; they govern the spawned jobs. `expireIn` is stored as a duration and re-applied
+    // these; they govern the spawned jobs. `expireInSeconds` is stored as a duration and re-applied
     // relative to each run's fire time. See {@link ScheduledJobOptions}.
     const jobOptions: ScheduledJobOptions = {
-      expireInMs: opts.expireIn != null ? toMs(opts.expireIn) : null,
+      expireInSeconds:
+        opts.expireInSeconds != null
+          ? assertSeconds(opts.expireInSeconds, 'expireInSeconds')
+          : null,
       retryBackoff: resolved.retryBackoff,
       retryBackoffFactor: resolved.retryBackoffFactor,
-      retryMaxDelayMs: resolved.retryMaxDelayMs,
+      retryMaxDelaySeconds: resolved.retryMaxDelaySeconds,
       retryJitter: resolved.retryJitter,
       retentionMode: resolved.retentionMode,
-      retentionTtlMs: resolved.retentionTtlMs,
+      retentionTtlSeconds: resolved.retentionTtlSeconds,
       singletonKey: resolved.singletonKey,
       preferredInstanceKeyPattern: affinity.preferredInstanceKeyPattern,
     };
@@ -255,12 +273,12 @@ export class ProducerService {
     const newSchedule: NewScheduleRow = {
       queueName: queue,
       cron: cron?.pattern ?? null,
-      everyMs,
+      everySeconds,
       timezone: cron?.tz ?? null,
       data: opts.data,
       priority: resolved.priority,
       retryMaxAttempts: resolved.retryMaxAttempts,
-      retryDelayMs: resolved.retryDelayMs,
+      retryDelaySeconds: resolved.retryDelaySeconds,
       nextRunAt,
       enabled: true,
       startAt: null,
@@ -285,9 +303,9 @@ export class ProducerService {
   }
 
   private validateSchedule(queue: string, opts: AddJobOptions<unknown>): void {
-    if (opts.schedule?.cron != null && opts.schedule?.startEvery != null) {
+    if (opts.schedule?.cron != null && opts.schedule?.startEverySeconds != null) {
       throw new InvalidOptionsError(
-        `A recurring job on queue '${queue}' must set exactly one of 'schedule.cron' or 'schedule.startEvery' — not both.`,
+        `A recurring job on queue '${queue}' must set exactly one of 'schedule.cron' or 'schedule.startEverySeconds' — not both.`,
         { queue },
       );
     }
@@ -298,7 +316,7 @@ export class ProducerService {
       const { pattern, tz } = normalizeCron(schedule.cron);
       return new CronExpression(pattern, tz).next(now);
     }
-    return now + toMs(schedule.startEvery!);
+    return now + secondsToMs(schedule.startEverySeconds!, 'schedule.startEverySeconds');
   }
 
   async getSchedules(queue: string): Promise<ScheduleInfo[]> {
@@ -307,7 +325,7 @@ export class ProducerService {
     return rows.map((s) => ({
       scheduleId: s.id,
       cron: s.cron,
-      every: s.everyMs,
+      everySeconds: s.everySeconds,
       timezone: s.timezone,
       nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
       lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,

@@ -23,10 +23,27 @@ them onto Docusaurus's Infima variables. Change a token once and both surfaces f
 
 <SwatchRow>
   <Swatch name="--bg" hex="#F2F3F1" note="Dominant. Page backgrounds, cards, panels, nav." />
-  <Swatch name="--primary" hex="#A9D8B8" note="Primary accent — buttons, active states, links, success. Never a large fill." />
-  <Swatch name="--primary-dark" hex="#6FA184" note="Hover / pressed for primary. Interactive text on light bg." />
-  <Swatch name="--secondary" hex="#DDE3DE" note="Borders, dividers, table separators, inputs, code blocks, disabled." />
-  <Swatch name="--text" hex="#1B1F1D" note="The only text colour. Full opacity for primary, ~68% for muted." dark />
+  <Swatch
+    name="--primary"
+    hex="#A9D8B8"
+    note="Primary accent — buttons, active states, links, success. Never a large fill."
+  />
+  <Swatch
+    name="--primary-dark"
+    hex="#6FA184"
+    note="Hover / pressed for primary. Interactive text on light bg."
+  />
+  <Swatch
+    name="--secondary"
+    hex="#DDE3DE"
+    note="Borders, dividers, table separators, inputs, code blocks, disabled."
+  />
+  <Swatch
+    name="--text"
+    hex="#1B1F1D"
+    note="The only text colour. Full opacity for primary, ~68% for muted."
+    dark
+  />
 </SwatchRow>
 
 ## Semantic palette
@@ -36,11 +53,23 @@ blue. Use them only when the context genuinely means it; never decoratively. Alw
 with `--text` (dark) for on-colour text, never white.
 
 <SwatchRow>
-  <Swatch name="--danger" hex="#D98A8A" note="Negative / error / destructive: failed jobs, delete actions, negative values, validation errors." />
+  <Swatch
+    name="--danger"
+    hex="#D98A8A"
+    note="Negative / error / destructive: failed jobs, delete actions, negative values, validation errors."
+  />
   <Swatch name="--danger-dark" hex="#B5645F" note="Hover / active for danger." />
-  <Swatch name="--warning" hex="#E0AE72" note="Warning / caution / pending: unsaved changes, approaching limits, deprecated docs, in-progress." />
+  <Swatch
+    name="--warning"
+    hex="#E0AE72"
+    note="Warning / caution / pending: unsaved changes, approaching limits, deprecated docs, in-progress."
+  />
   <Swatch name="--warning-dark" hex="#C68A4E" note="Hover / active for warning." />
-  <Swatch name="--info" hex="#8FB8D8" note="Optional neutral informational tone: tooltips, new-feature badges, neutral notices." />
+  <Swatch
+    name="--info"
+    hex="#8FB8D8"
+    note="Optional neutral informational tone: tooltips, new-feature badges, neutral notices."
+  />
 </SwatchRow>
 
 ## Usage rules
@@ -51,7 +80,7 @@ with `--text` (dark) for on-colour text, never white.
   secondary/muted text. No warm greys, no pure black, no white body text.
 - **Contrast first.** Because the accents are light and muted, on-colour text is always the
   dark `--text`, not white — this keeps every combination at WCAG AA. Light green is used
-  for *fills*; the darker `--primary-dark` is used for green *text/links* on light surfaces.
+  for _fills_; the darker `--primary-dark` is used for green _text/links_ on light surfaces.
 - **Semantics carry meaning.** `--danger`/`--warning`/`--info` appear only where they mean
   something — never for decoration.
 

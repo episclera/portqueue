@@ -4,7 +4,6 @@ import type { FlavourMigration, PhysicalName } from '../shared/migration';
 // by the drivers. A migration is a frozen record of a schema that has already been applied;
 // renaming an enum member must never retroactively rewrite a past migration's DDL.
 
-
 /**
  * Predefined Postgres DDL, version by version. Authored by hand for this engine; not generated at
  * runtime. There is a single version so far — the base schema — but the array is the extension
@@ -49,14 +48,14 @@ export function v1(t: PhysicalName): string[] {
       processed_on_instance_key TEXT,
       retry_attempt INTEGER NOT NULL DEFAULT 0,
       retry_max_attempts INTEGER NOT NULL DEFAULT 1,
-      retry_delay_ms BIGINT NOT NULL DEFAULT 0,
+      retry_delay_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
       retry_backoff TEXT NOT NULL DEFAULT 'FIXED',
       retry_backoff_factor REAL,
-      retry_max_delay_ms BIGINT,
+      retry_max_delay_seconds DOUBLE PRECISION,
       retry_jitter SMALLINT NOT NULL DEFAULT 0,
       failure_message TEXT,
       retention_mode TEXT NOT NULL DEFAULT 'KEEP_FOREVER',
-      retention_ttl_ms BIGINT,
+      retention_ttl_seconds DOUBLE PRECISION,
       idempotency_key TEXT,
       schedule_id TEXT,
       singleton_key TEXT
@@ -65,13 +64,13 @@ export function v1(t: PhysicalName): string[] {
       id TEXT NOT NULL,
       queue_name TEXT NOT NULL,
       cron TEXT,
-      every_ms BIGINT,
+      every_seconds DOUBLE PRECISION,
       timezone TEXT,
       data TEXT,
       job_options TEXT,
       priority INTEGER,
       retry_max_attempts INTEGER,
-      retry_delay_ms BIGINT,
+      retry_delay_seconds DOUBLE PRECISION,
       next_run_at BIGINT,
       last_run_at BIGINT,
       enabled SMALLINT NOT NULL DEFAULT 1,

@@ -23,7 +23,9 @@ export const fieldBaseStyles = css<{ $invalid: boolean }>`
   border: 1px solid ${(p) => (p.$invalid ? p.theme.color.danger : p.theme.color.border)};
   border-radius: ${(p) => p.theme.radii.md}px;
   font-family: inherit;
-  transition: border-color ${(p) => p.theme.motion.fast}, box-shadow ${(p) => p.theme.motion.fast};
+  transition:
+    border-color ${(p) => p.theme.motion.fast},
+    box-shadow ${(p) => p.theme.motion.fast};
 
   &::placeholder {
     color: ${(p) => p.theme.color.textFaint};
@@ -57,5 +59,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
   { invalid = false, inputSize = 'md', ...rest },
   ref,
 ): React.ReactElement {
-  return <StyledInput ref={ref} $invalid={invalid} $size={inputSize} aria-invalid={invalid || undefined} {...rest} />;
+  return (
+    <StyledInput
+      ref={ref}
+      $invalid={invalid}
+      $size={inputSize}
+      aria-invalid={invalid || undefined}
+      {...rest}
+    />
+  );
 });

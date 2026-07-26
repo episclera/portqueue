@@ -21,7 +21,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     const queue = h.pq.createQueue('reports');
     const res = await queue.addJob({
       data: { report: 'daily' },
-      schedule: { startEvery: 1000 },
+      schedule: { startEverySeconds: 1 },
     });
     expect(res.scheduleId).toBeTruthy();
     expect(res.nextRunAt).toBeInstanceOf(Date);
@@ -36,15 +36,15 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     expect(page.items[0]!.scheduleId).toBe(res.scheduleId);
   });
 
-  it('carries per-job options (expireIn) from a recurring add onto every spawned job', async () => {
+  it('carries per-job options (expireInSeconds) from a recurring add onto every spawned job', async () => {
     const queue = h.pq.createQueue('carry');
-    // No worker: a produced run just sits until it expires. The recurring add sets expireIn, which
+    // No worker: a produced run just sits until it expires. The recurring add sets expireInSeconds, which
     // must ride along and apply to each spawned job (relative to its own fire time). Without
     // carry-through the produced job would have no deadline and never expire.
     const res = await queue.addJob({
       data: {},
-      schedule: { startEvery: 1000 },
-      expireIn: 500,
+      schedule: { startEverySeconds: 1 },
+      expireInSeconds: 0.5,
     });
 
     // Fire the first run.
@@ -86,8 +86,16 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
 
   it('deduplicates schedules by idempotency key (keeps the first, unchanged)', async () => {
     const queue = h.pq.createQueue('sched-idem');
-    const a = await queue.addJob({ data: { n: 1 }, schedule: { cron: '0 0 * * *' }, idempotencyKey: 'daily' });
-    const b = await queue.addJob({ data: { n: 2 }, schedule: { cron: '0 0 * * *' }, idempotencyKey: 'daily' });
+    const a = await queue.addJob({
+      data: { n: 1 },
+      schedule: { cron: '0 0 * * *' },
+      idempotencyKey: 'daily',
+    });
+    const b = await queue.addJob({
+      data: { n: 2 },
+      schedule: { cron: '0 0 * * *' },
+      idempotencyKey: 'daily',
+    });
     expect(b.deduplicated).toBe(true);
     expect(b.scheduleId).toBe(a.scheduleId);
     const schedules = await queue.getSchedules();
@@ -133,7 +141,11 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     h.pq.createWorker({ queue: 'ephemeral', handler: async () => 'done' });
     const res = await queue.addJob({
       data: {},
-      retention: { mode: RetentionMode.DELETE_AFTER, ttl: 1000, statuses: [JobStatus.COMPLETED] },
+      retention: {
+        mode: RetentionMode.DELETE_AFTER,
+        ttlSeconds: 1,
+        statuses: [JobStatus.COMPLETED],
+      },
     });
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,

@@ -13,7 +13,8 @@ import { MYSQL_MIGRATIONS } from './mysql/migrations';
 import type { FlavourMigration } from './shared/migration';
 
 const bare = (t: TableName): string => `pq_${t}`;
-const v1 = (set: FlavourMigration[]): string[] => set.find((m) => m.version === 1)!.statements(bare);
+const v1 = (set: FlavourMigration[]): string[] =>
+  set.find((m) => m.version === 1)!.statements(bare);
 
 describe('per-engine migrations (authored alongside each driver)', () => {
   it('each engine authors its own migration set — separate arrays, never shared', () => {

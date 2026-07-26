@@ -37,7 +37,7 @@ import type { ReadService } from '../monitoring/stats.service';
 import type { TransactionHandle } from '../tx/transaction-handle';
 
 /** The default liveness window when the host set no explicit heartbeat interval. */
-const DEFAULT_HEARTBEAT_MS = 15000;
+const DEFAULT_HEARTBEAT_SECONDS = 15;
 
 /**
  * Rows a free-text job search reads per round trip. A search scans the whole matching set (see
@@ -88,9 +88,7 @@ export class DashboardService {
     const { limit, offset } = pageWindow(query);
     const filter = {
       ...(query.search ? { search: query.search } : {}),
-      ...(query.processingPaused !== undefined
-        ? { processingPaused: query.processingPaused }
-        : {}),
+      ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
     };
 
     // `inUse` is this process's own registry state, not a column, so it can't be pushed into SQL.
@@ -144,13 +142,14 @@ export class DashboardService {
   async getInstances(query: GetInstancesQuery = {}): Promise<Page<InstanceInfo>> {
     const { limit, offset } = pageWindow(query);
     const now = this.runtime.clock.now();
-    const staleAfter = (this.runtime.options.instance?.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_MS) * 3;
+    const staleAfter =
+      (this.runtime.options.instance?.heartbeatIntervalSeconds ?? DEFAULT_HEARTBEAT_SECONDS) *
+      3 *
+      1000;
     const seenSince = now - staleAfter;
     const filter = {
       ...(query.search ? { search: query.search } : {}),
-      ...(query.processingPaused !== undefined
-        ? { processingPaused: query.processingPaused }
-        : {}),
+      ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
       // The liveness cutoff is computed here; the driver only compares against it.
       ...(query.alive !== undefined ? { alive: query.alive, seenSince } : {}),
     };
@@ -200,7 +199,7 @@ export class DashboardService {
         scheduleId: s.id,
         queue: s.queueName,
         cron: s.cron,
-        every: s.everyMs,
+        everySeconds: s.everySeconds,
         timezone: s.timezone,
         nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
         lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,
@@ -221,7 +220,7 @@ export class DashboardService {
       scheduleId: s.id,
       queue: s.queueName,
       cron: s.cron,
-      every: s.everyMs,
+      everySeconds: s.everySeconds,
       timezone: s.timezone,
       nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
       lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,
@@ -416,10 +415,7 @@ export class DashboardService {
   }
 
   /** Arm or disarm a schedule. Core exposes the flag as read-only; the dashboard can toggle it. */
-  async setScheduleEnabled(options: {
-    scheduleId: string;
-    enabled: boolean;
-  }): Promise<boolean> {
+  async setScheduleEnabled(options: { scheduleId: string; enabled: boolean }): Promise<boolean> {
     const row = await this.runtime.driver.getSchedule({ scheduleId: options.scheduleId });
     if (!row) return false;
     const ok = await this.runtime.driver.runInTransaction({

@@ -18,7 +18,7 @@ handlers; set the timeout to your platform's grace period.
 
 ```ts
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
-  process.on(sig, async () => { await pq.shutdown({ graceful: true, timeoutMs: 30_000 }); process.exit(0); });
+  process.on(sig, async () => { await pq.shutdown({ graceful: true, timeoutSeconds: 30 }); process.exit(0); });
 }
 ```
 
@@ -68,7 +68,7 @@ warm cache / local data / GPU / region is"*.
   job waits.
 - **Keep most jobs unpinned.** A key makes targeting *possible*; it doesn't make it mandatory. Jobs
   with no pattern run anywhere, which stays the right default for stateless work.
-- **Tune `instance.heartbeatIntervalMs`** (default 15s) to your failover appetite: an instance is
+- **Tune `instance.heartbeatIntervalSeconds`** (default `15`) to your failover appetite: an instance is
   "dead" after ~3 missed beats.
 - **Drain one node at a time** from the dashboard **Instances** page (or
   `pauseInstance`/`resumeInstance`) for a deploy without touching the rest; remove a decommissioned

@@ -35,8 +35,8 @@ export class SystemMonitorService {
   start(): void {
     this.histogram = monitorEventLoopDelay({ resolution: 20 });
     this.histogram.enable();
-    const interval = this.options.sampleIntervalMs ?? 2000;
-    this.timer = setInterval(() => this.sample(), interval);
+    const intervalSeconds = this.options.sampleIntervalSeconds ?? 2;
+    this.timer = setInterval(() => this.sample(), intervalSeconds * 1000);
     this.timer.unref?.();
   }
 
@@ -82,15 +82,15 @@ export class SystemMonitorService {
     threshold: number;
     over: boolean;
   } {
-    // Event-loop delay.
-    if (this.options.maxEventLoopDelayMs != null && this.histogram) {
-      const meanMs = this.histogram.mean / 1e6;
+    // Event-loop delay. The histogram reports nanoseconds; the threshold is seconds.
+    if (this.options.maxEventLoopDelaySeconds != null && this.histogram) {
+      const meanSeconds = this.histogram.mean / 1e9;
       this.histogram.reset();
-      if (meanMs > this.options.maxEventLoopDelayMs) {
+      if (meanSeconds > this.options.maxEventLoopDelaySeconds) {
         return {
-          metric: 'eventLoopDelayMs',
-          value: meanMs,
-          threshold: this.options.maxEventLoopDelayMs,
+          metric: 'eventLoopDelaySeconds',
+          value: meanSeconds,
+          threshold: this.options.maxEventLoopDelaySeconds,
           over: true,
         };
       }

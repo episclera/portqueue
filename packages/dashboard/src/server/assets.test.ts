@@ -36,9 +36,7 @@ describe('serveAsset (no built client)', () => {
   it('issues a fresh nonce per response', async () => {
     const a = await serveAsset('/', config);
     const b = await serveAsset('/', config);
-    expect(a.headers?.['content-security-policy']).not.toBe(
-      b.headers?.['content-security-policy'],
-    );
+    expect(a.headers?.['content-security-policy']).not.toBe(b.headers?.['content-security-policy']);
   });
 
   it('never caches HTML, since the injected config rides along with it', async () => {

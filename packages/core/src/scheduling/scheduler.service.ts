@@ -52,9 +52,9 @@ export class SchedulerService {
     if (!won) return;
 
     // Stamp every option the recurring add carried (see ScheduledJobOptions) onto this run. These
-    // shape the produced job, never the schedule itself; `expireInMs` becomes an absolute deadline
-    // relative to *this* run. Produced jobs are never given the schedule's idempotencyKey, so the
-    // recurrence keeps firing.
+    // shape the produced job, never the schedule itself; `expireInSeconds` becomes an absolute
+    // deadline relative to *this* run. Produced jobs are never given the schedule's idempotencyKey,
+    // so the recurrence keeps firing.
     const t = schedule.jobOptions;
     const queueName = schedule.queueName;
     const job: NewJobRecord = {
@@ -63,16 +63,16 @@ export class SchedulerService {
       priority: schedule.priority ?? 0,
       data: schedule.data,
       startAfter: now,
-      expireAt: t?.expireInMs != null ? now + t.expireInMs : null,
+      expireAt: t?.expireInSeconds != null ? now + t.expireInSeconds * 1000 : null,
       retryAttempt: 0,
       retryMaxAttempts: schedule.retryMaxAttempts ?? 1,
-      retryDelayMs: schedule.retryDelayMs ?? 0,
+      retryDelaySeconds: schedule.retryDelaySeconds ?? 0,
       retryBackoff: t?.retryBackoff ?? BackoffStrategy.FIXED,
       retryBackoffFactor: t?.retryBackoffFactor ?? null,
-      retryMaxDelayMs: t?.retryMaxDelayMs ?? null,
+      retryMaxDelaySeconds: t?.retryMaxDelaySeconds ?? null,
       retryJitter: t?.retryJitter ?? false,
       retentionMode: t?.retentionMode ?? RetentionMode.KEEP_FOREVER,
-      retentionTtlMs: t?.retentionTtlMs ?? null,
+      retentionTtlSeconds: t?.retentionTtlSeconds ?? null,
       idempotencyKey: null,
       scheduleId: schedule.id,
       singletonKey: t?.singletonKey ?? null,
@@ -92,7 +92,7 @@ export class SchedulerService {
     if (schedule.cron) {
       return new CronExpression(schedule.cron, schedule.timezone ?? 'UTC').next(now);
     }
-    if (schedule.everyMs != null) return now + schedule.everyMs;
+    if (schedule.everySeconds != null) return now + schedule.everySeconds * 1000;
     return null;
   }
 

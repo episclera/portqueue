@@ -1,9 +1,9 @@
 /**
- * Graceful shutdown — `pq.shutdown({ graceful, timeoutMs })`.
+ * Graceful shutdown — `pq.shutdown({ graceful, timeoutSeconds })`.
  *
  * Run with: `npm run example:graceful` (from the repo root) or `npm start` here.
  *
- * A graceful shutdown stops claiming new jobs and waits up to `timeoutMs` for in-flight handlers
+ * A graceful shutdown stops claiming new jobs and waits up to `timeoutSeconds` for in-flight handlers
  * to finish. Handlers should honour `job.signal` (an `AbortSignal`) so they can bail out promptly
  * if the timeout is hit. Backed by PGLite under the repo-root `tmp/` folder.
  */
@@ -53,8 +53,8 @@ async function main(): Promise<void> {
 
   // Let the handler start, then shut down gracefully with a generous window so it can complete.
   await new Promise((r) => setTimeout(r, 500));
-  console.log('\nCalling pq.shutdown({ graceful: true, timeoutMs: 30_000 })…');
-  await pq.shutdown({ graceful: true, timeoutMs: 30_000 });
+  console.log('\nCalling pq.shutdown({ graceful: true, timeoutSeconds: 30 })…');
+  await pq.shutdown({ graceful: true, timeoutSeconds: 30 });
   console.log('Shutdown complete — no jobs were left half-done.');
   process.exit(0);
 }

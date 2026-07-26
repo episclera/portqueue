@@ -57,13 +57,14 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
     let attempts = 0;
     h.pq.createWorker({
       queue: 'batched',
-      limiter: { pollIntervalMs: 20 },
+      limiter: { pollIntervalSeconds: 0.02 },
       handler: async () => {
         attempts += 1;
         throw new Error('nope');
       },
     });
-    const jobId = (await q.addJob({ data: { v: 1 }, retry: { maxAttempts: 1, delay: 0 } })).jobId!;
+    const jobId = (await q.addJob({ data: { v: 1 }, retry: { maxAttempts: 1, delaySeconds: 0 } }))
+      .jobId!;
     await waitForStatus(h, jobId, JobStatus.FAILED);
 
     await h.pq._dashboard.runJobBatch({

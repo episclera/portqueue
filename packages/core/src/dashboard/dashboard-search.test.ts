@@ -42,7 +42,11 @@ describe('dashboard job search (sqlite)', () => {
 
   it('counts every match in `total`, and pages through them', async () => {
     await seed();
-    const first = await h.pq._dashboard.getJobs({ queue: 'searched', search: 'filler-', limit: 20 });
+    const first = await h.pq._dashboard.getJobs({
+      queue: 'searched',
+      search: 'filler-',
+      limit: 20,
+    });
     expect(first.total).toBe(ROWS - 1);
     expect(first.items).toHaveLength(20);
     expect(first.hasMore).toBe(true);

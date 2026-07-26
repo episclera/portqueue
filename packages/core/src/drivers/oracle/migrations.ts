@@ -4,7 +4,6 @@ import type { FlavourMigration, PhysicalName } from '../shared/migration';
 // by the drivers. A migration is a frozen record of a schema that has already been applied;
 // renaming an enum member must never retroactively rewrite a past migration's DDL.
 
-
 /**
  * Predefined Oracle DDL, version by version. Oracle has no `TEXT`/`BIGINT`/`SMALLINT` and (pre-23c)
  * no `CREATE TABLE IF NOT EXISTS`, so this flavour is authored from scratch rather than borrowed
@@ -69,14 +68,14 @@ function v1(t: PhysicalName): string[] {
         processed_on_instance_key VARCHAR2(4000),
         retry_attempt NUMBER(10) DEFAULT 0 NOT NULL,
         retry_max_attempts NUMBER(10) DEFAULT 1 NOT NULL,
-        retry_delay_ms NUMBER(19) DEFAULT 0 NOT NULL,
+        retry_delay_seconds BINARY_DOUBLE DEFAULT 0 NOT NULL,
         retry_backoff VARCHAR2(32) DEFAULT 'FIXED' NOT NULL,
         retry_backoff_factor BINARY_DOUBLE,
-        retry_max_delay_ms NUMBER(19),
+        retry_max_delay_seconds BINARY_DOUBLE,
         retry_jitter NUMBER(5) DEFAULT 0 NOT NULL,
         failure_message CLOB,
         retention_mode VARCHAR2(32) DEFAULT 'KEEP_FOREVER' NOT NULL,
-        retention_ttl_ms NUMBER(19),
+        retention_ttl_seconds BINARY_DOUBLE,
         idempotency_key VARCHAR2(4000),
         schedule_id VARCHAR2(4000),
         singleton_key VARCHAR2(4000)
@@ -87,13 +86,13 @@ function v1(t: PhysicalName): string[] {
         id VARCHAR2(4000) NOT NULL,
         queue_name VARCHAR2(4000) NOT NULL,
         cron VARCHAR2(4000),
-        every_ms NUMBER(19),
+        every_seconds BINARY_DOUBLE,
         timezone VARCHAR2(4000),
         data CLOB,
         job_options CLOB,
         priority NUMBER(10),
         retry_max_attempts NUMBER(10),
-        retry_delay_ms NUMBER(19),
+        retry_delay_seconds BINARY_DOUBLE,
         next_run_at NUMBER(19),
         last_run_at NUMBER(19),
         enabled NUMBER(5) DEFAULT 1 NOT NULL,

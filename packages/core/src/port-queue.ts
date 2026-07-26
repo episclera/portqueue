@@ -37,8 +37,8 @@ import type {
   QueueStats,
 } from './producer/results';
 
-/** An instance must be unseen for at least this long before it can be manually removed. */
-const INSTANCE_REMOVAL_STALE_MS = 30 * 60_000;
+/** An instance must be unseen for at least this long (seconds) before it can be manually removed. */
+const INSTANCE_REMOVAL_STALE_SECONDS = 30 * 60;
 
 /**
  * The top-level client. Owns connection, migration,
@@ -129,7 +129,7 @@ export class PortQueue<TQueues extends string = string> {
   async shutdown(options: ShutdownOptions = {}): Promise<void> {
     await this.lifecycle.shutdown({
       graceful: options.graceful ?? true,
-      timeoutMs: options.timeoutMs ?? 30000,
+      timeoutSeconds: options.timeoutSeconds ?? 30,
     });
   }
 
@@ -173,19 +173,19 @@ export class PortQueue<TQueues extends string = string> {
     const limiter = options.limiter ?? {};
     const concurrency = limiter.concurrency ?? 1;
     const rate =
-      limiter.rateMax != null && limiter.rateDuration != null
-        ? { max: limiter.rateMax, duration: limiter.rateDuration }
+      limiter.rateMax != null && limiter.rateDurationSeconds != null
+        ? { max: limiter.rateMax, durationSeconds: limiter.rateDurationSeconds }
         : null;
     const config: WorkerConfig = {
       queue: options.queue,
       handler,
       concurrency,
       batchSize: limiter.batchSize ?? concurrency,
-      lockDurationMs: limiter.lockDurationMs ?? 30000,
-      // Default poll cadence is 5000ms for every driver. LISTEN/NOTIFY-capable engines wake
+      lockDurationSeconds: limiter.lockDurationSeconds ?? 30,
+      // Default poll cadence is 5 seconds for every driver. LISTEN/NOTIFY-capable engines wake
       // instantly on new jobs and only fall back to polling as a safety net; non-notify engines
-      // poll on this same cadence. Lower it via `limiter.pollIntervalMs` if you need snappier pickup.
-      pollIntervalMs: limiter.pollIntervalMs ?? 5000,
+      // poll on this same cadence. Lower it via `limiter.pollIntervalSeconds` for snappier pickup.
+      pollIntervalSeconds: limiter.pollIntervalSeconds ?? 5,
       ...(rate ? { limiter: rate } : {}),
       respectSystemPressure: limiter.respectSystemPressure ?? false,
       dontAutoretryFor: options.dontAutoretryFor ?? [],
@@ -313,7 +313,7 @@ export class PortQueue<TQueues extends string = string> {
     const row = await this.runtime.driver.getInstance({ instanceKey: options.instanceKey });
     if (!row) return false;
     const now = this.runtime.clock.now();
-    if (row.lastSeenAt >= now - INSTANCE_REMOVAL_STALE_MS) {
+    if (row.lastSeenAt >= now - INSTANCE_REMOVAL_STALE_SECONDS * 1000) {
       throw new InstanceActiveError(options.instanceKey);
     }
     const ok = await this.runtime.driver.deleteInstance({ instanceKey: options.instanceKey });

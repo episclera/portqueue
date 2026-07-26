@@ -81,6 +81,10 @@ and remove, and bulk actions over a selection. Pause/resume, **Add job** and (fo
 running process declares) **Remove queue** sit in the subheader. Job ids are truncated to their
 first and last characters — enough to recognise one, short enough to keep the row readable.
 
+The **Add job** form mirrors `addJob`, so its timing fields are the same seconds the API takes:
+_Start after (seconds)_ for a one-off delay (or _…or start at_ for an exact ISO instant), and
+_Every (seconds)_ for a fixed-interval recurrence.
+
 </Shot>
 
 ### Job detail

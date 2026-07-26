@@ -18,15 +18,16 @@ pq.createWorker({
   limiter: {
     concurrency: 10,        // max in-flight handlers on this instance (default 1)
     batchSize: 20,          // max jobs claimed per fetch
-    pollIntervalMs: 1000,   // poll cadence when LISTEN/NOTIFY is unavailable
-    lockDurationMs: 30_000, // visibility timeout / heartbeat window
+    pollIntervalSeconds: 1,     // poll cadence when LISTEN/NOTIFY is unavailable, in seconds
+    lockDurationSeconds: 30,    // visibility timeout / heartbeat window, in seconds
   },
   handler: async (job) => { await send(job.data); },
 });
 ```
 
 Every throughput and claim knob lives under one `limiter` group: `concurrency`, `rateMax` +
-`rateDuration`, `respectSystemPressure`, `batchSize`, `pollIntervalMs`, and `lockDurationMs`.
+`rateDurationSeconds`, `respectSystemPressure`, `batchSize`, `pollIntervalSeconds`, and
+`lockDurationSeconds` — every one of those durations in seconds.
 Omit the group for sensible defaults.
 
 ### `batchSize` vs `concurrency`
@@ -58,7 +59,7 @@ pq.createWorker({
     job.data;            // TData — the payload, typed to the queue
     job.retryAttempt;    // number
     job.signal;          // AbortSignal — fires on graceful-shutdown timeout
-    await job.extendLock({ byMs: 30_000 }); // override the automatic heartbeat
+    await job.extendLock({ bySeconds: 30 }); // override the automatic heartbeat (seconds)
   },
 });
 ```
@@ -74,34 +75,34 @@ Every job is a row in the `job` table that moves through the `JobStatus` enum:
 
 | Status | Meaning |
 |---|---|
-| `PENDING` | Waiting to be claimed (may be delayed via `startAfter`). |
+| `PENDING` | Waiting to be claimed (may be delayed via `startAfterSeconds`/`startAfter`). |
 | `ACTIVE` | Claimed by an instance and running in a handler. |
 | `COMPLETED` | Handler returned successfully; `return_value` stored. |
 | `FAILED` | Terminal after retries are exhausted (or a non-retryable error). |
 | `RETRY` | Failed but scheduled for another attempt (backoff applied). |
 | `STALLED` | Lock expired without completion — reclaimable by another instance. |
 | `CANCELLED` | Cancelled before/while running. |
-| `EXPIRED` | Not started before its `expireIn` window. |
+| `EXPIRED` | Not started before its `expireInSeconds` window. |
 
 ## Claiming & visibility timeout
 
 Jobs are claimed with row-level locking (`SKIP LOCKED` where the engine supports it) so N
 instances never double-process. A claim is invisible to other instances for a **visibility
-timeout** (`lockDurationMs`, default ~30s), refreshed by an automatic heartbeat. If a
+timeout** (`lockDurationSeconds`, default 30), refreshed by an automatic heartbeat. If a
 process dies mid-job the lock lapses, the job becomes `STALLED`, and another instance
 reclaims it. This is the *acks-late* model: a job isn't "done" until its handler confirms.
 
 ### Extending the lock
 
 While your handler runs, the worker **automatically renews** the lock in the background — a
-heartbeat refreshes the `lockDurationMs` window (default 30 s) for as long as the handler is
+heartbeat refreshes the `lockDurationSeconds` window (default 30) for as long as the handler is
 executing. So under normal conditions you **never call `extendLock` yourself**; a handler that
 simply takes a long time keeps its lock without any effort.
 
-Manual `job.extendLock({ byMs })` is only needed for a **single long, uninterruptible unit of
+Manual `job.extendLock({ bySeconds })` is only needed for a **single long, uninterruptible unit of
 work** that could outlast the window because the automatic heartbeat can't fire in time — e.g. a
 blocking synchronous call that starves the event loop, so the heartbeat timer is delayed past
-`lockDurationMs` and the job risks being declared `STALLED` and reclaimed elsewhere. If your work
+`lockDurationSeconds` and the job risks being declared `STALLED` and reclaimed elsewhere. If your work
 is normal async code that yields to the event loop, the heartbeat handles it and `extendLock` is
 unnecessary.
 
@@ -137,8 +138,8 @@ await webhooksQueue.addJob({
   data,
   retry: {
     maxAttempts: 5,
-    delay: '2s',
-    backoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2, maxDelay: '5m', jitter: true },
+    delaySeconds: 2,   // base delay before a retry, in seconds
+    backoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2, maxDelaySeconds: 300, jitter: true },
   },
 });
 ```
@@ -167,11 +168,11 @@ A worker-local, in-process limiter (exact for this worker):
 ```ts
 pq.createWorker({
   queue: 'third-party',
-  limiter: { concurrency: 10, rateMax: 50, rateDuration: '1m' },
+  limiter: { concurrency: 10, rateMax: 50, rateDurationSeconds: 60 }, // 50 per 60-second window
 });
 ```
 
-The worker's rate cap (`rateMax` + `rateDuration`, both required together) is worker-local
+The worker's rate cap (`rateMax` + `rateDurationSeconds`, both required together) is worker-local
 (in-process) — see [Rate limiting](./rate-limiting.md).
 There is no cluster-wide job-rate cap: scale throughput by adding or removing workers/instances.
 
@@ -180,6 +181,6 @@ There is no cluster-wide job-rate cap: scale throughput by adding or removing wo
 There is no per-worker `on`. Subscribe on the client:
 
 ```ts
-pq.on(PortQueueEvent.JOB_COMPLETED, ({ jobId, durationMs }) => {}, { queue: 'emails' });
+pq.on(PortQueueEvent.JOB_COMPLETED, ({ jobId, durationSeconds }) => {}, { queue: 'emails' });
 pq.on(PortQueueEvent.JOB_FAILED, ({ jobId, error }) => {}, { queue: 'emails' });
 ```

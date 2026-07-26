@@ -46,7 +46,14 @@ const FieldHint = styled.p`
 `;
 
 /** Presentational field wrapper — label, control, then an error or hint below. */
-export function Field({ label, required = false, error, hint, htmlFor, children }: FieldProps): React.ReactElement {
+export function Field({
+  label,
+  required = false,
+  error,
+  hint,
+  htmlFor,
+  children,
+}: FieldProps): React.ReactElement {
   return (
     <FieldRoot>
       {label !== undefined && (

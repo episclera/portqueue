@@ -21,7 +21,8 @@ export interface ScheduleWithQueue {
   scheduleId: string;
   queue: string;
   cron?: string | null;
-  every?: number | null;
+  /** For an interval schedule: the seconds between runs. */
+  everySeconds?: number | null;
   timezone?: string | null;
   nextRunAt?: Date | null;
   lastRunAt?: Date | null;
@@ -104,7 +105,7 @@ export function serializeSchedule(s: ScheduleWithQueue): ScheduleDto {
     scheduleId: s.scheduleId,
     queue: s.queue,
     cron: s.cron,
-    every: s.every,
+    everySeconds: s.everySeconds,
     timezone: s.timezone,
     nextRunAt: iso(s.nextRunAt),
     lastRunAt: iso(s.lastRunAt),

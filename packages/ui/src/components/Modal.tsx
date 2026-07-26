@@ -84,7 +84,9 @@ const CloseButton = styled.button`
   border: 1px solid transparent;
   border-radius: ${(p) => p.theme.radii.md}px;
   cursor: pointer;
-  transition: background ${(p) => p.theme.motion.fast}, color ${(p) => p.theme.motion.fast};
+  transition:
+    background ${(p) => p.theme.motion.fast},
+    color ${(p) => p.theme.motion.fast};
   &:hover {
     background: ${(p) => p.theme.color.surfaceAlt};
     color: ${(p) => p.theme.color.text};

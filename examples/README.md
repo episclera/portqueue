@@ -22,9 +22,9 @@ Each folder is a workspace package, so the examples resolve `@portqueue/*` strai
 
 ## Running
 
-From the repo root (builds `@portqueue/core` + `@portqueue/dashboard` on first run — the two
-dashboard examples rebuild both every time, so the UI they serve is the one in your working tree;
-set `PORTQUEUE_SKIP_BUILD=1` to skip that):
+From the repo root. Every launcher rebuilds `@portqueue/core` + `@portqueue/dashboard` first, so an
+example always runs your working tree rather than a stale `dist/`; set `PORTQUEUE_SKIP_BUILD=1` to
+skip that when no package source has changed:
 
 ```bash
 npm run example:dashboard-node        # http://127.0.0.1:4321/portqueue

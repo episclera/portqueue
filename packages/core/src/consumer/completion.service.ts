@@ -1,6 +1,6 @@
 import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
-import { computeBackoffMs } from '../util/backoff';
+import { computeBackoffSeconds } from '../util/backoff';
 import type { ErrorClass } from '../options/worker-options';
 import type { JobRecord } from '../jobs/job-record';
 import type { Runtime } from '../client/runtime';
@@ -22,7 +22,7 @@ export class CompletionService {
       jobId: record.id,
       queue: queueName,
       returnValue,
-      durationMs: now - startTs,
+      durationSeconds: (now - startTs) / 1000,
     });
     return { kind: 'completed', returnValue };
   }
@@ -41,15 +41,15 @@ export class CompletionService {
     const canRetry = !nonRetryable && attemptsMade < record.retryMaxAttempts;
 
     if (canRetry) {
-      const delay = computeBackoffMs({
+      const delaySeconds = computeBackoffSeconds({
         strategy: record.retryBackoff,
         attempt: attemptsMade,
-        baseDelayMs: record.retryDelayMs,
+        baseDelaySeconds: record.retryDelaySeconds,
         factor: record.retryBackoffFactor,
-        maxDelayMs: record.retryMaxDelayMs,
+        maxDelaySeconds: record.retryMaxDelaySeconds,
         jitter: record.retryJitter,
       });
-      const nextRunAt = now + delay;
+      const nextRunAt = now + Math.round(delaySeconds * 1000);
       await this.runtime.driver.retryJob({
         jobId: record.id,
         nextRunAt,

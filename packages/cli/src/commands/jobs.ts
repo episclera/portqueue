@@ -15,7 +15,9 @@ export const jobsCommand: Command = {
     const page = await pq.getJobs({
       ...(flagString(flags, 'queue') ? { queue: flagString(flags, 'queue')! } : {}),
       ...(status ? { statuses: [status] } : {}),
-      ...(flagString(flags, 'schedule-id') ? { scheduleId: flagString(flags, 'schedule-id')! } : {}),
+      ...(flagString(flags, 'schedule-id')
+        ? { scheduleId: flagString(flags, 'schedule-id')! }
+        : {}),
       ...(flagNumber(flags, 'limit') ? { limit: flagNumber(flags, 'limit')! } : {}),
       ...(flagString(flags, 'cursor') ? { cursor: flagString(flags, 'cursor')! } : {}),
     });

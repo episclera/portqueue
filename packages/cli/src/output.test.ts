@@ -65,7 +65,13 @@ describe('writers', () => {
 describe('table', () => {
   it('aligns columns and prints a header + rows', async () => {
     const { stdout } = await captureOutput(() =>
-      table(['Name', 'Count'], [['emails', '2'], ['sms', '10']]),
+      table(
+        ['Name', 'Count'],
+        [
+          ['emails', '2'],
+          ['sms', '10'],
+        ],
+      ),
     );
     const lines = stdout.trimEnd().split('\n');
     expect(lines[0]).toContain('Name');

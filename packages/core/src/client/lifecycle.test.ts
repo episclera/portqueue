@@ -66,7 +66,7 @@ describe.each(TEST_ENGINES)('client shutdown (%s)', (engine) => {
 
     const pq = newClient(driver);
     await pq.init();
-    await pq.shutdown({ graceful: false, timeoutMs: 25 });
+    await pq.shutdown({ graceful: false, timeoutSeconds: 0.025 });
     expect(pq.isRunning).toBe(false);
 
     // Release the parked call so it doesn't outlive the test; it fails harmlessly on the
@@ -82,7 +82,7 @@ function newClient(driver: Driver): PortQueue {
     logger: new NoopLogger(),
     monitor: false,
     clock: new FakeClock(1_700_000_000_000),
-    tickIntervalMs: 50,
+    tickIntervalSeconds: 0.05,
   });
 }
 

@@ -1,10 +1,12 @@
-import { toMs } from '../util/duration';
-import type { Duration } from '../util/duration';
+import { secondsToMs } from '../util/seconds';
 import type { Clock } from '../util/clock';
 
 /**
  * A worker-local token-bucket limiter. Exact and in-process; limits how
  * many jobs this worker starts per window. Distinct from the cluster-wide queue rate limit.
+ *
+ * The window arrives in seconds (`limiter.rateDurationSeconds`) and is held in ms, because the
+ * refill maths runs against the clock's epoch-ms.
  */
 export class RateLimiterService {
   private tokens: number;
@@ -13,11 +15,11 @@ export class RateLimiterService {
   private readonly windowMs: number;
 
   constructor(
-    options: { max: number; duration: Duration },
+    options: { max: number; durationSeconds: number },
     private readonly clock: Clock,
   ) {
     this.max = options.max;
-    this.windowMs = toMs(options.duration);
+    this.windowMs = secondsToMs(options.durationSeconds, 'limiter.rateDurationSeconds');
     this.tokens = options.max;
     this.lastRefill = clock.now();
   }

@@ -16,8 +16,9 @@ export interface WorkerOptions<
   /** The single-function processor for this queue's jobs. */
   handler: JobHandler<TData, TResult>;
   /**
-   * Worker throughput & claim tuning in one group: `concurrency`, `rate`, `respectSystemPressure`,
-   * `batchSize`, `pollIntervalMs`, and `lockDurationMs`. Omit it for sensible defaults.
+   * Worker throughput & claim tuning in one group: `concurrency`, `rateMax`/`rateDurationSeconds`,
+   * `respectSystemPressure`, `batchSize`, `pollIntervalSeconds`, and `lockDurationSeconds`. Every
+   * duration is in seconds. Omit it for sensible defaults.
    */
   limiter?: LimiterOptions;
   /** Celery-style non-retryable errors — matched by `instanceof` or `error.name`. */

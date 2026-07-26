@@ -20,5 +20,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(fun
   { invalid = false, ...rest },
   ref,
 ): React.ReactElement {
-  return <StyledTextarea ref={ref} $invalid={invalid} aria-invalid={invalid || undefined} {...rest} />;
+  return (
+    <StyledTextarea ref={ref} $invalid={invalid} aria-invalid={invalid || undefined} {...rest} />
+  );
 });

@@ -47,7 +47,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
         return 'ok';
       },
     });
-    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 3, delay: 0 } });
+    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 3, delaySeconds: 0 } });
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
     );
@@ -62,7 +62,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
         throw new Error('always');
       },
     });
-    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 2, delay: 0 } });
+    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 2, delaySeconds: 0 } });
     await waitFor(
       async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED,
     );

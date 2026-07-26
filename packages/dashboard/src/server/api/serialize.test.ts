@@ -1,11 +1,6 @@
 /** @jest-environment node */
 import type { InstanceInfo, JobSnapshot } from '@portqueue/core';
-import {
-  serializeInstance,
-  serializeJob,
-  serializeSchedule,
-  serializeStats,
-} from './serialize';
+import { serializeInstance, serializeJob, serializeSchedule, serializeStats } from './serialize';
 
 const baseJob = (over: Partial<JobSnapshot> = {}): JobSnapshot =>
   ({
@@ -56,7 +51,7 @@ describe('serializeSchedule', () => {
       scheduleId: 'sch-1',
       queue: 'reports',
       cron: '0 0 * * *',
-      every: null,
+      everySeconds: null,
       timezone: 'UTC',
       nextRunAt: new Date('2026-07-23T00:00:00.000Z'),
       lastRunAt: null,

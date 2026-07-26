@@ -15,9 +15,9 @@ describe('OptionResolver precedence (queue < job)', () => {
     expect(resolved.retryMaxAttempts).toBe(3); // queue default applies when job omits it
   });
 
-  it('resolves a relative startAfter Duration into a future start_after', () => {
+  it('resolves a relative startAfterSeconds into a future start_after', () => {
     const resolver = new OptionResolver();
-    expect(resolver.resolve({ job: {}, startAfter: 5000, now }).startAfter).toBe(now + 5000);
+    expect(resolver.resolve({ job: {}, startAfterSeconds: 5, now }).startAfter).toBe(now + 5000);
   });
 
   it('resolves an absolute startAfter Date', () => {
@@ -26,21 +26,21 @@ describe('OptionResolver precedence (queue < job)', () => {
     expect(resolver.resolve({ job: {}, startAfter: at, now }).startAfter).toBe(at.getTime());
   });
 
-  it('computes expireAt from expireIn relative to start_after', () => {
+  it('computes expireAt from expireInSeconds relative to start_after', () => {
     const resolver = new OptionResolver();
-    const r = resolver.resolve({ job: { expireIn: 2000 }, startAfter: 1000, now });
+    const r = resolver.resolve({ job: { expireInSeconds: 2 }, startAfterSeconds: 1, now });
     expect(r.expireAt).toBe(now + 1000 + 2000);
   });
 
   it('resolves retention from job over queue', () => {
     const resolver = new OptionResolver();
     const r = resolver.resolve({
-      job: { retention: { mode: RetentionMode.DELETE_AFTER, ttl: 3000 } },
+      job: { retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 3 } },
       queueRetention: { mode: RetentionMode.KEEP_FOREVER },
       now,
     });
     expect(r.retentionMode).toBe(RetentionMode.DELETE_AFTER);
-    expect(r.retentionTtlMs).toBe(3000);
+    expect(r.retentionTtlSeconds).toBe(3);
   });
 
   it('carries backoff strategy/factor/cap/jitter', () => {
@@ -51,7 +51,7 @@ describe('OptionResolver precedence (queue < job)', () => {
           backoff: {
             strategy: BackoffStrategy.EXPONENTIAL,
             factor: 3,
-            maxDelay: 10_000,
+            maxDelaySeconds: 10,
             jitter: true,
           },
         },
@@ -60,7 +60,7 @@ describe('OptionResolver precedence (queue < job)', () => {
     });
     expect(r.retryBackoff).toBe(BackoffStrategy.EXPONENTIAL);
     expect(r.retryBackoffFactor).toBe(3);
-    expect(r.retryMaxDelayMs).toBe(10_000);
+    expect(r.retryMaxDelaySeconds).toBe(10);
     expect(r.retryJitter).toBe(true);
   });
 });

@@ -49,12 +49,12 @@ export class ClientLifecycleService {
     await migrationRunner.run(options.migration ?? MigrationMode.AUTO);
 
     // 4. Pub/sub.
-    const tickInterval = options.tickIntervalMs ?? 5000;
+    const tickIntervalSeconds = options.tickIntervalSeconds ?? 5;
     this.subscriber = new SubscriberService(
       driver,
       logger,
       this.runtime.wakeup,
-      Math.max(tickInterval, 5000),
+      Math.max(tickIntervalSeconds, 5) * 1000,
       this.runtime.instanceKey ?? null,
     );
     await this.subscriber.start();
@@ -64,7 +64,7 @@ export class ClientLifecycleService {
     this.retention = new RetentionService(this.runtime);
     if (options.monitor !== false) {
       this.monitor = new SystemMonitorService(
-        options.monitor ?? { maxEventLoopDelayMs: 200, sampleIntervalMs: 2000 },
+        options.monitor ?? { maxEventLoopDelaySeconds: 0.2, sampleIntervalSeconds: 2 },
         events,
         logger,
         () => this.runtime.wakeup.signalAll(),
@@ -73,7 +73,7 @@ export class ClientLifecycleService {
     }
     this.tickTimer = setInterval(
       () => this.runtime.background.run(() => this.tick()),
-      tickInterval,
+      tickIntervalSeconds * 1000,
     );
     this.tickTimer.unref?.();
 
@@ -82,7 +82,7 @@ export class ClientLifecycleService {
       const instances = new InstanceService(
         this.runtime,
         this.runtime.instanceKey,
-        options.instance?.heartbeatIntervalMs ?? 15000,
+        options.instance?.heartbeatIntervalSeconds ?? 15,
       );
       this.runtime.instances = instances;
       await instances.start();
@@ -120,7 +120,7 @@ export class ClientLifecycleService {
     await runner.migrate();
   }
 
-  async shutdown(options: { graceful: boolean; timeoutMs: number }): Promise<void> {
+  async shutdown(options: { graceful: boolean; timeoutSeconds: number }): Promise<void> {
     if (!this.state.running) return;
     const { events } = this.runtime;
     events.emit(PortQueueEvent.CLIENT_STOPPING, { instanceKey: this.runtime.instanceKey });
@@ -133,14 +133,14 @@ export class ClientLifecycleService {
 
     // Drain workers.
     for (const worker of this.registry.allWorkers()) {
-      await worker.stop({ graceful: options.graceful, timeoutMs: options.timeoutMs });
+      await worker.stop({ graceful: options.graceful, timeoutSeconds: options.timeoutSeconds });
     }
 
     this.monitor?.stop();
     // A tick, pump, heartbeat or NOTIFY fired without an await may still be mid-query. Let it
     // settle before the driver goes away — PGLite frees its WASM heap on disconnect and faults
     // if a query is still running in it.
-    if (!(await this.runtime.background.drain(options.timeoutMs))) {
+    if (!(await this.runtime.background.drain(options.timeoutSeconds))) {
       this.runtime.logger.warn(
         'Background work did not finish within the shutdown timeout; disconnecting anyway.',
       );

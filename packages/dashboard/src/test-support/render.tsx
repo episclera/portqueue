@@ -113,6 +113,9 @@ export function createHarness(options: StubOptions = {}): Harness {
 }
 
 /** A page DTO wrapper, so fixtures read as the API's actual shape. */
-export function page<T>(items: T[], total = items.length): { items: T[]; total: number; hasMore: boolean } {
+export function page<T>(
+  items: T[],
+  total = items.length,
+): { items: T[]; total: number; hasMore: boolean } {
   return { items, total, hasMore: false };
 }

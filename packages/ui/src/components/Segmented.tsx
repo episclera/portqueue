@@ -32,7 +32,9 @@ const Segment = styled.button<{ $active: boolean }>`
   color: ${(p) => (p.$active ? p.theme.color.link : p.theme.color.textMuted)};
   background: ${(p) => (p.$active ? p.theme.color.surface : 'transparent')};
   box-shadow: ${(p) => (p.$active ? p.theme.shadow.sm : 'none')};
-  transition: color ${(p) => p.theme.motion.fast}, background ${(p) => p.theme.motion.fast};
+  transition:
+    color ${(p) => p.theme.motion.fast},
+    background ${(p) => p.theme.motion.fast};
   &:hover {
     color: ${(p) => (p.$active ? p.theme.color.link : p.theme.color.text)};
   }

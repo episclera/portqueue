@@ -7,8 +7,10 @@ import { fieldBaseStyles, INPUT_SIZES, type InputSize } from './Input';
  * `<Field htmlFor>` label needs the `id` to reach the element it names; without one the label is
  * orphaned — clicking it focuses nothing and a screen reader announces an unlabelled spinbutton.
  */
-export interface InputNumberProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'size'> {
+export interface InputNumberProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'size'
+> {
   value?: number | null;
   onChange?: (value: number | null) => void;
   min?: number;

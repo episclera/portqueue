@@ -6,8 +6,8 @@
 #   scripts/cli/pglite.sh jobs --queue emails
 #
 # The connection string is the PGLite dataDir. Defaults to tmp/portqueue-cli-pglite in
-# the repo root (gitignored). Override it with PGLITE_DIR. Builds @portqueue/core and
-# @portqueue/cli on first run.
+# the repo root (gitignored). Override it with PGLITE_DIR. Rebuilds @portqueue/core and
+# @portqueue/cli each run (PORTQUEUE_SKIP_BUILD=1 skips it).
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 

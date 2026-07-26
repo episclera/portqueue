@@ -55,7 +55,7 @@ const SCHEDULE = {
   scheduleId: 'sch-nightly',
   queue: 'emails',
   cron: '0 0 * * *',
-  every: null,
+  everySeconds: null,
   timezone: 'UTC',
   nextRunAt: '2026-07-23T00:00:00.000Z',
   lastRunAt: '2026-07-22T00:00:00.000Z',
@@ -74,8 +74,7 @@ const RESPONSES: Record<string, unknown> = {
   '/instances': page([]),
 };
 
-const harness = (over: StubOptions = {}) =>
-  createHarness({ responses: RESPONSES, ...over });
+const harness = (over: StubOptions = {}) => createHarness({ responses: RESPONSES, ...over });
 
 beforeEach(() => window.localStorage.clear());
 

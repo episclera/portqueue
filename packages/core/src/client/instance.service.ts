@@ -14,7 +14,7 @@ export class InstanceService {
   constructor(
     private readonly runtime: Runtime,
     readonly instanceKey: string,
-    private readonly intervalMs: number,
+    private readonly intervalSeconds: number,
   ) {}
 
   /** This instance's cached pause flag (refreshed each heartbeat). */
@@ -25,7 +25,10 @@ export class InstanceService {
   /** Register the row and begin heartbeating. */
   async start(): Promise<void> {
     await this.beat();
-    this.timer = setInterval(() => this.runtime.background.run(() => this.beat()), this.intervalMs);
+    this.timer = setInterval(
+      () => this.runtime.background.run(() => this.beat()),
+      this.intervalSeconds * 1000,
+    );
     this.timer.unref?.();
   }
 
