@@ -13,6 +13,8 @@ import { ReadService } from './monitoring/stats.service';
 import { CompletionService } from './consumer/completion.service';
 import { ClientRegistryService } from './client/client-registry.service';
 import { ClientLifecycleService } from './client/client-lifecycle.service';
+import { DashboardService } from './dashboard/dashboard.service';
+import { CliService } from './cli/cli.service';
 import { Queue } from './producer/queue';
 import { Worker, type WorkerConfig } from './consumer/worker';
 import { InstanceActiveError, InvalidOptionsError, QueueInUseError } from './errors/errors';
@@ -57,6 +59,19 @@ export class PortQueue<TQueues extends string = string> {
   private readonly state = { running: false };
   private readonly hookedQueues = new Set<string>();
 
+  /**
+   * Internal facade for `@portqueue/dashboard`. **Not a developer API** — it is undocumented,
+   * unsupported for application code, and free to change in any release. Its purpose is to keep
+   * the dashboard's needs off the public surface: when the dashboard wants something this class
+   * doesn't already document, the method goes here rather than on `PortQueue`.
+   */
+  readonly _dashboard: DashboardService;
+
+  /**
+   * Internal facade for `@portqueue/cli`, with the same contract as {@link _dashboard}.
+   */
+  readonly _cli: CliService;
+
   constructor(options: PortQueueOptions) {
     if (!options.driver) {
       throw new InvalidOptionsError(
@@ -88,6 +103,7 @@ export class PortQueue<TQueues extends string = string> {
       instances: null,
       isRunning: () => this.state.running,
       cancelRunning: (jobId: string) => this.clientRegistry.cancelRunning(jobId),
+      isJobRunningHere: (jobId: string) => this.clientRegistry.isRunning(jobId),
     };
 
     const notifier = new NotifierService(
@@ -99,6 +115,8 @@ export class PortQueue<TQueues extends string = string> {
     this.reads = new ReadService(this.runtime);
     this.completion = new CompletionService(this.runtime);
     this.lifecycle = new ClientLifecycleService(this.runtime, this.clientRegistry, this.state);
+    this._dashboard = new DashboardService(this.runtime, this.reads);
+    this._cli = new CliService(this.runtime);
   }
 
   // --- Lifecycle ---

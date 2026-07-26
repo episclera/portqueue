@@ -33,4 +33,12 @@ export class ClientRegistryService {
     }
     return false;
   }
+
+  /**
+   * Whether a job is currently running *in this process*. The read-only half of
+   * {@link cancelRunning}, which both tests and acts and so can't be used as a probe.
+   */
+  isRunning(jobId: string): boolean {
+    return this.workers.some((worker) => worker.executor.active.has(jobId));
+  }
 }

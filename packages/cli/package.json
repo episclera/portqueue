@@ -29,11 +29,13 @@
     "@portqueue/core": "^0.1.0"
   },
   "dependencies": {
-    "@portqueue/dashboard": "^0.1.0"
+    "@portqueue/dashboard": "^0.1.0",
+    "basic-auth": "^2.0.1"
   },
   "devDependencies": {
     "@portqueue/core": "*",
     "@portqueue/eslint-config": "*",
+    "@types/basic-auth": "^1.1.8",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.0",
     "eslint": "^9.17.0",

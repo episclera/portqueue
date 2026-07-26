@@ -11,6 +11,18 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
 - **Keep the examples list in sync.** Every time you add a new example under `examples/`, list it (with a link) on the Examples docs page (`docs/docs/examples.md`) and in the examples index (`examples/README.md`). Add a launcher under `scripts/dev/examples/` and a matching `example:*` script in the root `package.json`.
 
 ## Design invariants
+- **The public API is for developers only — the dashboard and CLI never widen it.** `PortQueue`
+  exposes two internal facades, `pq._dashboard` and `pq._cli`, backed by
+  `packages/core/src/dashboard/` and `packages/core/src/cli/`. Those two packages consume **only**
+  their own facade plus the documented public methods that already fit their needs unchanged. The
+  moment the dashboard or CLI wants something the public surface doesn't already document —
+  server-side paging for the queues list, a read-only schedule scan, a shared transaction for a
+  batch action, driver access — that method goes on the facade, never on `PortQueue` itself. Facade
+  methods may reuse the public ones internally. Two consequences to hold to: a public method's
+  signature is never changed to suit `@portqueue/dashboard` or `@portqueue/cli`, and anything on a
+  facade is undocumented and unsupported for application code (the `_` prefix says so). If a facade
+  method turns out to be genuinely useful to developers, promoting it to the public API is a
+  deliberate, separately-documented decision — not a side effect.
 - **Named options over positional args** for any method with >1 input; `data` is a named key.
 - **Enums, not magic strings** for states, events, steps, capabilities, error codes, engines, instance types.
 - **No `any`** in the public surface; generics carry the payload type end-to-end.
@@ -26,7 +38,7 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
 - **Small, focused classes**, one concern each; DI per PortQueue instance.
 
 ## Layout
-- `packages/core` → `@portqueue/core` (engine + drivers). The `Driver` contract, capabilities, `DriverContext`, `TableName`, the shared `MigrationRunner`/migration helpers, and every per-engine driver + its migrations all live under `src/drivers/` (there is no separate `driver/` or `schema/` folder).
+- `packages/core` → `@portqueue/core` (engine + drivers). The `Driver` contract, capabilities, `DriverContext`, `TableName`, the shared `MigrationRunner`/migration helpers, and every per-engine driver + its migrations all live under `src/drivers/` (there is no separate `driver/` or `schema/` folder). `src/dashboard/` and `src/cli/` hold the two internal facades (`pq._dashboard`, `pq._cli`) — see the invariant above.
 - `packages/dashboard` → `@portqueue/dashboard`
 - `packages/cli` → `@portqueue/cli`
 - `packages/ui` → `@portqueue/ui` (private, never published)

@@ -102,14 +102,14 @@ describe('client reads & admin (sqlite)', () => {
     expect(await h.pq.getJob({ jobId: 'nope' })).toBeNull();
   });
 
-  it('bulk-removes jobs by id and reports throughput after completion', async () => {
+  it('bulk-removes jobs by id and leaves the counts empty', async () => {
     const q = h.pq.createQueue('bulk');
     const ids: string[] = [];
     for (let i = 0; i < 3; i += 1) ids.push((await q.addJob({ data: { i } })).jobId!);
     const removed = await q.removeJobs({ jobIds: ids });
     expect(removed).toBe(3);
     const stats = await q.getQueueStats();
-    expect(stats.throughputPerMinute).toBeGreaterThanOrEqual(0);
+    expect(stats.counts.PENDING).toBe(0);
   });
 
   it('never removes an ACTIVE job — it must be cancelled first', async () => {

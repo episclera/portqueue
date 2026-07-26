@@ -60,65 +60,57 @@ export class ReadService {
 
   async getQueueStats(queue?: string): Promise<QueueStats> {
     const counts = await this.runtime.driver.countJobsByStatus(queue ? { queueName: queue } : {});
-    const now = this.runtime.clock.now();
-    const points = await this.runtime.driver.getThroughput({
-      ...(queue ? { queueName: queue } : {}),
-      sinceMs: now - 3_600_000,
-      now,
-    });
-    let completed = 0;
-    let failed = 0;
-    for (const p of points) {
-      completed += p.completed;
-      failed += p.failed;
-    }
-    const minutes = 60;
-    return {
-      ...(queue ? { queue } : {}),
-      counts,
-      throughputPerMinute: completed / minutes,
-      failureRate: completed + failed === 0 ? 0 : failed / (completed + failed),
-    };
+    return { ...(queue ? { queue } : {}), counts };
   }
 
   async getQueues(): Promise<QueueInfo[]> {
     const rows = await this.runtime.driver.listQueues();
-    const out: QueueInfo[] = [];
-    for (const row of rows) {
-      const counts = await this.runtime.driver.countJobsByStatus({ queueName: row.name });
-      out.push({
-        name: row.name,
-        processingPaused: row.processingPaused,
-        acceptingPaused: row.acceptingPaused,
-        counts,
-        inUse: this.runtime.registry.isRegistered(row.name),
-      });
-    }
-    return out;
+    if (!rows.length) return [];
+    // One grouped count for the whole list rather than a query per queue.
+    const counts = await this.runtime.driver.countJobsByStatusPerQueue({
+      queueNames: rows.map((r) => r.name),
+    });
+    return rows.map((row) => ({
+      name: row.name,
+      processingPaused: row.processingPaused,
+      acceptingPaused: row.acceptingPaused,
+      counts: counts[row.name] ?? emptyStatusCounts(),
+      inUse: this.runtime.registry.isRegistered(row.name),
+    }));
   }
 
   /** Instance overview with liveness + per-instance job attribution. */
   async getInstances(): Promise<InstanceInfo[]> {
     const rows = await this.runtime.driver.listInstances();
+    if (!rows.length) return [];
     const now = this.runtime.clock.now();
     const staleAfter = (this.runtime.options.instance?.heartbeatIntervalMs ?? 15000) * 3;
-    const out: InstanceInfo[] = [];
-    for (const row of rows) {
-      const counts = await this.runtime.driver.countJobsByStatus({
-        processedOnInstanceKey: row.instanceKey,
-      });
-      out.push({
-        instanceKey: row.instanceKey,
-        processingPaused: row.processingPaused,
-        alive: row.lastSeenAt >= now - staleAfter,
-        createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt),
-        lastSeenAt: new Date(row.lastSeenAt),
-        counts,
-      });
-    }
-    return out;
+    const counts = await this.runtime.driver.countJobsByStatusPerInstance({
+      instanceKeys: rows.map((r) => r.instanceKey),
+    });
+    return rows.map((row) => ({
+      instanceKey: row.instanceKey,
+      processingPaused: row.processingPaused,
+      alive: row.lastSeenAt >= now - staleAfter,
+      createdAt: new Date(row.createdAt),
+      updatedAt: new Date(row.updatedAt),
+      lastSeenAt: new Date(row.lastSeenAt),
+      counts: counts[row.instanceKey] ?? emptyStatusCounts(),
+    }));
   }
+}
+
+/** A zeroed status breakdown, for a key the grouped count query returned nothing for. */
+function emptyStatusCounts(): Record<JobStatus, number> {
+  return {
+    [JobStatus.PENDING]: 0,
+    [JobStatus.ACTIVE]: 0,
+    [JobStatus.COMPLETED]: 0,
+    [JobStatus.FAILED]: 0,
+    [JobStatus.RETRY]: 0,
+    [JobStatus.CANCELLED]: 0,
+    [JobStatus.EXPIRED]: 0,
+  };
 }
 
 export { JobStatus };

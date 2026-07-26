@@ -32,4 +32,6 @@ export interface Runtime {
   isRunning(): boolean;
   /** Signal cooperative cancellation of an active job on this instance. */
   cancelRunning?(jobId: string): boolean;
+  /** Read-only probe: is this job running in this process right now? */
+  isJobRunningHere?(jobId: string): boolean;
 }

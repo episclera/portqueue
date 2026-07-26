@@ -159,8 +159,3 @@ export interface NewScheduleRow {
   jobOptions: ScheduledJobOptions | null;
 }
 
-export interface ThroughputPoint {
-  bucketStart: number;
-  completed: number;
-  failed: number;
-}

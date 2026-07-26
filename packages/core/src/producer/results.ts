@@ -98,10 +98,6 @@ export interface InstanceInfo {
 export interface QueueStats {
   queue?: string;
   counts: Record<JobStatus, number>;
-  /** Jobs completed per minute over the recent window. */
-  throughputPerMinute: number;
-  /** Failed / (completed + failed) over the recent window. */
-  failureRate: number;
 }
 
 /** Query for paged job reads. */

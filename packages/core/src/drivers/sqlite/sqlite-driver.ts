@@ -28,7 +28,11 @@ import { DriverContext } from '../driver-context';
 import type {
   Driver,
   DriverProbe,
+  InstanceListFilter,
   MigrationStep,
+  PageWindow,
+  QueueListFilter,
+  ScheduleListFilter,
   Subscription,
 } from '../driver.interface';
 import type {
@@ -40,7 +44,6 @@ import type {
   QueueRow,
   ScheduledJobOptions,
   ScheduleRow,
-  ThroughputPoint,
 } from '../../jobs/job-record';
 import type { QueueOptions } from '../../options/queue-options';
 import type { TransactionHandle, TxQueryResult } from '../../tx/transaction-handle';
@@ -224,6 +227,24 @@ export class SqliteDriver implements Driver {
   /** SQLite uses `?` positional placeholders. */
   private ph(_index0: number): string {
     return '?';
+  }
+
+  /**
+   * The trailing `LIMIT`/`OFFSET` for a list read, appending each bound value to `params`.
+   * Returns an empty string when the caller asked for no window, so core's unpaged reads emit
+   * exactly the SQL they always did.
+   */
+  private window(page: PageWindow, params: unknown[]): string {
+    let sql = '';
+    if (page.limit !== undefined) {
+      sql += ` LIMIT ${this.ph(params.length)}`;
+      params.push(Math.max(Math.trunc(page.limit), 0));
+    }
+    if (page.offset !== undefined) {
+      sql += ` OFFSET ${this.ph(params.length)}`;
+      params.push(Math.max(Math.trunc(page.offset), 0));
+    }
+    return sql;
   }
 
   // --- Probe / migration ---
@@ -612,6 +633,20 @@ export class SqliteDriver implements Driver {
     return res.rowCount > 0;
   }
 
+  async setScheduleEnabled(options: {
+    scheduleId: string;
+    enabled: boolean;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<boolean> {
+    const res = await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.ENABLED} = ${this.ph(0)}, ${ScheduleColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${ScheduleColumn.ID} = ${this.ph(2)}`,
+      [this.boolIn(options.enabled), options.now, options.scheduleId],
+      options.tx,
+    );
+    return res.rowCount > 0;
+  }
+
   // --- Claiming (hot path) ---
   async claimJobs(options: {
     queueName: string;
@@ -907,10 +942,64 @@ export class SqliteDriver implements Driver {
     return counts;
   }
 
-  async listQueues(): Promise<QueueRow[]> {
+  /**
+   * Per-status counts for many queues in one grouped pass. One query replaces the
+   * `countJobsByStatus`-per-row storm a queue list page would otherwise issue.
+   */
+  async countJobsByStatusPerQueue(options: {
+    queueNames: string[];
+  }): Promise<Record<string, Record<JobStatus, number>>> {
+    return this.countByStatusGrouped(JobColumn.QUEUE_NAME, options.queueNames);
+  }
+
+  async countJobsByStatusPerInstance(options: {
+    instanceKeys: string[];
+  }): Promise<Record<string, Record<JobStatus, number>>> {
+    return this.countByStatusGrouped(JobColumn.PROCESSED_ON_INSTANCE_KEY, options.instanceKeys);
+  }
+
+  /** The shared `GROUP BY <key>, status` read behind both per-key count breakdowns. */
+  private async countByStatusGrouped(
+    keyColumn: JobColumn,
+    keys: string[],
+  ): Promise<Record<string, Record<JobStatus, number>>> {
+    const out: Record<string, Record<JobStatus, number>> = {};
+    for (const key of keys) out[key] = emptyStatusCounts();
+    if (!keys.length) return out;
+    const placeholders = keys.map((_, i) => this.ph(i)).join(', ');
     const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.QUEUE)} ORDER BY ${QueueColumn.NAME} ASC`,
-      [],
+      `SELECT ${keyColumn}, ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ` +
+        `WHERE ${keyColumn} IN (${placeholders}) GROUP BY ${keyColumn}, ${JobColumn.STATUS}`,
+      keys,
+    );
+    for (const row of res.rows) {
+      const bucket = out[String(row[keyColumn])];
+      if (bucket) bucket[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
+    }
+    return out;
+  }
+
+  /** WHERE clauses for a queue-list filter, appending each value to `params`. */
+  private queueFilterClauses(options: QueueListFilter, params: unknown[]): string {
+    const clauses: string[] = [];
+    if (options.search) {
+      clauses.push(`LOWER(${QueueColumn.NAME}) LIKE ${this.ph(params.length)} ESCAPE '!'`);
+      params.push(likePattern(options.search));
+    }
+    if (options.processingPaused !== undefined) {
+      clauses.push(`${QueueColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
+      params.push(this.boolIn(options.processingPaused));
+    }
+    return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  }
+
+  async listQueues(options: QueueListFilter & PageWindow = {}): Promise<QueueRow[]> {
+    const params: unknown[] = [];
+    const where = this.queueFilterClauses(options, params);
+    const res = await this.execute(
+      `SELECT * FROM ${this.t(TableName.QUEUE)} ${where} ORDER BY ${QueueColumn.NAME} ASC` +
+        this.window(options, params),
+      params,
     );
     // No unique index on name: dedupe defensively so a creation race can't surface twice.
     return this.mapUnique(
@@ -920,57 +1009,68 @@ export class SqliteDriver implements Driver {
     );
   }
 
-  async listSchedules(options: { queueName?: string }): Promise<ScheduleRow[]> {
+  async countQueues(options: QueueListFilter = {}): Promise<number> {
     const params: unknown[] = [];
-    let where = '';
+    const where = this.queueFilterClauses(options, params);
+    const res = await this.execute(
+      `SELECT COUNT(*) AS c FROM ${this.t(TableName.QUEUE)} ${where}`,
+      params,
+    );
+    return Number(res.rows[0]?.c ?? 0);
+  }
+
+  /** WHERE clauses for a schedule-list filter, appending each value to `params`. */
+  private scheduleFilterClauses(options: ScheduleListFilter, params: unknown[]): string {
+    const clauses: string[] = [];
     if (options.queueName) {
-      where = `WHERE ${ScheduleColumn.QUEUE_NAME} = ${this.ph(0)}`;
+      clauses.push(`${ScheduleColumn.QUEUE_NAME} = ${this.ph(params.length)}`);
       params.push(options.queueName);
     }
+    if (options.enabled !== undefined) {
+      clauses.push(`${ScheduleColumn.ENABLED} = ${this.ph(params.length)}`);
+      params.push(this.boolIn(options.enabled));
+    }
+    if (options.search) {
+      // A schedule is searchable by any of the three things the table actually shows.
+      const pattern = likePattern(options.search);
+      const cols = [ScheduleColumn.ID, ScheduleColumn.QUEUE_NAME, ScheduleColumn.CRON];
+      const ors = cols.map((col) => {
+        const clause = `LOWER(${col}) LIKE ${this.ph(params.length)} ESCAPE '!'`;
+        params.push(pattern);
+        return clause;
+      });
+      clauses.push(`(${ors.join(' OR ')})`);
+    }
+    return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  }
+
+  async listSchedules(options: ScheduleListFilter & PageWindow = {}): Promise<ScheduleRow[]> {
+    const params: unknown[] = [];
+    const where = this.scheduleFilterClauses(options, params);
     const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.SCHEDULE)} ${where} ORDER BY ${ScheduleColumn.CREATED_AT} ASC`,
+      `SELECT * FROM ${this.t(TableName.SCHEDULE)} ${where} ` +
+        `ORDER BY ${ScheduleColumn.CREATED_AT} ASC, ${ScheduleColumn.ID} ASC` +
+        this.window(options, params),
       params,
     );
     return res.rows.map((r) => this.mapSchedule(r));
   }
 
+  async countSchedules(options: ScheduleListFilter = {}): Promise<number> {
+    const params: unknown[] = [];
+    const where = this.scheduleFilterClauses(options, params);
+    const res = await this.execute(
+      `SELECT COUNT(*) AS c FROM ${this.t(TableName.SCHEDULE)} ${where}`,
+      params,
+    );
+    return Number(res.rows[0]?.c ?? 0);
+  }
   async getSchedule(options: { scheduleId: string }): Promise<ScheduleRow | null> {
     const res = await this.execute(
       `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
       [options.scheduleId],
     );
     return res.rows[0] ? this.mapSchedule(res.rows[0]) : null;
-  }
-
-  async getThroughput(options: {
-    queueName?: string;
-    sinceMs: number;
-    now: number;
-  }): Promise<ThroughputPoint[]> {
-    const params: unknown[] = [options.sinceMs];
-    let where = `(${JobColumn.COMPLETED_AT} IS NOT NULL OR ${JobColumn.FAILED_AT} IS NOT NULL) AND ${JobColumn.UPDATED_AT} >= ${this.ph(0)}`;
-    if (options.queueName) {
-      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(1)}`;
-      params.push(options.queueName);
-    }
-    const res = await this.execute(
-      `SELECT ${JobColumn.STATUS}, ${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT} FROM ${this.t(TableName.JOB)} WHERE ${where}`,
-      params,
-    );
-    // Bucket by minute in-memory (avoids engine-specific date functions).
-    const buckets = new Map<number, ThroughputPoint>();
-    for (const row of res.rows) {
-      const ts =
-        row[JobColumn.COMPLETED_AT] != null
-          ? Number(row[JobColumn.COMPLETED_AT])
-          : Number(row[JobColumn.FAILED_AT]);
-      const bucket = Math.floor(ts / 60000) * 60000;
-      const point = buckets.get(bucket) ?? { bucketStart: bucket, completed: 0, failed: 0 };
-      if (row[JobColumn.STATUS] === JobStatus.COMPLETED) point.completed += 1;
-      else if (row[JobColumn.STATUS] === JobStatus.FAILED) point.failed += 1;
-      buckets.set(bucket, point);
-    }
-    return [...buckets.values()].sort((a, b) => a.bucketStart - b.bucketStart);
   }
 
   async getDueSchedules(options: { now: number; limit: number }): Promise<ScheduleRow[]> {
@@ -1134,10 +1234,34 @@ export class SqliteDriver implements Driver {
     return this.mapInstance(inserted.rows[0]!);
   }
 
-  async listInstances(): Promise<InstanceRow[]> {
+  /** WHERE clauses for an instance-list filter, appending each value to `params`. */
+  private instanceFilterClauses(options: InstanceListFilter, params: unknown[]): string {
+    const clauses: string[] = [];
+    if (options.search) {
+      clauses.push(`LOWER(${InstanceColumn.INSTANCE_KEY}) LIKE ${this.ph(params.length)} ESCAPE '!'`);
+      params.push(likePattern(options.search));
+    }
+    if (options.processingPaused !== undefined) {
+      clauses.push(`${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
+      params.push(this.boolIn(options.processingPaused));
+    }
+    // Liveness is a cutoff the caller computed; the driver only compares against it.
+    if (options.alive !== undefined && options.seenSince !== undefined) {
+      clauses.push(
+        `${InstanceColumn.LAST_SEEN_AT} ${options.alive ? '>=' : '<'} ${this.ph(params.length)}`,
+      );
+      params.push(options.seenSince);
+    }
+    return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  }
+
+  async listInstances(options: InstanceListFilter & PageWindow = {}): Promise<InstanceRow[]> {
+    const params: unknown[] = [];
+    const where = this.instanceFilterClauses(options, params);
     const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.INSTANCE)} ORDER BY ${InstanceColumn.INSTANCE_KEY} ASC`,
-      [],
+      `SELECT * FROM ${this.t(TableName.INSTANCE)} ${where} ORDER BY ${InstanceColumn.INSTANCE_KEY} ASC` +
+        this.window(options, params),
+      params,
     );
     return this.mapUnique(
       res.rows,
@@ -1146,6 +1270,15 @@ export class SqliteDriver implements Driver {
     );
   }
 
+  async countInstances(options: InstanceListFilter = {}): Promise<number> {
+    const params: unknown[] = [];
+    const where = this.instanceFilterClauses(options, params);
+    const res = await this.execute(
+      `SELECT COUNT(*) AS c FROM ${this.t(TableName.INSTANCE)} ${where}`,
+      params,
+    );
+    return Number(res.rows[0]?.c ?? 0);
+  }
   async getInstance(options: { instanceKey: string }): Promise<InstanceRow | null> {
     const res = await this.execute(
       `SELECT * FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
@@ -1241,4 +1374,15 @@ function emptyStatusCounts(): Record<JobStatus, number> {
     [JobStatus.CANCELLED]: 0,
     [JobStatus.EXPIRED]: 0,
   };
+}
+
+/**
+ * A bound `LIKE` pattern for a case-insensitive substring search. The term is lower-cased (the
+ * column is too, at the query site) and `%`/`_`/`!` are escaped with `!` — declared by the
+ * query's own `ESCAPE '!'` — so a user typing `100%` searches for that text rather than matching
+ * everything. Still a bound parameter: nothing here is interpolated into SQL.
+ */
+function likePattern(term: string): string {
+  const escaped = term.toLowerCase().replace(/[!%_]/g, (ch) => `!${ch}`);
+  return `%${escaped}%`;
 }

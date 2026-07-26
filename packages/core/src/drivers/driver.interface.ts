@@ -8,7 +8,6 @@ import type {
   NewScheduleRow,
   QueueRow,
   ScheduleRow,
-  ThroughputPoint,
 } from '../jobs/job-record';
 import type { DriverCapability, DriverCapabilitySet } from './driver-capabilities';
 import type { DriverContext } from './driver-context';
@@ -29,6 +28,46 @@ export interface MigrationStep {
   checksum: string;
   /** Run the migration against the driver in a transaction. */
   up(driver: Driver, context: DriverContext): Promise<void>;
+}
+
+/**
+ * The paging window a list read accepts. Both fields are optional so the same driver method
+ * serves core's "give me everything" reads and the dashboard's paged ones; omitting them means
+ * no window at all rather than a defaulted page.
+ */
+export interface PageWindow {
+  limit?: number;
+  offset?: number;
+}
+
+/** Narrowing for {@link Driver.listQueues} / {@link Driver.countQueues}. */
+export interface QueueListFilter {
+  /** Case-insensitive substring of the queue name. */
+  search?: string;
+  /** Match only queues whose `processing_paused` equals this. */
+  processingPaused?: boolean;
+}
+
+/** Narrowing for {@link Driver.listSchedules} / {@link Driver.countSchedules}. */
+export interface ScheduleListFilter {
+  queueName?: string;
+  enabled?: boolean;
+  /** Case-insensitive substring matched against the schedule id, queue name and cron pattern. */
+  search?: string;
+}
+
+/** Narrowing for {@link Driver.listInstances} / {@link Driver.countInstances}. */
+export interface InstanceListFilter {
+  /** Case-insensitive substring of the instance key. */
+  search?: string;
+  processingPaused?: boolean;
+  /**
+   * Liveness cutoff: with `alive: true` only instances seen at or after `seenSince` match, with
+   * `alive: false` only those seen before it. The caller derives the cutoff from its own clock and
+   * heartbeat config, so the driver never needs to know the liveness window.
+   */
+  alive?: boolean;
+  seenSince?: number;
 }
 
 /**
@@ -86,6 +125,13 @@ export interface Driver {
     tx?: TransactionHandle;
   }): Promise<ScheduleRow | null>;
   deleteSchedule(options: { scheduleId: string; tx?: TransactionHandle }): Promise<boolean>;
+  /** Arm or disarm a schedule without deleting it (the dashboard's enable/disable action). */
+  setScheduleEnabled(options: {
+    scheduleId: string;
+    enabled: boolean;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<boolean>;
 
   // Claiming & completing (hot path)
   claimJobs(options: {
@@ -131,6 +177,18 @@ export interface Driver {
     queueName?: string;
     processedOnInstanceKey?: string;
   }): Promise<Record<JobStatus, number>>;
+  /**
+   * Per-status counts for many queues in **one** grouped query, keyed by queue name. Replaces a
+   * `countJobsByStatus` call per row when a list page needs a count breakdown for each of its
+   * queues; a name absent from the result simply has no jobs.
+   */
+  countJobsByStatusPerQueue(options: {
+    queueNames: string[];
+  }): Promise<Record<string, Record<JobStatus, number>>>;
+  /** The {@link countJobsByStatusPerQueue} equivalent keyed by `processed_on_instance_key`. */
+  countJobsByStatusPerInstance(options: {
+    instanceKeys: string[];
+  }): Promise<Record<string, Record<JobStatus, number>>>;
   /** Total rows matching a {@link Driver.getJobs} filter, ignoring paging. */
   countJobs(options: {
     queueName?: string;
@@ -138,14 +196,17 @@ export interface Driver {
     scheduleId?: string;
     processedOnInstanceKey?: string;
   }): Promise<number>;
-  listQueues(): Promise<QueueRow[]>;
-  listSchedules(options: { queueName?: string }): Promise<ScheduleRow[]>;
+  /**
+   * Queue rows, optionally narrowed and paged. Called with no options it returns every queue —
+   * the shape core's own reads rely on. `search` is a case-insensitive substring of the name.
+   */
+  listQueues(options?: QueueListFilter & PageWindow): Promise<QueueRow[]>;
+  /** Total queues matching a {@link listQueues} filter, ignoring paging. */
+  countQueues(options?: QueueListFilter): Promise<number>;
+  listSchedules(options: ScheduleListFilter & PageWindow): Promise<ScheduleRow[]>;
+  /** Total schedules matching a {@link listSchedules} filter, ignoring paging. */
+  countSchedules(options: ScheduleListFilter): Promise<number>;
   getSchedule(options: { scheduleId: string }): Promise<ScheduleRow | null>;
-  getThroughput(options: {
-    queueName?: string;
-    sinceMs: number;
-    now: number;
-  }): Promise<ThroughputPoint[]>;
   getDueSchedules(options: { now: number; limit: number }): Promise<ScheduleRow[]>;
   /**
    * Advance a schedule's next-run, guarded on its previous value so only one instance
@@ -192,7 +253,10 @@ export interface Driver {
 
   // Instance liveness & per-instance pause
   upsertInstance(options: { instanceKey: string; now: number }): Promise<InstanceRow>;
-  listInstances(): Promise<InstanceRow[]>;
+  /** Instance rows, optionally narrowed and paged. No options returns every instance. */
+  listInstances(options?: InstanceListFilter & PageWindow): Promise<InstanceRow[]>;
+  /** Total instances matching a {@link listInstances} filter, ignoring paging. */
+  countInstances(options?: InstanceListFilter): Promise<number>;
   getInstance(options: { instanceKey: string }): Promise<InstanceRow | null>;
   setInstancePaused(options: {
     instanceKey: string;
