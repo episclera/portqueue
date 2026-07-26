@@ -47,7 +47,6 @@ const FILTER_DEFS: FilterDef[] = [
   {
     key: 'status',
     label: 'Status',
-    multiple: true,
     options: Object.values(JobStatus).map((s) => ({ label: STATUSES_CONFIG[s].label, value: s })),
   },
 ];
@@ -131,7 +130,9 @@ export function JobsTable({ queue, scheduleId, prefix = 'jobs' }: JobsTableProps
     {
       title: 'Actions',
       key: 'actions',
+      // Buttons hug the right edge; the title stays on the left, where it reads as this column's.
       align: 'right',
+      headerAlign: 'left',
       render: (r: JobDto) => (
         <RowActions>
           <RowAction
