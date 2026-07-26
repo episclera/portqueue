@@ -11,6 +11,13 @@ export interface TableColumn<T> {
   render?: (row: T, index: number) => React.ReactNode;
   dataIndex?: keyof T;
   width?: number | string;
+  /**
+   * Floor for the column's width, applied to the header and every body cell. `width` alone is a
+   * suggestion the auto layout may shrink; a floor holds even in a narrow card — the table grows
+   * past the card and the horizontal scroller takes over. Used by columns whose content must not
+   * wrap, e.g. a full timestamp.
+   */
+  minWidth?: number | string;
   align?: TableAlign;
   /**
    * Alignment for the header cell alone, when it should differ from the body. An actions column
@@ -112,6 +119,12 @@ const EmptyCell = styled.td<{ $size: TableSize }>`
 const sizeToPx = (v: number | string | undefined): string | undefined =>
   v === undefined ? undefined : typeof v === 'number' ? `${v}px` : v;
 
+/** The width constraints a column puts on both its header and its body cells. */
+const cellSizing = <T,>(column: TableColumn<T>): React.CSSProperties => ({
+  ...(column.width === undefined ? {} : { width: sizeToPx(column.width) }),
+  ...(column.minWidth === undefined ? {} : { minWidth: sizeToPx(column.minWidth) }),
+});
+
 const cellContent = <T,>(column: TableColumn<T>, row: T, index: number): React.ReactNode => {
   if (column.render) return column.render(row, index);
   if (column.dataIndex !== undefined) return String(row[column.dataIndex]);
@@ -198,7 +211,7 @@ export function Table<T>({
               key={column.key}
               $align={column.headerAlign ?? column.align ?? 'left'}
               $size={size}
-              style={{ width: sizeToPx(column.width) }}
+              style={cellSizing(column)}
             >
               {column.title}
             </Th>
@@ -220,7 +233,12 @@ export function Table<T>({
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {allColumns.map((column) => (
-                <Td key={column.key} $align={column.align ?? 'left'} $size={size}>
+                <Td
+                  key={column.key}
+                  $align={column.align ?? 'left'}
+                  $size={size}
+                  style={cellSizing(column)}
+                >
                   {cellContent(column, row, index)}
                 </Td>
               ))}

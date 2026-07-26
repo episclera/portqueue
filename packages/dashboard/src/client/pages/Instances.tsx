@@ -18,9 +18,8 @@ import {
 } from '../constants/labels';
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
-import { countColumns } from '../components/table-columns';
+import { countColumns, dateColumn } from '../components/table-columns';
 import { DOCS, EmptyState } from '../components/states';
-import { Time } from '../components/Time';
 import type { FilterDef } from '../components/FiltersModal';
 
 const FILTER_KEYS = ['liveness', 'state'] as const;
@@ -85,13 +84,9 @@ export function InstancesPage(): React.ReactElement {
       ),
     },
     ...countColumns<InstanceDto>(),
-    {
-      title: 'Last Seen',
-      key: 'lastSeenAt',
-      // The clock time of the last heartbeat. Whether that is recent is what the Liveness column
-      // already answers, so this column doesn't need to count on its own.
-      render: (r) => <Time value={r.lastSeenAt} />,
-    },
+    // The clock time of the last heartbeat. Whether that is recent is what the Liveness column
+    // already answers, so this column doesn't need to count on its own.
+    dateColumn<InstanceDto>('Last Seen', 'lastSeenAt', (r) => r.lastSeenAt),
     {
       title: 'Actions',
       key: 'actions',

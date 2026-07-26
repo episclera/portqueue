@@ -20,7 +20,7 @@ import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import { ACTIONS_CONFIG, STALLED, STATUSES_CONFIG, statusLabel } from '../constants/labels';
 import { truncate } from './format';
-import { Time } from './Time';
+import { dateColumn } from './table-columns';
 import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
 import type { FilterDef } from './FiltersModal';
@@ -122,10 +122,10 @@ export function JobsTable({ queue, scheduleId, prefix = 'jobs' }: JobsTableProps
           '—'
         ),
     },
-    { title: 'Created At', key: 'createdAt', render: (r) => <Time value={r.createdAt} /> },
-    { title: 'Start After', key: 'startAfter', render: (r) => <Time value={r.startAfter} /> },
-    { title: 'Completed At', key: 'completedAt', render: (r) => <Time value={r.completedAt} /> },
-    { title: 'Failed At', key: 'failedAt', render: (r) => <Time value={r.failedAt} /> },
+    dateColumn<JobDto>('Created At', 'createdAt', (r) => r.createdAt),
+    dateColumn<JobDto>('Start After', 'startAfter', (r) => r.startAfter),
+    dateColumn<JobDto>('Completed At', 'completedAt', (r) => r.completedAt),
+    dateColumn<JobDto>('Failed At', 'failedAt', (r) => r.failedAt),
     {
       title: 'Actions',
       key: 'actions',

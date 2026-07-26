@@ -16,7 +16,7 @@ import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import { ACTIONS_CONFIG, SCHEDULE_STATES_CONFIG } from '../constants/labels';
 import { truncate } from './format';
-import { Time } from './Time';
+import { dateColumn } from './table-columns';
 import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
 import type { FilterDef } from './FiltersModal';
@@ -108,8 +108,8 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
       render: (r) => (r.cron ? <Code>{r.cron}</Code> : cadence(r)),
     },
     { title: 'Timezone', key: 'timezone', render: (r) => r.timezone ?? 'UTC' },
-    { title: 'Next Run', key: 'nextRunAt', render: (r) => <Time value={r.nextRunAt} /> },
-    { title: 'Last Run', key: 'lastRunAt', render: (r) => <Time value={r.lastRunAt} /> },
+    dateColumn<ScheduleDto>('Next Run', 'nextRunAt', (r) => r.nextRunAt),
+    dateColumn<ScheduleDto>('Last Run', 'lastRunAt', (r) => r.lastRunAt),
     {
       title: 'State',
       key: 'enabled',

@@ -195,6 +195,16 @@ describe('queue detail page', () => {
     expect(screen.getByRole('button', { name: 'Page 3' })).toBeInTheDocument();
   });
 
+  it('gives every timestamp column the same width floor, so a date never wraps', async () => {
+    harness().renderApp('#/queues/emails');
+
+    await screen.findByText('Results (42)');
+    for (const title of ['Created At', 'Start After', 'Completed At', 'Failed At']) {
+      const header = screen.getByText(title).closest('th');
+      expect(header).toHaveStyle({ minWidth: '220px' });
+    }
+  });
+
   it('reveals bulk actions only once a row is selected', async () => {
     harness().renderApp('#/queues/emails');
 
