@@ -100,11 +100,11 @@ for the generated usage. Global connection flags apply to all of them.
 
 | Command | Usage | What it does |
 | --- | --- | --- |
-| `stats` | `[--queue <name>] [--watch]` | State counts, throughput, failure rate. `--watch` refreshes live |
+| `stats` | `[--queue <name>] [--watch]` | Job counts by state. `--watch` refreshes live |
 | `queues` | | List queues with counts + paused state |
 | `jobs` | `--queue <name> [--status <s>] [--schedule-id <id>] [--limit <n> --cursor <c>]` | Paged job list |
 | `job` | `--id <jobId>` | Full detail for a single job |
-| `schedules` | `--queue <name>` | List recurring definitions |
+| `schedules` | `[--queue <name>]` | List recurring definitions. Without `--queue`, every queue's |
 
 ### Actions
 
@@ -113,7 +113,7 @@ for the generated usage. Global connection flags apply to all of them.
 | `add` | `--queue <name> --data <json\|@file> [--priority <n>] [--start-after <duration>] [--idempotency-key <k>] [--retry-max-attempts <n>] [--cron "<expr>" --timezone <tz> \| --every <ms>]` | Enqueue a one-off job or create a recurring schedule. `--data` is inline JSON or `@path/to/file.json` |
 | `retry` | `--id <jobId>` | Requeue a failed/completed job (re-arms its own row) |
 | `cancel` | `--id <jobId>` | Cancel a pending or active job |
-| `remove` | `(--id <jobId> \| --schedule-id <id> --queue <name>)` | Remove a single job **or** a schedule. An ACTIVE job is skipped — cancel it first |
+| `remove` | `(--id <jobId> \| --schedule-id <id>)` | Remove a single job **or** a schedule. An ACTIVE job is skipped — cancel it first |
 | `remove-queue` | `--queue <name>` | Remove a queue no longer used by any running code |
 | `remove-instance` | `--instance-key <key>` | Remove a long-inactive instance from monitoring (refused unless unseen for 30+ min) |
 | `purge` | `--queue <name> --status <status> --yes` | **Destructive** bulk delete of jobs in a state. Requires `--yes` |
@@ -128,9 +128,9 @@ for the generated usage. Global connection flags apply to all of them.
 | Command | Usage | What it does |
 | --- | --- | --- |
 | `migrate` | `[--mode auto\|validate-only]` | Apply pending schema migrations |
-| `doctor` | | Check connectivity and schema health |
+| `doctor` | `[--json]` | Probe the server and report the engine, its version, verified capabilities, the applied vs shipped schema version, and queue/instance counts |
 | `listen` | `[--queue <name>]` | Stream the event feed until interrupted |
-| `dashboard` | `--port <n> --root-user <u> --root-password <p> [--host <h>] [--read-only] [--base-path <p>]` | Serve the web dashboard |
+| `dashboard` | `--port <n> --root-user <u> --root-password <p> [--host <h>] [--base-path <p>]` | Serve the web dashboard |
 
 ### `dashboard` flags
 
@@ -140,10 +140,16 @@ for the generated usage. Global connection flags apply to all of them.
 | `--host <h>` | `127.0.0.1` | Interface to bind (use `0.0.0.0` in a container) |
 | `--root-user <u>` | `PORTQUEUE_ROOT_USER` env | Basic-auth username (required) |
 | `--root-password <p>` | `PORTQUEUE_ROOT_PASSWORD` env | Basic-auth password (required) |
-| `--read-only` | off | Serve read-only — hide all mutating actions |
 | `--base-path <p>` | `/portqueue` | URL prefix the dashboard is served under |
 
 Credentials are required: pass `--root-user`/`--root-password` or set the matching env vars.
+
+The `@portqueue/dashboard` package itself ships no authentication — when you mount it in your own
+app, you put your existing auth middleware in front of it (see
+[Protecting the dashboard](./dashboard.mdx#protecting-the-dashboard)). `portqueue dashboard` is the
+exception: it opens the port itself, with no host application to guard it, so it brings its own
+HTTP Basic auth and refuses to start without credentials. It binds to loopback by default —
+if you set `--host 0.0.0.0`, terminate TLS in front of it.
 
 ## Common commands
 

@@ -79,6 +79,7 @@ caller's transaction. The interface groups its methods by concern:
 - `findJobByIdempotencyKey({ queueName, idempotencyKey, tx? }): Promise<InsertedJobRow | null>`
 - `findScheduleByIdempotencyKey({ queueName, idempotencyKey, tx? }): Promise<ScheduleRow | null>`
 - `deleteSchedule({ scheduleId, tx? }): Promise<boolean>`
+- `setScheduleEnabled({ scheduleId, enabled, now, tx? }): Promise<boolean>` — arm/disarm without deleting.
 
 **Claiming & completing (hot path)**
 
@@ -96,11 +97,11 @@ caller's transaction. The interface groups its methods by concern:
 - `getJob({ jobId }): Promise<JobRecord | null>`
 - `getJobs({ queueName?, statuses?, scheduleId?, processedOnInstanceKey?, limit, offset, order }): Promise<JobRecord[]>`
 - `countJobsByStatus({ queueName?, processedOnInstanceKey? }): Promise<Record<JobStatus, number>>`
+- `countJobsByStatusPerQueue({ queueNames }): Promise<Record<string, Record<JobStatus, number>>>` — the same breakdown for many queues in **one** grouped query, so a list page costs one count query rather than one per row. `countJobsByStatusPerInstance({ instanceKeys })` is its per-instance twin.
 - `countJobs({ queueName?, statuses?, scheduleId?, processedOnInstanceKey? }): Promise<number>` — total rows behind a `getJobs` filter, ignoring paging.
-- `listQueues(): Promise<QueueRow[]>`
-- `listSchedules({ queueName? }): Promise<ScheduleRow[]>`
+- `listQueues({ search?, processingPaused?, limit?, offset? }?): Promise<QueueRow[]>` — called with no options it returns every queue, which is what core's own reads want; the paging fields exist for list UIs. `countQueues(filter?)` gives the matching total.
+- `listSchedules({ queueName?, enabled?, search?, limit?, offset? }): Promise<ScheduleRow[]>`, with `countSchedules(filter)`.
 - `getSchedule({ scheduleId }): Promise<ScheduleRow | null>`
-- `getThroughput({ queueName?, sinceMs, now }): Promise<ThroughputPoint[]>`
 - `getDueSchedules({ now, limit }): Promise<ScheduleRow[]>`
 - `advanceSchedule({ scheduleId, nextRunAt, lastRunAt, fromNextRunAt }): Promise<boolean>` — guarded so one instance wins each tick.
 
@@ -121,7 +122,7 @@ caller's transaction. The interface groups its methods by concern:
 **Instance liveness & per-instance pause**
 
 - `upsertInstance({ instanceKey, now }): Promise<InstanceRow>`
-- `listInstances(): Promise<InstanceRow[]>`
+- `listInstances({ search?, processingPaused?, alive?, seenSince?, limit?, offset? }?): Promise<InstanceRow[]>` — `alive` compares `last_seen_at` against the `seenSince` cutoff the caller computed, so the driver never needs to know the liveness window. `countInstances(filter?)` gives the matching total.
 - `getInstance({ instanceKey }): Promise<InstanceRow | null>`
 - `setInstancePaused({ instanceKey, processingPaused, now }): Promise<void>`
 - `deleteInstance({ instanceKey, tx? }): Promise<boolean>`

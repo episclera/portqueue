@@ -380,7 +380,7 @@ Reads return objects, never bare ids. The main shapes:
 - **ScheduleInfo** — `scheduleId`, `cron?`, `every?`, `timezone?`, `nextRunAt?`, `lastRunAt?`, `enabled`, `idempotencyKey?`.
 - **QueueInfo** — `name`, `processingPaused`, `acceptingPaused`, `counts`, `inUse`.
 - **InstanceInfo** — `instanceKey`, `processingPaused`, `alive`, `createdAt`, `updatedAt`, `lastSeenAt`, `counts`.
-- **QueueStats** — `queue?`, `counts`, `throughputPerMinute`, `failureRate`.
+- **QueueStats** — `queue?`, `counts` (a `JobStatus` → count map).
 - **Page&lt;T&gt;** — `items`, `cursor`, `hasMore`, `total` (rows matching the query, ignoring paging).
 
 ---

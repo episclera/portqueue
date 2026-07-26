@@ -26,7 +26,11 @@ a one-line description, and the page's actions.
   per-queue table (totals and per-status counts) with pause/resume.
 - **Instances** — every registered instance with liveness, per-instance job counts, and
   per-instance pause/resume (only populated for servers that set an [instance key](./scale-horizontally.md#give-each-server-an-identity-key)).
-- **Schedules** — recurring definitions across queues, with bulk unschedule.
+- **Schedules** — recurring definitions across queues, with per-schedule enable/disable and bulk
+  unschedule. Each schedule id links to its own page.
+- **Schedule detail** — one recurring definition (cadence, timezone, next and last run, state)
+  above a table of the jobs it has produced, so "did last night's run succeed?" is answerable
+  without hunting through the queue's full job list.
 - **Queue / Job detail** — drill into a queue's jobs, or into a single job: its full record
   (queue, status, priority, attempts, the instance that processed it and any preferred-instance
   pattern, lock, idempotency key, schedule), its `data` and return value, the failure message, a
@@ -38,19 +42,33 @@ Every table works the same way:
 
 - **`Results (n)`** in the card's top-left is the total number of matching rows in the database,
   not just the rows on screen.
-- **Filters** opens a dialog of the filters that table supports; **search** sits next to it and
-  matches that table's leading columns (queue name, schedule cadence, job id or status).
-- **20 rows a page**, with numbered pagination at the bottom of the card.
+- **Filters** opens a dialog of the filters that table supports; **search** sits next to it.
+  Applied filters then appear as dismissible chips under the toolbar, each removable on its own.
+- **20 rows a page**, with numbered pagination at the bottom of the card. Every table is paged,
+  searched and filtered **in the database** — no table loads more than the page you are looking at.
 - The page, the search term and the applied filters are all kept in the URL
   (`#/queues/emails?jobs.page=3&jobs.status=FAILED`), so any table view can be linked or
   reloaded.
 - Rows are selectable where bulk actions apply (jobs, schedules); the **Bulk actions** button
-  appears once something is selected.
+  appears once something is selected. A bulk action is a **single request applied in one
+  transaction** — it either lands for every selected row or for none of them, and reports once.
+- If a query fails, the card shows the server's error with a **Retry** button rather than an empty
+  table, so "nothing here" and "we couldn't ask" never look alike.
+
+Searching jobs matches the job id, status, idempotency key, failure message and payload contents.
 
 :::note Searching jobs scans the most recent 500
-Job ids have no text index, so a job search filters the most recent 500 jobs matching the other
-filters rather than scanning the whole table. Narrow it with a status filter to reach older jobs.
+Jobs have no text index, so a job search filters the most recent 500 jobs matching the other
+filters rather than scanning the whole table. When that window was the limiting factor the toolbar
+says so — narrow it with a status filter to reach older jobs.
 :::
+
+### Live updates
+
+Each page polls the handful of queries it needs every 30 seconds, and refetches immediately after
+any action you take. **Pause** in the top bar stops the interval and freezes the data; **Refresh
+now** beside it fetches once, whether or not polling is running. Relative timestamps ("3 minutes
+ago") keep counting on their own, and every one of them carries the exact timestamp on hover.
 
 ## Mount on an existing app
 
@@ -76,9 +94,16 @@ import { createDashboard } from '@portqueue/dashboard';
 const dash = createDashboard({
   portQueue: pq,
   basePath: '/portqueue',
-  auth: { mode: 'basic', username, password: process.env.PORTQUEUE_ROOT_PASSWORD },
+  title: 'Acme Jobs', // optional; shown in the header and the browser tab
+  theme: 'system', // optional default — a visitor's own choice always wins
 });
 ```
+
+:::danger The dashboard ships no authentication
+Anyone who can reach the mount can perform every action it offers: pausing queues, removing jobs,
+deleting schedules. **Protecting it is your application's job** — see
+[Protecting the dashboard](#protecting-the-dashboard) below.
+:::
 
 :::info `basePath` must agree with the host framework's mount point
 `basePath` is the URL prefix the dashboard lives under (default `/portqueue`). It's how the
@@ -140,46 +165,130 @@ createServer((req, res) => {
   </TabItem>
 </Tabs>
 
-## Securing
+## Protecting the dashboard
 
-The `auth` option guards access to the dashboard endpoint itself (never the DB). Three modes
-are supported:
+The dashboard has **no authentication of its own**, and no read-only mode. It is a mounted
+middleware, and guarding a mount is something your application already knows how to do — with the
+same session, SSO or API-key middleware that protects the rest of your admin surface. Shipping a
+second, weaker mechanism alongside yours only invited people to rely on it.
 
-- **`none`** — no auth. Only for a trusted, locked-down network; the dashboard is fully open.
-- **`basic`** — HTTP Basic auth against a fixed `username` / `password` (shown above).
-- **`custom`** — supply your own `guard` for SSO, sessions, API keys, etc. It receives a
-  framework-agnostic request (`{ method, url, headers }`) and returns either a boolean or an
-  `{ authorized, readOnly? }` result — returning `readOnly: true` lets an authorized viewer in
-  without control actions. The guard may be sync or async:
+So: put auth in front of the mount. Anything that runs before the adapter and can end the response
+works.
+
+<Tabs groupId="http-framework">
+  <TabItem value="express" label="Express" default>
 
 ```ts
-const dash = createDashboard({
-  portQueue: pq,
-  basePath: '/portqueue',
-  auth: {
-    mode: 'custom',
-    async guard(req) {
-      // `req` is { method, url, headers } — inspect a cookie, bearer token, header, etc.
-      const token = req.headers['authorization'];
-      const session = await resolveSession(token);
-      if (!session) return { authorized: false };
-      // Ops team gets full control; everyone else is read-only.
-      return { authorized: true, readOnly: session.role !== 'ops' };
-    },
-  },
-});
+// Your existing middleware — a session check, an SSO guard, an API-key check, whatever
+// already protects your admin routes.
+app.use('/portqueue', requireAdmin);
+app.use(dash.express());
 ```
 
-Always mount the dashboard behind your platform's auth in production, and rely on parameterized
-queries.
+  </TabItem>
+  <TabItem value="koa" label="Koa">
+
+```ts
+app.use(async (ctx, next) => {
+  if (ctx.path.startsWith('/portqueue') && !(await isAdmin(ctx))) {
+    ctx.status = 403;
+    return;
+  }
+  await next();
+});
+app.use(dash.koa());
+```
+
+  </TabItem>
+  <TabItem value="fastify" label="Fastify">
+
+```ts
+app.addHook('onRequest', async (req, reply) => {
+  if (req.url.startsWith('/portqueue') && !(await isAdmin(req))) {
+    return reply.code(403).send();
+  }
+});
+await app.register(dash.fastify());
+```
+
+  </TabItem>
+  <TabItem value="nestjs" label="NestJS">
+
+```ts
+export class DashboardModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    // Your guard runs first; the dashboard only sees requests that got past it.
+    consumer.apply(AdminGuardMiddleware, dash.nest()).forRoutes('/portqueue');
+  }
+}
+```
+
+  </TabItem>
+</Tabs>
+
+### If you just need a password
+
+For an internal tool with no existing auth layer, HTTP Basic is enough. The
+[`basic-auth`](https://www.npmjs.com/package/basic-auth) package parses the header; compare with
+`timingSafeEqual` so a wrong password can't be recovered a byte at a time from response timings:
+
+```bash
+npm install basic-auth
+```
+
+```ts
+import { timingSafeEqual } from 'node:crypto';
+import auth from 'basic-auth';
+
+/** Constant-time compare that doesn't short-circuit on length. */
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  const len = Math.max(ab.length, bb.length, 1);
+  const pa = Buffer.alloc(len);
+  const pb = Buffer.alloc(len);
+  ab.copy(pa);
+  bb.copy(pb);
+  return timingSafeEqual(pa, pb) && ab.length === bb.length;
+}
+
+app.use('/portqueue', (req, res, next) => {
+  const credentials = auth(req);
+  const ok =
+    credentials !== undefined &&
+    safeEqual(credentials.name, process.env.DASHBOARD_USER!) &&
+    safeEqual(credentials.pass, process.env.DASHBOARD_PASSWORD!);
+  if (ok) return next();
+  res.setHeader('WWW-Authenticate', 'Basic realm="PortQueue Dashboard", charset="UTF-8"');
+  res.status(401).end('Unauthorized');
+});
+
+app.use(dash.express());
+```
+
+Basic auth over plain HTTP sends the password in near-clear on every request, so terminate TLS in
+front of it, and add a rate limit if the mount is reachable from the public internet — nothing
+here slows down a guessing attack on its own.
+
+### What the dashboard does handle
+
+- **Response hardening** — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: no-referrer`, and a Content-Security-Policy whose nonce authorizes exactly one
+  inline script (the config blob) and nothing else.
+- **Caching** — content-hashed assets are served `immutable`; HTML always revalidates.
+- **SQL** — every value core writes is a bound parameter, and identifiers are allowlisted.
 
 ## Serve it from the CLI (no app changes)
 
 If you'd rather not touch your app, the CLI hosts the dashboard as a standalone process. It
 opens its own short-lived connection from `--driver` + `--connection-string` (or `DATABASE_URL`)
-and serves the same UI. Credentials are required: pass `--root-user` / `--root-password` or set
-`PORTQUEUE_ROOT_USER` / `PORTQUEUE_ROOT_PASSWORD`. The bind defaults are `--host 127.0.0.1`,
-`--port 4321`, and `--base-path /portqueue`:
+and serves the same UI.
+
+The CLI is the one case with no host application to put a guard in front of, since it opens the
+port itself — so **it brings its own HTTP Basic auth**, and credentials are required: pass
+`--root-user` / `--root-password` or set `PORTQUEUE_ROOT_USER` / `PORTQUEUE_ROOT_PASSWORD`. The
+bind defaults to `--host 127.0.0.1` (loopback only), with `--port 4321` and
+`--base-path /portqueue`:
 
 ```bash
 portqueue dashboard --driver postgres \
@@ -223,3 +332,15 @@ docker run --rm -p 9000:9000 \
   -e PORTQUEUE_ROOT_PASSWORD="<your-password>" \
   portqueue-dashboard
 ```
+
+## Options
+
+`createDashboard(options)` takes a single named-options object:
+
+| Option | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `portQueue` | `PortQueue` | — | **Required.** Your running instance. The dashboard rides on it and never opens its own connection. |
+| `basePath` | `string` | `'/portqueue'` | The URL prefix the dashboard is mounted at. Must match your framework's mount point. |
+| `title` | `string` | `'PortQueue Dashboard'` | Header text and browser tab title. |
+| `theme` | `'light' \| 'dark' \| 'system'` | `'system'` | The theme a visitor sees before choosing one. Their own choice (the header toggle, stored in `localStorage`) always takes precedence. |
+| `logger` | `{ warn }` | `console` | Where startup problems are reported — most usefully a missing client bundle, which otherwise serves a placeholder with a 200 and looks like a working deploy. |
