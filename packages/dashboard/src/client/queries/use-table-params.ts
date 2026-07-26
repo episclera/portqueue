@@ -13,7 +13,18 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 
-/** Rows per page — the single page size across the dashboard. */
+/**
+ * Rows per page — the single page size across the dashboard, deliberately fixed.
+ *
+ * A page-size control and sortable column headers are the two obvious additions here, and both
+ * are deliberately absent. Twenty rows is a screenful; someone who needs a different slice
+ * reaches for a filter or the search box, which narrow the set rather than just enlarging the
+ * page. Sorting is the same story in reverse: every table already arrives in the order that
+ * answers its question (newest jobs first, queues by name), and making a header sortable means
+ * pushing an `order` into the URL, the query key and the API for every column, on tables whose
+ * useful orderings a filter expresses better. Neither is free, and neither answers a question the
+ * current controls leave open.
+ */
 export const PAGE_SIZE = 20;
 
 export interface TableParams<K extends string = string> {

@@ -35,9 +35,13 @@ export default {
       },
     ],
   },
+  // The client counts too. Limiting this to `src/server/**` excluded every hook, page and
+  // component by construction, so the coverage report couldn't show that the client was untested.
   collectCoverageFrom: [
     'src/server/**/*.ts',
-    'src/client/components/format.ts',
+    'src/shared/**/*.ts',
+    'src/client/**/*.{ts,tsx}',
+    '!src/client/main.tsx', // the mount point; nothing to assert that a render test doesn't
     '!src/**/*.test.ts',
     '!src/**/*.test.tsx',
   ],
