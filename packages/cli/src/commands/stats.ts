@@ -1,12 +1,12 @@
 import { flagBool, flagString } from '../args';
-import { color, colorStatus, heading, printJson, table, warn } from '../output';
+import { colorStatus, heading, printJson, table, warn } from '../output';
 import { CommandGroup, type Command } from './types';
 
 /** `portqueue stats [--queue] [--watch]` */
 export const statsCommand: Command = {
   name: 'stats',
   group: CommandGroup.Monitoring,
-  summary: 'State counts, throughput, failure rate',
+  summary: 'Job counts by state',
   usage: '[--queue <name>] [--watch]',
   async run({ pq, flags }) {
     const queue = flagString(flags, 'queue');
@@ -19,10 +19,6 @@ export const statsCommand: Command = {
         String(count),
       ]);
       table(['State', 'Count'], rows);
-      process.stdout.write(
-        `\n${color('throughput', 'dim')} ${stats.throughputPerMinute.toFixed(1)}/min   ` +
-          `${color('failure rate', 'dim')} ${(stats.failureRate * 100).toFixed(1)}%\n`,
-      );
     };
     await render();
     if (flagBool(flags, 'watch')) {

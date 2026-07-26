@@ -32,17 +32,16 @@ async function run(
 }
 
 describe('statsCommand', () => {
-  it('prints a table with throughput and failure rate', async () => {
+  it('prints a table of counts by state', async () => {
     const { stdout } = await run(statsCommand, {});
     expect(stdout).toContain('Stats');
-    expect(stdout).toContain('throughput');
-    expect(stdout).toContain('5.0/min');
-    expect(stdout).toContain('10.0%');
+    expect(stdout).toContain('PENDING');
+    expect(stdout).toContain('2');
   });
 
   it('prints raw JSON with --json', async () => {
     const { stdout } = await run(statsCommand, { json: true });
-    expect(stdout).toContain('"throughputPerMinute": 5');
+    expect(stdout).toContain('"PENDING": 2');
   });
 });
 
@@ -77,19 +76,26 @@ describe('jobCommand', () => {
 });
 
 describe('schedulesCommand', () => {
-  it('requires --queue', async () => {
-    const fake = makeFakePq();
-    await expect(schedulesCommand.run({ pq: fake.pq, flags: {} })).rejects.toThrow(/requires --queue/);
+  const SCHEDULES = [
+    { scheduleId: 'sch-daily', queue: 'emails', cron: '0 0 * * *', nextRunAt: null, enabled: true },
+  ];
+
+  it('lists every queue\u2019s schedules when --queue is omitted', async () => {
+    const { stdout } = await run(schedulesCommand, {}, { schedules: SCHEDULES });
+    expect(stdout).toContain('all queues');
+    expect(stdout).toContain('sch-daily');
   });
 
   it('lists schedules for a queue', async () => {
-    const { stdout } = await run(
-      schedulesCommand,
-      { queue: 'emails' },
-      { schedules: [{ scheduleId: 'sch-daily', cron: '0 0 * * *', nextRunAt: null, enabled: true }] },
-    );
+    const { stdout } = await run(schedulesCommand, { queue: 'emails' }, { schedules: SCHEDULES });
     expect(stdout).toContain('sch-daily');
     expect(stdout).toContain('0 0 * * *');
+  });
+
+  // Reading schedules must not claim the queue in this admin process (see the _cli facade).
+  it('never registers a queue in this process', async () => {
+    const { calls } = await run(schedulesCommand, { queue: 'emails' }, { schedules: SCHEDULES });
+    expect(calls.createQueue).toEqual([]);
   });
 });
 
@@ -168,13 +174,12 @@ describe('removeCommand', () => {
     expect(calls.removeJob).toHaveLength(1);
   });
 
-  it('removes a schedule by --schedule-id', async () => {
-    const { stdout, calls } = await run(removeCommand, {
-      'schedule-id': 'sch-1',
-      queue: 'emails',
-    });
+  // The facade resolves the queue from the schedule id, so --queue is no longer required.
+  it('removes a schedule by --schedule-id alone', async () => {
+    const { stdout, calls } = await run(removeCommand, { 'schedule-id': 'sch-1' });
     expect(stdout).toContain('Removed schedule sch-1');
-    expect(calls.removeSchedule).toHaveLength(1);
+    expect(calls.removeSchedule).toEqual([{ scheduleId: 'sch-1' }]);
+    expect(calls.createQueue).toEqual([]);
   });
 
   it('rejects when neither or both selectors are given', async () => {
@@ -201,7 +206,9 @@ describe('purgeCommand', () => {
       { removed: 7 },
     );
     expect(stdout).toContain('Purged 7');
-    expect(calls.removeJobs).toHaveLength(1);
+    expect(calls.purge).toEqual([{ queue: 'emails', statuses: ['FAILED'] }]);
+    // Purging addresses the queue by name; it must not register it here.
+    expect(calls.createQueue).toEqual([]);
   });
 });
 
@@ -226,9 +233,29 @@ describe('migrate/doctor', () => {
     expect(calls.migrated).toBe(true);
   });
 
-  it('reports connectivity', async () => {
+  it('reports engine, schema version and counts', async () => {
     const { stdout } = await run(doctorCommand, {});
     expect(stdout).toContain('PortQueue doctor');
-    expect(stdout).toContain('Connected');
+    expect(stdout).toContain('sqlite');
+    expect(stdout).toContain('3.45.0');
+    expect(stdout).toContain('Connected, and the schema is current.');
+  });
+
+  it('warns when the applied schema lags the driver', async () => {
+    const { stdout } = await run(
+      doctorCommand,
+      {},
+      { doctor: { ...{ engine: 'sqlite', serverVersion: '3.45.0', verifiedCapabilities: [], queueCount: 0, instanceCount: 0 }, schemaVersion: 1, latestVersion: 3 } },
+    );
+    expect(stdout).toContain('Schema is at v1 but this driver ships v3');
+  });
+
+  it('warns when the schema has never been migrated', async () => {
+    const { stdout } = await run(
+      doctorCommand,
+      {},
+      { doctor: { engine: 'sqlite', serverVersion: '3.45.0', verifiedCapabilities: [], queueCount: 0, instanceCount: 0, schemaVersion: null, latestVersion: 2 } },
+    );
+    expect(stdout).toContain('never been migrated');
   });
 });

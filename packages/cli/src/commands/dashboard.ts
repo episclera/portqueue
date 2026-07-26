@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
-import { flagBool, flagNumber, flagString } from '../args';
+import { flagNumber, flagString } from '../args';
+import { createBasicAuthGuard } from '../basic-auth';
 import { CliError } from '../errors';
 import { success } from '../output';
 import { CommandGroup, type Command } from './types';
@@ -8,12 +9,12 @@ const DEFAULT_PORT = 4321;
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_BASE_PATH = '/portqueue';
 
-/** `portqueue dashboard --port [--root-user --root-password] [--read-only --base-path]` */
+/** `portqueue dashboard --port --root-user --root-password [--host --base-path]` */
 export const dashboardCommand: Command = {
   name: 'dashboard',
   group: CommandGroup.Operational,
   summary: 'Serve the web dashboard',
-  usage: '--port <n> --root-user <u> --root-password <p> [--read-only --base-path]',
+  usage: '--port <n> --root-user <u> --root-password <p> [--host <h> --base-path <p>]',
   persistent: true,
   async run({ pq, flags }) {
     const port = flagNumber(flags, 'port') ?? DEFAULT_PORT;
@@ -30,13 +31,15 @@ export const dashboardCommand: Command = {
     const { createDashboard } = await import('@portqueue/dashboard');
     const dashboard = createDashboard({
       portQueue: pq,
-      auth: { mode: 'basic', username: user, password },
-      readOnly: flagBool(flags, 'read-only'),
       ...(basePath ? { basePath } : {}),
     });
 
+    // The dashboard package ships no auth of its own — protecting the mount belongs to whatever
+    // sits in front of it. `portqueue dashboard` opens the port itself, so the guard is here.
+    const guard = createBasicAuthGuard({ username: user, password });
     const handler = dashboard.node();
     const server = createServer((req, res) => {
+      if (!guard(req, res)) return; // already answered with a 401 challenge
       if (!handler(req, res)) {
         res.statusCode = 404;
         res.end('Not found');

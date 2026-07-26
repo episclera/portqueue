@@ -100,3 +100,21 @@ export {
   MissingPeerDependencyError,
 } from './errors/errors';
 export type { ErrorContext } from './errors/errors';
+
+/**
+ * Internal facade surface for `@portqueue/dashboard` and `@portqueue/cli` (`pq._dashboard` /
+ * `pq._cli`). **Not a developer API** — undocumented, unsupported for application code, and free
+ * to change in any release. Exported only so those two packages can type their calls. See the
+ * facade invariant in CLAUDE.md.
+ */
+export { JobBatchAction } from './dashboard/dashboard-results';
+export type {
+  BatchResult,
+  DashboardStats,
+  GetInstancesQuery,
+  GetQueuesQuery,
+  GetSchedulesQuery,
+  JobSearchQuery,
+  ScheduleWithQueue,
+} from './dashboard/dashboard-results';
+export type { CliSchedule, DoctorReport } from './cli/cli.service';

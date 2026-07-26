@@ -16,7 +16,8 @@ export const purgeCommand: Command = {
     if (!flagBool(flags, 'yes')) {
       throw new CliError('purge is destructive — pass --yes to confirm.');
     }
-    const n = await pq.createQueue(queue).removeJobs({ statuses: [status!] });
+    // Via the CLI facade so purging doesn't register the queue in this admin process.
+    const n = await pq._cli.purge({ queue, statuses: [status!] });
     success(`Purged ${n} ${status} job(s) from '${queue}'.`);
   },
 };

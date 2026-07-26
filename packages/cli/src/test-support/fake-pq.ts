@@ -6,10 +6,17 @@ export interface FakePqCalls {
   retryJob: unknown[];
   cancelJob: unknown[];
   removeJob: unknown[];
-  removeJobs: unknown[];
+  /** `pq._cli.purge(...)` — the facade path a purge takes. */
+  purge: unknown[];
+  /** `pq._cli.removeSchedule(...)` — the facade path a schedule removal takes. */
   removeSchedule: unknown[];
   pauseQueue: unknown[];
   resumeQueue: unknown[];
+  /**
+   * Queue names this command registered in the process. Commands that only read or address a
+   * queue by name must leave this empty — registering pins `inUse` and trips the removeQueue
+   * guard, which is exactly what the `_cli` facade exists to avoid.
+   */
   createQueue: string[];
   migrated: boolean;
 }
@@ -26,6 +33,7 @@ export interface FakePqOverrides {
   removeJobOk?: boolean;
   removeScheduleOk?: boolean;
   removed?: number;
+  doctor?: unknown;
 }
 
 const DEFAULT_JOB = {
@@ -35,6 +43,16 @@ const DEFAULT_JOB = {
   retryAttempt: 1,
   retryMaxAttempts: 3,
   createdAt: new Date('2026-07-22T00:00:00.000Z'),
+};
+
+const DEFAULT_DOCTOR = {
+  engine: 'sqlite',
+  serverVersion: '3.45.0',
+  verifiedCapabilities: ['TRANSACTIONS'],
+  schemaVersion: 1,
+  latestVersion: 1,
+  queueCount: 1,
+  instanceCount: 0,
 };
 
 /** Build a minimal fake PortQueue plus a record of the calls made through it. */
@@ -47,7 +65,7 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
     retryJob: [],
     cancelJob: [],
     removeJob: [],
-    removeJobs: [],
+    purge: [],
     removeSchedule: [],
     pauseQueue: [],
     resumeQueue: [],
@@ -73,22 +91,28 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
       calls.removeJob.push(arg);
       return overrides.removeJobOk ?? true;
     },
+  };
+
+  /** The `pq._cli` facade the CLI reaches for instead of widening the public API. */
+  const cli = {
+    getSchedules: async () => overrides.schedules ?? [],
     removeSchedule: async (arg: unknown) => {
       calls.removeSchedule.push(arg);
       return overrides.removeScheduleOk ?? true;
     },
-    removeJobs: async (arg: unknown) => {
-      calls.removeJobs.push(arg);
+    purge: async (arg: unknown) => {
+      calls.purge.push(arg);
       return overrides.removed ?? 3;
     },
+    doctor: async () => overrides.doctor ?? DEFAULT_DOCTOR,
   };
 
   const pq = {
     isRunning: true,
     init: async () => {},
     shutdown: async () => {},
-    getQueueStats: async () =>
-      overrides.stats ?? { counts: { PENDING: 2, ACTIVE: 1 }, throughputPerMinute: 5, failureRate: 0.1 },
+    _cli: cli,
+    getQueueStats: async () => overrides.stats ?? { counts: { PENDING: 2, ACTIVE: 1 } },
     getQueues: async () =>
       overrides.queues ?? [
         {

@@ -1,18 +1,27 @@
 /**
- * The framework-agnostic serve core (extracted from `create-dashboard`). Holds the router,
- * config, and path matching, and exposes `serve`/`serveSafely` that every adapter drives with
- * a raw Node `(req, res)` pair. Uses the provided PortQueue instance only; never opens a DB
- * connection.
+ * The framework-agnostic serve core. Holds the router, config and path matching, and exposes
+ * `serve`/`serveSafely` that every adapter drives with a raw Node `(req, res)` pair. Uses the
+ * provided PortQueue instance only; never opens a DB connection.
+ *
+ * The dashboard has no authentication of its own — see `api/routes.ts` and the dashboard docs.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { authorize } from './api/auth';
-import { createRouter, subscribeEvents, type HandlerInput } from './api/routes';
-import { serveAsset } from './assets';
+import { createRouter, type HandlerInput } from './api/routes';
+import { hasBuiltClient, serveAsset } from './assets';
 import { normalizeBase, readBody, toHeaders } from './request';
 import type { DashboardOptions } from './types';
 import type { DashboardConfigDto } from '../shared/dto';
 
-const SSE_KEEP_ALIVE_MS = 25000;
+/**
+ * Headers on every response the dashboard writes. `nosniff` stops a browser second-guessing a
+ * declared content type; the rest keep the UI out of frames and stop the referrer leaking a job
+ * id (which URLs carry) to any external link a user follows.
+ */
+const SECURITY_HEADERS: Record<string, string> = {
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'no-referrer',
+};
 
 export interface DashboardEngine {
   /** The resolved, normalized mount path. */
@@ -27,18 +36,24 @@ export interface DashboardEngine {
 
 export function createEngine(options: DashboardOptions): DashboardEngine {
   const basePath = normalizeBase(options.basePath ?? '/portqueue');
-  const readOnly = options.readOnly ?? false;
   const config: DashboardConfigDto = {
     basePath,
     title: options.title ?? 'PortQueue Dashboard',
     theme: options.theme ?? 'system',
-    readOnly,
   };
-  const router = createRouter({
-    portQueue: options.portQueue,
-    basePath,
-    ...(options.auth ? { auth: options.auth } : {}),
-    readOnly,
+  const router = createRouter({ portQueue: options.portQueue, basePath });
+  const logger = options.logger ?? console;
+
+  // A missing bundle makes every navigation serve the "not built" shell with a 200, which reads
+  // as a working deploy. Say so once, at mount time, rather than letting it pass silently.
+  void hasBuiltClient().then((built) => {
+    if (!built) {
+      logger.warn(
+        `[@portqueue/dashboard] No client bundle found; serving the fallback shell at ${basePath}. ` +
+          'The package was published or built without its SPA — run `npm run build` in ' +
+          '@portqueue/dashboard, or reinstall the package.',
+      );
+    }
   });
 
   function owns(url: string | undefined): boolean {
@@ -52,45 +67,7 @@ export function createEngine(options: DashboardOptions): DashboardEngine {
     return path.startsWith('/') || path === '' ? path || '/' : `/${path}`;
   }
 
-  function denyUnauthorized(res: ServerResponse, challenge: string | undefined): void {
-    res.writeHead(401, challenge ? { 'www-authenticate': challenge } : {});
-    res.end('Unauthorized');
-  }
-
-  /** Handle the SSE stream on a raw Node response. */
-  async function handleEvents(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const decision = await authorize(options.auth, {
-      method: req.method ?? 'GET',
-      url: req.url ?? '',
-      headers: toHeaders(req),
-    });
-    if (!decision.authorized) return denyUnauthorized(res, decision.challenge);
-
-    res.writeHead(200, {
-      'content-type': 'text/event-stream',
-      'cache-control': 'no-cache, no-transform',
-      connection: 'keep-alive',
-      'x-accel-buffering': 'no',
-    });
-    res.write(`event: ready\ndata: {}\n\n`);
-    const unsubscribe = subscribeEvents(options.portQueue, (line) => res.write(line));
-    const keepAlive = setInterval(() => {
-      try {
-        res.write(': keep-alive\n\n');
-      } catch {
-        /* ignore */
-      }
-    }, SSE_KEEP_ALIVE_MS);
-    const cleanup = (): void => {
-      clearInterval(keepAlive);
-      unsubscribe();
-    };
-    req.on('close', cleanup);
-    res.on('close', cleanup);
-    res.on('error', cleanup);
-  }
-
-  /** Handle a JSON API request (reads + auth-gated mutations). */
+  /** Handle a JSON API request. */
   async function handleApi(
     req: IncomingMessage,
     res: ServerResponse,
@@ -102,43 +79,40 @@ export function createEngine(options: DashboardOptions): DashboardEngine {
       try {
         body = await readBody(req);
       } catch {
-        res.writeHead(413, { 'content-type': 'application/json' });
+        res.writeHead(413, { ...SECURITY_HEADERS, 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: 'Request body too large' }));
         return;
       }
     }
     const input: HandlerInput = { method, url, body, headers: toHeaders(req) };
     const result = await router.handle(input);
-    res.writeHead(result.status, result.headers);
+    res.writeHead(result.status, { ...SECURITY_HEADERS, ...result.headers });
     res.end(result.body);
   }
 
-  /** Serve the static SPA shell / assets (auth-gated). */
-  async function handleAsset(
-    req: IncomingMessage,
-    res: ServerResponse,
-    method: string,
-    url: string,
-  ): Promise<void> {
-    const decision = await authorize(options.auth, { method, url, headers: toHeaders(req) });
-    if (!decision.authorized) return denyUnauthorized(res, decision.challenge);
+  /** Serve the static SPA shell / assets. */
+  async function handleAsset(res: ServerResponse, url: string): Promise<void> {
     const asset = await serveAsset(relPath(url), config);
-    res.writeHead(asset.status, { 'content-type': asset.contentType });
+    res.writeHead(asset.status, {
+      ...SECURITY_HEADERS,
+      'content-type': asset.contentType,
+      ...asset.headers,
+    });
     res.end(asset.body);
   }
 
   async function serve(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = req.url ?? '';
     const method = (req.method ?? 'GET').toUpperCase();
-
-    if (router.isEventsPath(url) && method === 'GET') return handleEvents(req, res);
     if (router.isApiPath(url)) return handleApi(req, res, method, url);
-    return handleAsset(req, res, method, url);
+    return handleAsset(res, url);
   }
 
   function serveSafely(req: IncomingMessage, res: ServerResponse): void {
     void serve(req, res).catch(() => {
-      if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' });
+      if (!res.headersSent) {
+        res.writeHead(500, { ...SECURITY_HEADERS, 'content-type': 'application/json' });
+      }
       res.end(JSON.stringify({ error: 'Internal dashboard error' }));
     });
   }

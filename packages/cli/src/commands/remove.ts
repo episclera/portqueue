@@ -1,15 +1,14 @@
 import { flagString } from '../args';
 import { CliError } from '../errors';
 import { success, warn } from '../output';
-import { requireFlag } from './helpers';
 import { CommandGroup, type Command } from './types';
 
-/** `portqueue remove (--id <jobId> | --schedule-id <id> --queue <name>)` */
+/** `portqueue remove (--id <jobId> | --schedule-id <id>)` */
 export const removeCommand: Command = {
   name: 'remove',
   group: CommandGroup.Actions,
   summary: 'Remove a job or a schedule',
-  usage: '(--id <jobId> | --schedule-id <id> --queue <name>)',
+  usage: '(--id <jobId> | --schedule-id <id>)',
   async run({ pq, flags }) {
     const id = flagString(flags, 'id');
     const scheduleId = flagString(flags, 'schedule-id');
@@ -23,8 +22,9 @@ export const removeCommand: Command = {
       if (ok) success(`Removed job ${id}.`);
       else warn(`Job ${id} not removed.`);
     } else {
-      const queue = requireFlag(flags, 'queue');
-      const ok = await pq.createQueue(queue).removeSchedule({ scheduleId: scheduleId! });
+      // The facade resolves the schedule's queue from the id itself, so `--queue` is no longer
+      // needed — and removing one never registers a queue in this admin process.
+      const ok = await pq._cli.removeSchedule({ scheduleId: scheduleId! });
       if (ok) success(`Removed schedule ${scheduleId}.`);
       else warn(`Schedule ${scheduleId} not found.`);
     }

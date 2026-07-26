@@ -1,39 +1,43 @@
 /**
- * Framework-agnostic JSON API + SSE event stream.
+ * Framework-agnostic JSON API. A pure `handle(input) => Promise<HandlerResult>`; the adapters
+ * only translate their framework's request into {@link HandlerInput} and write the result back.
  *
- * The core is a pure `handle(input) => Promise<HandlerResult>` for JSON endpoints, plus a
- * separate SSE helper the node adapter wires to the response socket. All mutations are gated
- * by auth, `readOnly`, and a same-origin CSRF check. No magic status strings — core enums only.
+ * Everything here goes through `portQueue._dashboard` — core's internal dashboard facade — rather
+ * than the public API. Two reasons, both load-bearing:
+ *
+ * - The facade never calls `createQueue`, which would register the queue in the host's process
+ *   and permanently flip `inUse`. Only the actions that genuinely operate a queue take a `Queue`
+ *   handle, and they take the developer's own.
+ * - Anything the dashboard needs that the public API doesn't document lives on the facade, so a
+ *   dashboard feature never reshapes `PortQueue`. See CLAUDE.md.
+ *
+ * There is **no authentication and no read-only mode here**: protecting the mount belongs to
+ * whatever middleware the host puts in front of it (see `docs/docs/dashboard.mdx`). Anyone who
+ * can reach these routes can perform every action.
  */
 import {
+  JobBatchAction,
   JobStatus,
   PauseMode,
-  PortQueueEvent,
   type PortQueue,
   type GetJobsQuery,
   type AddJobOptions,
 } from '@portqueue/core';
-import { authorize, type DashboardAuth, type AuthRequest } from './auth';
 import {
+  serializeInstancePage,
   serializeJob,
   serializeJobPage,
-  serializeQueue,
+  serializeQueuePage,
   serializeSchedule,
+  serializeSchedulePage,
   serializeStats,
-  serializeInstance,
 } from './serialize';
-import type { ActionRequestDto, ActionResultDto, JobPageDto } from '../../shared/dto';
-import {
-  JOB_SEARCH_SCAN_LIMIT,
-  REQUESTED_WITH_HEADER,
-  REQUESTED_WITH_MARKER,
-} from '../../shared/constants';
+import { ActionKind, type ActionRequestDto, type ActionResultDto } from '../../shared/dto';
+import { JOB_SEARCH_SCAN_LIMIT } from '../../shared/constants';
 
 export interface RouterOptions {
   portQueue: PortQueue;
   basePath: string;
-  auth?: DashboardAuth;
-  readOnly: boolean;
 }
 
 export interface HandlerInput {
@@ -56,11 +60,7 @@ function json(status: number, payload: unknown, extra?: Record<string, string>):
   return { status, body: JSON.stringify(payload), headers: { ...JSON_HEADERS, ...extra } };
 }
 
-function firstHeader(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-/** Strip the mount base path so route matching sees `/api/...` or `/events`. */
+/** Strip the mount base path so route matching sees `/api/...`. */
 function relativePath(url: string, basePath: string): string {
   const qIndex = url.indexOf('?');
   let path = qIndex === -1 ? url : url.slice(0, qIndex);
@@ -74,25 +74,24 @@ function query(url: string): URLSearchParams {
   return new URLSearchParams(qIndex === -1 ? '' : url.slice(qIndex + 1));
 }
 
-/**
- * Same-origin CSRF guard for mutations: the Origin/Referer host must match the Host header.
- * Browsers always send Origin on cross-origin state-changing fetches, so a mismatch is rejected.
- */
-function sameOrigin(headers: HandlerInput['headers']): boolean {
-  const host = firstHeader(headers['host']);
-  if (!host) return false;
-  const origin = firstHeader(headers['origin']);
-  const referer = firstHeader(headers['referer']);
-  const source = origin ?? referer;
-  if (!source) {
-    // No Origin/Referer (e.g. a non-browser client). Require an explicit fetch marker.
-    return firstHeader(headers[REQUESTED_WITH_HEADER]) === REQUESTED_WITH_MARKER;
-  }
-  try {
-    return new URL(source).host === host;
-  } catch {
-    return false;
-  }
+/** Default page size, so no read path re-guesses core's own default. */
+const DEFAULT_LIMIT = 50;
+
+/** Read a paging window from the query string, clamped to something sane. */
+function paging(params: URLSearchParams): { limit: number; offset: number } {
+  const rawLimit = Number(params.get('limit'));
+  const rawOffset = Number(params.get('offset'));
+  return {
+    limit: Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.trunc(rawLimit), 200) : DEFAULT_LIMIT,
+    offset: Number.isFinite(rawOffset) && rawOffset > 0 ? Math.trunc(rawOffset) : 0,
+  };
+}
+
+/** A tri-state boolean query param: `true`/`false` narrow, anything else means "don't filter". */
+function triBool(raw: string | null): boolean | undefined {
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return undefined;
 }
 
 function parseStatuses(raw: string | null): JobStatus[] | undefined {
@@ -105,60 +104,20 @@ function parseStatuses(raw: string | null): JobStatus[] | undefined {
   return out.length ? out : undefined;
 }
 
-/** Default page size, so the search path never re-guesses core's own default. */
-const DEFAULT_LIMIT = 50;
-
 function buildJobsQuery(params: URLSearchParams): GetJobsQuery {
-  const q: GetJobsQuery = { limit: DEFAULT_LIMIT };
+  const { limit, offset } = paging(params);
+  const q: GetJobsQuery = { limit, offset };
   const queue = params.get('queue');
   if (queue) q.queue = queue;
   const statuses = parseStatuses(params.get('statuses'));
   if (statuses) q.statuses = statuses;
   const scheduleId = params.get('scheduleId');
   if (scheduleId) q.scheduleId = scheduleId;
-  const limit = params.get('limit');
-  if (limit && Number.isFinite(Number(limit))) q.limit = Math.min(Math.max(Number(limit), 1), 200);
   const cursor = params.get('cursor');
   if (cursor) q.cursor = cursor;
-  const offset = params.get('offset');
-  if (offset && Number.isFinite(Number(offset))) q.offset = Math.max(Math.trunc(Number(offset)), 0);
   const order = params.get('order');
   if (order === 'asc' || order === 'desc') q.order = order;
   return q;
-}
-
-/** Substring match over the columns a job table shows first: its id and its status. */
-function matchesJobSearch(job: { id: string; status: string }, term: string): boolean {
-  return job.id.toLowerCase().includes(term) || job.status.toLowerCase().includes(term);
-}
-
-/**
- * Page of jobs, optionally narrowed by a search term. A search filters the bounded scan window
- * from {@link JOB_SEARCH_SCAN_LIMIT} and pages within the matches, reporting `searchTruncated`
- * when that window — not the filter — was the limiting factor.
- */
-async function readJobs(portQueue: PortQueue, params: URLSearchParams): Promise<HandlerResult> {
-  const query = buildJobsQuery(params);
-  const search = params.get('search')?.trim().toLowerCase();
-  if (!search) {
-    const page = await portQueue.getJobs(query);
-    return json(200, serializeJobPage(page));
-  }
-
-  const limit = query.limit ?? DEFAULT_LIMIT;
-  const offset = query.offset ?? 0;
-  const scan = await portQueue.getJobs({ ...query, limit: JOB_SEARCH_SCAN_LIMIT, offset: 0 });
-  const matched = scan.items.filter((job) => matchesJobSearch(job, search));
-  const items = matched.slice(offset, offset + limit);
-  return json(200, {
-    ...serializeJobPage({
-      items,
-      cursor: null,
-      hasMore: offset + items.length < matched.length,
-      total: matched.length,
-    }),
-    searchTruncated: scan.items.length >= JOB_SEARCH_SCAN_LIMIT,
-  } satisfies JobPageDto);
 }
 
 /** Build the core AddJobOptions from a validated action body. */
@@ -167,6 +126,12 @@ function buildAddOptions(add: NonNullable<ActionRequestDto['add']>): AddJobOptio
   if (typeof add.priority === 'number') opts.priority = add.priority;
   if (add.idempotencyKey) opts.idempotencyKey = add.idempotencyKey;
   if (add.singletonKey) opts.singletonKey = add.singletonKey;
+  if (typeof add.retryMaxAttempts === 'number') {
+    opts.retry = { maxAttempts: add.retryMaxAttempts };
+  }
+  if (add.preferredInstanceKeyPattern) {
+    opts.preferredInstanceKeyPattern = add.preferredInstanceKeyPattern;
+  }
   const schedule: NonNullable<AddJobOptions<unknown>['schedule']> = {};
   if (add.startAfter != null) schedule.startAfter = add.startAfter as never;
   if (add.cron != null) schedule.cron = add.cron;
@@ -176,85 +141,105 @@ function buildAddOptions(add: NonNullable<ActionRequestDto['add']>): AddJobOptio
 }
 
 /**
- * Create the router. Returns the pure JSON handler and metadata the node adapter uses for
- * routing (asset serving vs API vs SSE).
+ * Create the router. Returns the pure JSON handler plus the path predicate the adapters use to
+ * decide between an API call and a static asset.
  */
 export function createRouter(options: RouterOptions): {
   handle: (input: HandlerInput) => Promise<HandlerResult>;
-  isEventsPath: (url: string) => boolean;
   isApiPath: (url: string) => boolean;
-  authRequest: (input: HandlerInput) => AuthRequest;
 } {
-  const { portQueue, basePath, auth, readOnly } = options;
+  const { portQueue, basePath } = options;
+  const dashboard = portQueue._dashboard;
 
-  const authRequest = (input: HandlerInput): AuthRequest => ({
-    method: input.method,
-    url: input.url,
-    headers: input.headers,
-  });
-
-  const isEventsPath = (url: string): boolean => relativePath(url, basePath) === '/api/events';
   const isApiPath = (url: string): boolean => relativePath(url, basePath).startsWith('/api/');
 
-  async function handle(input: HandlerInput): Promise<HandlerResult> {
-    const decision = await authorize(auth, authRequest(input));
-    if (!decision.authorized) {
-      const extra = decision.challenge ? { 'www-authenticate': decision.challenge } : undefined;
-      return json(401, { error: 'Unauthorized' }, extra);
+  async function handleGet(path: string, params: URLSearchParams): Promise<HandlerResult> {
+    if (path === '/api/config') {
+      // Kept so a client can confirm it is talking to a PortQueue dashboard.
+      return json(200, { ok: true });
     }
-    const effectiveReadOnly = readOnly || decision.readOnly;
 
+    if (path === '/api/queues') {
+      const page = await dashboard.getQueues({
+        ...paging(params),
+        ...(params.get('search') ? { search: params.get('search')! } : {}),
+        ...(triBool(params.get('processingPaused')) !== undefined
+          ? { processingPaused: triBool(params.get('processingPaused'))! }
+          : {}),
+        ...(triBool(params.get('inUse')) !== undefined
+          ? { inUse: triBool(params.get('inUse'))! }
+          : {}),
+      });
+      return json(200, serializeQueuePage(page));
+    }
+
+    if (path === '/api/instances') {
+      const page = await dashboard.getInstances({
+        ...paging(params),
+        ...(params.get('search') ? { search: params.get('search')! } : {}),
+        ...(triBool(params.get('processingPaused')) !== undefined
+          ? { processingPaused: triBool(params.get('processingPaused'))! }
+          : {}),
+        ...(triBool(params.get('alive')) !== undefined
+          ? { alive: triBool(params.get('alive'))! }
+          : {}),
+      });
+      return json(200, serializeInstancePage(page));
+    }
+
+    if (path === '/api/schedules') {
+      const page = await dashboard.getSchedules({
+        ...paging(params),
+        ...(params.get('queue') ? { queue: params.get('queue')! } : {}),
+        ...(params.get('search') ? { search: params.get('search')! } : {}),
+        ...(triBool(params.get('enabled')) !== undefined
+          ? { enabled: triBool(params.get('enabled'))! }
+          : {}),
+      });
+      return json(200, serializeSchedulePage(page));
+    }
+
+    const scheduleMatch = /^\/api\/schedules\/([^/]+)$/.exec(path);
+    if (scheduleMatch?.[1]) {
+      const schedule = await dashboard.getSchedule({
+        scheduleId: decodeURIComponent(scheduleMatch[1]),
+      });
+      if (!schedule) return json(404, { error: 'Schedule not found' });
+      return json(200, serializeSchedule(schedule));
+    }
+
+    if (path === '/api/stats') {
+      const queue = params.get('queue');
+      const stats = await dashboard.getStats(queue ? { queue } : {});
+      return json(200, serializeStats(stats));
+    }
+
+    if (path === '/api/jobs') {
+      const page = await dashboard.getJobs({
+        ...buildJobsQuery(params),
+        ...(params.get('search') ? { search: params.get('search')! } : {}),
+        searchScanLimit: JOB_SEARCH_SCAN_LIMIT,
+      });
+      return json(200, serializeJobPage(page));
+    }
+
+    const jobMatch = /^\/api\/jobs\/([^/]+)$/.exec(path);
+    if (jobMatch?.[1]) {
+      const job = await portQueue.getJob({ jobId: decodeURIComponent(jobMatch[1]) });
+      if (!job) return json(404, { error: 'Job not found' });
+      return json(200, serializeJob(job));
+    }
+
+    return json(404, { error: 'Not found' });
+  }
+
+  async function handle(input: HandlerInput): Promise<HandlerResult> {
     const path = relativePath(input.url, basePath);
     const method = input.method.toUpperCase();
-    const params = query(input.url);
 
-    // --- Reads (GET) ---
-    if (method === 'GET') {
-      if (path === '/api/config') {
-        return json(200, { readOnly: effectiveReadOnly });
-      }
-      if (path === '/api/queues') {
-        const queues = await portQueue.getQueues();
-        return json(200, queues.map(serializeQueue));
-      }
-      if (path === '/api/stats') {
-        const queue = params.get('queue') ?? undefined;
-        const stats = await portQueue.getQueueStats(queue ? { queue } : {});
-        return json(200, serializeStats(stats));
-      }
-      if (path === '/api/jobs') {
-        return readJobs(portQueue, params);
-      }
-      if (path === '/api/instances') {
-        // Real instance rows with liveness + per-instance job attribution.
-        const instances = await portQueue.getInstances();
-        return json(200, instances.map(serializeInstance));
-      }
-      const jobMatch = /^\/api\/jobs\/([^/]+)$/.exec(path);
-      if (jobMatch && jobMatch[1]) {
-        const job = await portQueue.getJob({ jobId: decodeURIComponent(jobMatch[1]) });
-        if (!job) return json(404, { error: 'Job not found' });
-        return json(200, serializeJob(job));
-      }
-      if (path === '/api/schedules') {
-        const queueFilter = params.get('queue') ?? undefined;
-        const queues = await portQueue.getQueues();
-        const names = queueFilter ? [queueFilter] : queues.map((q) => q.name);
-        const out = [];
-        for (const name of names) {
-          const q = portQueue.createQueue(name);
-          const schedules = await q.getSchedules();
-          for (const s of schedules) out.push(serializeSchedule(s, name));
-        }
-        return json(200, out);
-      }
-      return json(404, { error: 'Not found' });
-    }
+    if (method === 'GET') return handleGet(path, query(input.url));
 
-    // --- Mutations (POST) ---
     if (method === 'POST' && path === '/api/actions') {
-      if (effectiveReadOnly) return json(403, { error: 'Dashboard is read-only' });
-      if (!sameOrigin(input.headers)) return json(403, { error: 'Cross-origin request rejected' });
       let action: ActionRequestDto;
       try {
         action = JSON.parse(input.body ?? '') as ActionRequestDto;
@@ -267,148 +252,156 @@ export function createRouter(options: RouterOptions): {
     return json(404, { error: 'Not found' });
   }
 
-  return { handle, isEventsPath, isApiPath, authRequest };
+  return { handle, isApiPath };
+}
+
+/** A 409 carrying the actionable message core threw (queue in use, instance still active, …). */
+function conflict(err: unknown, fallback: string): HandlerResult {
+  return json(409, { error: err instanceof Error ? err.message : fallback });
 }
 
 /** Execute a validated mutation against the provided PortQueue instance. */
 async function runAction(portQueue: PortQueue, action: ActionRequestDto): Promise<HandlerResult> {
-  // Instance actions are queue-less and handled up front.
-  if (action?.kind === 'pauseInstance' || action?.kind === 'resumeInstance') {
+  const dashboard = portQueue._dashboard;
+
+  // --- Instance actions (queue-less) ---
+  if (
+    action?.kind === ActionKind.PAUSE_INSTANCE ||
+    action?.kind === ActionKind.RESUME_INSTANCE ||
+    action?.kind === ActionKind.REMOVE_INSTANCE
+  ) {
     if (typeof action.instanceKey !== 'string' || !action.instanceKey) {
       return json(400, { error: 'Missing instanceKey' });
     }
-    if (action.kind === 'pauseInstance')
+    if (action.kind === ActionKind.PAUSE_INSTANCE) {
       await portQueue.pauseInstance({ instanceKey: action.instanceKey });
-    else await portQueue.resumeInstance({ instanceKey: action.instanceKey });
-    return json(200, { ok: true } satisfies ActionResultDto);
-  }
-  if (action?.kind === 'removeInstance') {
-    if (typeof action.instanceKey !== 'string' || !action.instanceKey) {
-      return json(400, { error: 'Missing instanceKey' });
+      return json(200, { ok: true } satisfies ActionResultDto);
+    }
+    if (action.kind === ActionKind.RESUME_INSTANCE) {
+      await portQueue.resumeInstance({ instanceKey: action.instanceKey });
+      return json(200, { ok: true } satisfies ActionResultDto);
     }
     try {
       const ok = await portQueue.removeInstance({ instanceKey: action.instanceKey });
       return json(200, { ok } satisfies ActionResultDto);
     } catch (err) {
-      // e.g. still-active instance — surface the actionable message as a conflict.
-      return json(409, { error: err instanceof Error ? err.message : 'Cannot remove instance' });
+      return conflict(err, 'Cannot remove instance');
     }
   }
-  if (action?.kind === 'removeQueue') {
+
+  // --- Schedule actions (resolve their own queue from the id) ---
+  if (action?.kind === ActionKind.REMOVE_SCHEDULE) {
+    const ids = action.scheduleIds?.length
+      ? action.scheduleIds
+      : action.scheduleId
+        ? [action.scheduleId]
+        : [];
+    if (!ids.length) return json(400, { error: 'Missing scheduleId(s)' });
+    // One transaction for the whole set — a bulk removal can't half-apply.
+    const result = await dashboard.removeSchedules({ scheduleIds: ids });
+    return json(200, {
+      ok: result.affected > 0,
+      affected: result.affected,
+      requested: result.requested,
+    } satisfies ActionResultDto);
+  }
+
+  if (action?.kind === ActionKind.SET_SCHEDULE_ENABLED) {
+    if (!action.scheduleId) return json(400, { error: 'Missing scheduleId' });
+    if (typeof action.enabled !== 'boolean') return json(400, { error: 'Missing enabled' });
+    const ok = await dashboard.setScheduleEnabled({
+      scheduleId: action.scheduleId,
+      enabled: action.enabled,
+    });
+    return json(200, { ok } satisfies ActionResultDto);
+  }
+
+  if (action?.kind === ActionKind.REMOVE_QUEUE) {
     if (typeof action.queue !== 'string' || !action.queue) {
       return json(400, { error: 'Missing queue' });
     }
-    // Deliberately not createQueue() — that would register it in this process and trip the guard.
     try {
       const ok = await portQueue.removeQueue({ name: action.queue });
       return json(200, { ok } satisfies ActionResultDto);
     } catch (err) {
-      return json(409, { error: err instanceof Error ? err.message : 'Cannot remove queue' });
+      return conflict(err, 'Cannot remove queue');
     }
   }
 
+  // --- Queue-scoped actions ---
   if (!action || typeof action.queue !== 'string' || !action.queue) {
     return json(400, { error: 'Missing queue' });
   }
-  const queue = portQueue.createQueue(action.queue);
+  const queueName = action.queue;
+
+  // Batch job actions go through the facade so every id lands in one transaction.
+  const batchAction = BATCH_ACTIONS[action.kind];
+  if (batchAction && action.jobIds?.length) {
+    const result = await dashboard.runJobBatch({
+      queue: queueName,
+      jobIds: action.jobIds,
+      action: batchAction,
+    });
+    return json(200, {
+      ok: true,
+      affected: result.affected,
+      requested: result.requested,
+    } satisfies ActionResultDto);
+  }
 
   switch (action.kind) {
-    case 'pause': {
+    case ActionKind.PAUSE: {
       const mode = action.mode === PauseMode.ALL ? PauseMode.ALL : PauseMode.PROCESSING;
-      await queue.pause({ mode });
+      await portQueue.pauseQueue({ queue: queueName, mode });
       return json(200, { ok: true } satisfies ActionResultDto);
     }
-    case 'resume': {
-      await queue.resume();
+    case ActionKind.RESUME: {
+      await portQueue.resumeQueue({ queue: queueName });
       return json(200, { ok: true } satisfies ActionResultDto);
     }
-    case 'retry': {
-      if (!action.jobId) return json(400, { error: 'Missing jobId' });
-      const result = await queue.retryJob({ jobId: action.jobId });
-      return json(200, {
-        ok: true,
-        ...(result.jobId ? { jobId: result.jobId } : {}),
-      } satisfies ActionResultDto);
-    }
-    case 'remove': {
-      if (action.jobIds && action.jobIds.length) {
-        const affected = await queue.removeJobs({ jobIds: action.jobIds });
-        return json(200, { ok: true, affected } satisfies ActionResultDto);
-      }
+    case ActionKind.RETRY:
+    case ActionKind.CANCEL:
+    case ActionKind.REMOVE: {
       if (!action.jobId) return json(400, { error: 'Missing jobId(s)' });
-      const ok = await queue.removeJob({ jobId: action.jobId });
-      return json(200, { ok } satisfies ActionResultDto);
-    }
-    case 'cancel': {
-      if (!action.jobId) return json(400, { error: 'Missing jobId' });
-      const ok = await queue.cancelJob({ jobId: action.jobId });
-      return json(200, { ok } satisfies ActionResultDto);
-    }
-    case 'purge': {
-      const statuses = action.statuses?.filter((s) => Object.values(JobStatus).includes(s)) ?? [];
-      if (!statuses.length) return json(400, { error: 'Missing statuses' });
-      const affected = await queue.removeJobs({ statuses });
-      return json(200, { ok: true, affected } satisfies ActionResultDto);
-    }
-    case 'add': {
-      if (!action.add || typeof action.add !== 'object')
-        return json(400, { error: 'Missing add payload' });
-      const result = await queue.addJob(buildAddOptions(action.add));
+      // A single id is the one-element case of the same transactional batch.
+      const result = await dashboard.runJobBatch({
+        queue: queueName,
+        jobIds: [action.jobId],
+        action: BATCH_ACTIONS[action.kind]!,
+      });
       return json(200, {
-        ok: true,
-        ...(result.jobId ? { jobId: result.jobId } : {}),
-        ...(result.scheduleId ? { scheduleId: result.scheduleId } : {}),
+        ok: result.affected > 0,
+        affected: result.affected,
       } satisfies ActionResultDto);
     }
-    case 'removeSchedule': {
-      if (!action.scheduleId) return json(400, { error: 'Missing scheduleId' });
-      const ok = await queue.removeSchedule({ scheduleId: action.scheduleId });
-      return json(200, { ok } satisfies ActionResultDto);
+    case ActionKind.ADD: {
+      if (!action.add || typeof action.add !== 'object') {
+        return json(400, { error: 'Missing add payload' });
+      }
+      try {
+        // Adding is the one action that legitimately produces onto a queue, so it uses the
+        // public producer path — and with it every validation core already enforces.
+        const result = await portQueue
+          .createQueue(queueName)
+          .addJob(buildAddOptions(action.add));
+        return json(200, {
+          ok: true,
+          ...(result.jobId ? { jobId: result.jobId } : {}),
+          ...(result.scheduleId ? { scheduleId: result.scheduleId } : {}),
+        } satisfies ActionResultDto);
+      } catch (err) {
+        // Bad cron, both cron and interval, a paused queue — all actionable, none a 500.
+        return json(400, { error: err instanceof Error ? err.message : 'Cannot add job' });
+      }
     }
     default:
       return json(400, { error: 'Unknown action' });
   }
 }
 
-/** The set of events the SSE stream forwards. */
-export const STREAMED_EVENTS: readonly PortQueueEvent[] = [
-  PortQueueEvent.JOB_ADDED,
-  PortQueueEvent.JOB_ACTIVE,
-  PortQueueEvent.JOB_COMPLETED,
-  PortQueueEvent.JOB_FAILED,
-  PortQueueEvent.JOB_RETRYING,
-  PortQueueEvent.JOB_STALLED,
-  PortQueueEvent.JOB_EXPIRED,
-  PortQueueEvent.JOB_CANCELLED,
-  PortQueueEvent.JOB_REMOVED,
-  PortQueueEvent.QUEUE_PAUSED,
-  PortQueueEvent.QUEUE_RESUMED,
-  PortQueueEvent.QUEUE_REMOVED,
-  PortQueueEvent.INSTANCE_PAUSED,
-  PortQueueEvent.INSTANCE_RESUMED,
-  PortQueueEvent.INSTANCE_REMOVED,
-  PortQueueEvent.SCHEDULE_CREATED,
-  PortQueueEvent.SCHEDULE_UPDATED,
-  PortQueueEvent.SCHEDULE_REMOVED,
-  PortQueueEvent.SCHEDULE_FIRED,
-];
-
-/**
- * Subscribe to PortQueue events and push SSE lines through `write`. Returns an unsubscribe
- * that detaches every listener. Uses plain Node/SSE framing — no dependency.
- */
-export function subscribeEvents(portQueue: PortQueue, write: (line: string) => void): () => void {
-  const unsubs = STREAMED_EVENTS.map((event) =>
-    portQueue.on(event, (payload) => {
-      // Non-blocking best-effort push; a broken pipe is swallowed by the caller.
-      try {
-        write(`event: ${event}\ndata: ${JSON.stringify({ event, payload })}\n\n`);
-      } catch {
-        /* ignore write errors; the stream will be torn down */
-      }
-    }),
-  );
-  return () => {
-    for (const off of unsubs) off();
-  };
-}
+/** Which batch verb each job-scoped action maps to. */
+const BATCH_ACTIONS: Partial<Record<ActionKind, JobBatchAction>> = {
+  [ActionKind.RETRY]: JobBatchAction.RETRY,
+  [ActionKind.CANCEL]: JobBatchAction.CANCEL,
+  [ActionKind.REMOVE]: JobBatchAction.REMOVE,
+};

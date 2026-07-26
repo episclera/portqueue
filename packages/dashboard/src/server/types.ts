@@ -1,21 +1,24 @@
 /** Public option, handler, and framework-shape types for the dashboard middleware. */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { PortQueue } from '@portqueue/core';
-import type { DashboardAuth } from './api/auth';
+import type { Logger, PortQueue } from '@portqueue/core';
 
 export interface DashboardOptions {
   /** The developer's running PortQueue instance. The dashboard rides on it. */
   portQueue: PortQueue;
   /** Mount path (default `/portqueue`). */
   basePath?: string;
-  /** Pluggable auth guard (default: none). */
-  auth?: DashboardAuth;
-  /** Disable all mutating actions server-side. */
-  readOnly?: boolean;
   /** Header/title text. */
   title?: string;
-  /** Initial theme preference for the SPA. */
+  /**
+   * Theme the dashboard opens with for a visitor who has not chosen one. A visitor's own choice
+   * (the header switcher, stored in `localStorage`) always takes precedence. Default `'system'`.
+   */
   theme?: 'light' | 'dark' | 'system';
+  /**
+   * Where the dashboard reports problems it can only notice at startup — most usefully a missing
+   * client bundle, which otherwise looks like a working server. Defaults to `console`.
+   */
+  logger?: Pick<Logger, 'warn'>;
 }
 
 /** A raw-Node request handler: returns true if it handled the request. */
