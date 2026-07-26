@@ -24,15 +24,14 @@ describe('per-engine migrations (authored alongside each driver)', () => {
       ORACLE_MIGRATIONS,
       MYSQL_MIGRATIONS,
     ];
-    // No two engines share the same array object — a change to one never leaks into another.
+    // No two engines share the same array object, so adding a version to one never adds it to
+    // another. (PG-wire is the one place where the statement builders themselves are reused — see
+    // the PGLite case below.)
     expect(new Set(sets).size).toBe(sets.length);
     // Every set declares the same versions with the same checksums (same logical schema).
     for (const set of sets) {
-      expect(set.map((m) => m.version)).toEqual([1, 2]);
-      expect(set.map((m) => m.checksum)).toEqual([
-        'v1-base-schema',
-        'v2-schedule-idempotency-key',
-      ]);
+      expect(set.map((m) => m.version)).toEqual([1]);
+      expect(set.map((m) => m.checksum)).toEqual(['v1-base-schema']);
     }
   });
 
@@ -46,19 +45,19 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     ] as const;
     for (const [driver, engine] of drivers) {
       expect(driver.engine).toBe(engine);
-      expect(driver.migrations.map((m) => m.version)).toEqual([1, 2]);
+      expect(driver.migrations.map((m) => m.version)).toEqual([1]);
     }
   });
 
-  it('Postgres v1 creates every table with the pruned job shape; v2 adds the schedule key', () => {
+  it('Postgres v1 creates every table with the pruned job shape and the schedule dedup token', () => {
     const statements = v1(POSTGRES_MIGRATIONS);
     expect(statements).toHaveLength(5);
     expect(statements.every((s) => s.startsWith('CREATE TABLE IF NOT EXISTS'))).toBe(true);
     const job = statements.find((s) => s.includes('pq_job'))!;
     expect(job).toContain('preferred_instance_key_pattern');
     expect(job).not.toMatch(/preferred_instance_key\b/);
-    const v2 = POSTGRES_MIGRATIONS.find((m) => m.version === 2)!.statements(bare);
-    expect(v2).toEqual(['ALTER TABLE pq_schedule ADD COLUMN idempotency_key TEXT']);
+    // The schedule dedup token is part of the base schema — no follow-up ALTER version.
+    expect(statements.find((s) => s.includes('pq_schedule'))!).toContain('idempotency_key TEXT');
   });
 
   it('MySQL avoids DEFAULT on TEXT by using VARCHAR for defaulted string columns', () => {
@@ -73,7 +72,7 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     expect(job).not.toMatch(/BIGINT|SMALLINT/);
   });
 
-  it('Oracle authors its own dialect: PL/SQL create guards, VARCHAR2/NUMBER/CLOB, ADD (col)', () => {
+  it('Oracle authors its own dialect: PL/SQL create guards, VARCHAR2/NUMBER/CLOB', () => {
     const statements = v1(ORACLE_MIGRATIONS);
     expect(statements.every((s) => s.includes('EXECUTE IMMEDIATE') && s.includes('-955'))).toBe(
       true,
@@ -82,12 +81,15 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     expect(job).toContain('NUMBER(19)');
     expect(job).toContain('data CLOB');
     expect(job).not.toMatch(/\bTEXT\b|\bBIGINT\b/);
-    const v2 = ORACLE_MIGRATIONS.find((m) => m.version === 2)!.statements(bare)[0]!;
-    expect(v2).toContain('ADD (idempotency_key VARCHAR2(4000))');
+    expect(statements.find((s) => s.includes('pq_schedule'))!).toContain(
+      'idempotency_key VARCHAR2(4000)',
+    );
   });
 
-  it('PGLite matches Postgres statement text (PG-wire) but from its own array', () => {
+  it('PGLite reuses the Postgres statement builders (PG-wire) from its own array', () => {
     expect(PGLITE_MIGRATIONS).not.toBe(POSTGRES_MIGRATIONS);
+    // Same builder object, not a hand-kept copy: the two can never drift.
+    expect(PGLITE_MIGRATIONS[0]!.statements).toBe(POSTGRES_MIGRATIONS[0]!.statements);
     expect(v1(PGLITE_MIGRATIONS)).toEqual(v1(POSTGRES_MIGRATIONS));
   });
 });

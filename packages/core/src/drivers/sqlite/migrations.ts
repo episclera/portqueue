@@ -10,7 +10,9 @@ import type { FlavourMigration, PhysicalName } from '../shared/migration';
  * integer-family column maps to its native `INTEGER` storage class (a 64-bit signed value), string
  * columns to `TEXT`, and the one float column to `REAL`. `CREATE TABLE IF NOT EXISTS` and
  * `ALTER TABLE ADD COLUMN` are both native. Authored by hand for this engine;
- * not generated at runtime.
+ * not generated at runtime. There is a single version so far — the base schema — but the array is
+ * the extension point: a future change appends `{ version: 2, ... }` with its own statement builder
+ * rather than editing `v1`, which is a frozen record of what has already been applied.
  */
 
 /** Version 1 — the full base schema. */
@@ -75,7 +77,8 @@ function v1(t: PhysicalName): string[] {
       start_at INTEGER,
       end_at INTEGER,
       created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
+      updated_at INTEGER NOT NULL,
+      idempotency_key TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.INSTANCE)} (
       instance_key TEXT NOT NULL,
@@ -94,12 +97,6 @@ function v1(t: PhysicalName): string[] {
   ];
 }
 
-/** Version 2 — add the schedule cross-table dedup token. */
-function v2(t: PhysicalName): string[] {
-  return [`ALTER TABLE ${t(TableName.SCHEDULE)} ADD COLUMN idempotency_key TEXT`];
-}
-
 export const SQLITE_MIGRATIONS: FlavourMigration[] = [
   { version: 1, checksum: 'v1-base-schema', statements: v1 },
-  { version: 2, checksum: 'v2-schedule-idempotency-key', statements: v2 },
 ];

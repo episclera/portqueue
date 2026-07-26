@@ -10,8 +10,12 @@ import type { FlavourMigration, PhysicalName } from '../shared/migration';
  * two engine-specific ways: MySQL forbids a `DEFAULT` on `TEXT`/`BLOB` columns, so the two
  * defaulted text columns (`retry_backoff`, `retention_mode`) are `VARCHAR`. `REAL` is MySQL's
  * synonym for `DOUBLE`; `BIGINT`/`INTEGER`/`SMALLINT`/`TEXT` are native. Authored by hand for this engine; not generated at runtime.
+ * There is a single version so far — the base schema — but the array is the extension point: a
+ * future change appends `{ version: 2, ... }` with its own statement builder rather than editing
+ * `v1`, which is a frozen record of what has already been applied.
  */
 
+/** Version 1 — the full base schema. */
 function v1(t: PhysicalName): string[] {
   return [
     `CREATE TABLE IF NOT EXISTS ${t(TableName.QUEUE)} (
@@ -73,7 +77,8 @@ function v1(t: PhysicalName): string[] {
       start_at BIGINT,
       end_at BIGINT,
       created_at BIGINT NOT NULL,
-      updated_at BIGINT NOT NULL
+      updated_at BIGINT NOT NULL,
+      idempotency_key TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.INSTANCE)} (
       instance_key TEXT NOT NULL,
@@ -92,11 +97,6 @@ function v1(t: PhysicalName): string[] {
   ];
 }
 
-function v2(t: PhysicalName): string[] {
-  return [`ALTER TABLE ${t(TableName.SCHEDULE)} ADD COLUMN idempotency_key TEXT`];
-}
-
 export const MYSQL_MIGRATIONS: FlavourMigration[] = [
   { version: 1, checksum: 'v1-base-schema', statements: v1 },
-  { version: 2, checksum: 'v2-schedule-idempotency-key', statements: v2 },
 ];

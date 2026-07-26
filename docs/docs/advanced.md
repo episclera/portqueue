@@ -151,13 +151,22 @@ caller's transaction. The interface groups its methods by concern:
 
 ### Own your dialect and migrations
 
-A driver is **fully standalone**: it lives in its own folder, carries its own migrations
-authored in its engine's dialect, and shares no query-building code with other drivers —
-even wire-compatible ones. Core calls intent-named methods (`upsert`, `getOrCreate`, …) and
+A driver is **standalone per engine**: it lives in its own folder, carries its own migrations
+authored in its engine's dialect, and shares no query-building code with drivers for other
+engines. Core calls intent-named methods (`upsert`, `getOrCreate`, …) and
 your driver emits whatever its engine does best: native `INSERT … ON CONFLICT` on a capable
 engine, a guarded `UPDATE … RETURNING`-then-`INSERT` on a sharded one, or a mutate-then-read
 on an engine without `RETURNING`. All values are bound parameters; identifiers are
 allowlist-validated and quoted; every operation runs in a transaction.
+
+The one exception is a **flavour of an engine that is already supported** — a build that speaks the
+same wire protocol and dialect rather than a different engine. `PgliteDriver` is exactly that
+(PGLite is Postgres compiled to WASM), so it `extends PostgresDriver`, inherits the whole SQL
+surface, and overrides only what is genuinely its own: the connection mechanism, its capability set
+(no LISTEN/NOTIFY, no advisory locks) and its migration array. `PGLITE_MIGRATIONS` stays PGLite's
+own array — it just points at the Postgres statement builders while the DDL is identical, so a
+version can be swapped for a PGLite-specific one without touching Postgres. If your engine merely
+*resembles* another, duplicate instead: subclass only when the dialect is the same by construction.
 
 ### Declare capabilities honestly
 

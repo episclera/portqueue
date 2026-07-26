@@ -14,8 +14,14 @@ import type { FlavourMigration, PhysicalName } from '../shared/migration';
  *   - integers → `NUMBER(p)` (`NUMBER(19)` bigint, `NUMBER(10)` int, `NUMBER(5)` smallint),
  *     floats → `BINARY_DOUBLE`;
  *   - idempotent creation is emulated with a PL/SQL block that swallows ORA-00955 (name already
- *     used); the additive `ALTER` swallows ORA-01430 (column already exists).
+ *     used) — see `createIfAbsent`.
  * Authored by hand for this engine; not generated at runtime.
+ *
+ * There is a single version so far — the base schema — but the array is the extension point: a
+ * future change appends `{ version: 2, ... }` with its own statement builder rather than editing
+ * `v1`, which is a frozen record of what has already been applied. An additive `ALTER TABLE … ADD
+ * (col type)` needs the same PL/SQL treatment, swallowing ORA-01430 (column already exists), so
+ * re-running it stays a no-op.
  */
 
 /** Wrap a `CREATE TABLE` so re-running the migration is a no-op (emulates `IF NOT EXISTS`). */
@@ -24,15 +30,6 @@ function createIfAbsent(ddl: string): string {
   EXECUTE IMMEDIATE '${ddl.replace(/'/g, "''")}';
 EXCEPTION
   WHEN OTHERS THEN IF SQLCODE != -955 THEN RAISE; END IF;
-END;`;
-}
-
-/** Wrap an additive `ALTER TABLE ... ADD` so re-running is a no-op (swallows ORA-01430). */
-function addColumnIfAbsent(ddl: string): string {
-  return `BEGIN
-  EXECUTE IMMEDIATE '${ddl.replace(/'/g, "''")}';
-EXCEPTION
-  WHEN OTHERS THEN IF SQLCODE != -1430 THEN RAISE; END IF;
 END;`;
 }
 
@@ -103,7 +100,8 @@ function v1(t: PhysicalName): string[] {
         start_at NUMBER(19),
         end_at NUMBER(19),
         created_at NUMBER(19) NOT NULL,
-        updated_at NUMBER(19) NOT NULL
+        updated_at NUMBER(19) NOT NULL,
+        idempotency_key VARCHAR2(4000)
       )`,
     ),
     createIfAbsent(
@@ -127,12 +125,6 @@ function v1(t: PhysicalName): string[] {
   ];
 }
 
-/** Version 2 — add the schedule cross-table dedup token (Oracle uses `ADD (col type)`). */
-function v2(t: PhysicalName): string[] {
-  return [addColumnIfAbsent(`ALTER TABLE ${t(TableName.SCHEDULE)} ADD (idempotency_key VARCHAR2(4000))`)];
-}
-
 export const ORACLE_MIGRATIONS: FlavourMigration[] = [
   { version: 1, checksum: 'v1-base-schema', statements: v1 },
-  { version: 2, checksum: 'v2-schedule-idempotency-key', statements: v2 },
 ];

@@ -77,13 +77,13 @@ interface PgPool {
   end(): Promise<void>;
 }
 
-/** A raw query result. */
-interface RawResult {
+/** A raw query result. Exported so a PG-wire subclass (PGLite) can type its own `execute`. */
+export interface RawResult {
   rows: Array<Record<string, unknown>>;
   rowCount: number;
 }
 /** An opaque per-connection session used inside a transaction. */
-type Session = unknown;
+export type Session = unknown;
 type Row = Record<string, unknown>;
 
 const JOB_COLUMNS = [
@@ -123,15 +123,24 @@ const JOB_COLUMNS = [
 ] as const;
 
 /**
- * Postgres driver — the full-feature reference driver, standalone: it owns the entire SQL surface
- * (no shared base class) so a Postgres-specific change never touches another engine. `$1`-style
- * placeholders, LISTEN/NOTIFY on a dedicated connection, advisory locks for leader-only tasks,
- * SKIP LOCKED claiming, RETURNING everywhere. No method emits a relational JOIN — relationships
- * resolve by name/key lookups, and the schema carries no unique index, so name-uniqueness and
- * idempotency/singleton dedup are enforced here in code. The `pg` package is an optional peer.
+ * Postgres driver — the full-feature reference driver and the sole owner of the PG-wire SQL
+ * surface: `$1`-style placeholders, LISTEN/NOTIFY on a dedicated connection, advisory locks for
+ * leader-only tasks, SKIP LOCKED claiming, RETURNING everywhere. No method emits a relational JOIN
+ * — relationships resolve by name/key lookups, and the schema carries no unique index, so
+ * name-uniqueness and idempotency/singleton dedup are enforced here in code. The `pg` package is
+ * an optional peer, imported lazily inside `connect()`.
+ *
+ * PG-wire subclassing: `PgliteDriver` extends this class and overrides only the connection
+ * mechanism (`connect`/`disconnect`/`execute`/`transaction`/`probe`) plus the features PGLite
+ * lacks. Every query method below is therefore shared with PGLite — treat a change here as a
+ * change to both engines, and if a tweak is genuinely Postgres-only, override it in `PgliteDriver`
+ * rather than branching on the engine here. No other engine shares this code.
+ *
+ * Members the PG-wire subclass relies on are `protected` (`execute`, `transaction`,
+ * `enabledCapabilities`); the pool/listener state stays private to this class.
  */
 export class PostgresDriver implements Driver {
-  readonly engine = DatabaseEngine.POSTGRES;
+  readonly engine: DatabaseEngine = DatabaseEngine.POSTGRES;
   readonly capabilities: DriverCapabilitySet = capabilities({
     [DriverCapability.SKIP_LOCKED]: true,
     [DriverCapability.RETURNING]: true,
@@ -139,7 +148,7 @@ export class PostgresDriver implements Driver {
     [DriverCapability.LISTEN_NOTIFY]: true,
     [DriverCapability.ADVISORY_LOCK]: true,
   });
-  readonly migrations = toMigrationSteps(POSTGRES_MIGRATIONS);
+  readonly migrations: MigrationStep[] = toMigrationSteps(POSTGRES_MIGRATIONS);
 
   readonly context: DriverContext;
   private pool: PgPool | null = null;
@@ -189,7 +198,8 @@ export class PostgresDriver implements Driver {
     this.pool = null;
   }
 
-  private async execute(
+  /** Run one statement. `protected` so a PG-wire subclass can swap in its own client. */
+  protected async execute(
     sql: string,
     params: readonly unknown[],
     session?: Session,
@@ -200,7 +210,8 @@ export class PostgresDriver implements Driver {
     return { rows: res.rows ?? [], rowCount: res.rowCount ?? res.rows?.length ?? 0 };
   }
 
-  private async transaction<T>(fn: (session: Session) => Promise<T>): Promise<T> {
+  /** Wrap `fn` in a transaction. `protected` so a PG-wire subclass can swap in its own client. */
+  protected async transaction<T>(fn: (session: Session) => Promise<T>): Promise<T> {
     if (!this.pool) throw new DriverConnectionError('Postgres driver is not connected.');
     const client = await this.pool.connect();
     try {
@@ -253,7 +264,8 @@ export class PostgresDriver implements Driver {
     return { serverVersion, verifiedCapabilities: this.enabledCapabilities() };
   }
 
-  private enabledCapabilities(): DriverCapability[] {
+  /** The capability keys this driver declares as on. `protected` for the PG-wire subclass's probe. */
+  protected enabledCapabilities(): DriverCapability[] {
     return (Object.keys(this.capabilities) as DriverCapability[]).filter(
       (c) => this.capabilities[c],
     );
