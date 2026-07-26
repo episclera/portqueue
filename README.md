@@ -58,5 +58,3 @@ For full details — dev setup, conventions, running the examples, and filing is
 ## License
 
 MIT — see [LICENSE](./LICENSE). Free and open source, commercial use permitted, no obligations.
-
-> **Free and open source. Commercial use permitted. No license fee, no obligations.** (MIT)
