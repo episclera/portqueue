@@ -31,9 +31,17 @@ describe('run', () => {
 
   it('exits 1 when a command throws a CliError', async () => {
     const { stderr } = await captureOutput(async () => {
-      // `schedules` without --queue throws a CliError after the instance is built.
-      expect(await run(['schedules', '--driver', 'sqlite'])).toBe(1);
+      // `remove` with neither selector throws a CliError after the instance is built.
+      expect(await run(['remove', '--driver', 'sqlite'])).toBe(1);
     });
-    expect(stderr).toContain('requires --queue');
+    expect(stderr).toContain('exactly one');
+  });
+
+  it('lists every queue’s schedules when --queue is omitted', async () => {
+    const { stdout } = await captureOutput(async () => {
+      expect(await run(['schedules', '--json', '--driver', 'sqlite'])).toBe(0);
+    });
+    // Reading across queues no longer needs --queue, and a fresh DB simply has none.
+    expect(stdout).toContain('[]');
   });
 });
