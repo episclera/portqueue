@@ -12,9 +12,10 @@ import { Shot } from '@site/src/components/Shot';
 
 # Dashboard
 
-`@portqueue/dashboard` is a pluggable React ops dashboard — queues, jobs,
-schedules, instances, and live stats — served from the CLI or mounted on your existing HTTP
-server.
+`@portqueue/dashboard` is a pluggable React ops dashboard — queues, jobs, schedules, instances and
+live stats. [Mount it on your existing HTTP server](#mount-on-an-existing-app) (Express, Koa,
+Fastify, NestJS or raw Node), or [serve it from the CLI](#serve-it-from-the-cli-no-app-changes) with
+no app changes at all.
 
 ## Pages
 
@@ -66,12 +67,6 @@ the reversible half of "make this stop". Each (truncated) schedule id links to i
 
 </Shot>
 
-### Schedule detail
-
-One recurring definition — cadence, timezone, next and last run, state — above a table of the jobs
-it has produced. That second table is the point of the page: "did last night's run succeed?" is
-answerable there without hunting through the queue's full job list.
-
 ### Queue detail
 
 <Shot
@@ -100,57 +95,6 @@ never reached.
 
 </Shot>
 
-### Tables
-
-Every table works the same way:
-
-- **`Results (n)`** in the card's top-left is the total number of matching rows in the database,
-  not just the rows on screen.
-- **Filters** opens a dialog of the filters that table supports; **search** sits next to it. Each
-  filter is a single choice — a status, a state — with **Any** to drop it. Applied filters then
-  appear as dismissible chips under the toolbar, each removable on its own.
-- **20 rows a page**, with numbered pagination at the bottom of the card. Every table is paged,
-  searched and filtered **in the database** — no table loads more than the page you are looking at.
-- The page, the search term and the applied filters are all kept in the URL
-  (`#/queues/emails?jobs.page=3&jobs.status=FAILED`), so any table view can be linked or
-  reloaded.
-- Rows are selectable where bulk actions apply (jobs, schedules); the **Bulk actions** button
-  appears once something is selected. A bulk action is a **single request applied in one
-  transaction** — it either lands for every selected row or for none of them, and reports once.
-- If a query fails, the card shows the server's error with a **Retry** button rather than an empty
-  table, so "nothing here" and "we couldn't ask" never look alike.
-
-Searching jobs matches the job id, status, idempotency key, failure message and payload contents.
-
-:::note Searching jobs scans the most recent 500
-Jobs have no text index, so a job search filters the most recent 500 jobs matching the other
-filters rather than scanning the whole table. When that window was the limiting factor the toolbar
-says so — narrow it with a status filter to reach older jobs.
-:::
-
-### Live updates
-
-Each page polls the handful of queries it needs every 30 seconds, and refetches immediately after
-any action you take. **Pause** in the top bar stops the interval and freezes the data; **Refresh
-now** beside it fetches once, whether or not polling is running. Nothing is served from a cache
-between visits either — landing on a page (or coming back to it) always asks the server, so you are
-never reading a snapshot from a previous visit.
-
-### Dates and times
-
-Every timestamp in the dashboard is the same thing in the same shape: the exact moment, in your
-browser's timezone, with that timezone's UTC offset named.
-
-```text
-12 Mar. 2026 13:23:01 UTC+2
-```
-
-There are no relative labels ("3 minutes ago") anywhere. A relative label reads as friendlier and
-answers less: correlating a failure with a deploy or a log line needs the clock time, and a label
-computed at render time is only true until the next one. Timestamps here never move on their own,
-whatever the live-updates control is set to. The UTC instant is on the element's `datetime`
-attribute (and on hover) for anyone comparing against a UTC log.
-
 ## Mount on an existing app
 
 Install the dashboard package alongside `@portqueue/core`:
@@ -159,47 +103,23 @@ Install the dashboard package alongside `@portqueue/core`:
 npm install @portqueue/dashboard
 ```
 
-:::info Your DB driver's peer dependency is still required
-The dashboard talks to your database through a `@portqueue/core` driver, so the driver's
-client — an optional peer dependency — must be installed too: `pg` (Postgres),
-`better-sqlite3` (SQLite), `@electric-sql/pglite` (PGLite), and so on. If it's missing,
-PortQueue throws `MissingPeerDependencyError`.
+:::info Your driver's client is still required
+The dashboard reads through a `@portqueue/core` driver, so its client (`pg`, `better-sqlite3`,
+`@electric-sql/pglite`, …) must be installed too — otherwise PortQueue throws `MissingPeerDependencyError`.
 :::
 
-Create the dashboard once from your running PortQueue, then mount it with the adapter for
-your framework — Express, Koa, Fastify, NestJS, or raw Node all ship in the box:
-
-```ts
-import { createDashboard } from '@portqueue/dashboard';
-
-const dash = createDashboard({
-  portQueue: pq,
-  basePath: '/portqueue',
-  title: 'Acme Jobs', // optional; shown in the header and the browser tab
-  theme: 'system', // optional default — a visitor's own choice always wins
-});
-```
-
-:::danger The dashboard ships no authentication
-Anyone who can reach the mount can perform every action it offers: pausing queues, removing jobs,
-deleting schedules. **Protecting it is your application's job** — see
-[Protecting the dashboard](#protecting-the-dashboard) below.
-:::
-
-:::info `basePath` must agree with the host framework's mount point
-`basePath` is the URL prefix the dashboard lives under (default `/portqueue`). It's how the
-dashboard knows where its own assets and API sit, so it **must match the path you mount the
-adapter at** in your framework's router. The Express, Koa, Fastify, and raw-Node adapters read
-`basePath` from the options and route themselves — just mount them at the root. NestJS is the
-exception: you pass the same prefix to `forRoutes(...)`, so keep it in sync with `basePath`
-(both `/portqueue` below).
-:::
+Create the dashboard once from your running PortQueue, then mount it with the adapter for your
+framework — Express, Koa, Fastify, NestJS and raw Node all ship in the box.
 
 <Tabs groupId="http-framework">
   <TabItem value="express" label="Express" default>
 
 ```ts
-// basePath from the options above sets the mount point.
+import { createDashboard } from '@portqueue/dashboard';
+
+const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
+
+// `basePath` is the mount point, so the middleware goes on at the root.
 app.use(dash.express());
 ```
 
@@ -207,6 +127,10 @@ app.use(dash.express());
   <TabItem value="koa" label="Koa">
 
 ```ts
+import { createDashboard } from '@portqueue/dashboard';
+
+const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
+
 app.use(dash.koa());
 ```
 
@@ -214,6 +138,10 @@ app.use(dash.koa());
   <TabItem value="fastify" label="Fastify">
 
 ```ts
+import { createDashboard } from '@portqueue/dashboard';
+
+const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
+
 await app.register(dash.fastify());
 ```
 
@@ -221,8 +149,12 @@ await app.register(dash.fastify());
   <TabItem value="nestjs" label="NestJS">
 
 ```ts
+import { createDashboard } from '@portqueue/dashboard';
+
+const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
+
 // Nest's default platform is Express, so mount it as functional middleware.
-// No @nestjs/* dependency is required.
+// No @nestjs/* dependency is required — but keep forRoutes in sync with basePath.
 export class DashboardModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(dash.nest()).forRoutes('/portqueue');
@@ -235,6 +167,9 @@ export class DashboardModule implements NestModule {
 
 ```ts
 import { createServer } from 'node:http';
+import { createDashboard } from '@portqueue/dashboard';
+
+const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
 
 const handler = dash.node();
 createServer((req, res) => {
@@ -246,118 +181,34 @@ createServer((req, res) => {
   </TabItem>
 </Tabs>
 
+`portQueue` is the only required option. `basePath` defaults to `/portqueue`, and `logger` (default
+`console`) is where the dashboard reports the one problem it can only notice at startup: a missing
+client bundle, which otherwise serves a placeholder with a 200 and looks like a working deploy.
+
+:::info `basePath` is the mount point
+It tells the dashboard where its own assets and API sit, so it must match where you mount the
+adapter. Only NestJS repeats it — keep `forRoutes(...)` in sync.
+:::
+
+:::danger The dashboard ships no authentication
+Anyone who can reach the mount can pause queues, remove jobs and delete schedules. **Protecting it
+is your application's job** — see [Protecting the dashboard](#protecting-the-dashboard) below.
+:::
+
 ## Protecting the dashboard
 
-The dashboard has **no authentication of its own**, and no read-only mode. It is a mounted
-middleware, and guarding a mount is something your application already knows how to do — with the
-same session, SSO or API-key middleware that protects the rest of your admin surface. Shipping a
-second, weaker mechanism alongside yours only invited people to rely on it.
+The dashboard has **no authentication of its own**, and no read-only mode: anyone who can reach the
+mount can pause queues, retry and remove jobs, and delete schedules. Guarding a mount is something
+your application already does, so **bring your own middleware and run it in front of the adapter** —
+the same session, SSO or API-key check that protects the rest of your admin surface. Anything that
+runs first and can end the response works; the dashboard only ever sees what got past it. Shipping a
+second, weaker mechanism alongside yours would only invite people to rely on it.
 
-So: put auth in front of the mount. Anything that runs before the adapter and can end the response
-works.
-
-<Tabs groupId="http-framework">
-  <TabItem value="express" label="Express" default>
-
-```ts
-// Your existing middleware — a session check, an SSO guard, an API-key check, whatever
-// already protects your admin routes.
-app.use('/portqueue', requireAdmin);
-app.use(dash.express());
-```
-
-  </TabItem>
-  <TabItem value="koa" label="Koa">
-
-```ts
-app.use(async (ctx, next) => {
-  if (ctx.path.startsWith('/portqueue') && !(await isAdmin(ctx))) {
-    ctx.status = 403;
-    return;
-  }
-  await next();
-});
-app.use(dash.koa());
-```
-
-  </TabItem>
-  <TabItem value="fastify" label="Fastify">
-
-```ts
-app.addHook('onRequest', async (req, reply) => {
-  if (req.url.startsWith('/portqueue') && !(await isAdmin(req))) {
-    return reply.code(403).send();
-  }
-});
-await app.register(dash.fastify());
-```
-
-  </TabItem>
-  <TabItem value="nestjs" label="NestJS">
-
-```ts
-export class DashboardModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
-    // Your guard runs first; the dashboard only sees requests that got past it.
-    consumer.apply(AdminGuardMiddleware, dash.nest()).forRoutes('/portqueue');
-  }
-}
-```
-
-  </TabItem>
-</Tabs>
-
-### If you just need a password
-
-For an internal tool with no existing auth layer, HTTP Basic is enough. The
-[`basic-auth`](https://www.npmjs.com/package/basic-auth) package parses the header; compare with
-`timingSafeEqual` so a wrong password can't be recovered a byte at a time from response timings:
-
-```bash
-npm install basic-auth
-```
-
-```ts
-import { timingSafeEqual } from 'node:crypto';
-import auth from 'basic-auth';
-
-/** Constant-time compare that doesn't short-circuit on length. */
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a, 'utf8');
-  const bb = Buffer.from(b, 'utf8');
-  const len = Math.max(ab.length, bb.length, 1);
-  const pa = Buffer.alloc(len);
-  const pb = Buffer.alloc(len);
-  ab.copy(pa);
-  bb.copy(pb);
-  return timingSafeEqual(pa, pb) && ab.length === bb.length;
-}
-
-app.use('/portqueue', (req, res, next) => {
-  const credentials = auth(req);
-  const ok =
-    credentials !== undefined &&
-    safeEqual(credentials.name, process.env.DASHBOARD_USER!) &&
-    safeEqual(credentials.pass, process.env.DASHBOARD_PASSWORD!);
-  if (ok) return next();
-  res.setHeader('WWW-Authenticate', 'Basic realm="PortQueue Dashboard", charset="UTF-8"');
-  res.status(401).end('Unauthorized');
-});
-
-app.use(dash.express());
-```
-
-Basic auth over plain HTTP sends the password in near-clear on every request, so terminate TLS in
-front of it, and add a rate limit if the mount is reachable from the public internet — nothing
-here slows down a guessing attack on its own.
-
-### What the dashboard does handle
-
-- **Response hardening** — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy: no-referrer`, and a Content-Security-Policy whose nonce authorizes exactly one
-  inline script (the config blob) and nothing else.
-- **Caching** — content-hashed assets are served `immutable`; HTML always revalidates.
-- **SQL** — every value core writes is a bound parameter, and identifiers are allowlisted.
+No auth layer to reuse? HTTP Basic in front of the mount is enough for an internal tool —
+[`basic-auth`](https://www.npmjs.com/package/basic-auth) parses the header and its README has the
+middleware; compare the credentials with `timingSafeEqual` from `node:crypto`, terminate TLS in front
+of it, and rate-limit the mount if it is reachable from the internet. Or skip your app entirely and
+let the CLI host the dashboard — it brings its own Basic auth, below.
 
 ## Serve it from the CLI (no app changes)
 
@@ -413,15 +264,3 @@ docker run --rm -p 9000:9000 \
   -e PORTQUEUE_ROOT_PASSWORD="<your-password>" \
   portqueue-dashboard
 ```
-
-## Options
-
-`createDashboard(options)` takes a single named-options object:
-
-| Option | Type | Default | What it does |
-| --- | --- | --- | --- |
-| `portQueue` | `PortQueue` | — | **Required.** Your running instance. The dashboard rides on it and never opens its own connection. |
-| `basePath` | `string` | `'/portqueue'` | The URL prefix the dashboard is mounted at. Must match your framework's mount point. |
-| `title` | `string` | `'PortQueue Dashboard'` | Header text and browser tab title. |
-| `theme` | `'light' \| 'dark' \| 'system'` | `'system'` | The theme a visitor sees before choosing one. Their own choice (the header toggle, stored in `localStorage`) always takes precedence. |
-| `logger` | `{ warn }` | `console` | Where startup problems are reported — most usefully a missing client bundle, which otherwise serves a placeholder with a 200 and looks like a working deploy. |
