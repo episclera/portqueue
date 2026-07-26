@@ -10,20 +10,25 @@ import { ThemeProvider, ToastProvider, useThemeMode } from '@portqueue/ui';
 import { App } from './App';
 import { LiveProvider } from './components/LiveProvider';
 import { config } from './queries/api';
-import { REFETCH_INTERVAL_MS } from './queries/use-queries';
 
 /**
  * Cache defaults for every query.
  *
- * `staleTime` is half the poll interval: navigating back to a page inside that window reuses what
- * is already cached instead of refetching, while anything older refreshes on mount. Failures retry
- * once — enough to ride out a dropped connection, few enough that a genuinely broken endpoint
- * surfaces its error promptly rather than after a backoff chain.
+ * **Nothing is served from cache.** `staleTime: 0` and `gcTime: 0` together mean every mount
+ * fetches: landing on a page — or coming back to one — always asks the server rather than painting
+ * a snapshot from a previous visit. An ops dashboard is read to answer "what is happening right
+ * now", and a queue depth or a job status from thirty seconds ago answers that wrongly while
+ * looking exactly as authoritative. The cache is still what holds a page's rows while it is open
+ * (and what a mutation invalidates); it just never outlives the view that filled it.
+ *
+ * Failures retry once — enough to ride out a dropped connection, few enough that a genuinely
+ * broken endpoint surfaces its error promptly rather than after a backoff chain.
  */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: REFETCH_INTERVAL_MS / 2,
+      staleTime: 0,
+      gcTime: 0,
       retry: 1,
       refetchOnWindowFocus: false,
     },
