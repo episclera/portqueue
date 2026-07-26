@@ -10,7 +10,6 @@ set under the `schedule` group selects the mode:
 | --- | --- |
 | _(omit `schedule`)_ | one-off, runs immediately |
 | `schedule.startAfterSeconds` | one-off, delayed by N seconds |
-| `schedule.startAfter` | one-off, delayed until an absolute `Date` |
 | `schedule.startEverySeconds` | recurring, fixed interval in seconds |
 | `schedule.cron` | recurring, cron expression |
 

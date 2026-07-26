@@ -27,8 +27,6 @@ export interface AddJobRequestDto {
   retryMaxAttempts?: number;
   /** Regex matching the instance keys this job may run on. */
   preferredInstanceKeyPattern?: string;
-  /** One-off: run at this absolute instant (an ISO date string). */
-  startAfter?: string;
   /** One-off: delay this many **seconds** from now. */
   startAfterSeconds?: number;
   /** Recurring: fixed interval, in **seconds**. */

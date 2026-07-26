@@ -20,10 +20,19 @@ describe('OptionResolver precedence (queue < job)', () => {
     expect(resolver.resolve({ job: {}, startAfterSeconds: 5, now }).startAfter).toBe(now + 5000);
   });
 
-  it('resolves an absolute startAfter Date', () => {
+  it('starts a job now when no delay is given', () => {
     const resolver = new OptionResolver();
-    const at = new Date(now + 9999);
-    expect(resolver.resolve({ job: {}, startAfter: at, now }).startAfter).toBe(at.getTime());
+    expect(resolver.resolve({ job: {}, now }).startAfter).toBe(now);
+  });
+
+  it('rejects a fractional delay — seconds are the smallest unit and are stored as integers', () => {
+    const resolver = new OptionResolver();
+    expect(() => resolver.resolve({ job: {}, startAfterSeconds: 0.25, now })).toThrow(
+      /whole, non-negative number of seconds/,
+    );
+    expect(() => resolver.resolve({ job: { expireInSeconds: 1.5 }, now })).toThrow(
+      /whole, non-negative number of seconds/,
+    );
   });
 
   it('computes expireAt from expireInSeconds relative to start_after', () => {

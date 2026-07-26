@@ -16,7 +16,6 @@
  * can reach these routes can perform every action.
  */
 import {
-  InvalidOptionsError,
   JobBatchAction,
   JobStatus,
   PauseMode,
@@ -136,17 +135,6 @@ function buildAddOptions(add: NonNullable<ActionRequestDto['add']>): AddJobOptio
     opts.preferredInstanceKeyPattern = add.preferredInstanceKeyPattern;
   }
   const schedule: NonNullable<AddJobOptions<unknown>['schedule']> = {};
-  // `startAfter` arrives as an ISO instant; `startAfterSeconds` as a delay. Core rejects both at
-  // once, so pass through whatever the form sent and let it own that validation.
-  if (add.startAfter != null) {
-    const at = new Date(add.startAfter);
-    if (Number.isNaN(at.getTime())) {
-      throw new InvalidOptionsError(
-        `Invalid 'startAfter' value '${add.startAfter}': expected an ISO date string.`,
-      );
-    }
-    schedule.startAfter = at;
-  }
   if (add.startAfterSeconds != null) schedule.startAfterSeconds = add.startAfterSeconds;
   if (add.cron != null) schedule.cron = add.cron;
   else if (add.startEverySeconds != null) schedule.startEverySeconds = add.startEverySeconds;

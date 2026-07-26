@@ -19,7 +19,7 @@ export const addCommand: Command = {
   group: CommandGroup.Actions,
   summary: 'Enqueue a job or create a recurring schedule',
   usage:
-    '--queue <name> --data <json|@file> [--priority --start-after <seconds>|<ISO date>\n' +
+    '--queue <name> --data <json|@file> [--priority --start-after <seconds>\n' +
     '      --idempotency-key <k> | --cron "<expr>" --timezone <tz> | --every <seconds>]',
   async run({ pq, flags }) {
     const queue = requireFlag(flags, 'queue');
@@ -29,21 +29,16 @@ export const addCommand: Command = {
     const schedule: Record<string, unknown> = {};
     if (flagNumber(flags, 'priority') !== undefined)
       options.priority = flagNumber(flags, 'priority');
-    // `--start-after` takes a delay in **seconds** (every PortQueue duration does), or an ISO date
-    // when an exact instant is wanted.
+    // Like every PortQueue duration, `--start-after` is a whole number of seconds. There is no
+    // date form: the tool offers one way to express a delay, and `--every` reads the same way.
     const startAfter = flagString(flags, 'start-after');
-    if (startAfter) {
-      if (/^\d+(\.\d+)?$/.test(startAfter)) {
-        schedule.startAfterSeconds = Number(startAfter);
-      } else {
-        const at = new Date(startAfter);
-        if (Number.isNaN(at.getTime())) {
-          throw new CliError(
-            `--start-after '${startAfter}' is neither a number of seconds nor an ISO date.`,
-          );
-        }
-        schedule.startAfter = at;
+    if (startAfter !== undefined) {
+      if (!/^\d+$/.test(startAfter)) {
+        throw new CliError(
+          `--start-after '${startAfter}' is not a whole number of seconds (e.g. --start-after 30).`,
+        );
       }
+      schedule.startAfterSeconds = Number(startAfter);
     }
     if (flagNumber(flags, 'retry-max-attempts') !== undefined) {
       options.retry = { maxAttempts: flagNumber(flags, 'retry-max-attempts') };

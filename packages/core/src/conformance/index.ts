@@ -41,7 +41,7 @@ function newJob(
     expireAt: null,
     retryAttempt: 0,
     retryMaxAttempts: 3,
-    retryDelaySeconds: 0.1,
+    retryDelaySeconds: 1,
     retryBackoff: BackoffStrategy.FIXED,
     retryBackoffFactor: null,
     retryMaxDelaySeconds: null,

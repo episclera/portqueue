@@ -628,10 +628,18 @@ types — `Driver`, `DriverProbe`, `Subscription`, `MigrationStep`, `DriverCapab
 
 ## Options
 
-Every duration in every options bag below is a **number of seconds** — there is no duration string
-to parse and no other unit anywhere in the API. Names carry the unit (`expireInSeconds`,
-`lockDurationSeconds`, …) so a call site can't be misread; fractions are allowed where sub-second
-values make sense (`0.5`).
+Every duration in every options bag below is a number of **seconds** — there is no duration string to
+parse, no other unit anywhere in the API, and exactly one option per setting (no `Date`-shaped
+alternative to a delay). Names carry the unit (`expireInSeconds`, `lockDurationSeconds`, …) so a call
+site can't be misread.
+
+A duration describing a **job** — `expireInSeconds`, `retry.delaySeconds`, `maxDelaySeconds`,
+`ttlSeconds`, `startAfterSeconds`, `startEverySeconds`, `rateDurationSeconds` — must be a **whole**
+number of seconds: it is stored in an integer column, so a fraction is rejected rather than
+truncated. The process-local loop cadences that are never stored — `tickIntervalSeconds`,
+`pollIntervalSeconds`, `lockDurationSeconds`, `heartbeatIntervalSeconds`, `sampleIntervalSeconds`,
+`maxEventLoopDelaySeconds`, `timeoutSeconds` — accept fractions, since sub-second timer intervals
+and thresholds are meaningful there.
 
 ### PortQueueOptions
 
@@ -742,7 +750,6 @@ Exactly one timing mode may be set.
 | Option              | Type       | Description                                     |
 | ------------------- | ---------- | ----------------------------------------------- |
 | `startAfterSeconds` | `number`   | One-off: delay this many seconds from now.      |
-| `startAfter`        | `Date`     | One-off: run not before this absolute instant.  |
 | `startEverySeconds` | `number`   | Recurring: seconds between runs, e.g. `30`.     |
 | `cron`              | `CronSpec` | Recurring: a cron string, or `{ pattern, tz }`. |
 

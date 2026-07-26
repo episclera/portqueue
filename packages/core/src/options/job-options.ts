@@ -28,17 +28,15 @@ export type CronSpec = string | { pattern: string; tz?: string };
 
 /**
  * When a job runs. Exactly one timing mode may be set:
- * - **one-off** (default) — runs immediately, at the `startAfter` instant, or after
- *   `startAfterSeconds`;
+ * - **one-off** (default) — runs immediately, or after `startAfterSeconds`;
  * - **recurring interval** — `startEverySeconds` (seconds between runs);
  * - **recurring cron** — `cron` (a {@link CronSpec}).
  *
- * `startAfter`/`startAfterSeconds` are mutually exclusive with the recurring modes, and with
- * each other. Intervals are **in seconds**.
+ * `startAfterSeconds` is mutually exclusive with the recurring modes. Every value here is **in
+ * seconds** — there is deliberately no absolute-`Date` variant of any of them, so there is exactly
+ * one way to express a delay. For a known wall-clock instant, subtract: `(at - Date.now()) / 1000`.
  */
 export interface ScheduleOptions {
-  /** Delay a one-off job until this absolute instant. */
-  startAfter?: Date;
   /** Delay a one-off job by this many **seconds** from now. */
   startAfterSeconds?: number;
   /** Recurring: **seconds** between runs, e.g. `30`. */
@@ -51,7 +49,7 @@ export interface ScheduleOptions {
  * The full add-a-job options. `data` is a named key, never positional.
  *
  * Timing lives under the `schedule` group ({@link ScheduleOptions}) — a one-off delay
- * (`startAfter`/`startAfterSeconds`), a fixed interval (`startEverySeconds`), or a `cron`
+ * (`startAfterSeconds`), a fixed interval (`startEverySeconds`), or a `cron`
  * expression. Omit `schedule` to run immediately. Every duration is **in seconds**.
  *
  * Identical recurrences may coexist; pass an `idempotencyKey` to guarantee a single one. Dedup is

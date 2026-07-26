@@ -42,11 +42,10 @@ the rest are optional and default sensibly.
 
 ## Scheduling
 
-All timing lives under the `schedule` group — pass exactly one mode. Durations are **seconds**:
+All timing lives under the `schedule` group — pass exactly one mode. Durations are **whole seconds**:
 
 ```ts
 await emailsQueue.addJob({ data, schedule: { startAfterSeconds: 86_400 } }); // 24 h, in seconds
-await emailsQueue.addJob({ data, schedule: { startAfter: new Date('2026-08-01T09:00:00Z') } });
 await emailsQueue.addJob({ data, schedule: { startEverySeconds: 30 } }); // recurring interval, in seconds
 await emailsQueue.addJob({ data, schedule: { cron: '0 8 * * 1-5' } }); // recurring cron (UTC)
 await emailsQueue.addJob({
@@ -55,8 +54,8 @@ await emailsQueue.addJob({
 });
 ```
 
-- `schedule.startAfterSeconds` — delay a **one-off** job by N seconds from now.
-- `schedule.startAfter` — delay a **one-off** job until an absolute `Date`.
+- `schedule.startAfterSeconds` — delay a **one-off** job by N seconds from now. There is no
+  absolute-`Date` variant; for a known instant, pass `(at.getTime() - Date.now()) / 1000`.
 - `schedule.startEverySeconds` — a **recurring** fixed interval, in seconds between runs.
 - `schedule.cron` — a **recurring** cron expression, a bare string (UTC) or `{ pattern, tz }`.
 

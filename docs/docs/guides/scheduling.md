@@ -16,26 +16,31 @@ method covers one-off and recurring production, selected by which prop you set u
 |---|---|
 | _(none / omit `schedule`)_ | one-off, runs immediately |
 | `schedule.startAfterSeconds` | one-off, delayed by N **seconds** |
-| `schedule.startAfter` | one-off, delayed until an absolute `Date` |
 | `schedule.startEverySeconds` | recurring, fixed interval in **seconds** |
 | `schedule.cron` | recurring, cron expression |
 
-The timing props are **mutually exclusive**: a one-off delay never combines with a recurring mode,
-and `startAfter` never combines with `startAfterSeconds`.
+The timing props are **mutually exclusive**: a one-off delay never combines with a recurring mode.
 
 **Every duration PortQueue accepts is a number of seconds** — here and everywhere else in the API.
 There are no unit strings to parse and no `'1m'` that might mean a minute or a month; write `60`.
-Fractions are allowed where they make sense (`0.5` is half a second).
+A job's own durations must be **whole** seconds, since that is how they are stored (integer columns),
+so a fraction is rejected rather than truncated. And there is exactly **one** way to express each of
+them — no `Date`-shaped alternative to `startAfterSeconds`, no unit-string alternative anywhere.
 
 ## Delayed (one-off)
 
-`schedule.startAfterSeconds` delays by seconds from now; `schedule.startAfter` takes an absolute
-`Date`:
+`schedule.startAfterSeconds` delays a one-off job by that many seconds from now:
 
 ```ts
 const emailsQueue = pq.createQueue('emails');
 await emailsQueue.addJob({ data, schedule: { startAfterSeconds: 86_400 } }); // 24 hours, in seconds
-await emailsQueue.addJob({ data, schedule: { startAfter: new Date('2026-08-01T09:00:00Z') } });
+
+// For a known wall-clock instant, subtract — there is no absolute-Date option:
+const at = new Date('2026-08-01T09:00:00Z');
+await emailsQueue.addJob({
+  data,
+  schedule: { startAfterSeconds: Math.round((at.getTime() - Date.now()) / 1000) },
+});
 ```
 
 ## Recurring — cron with timezone
@@ -50,7 +55,7 @@ const result = await reportsQueue.addJob({
   data: { kind: 'sales' },       // template for each run
   priority: 5,                   // job options apply to each run
   retry: { maxAttempts: 3 },     // …as do retry, backoff, expireInSeconds, retention, etc.
-  expireInSeconds: 600,          // 10 minutes — durations are always seconds
+  expireInSeconds: 600,          // 10 minutes — durations are always whole seconds
   schedule: { cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' } },
 });
 // Bare UTC form: schedule: { cron: '0 8 * * 1-5' }

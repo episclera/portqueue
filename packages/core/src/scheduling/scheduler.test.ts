@@ -38,13 +38,13 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
 
   it('carries per-job options (expireInSeconds) from a recurring add onto every spawned job', async () => {
     const queue = h.pq.createQueue('carry');
-    // No worker: a produced run just sits until it expires. The recurring add sets expireInSeconds, which
-    // must ride along and apply to each spawned job (relative to its own fire time). Without
-    // carry-through the produced job would have no deadline and never expire.
+    // No worker: a produced run just sits until it expires. The recurring add sets
+    // expireInSeconds, which must ride along and apply to each spawned job (relative to its own
+    // fire time). Without carry-through the produced job would have no deadline and never expire.
     const res = await queue.addJob({
       data: {},
       schedule: { startEverySeconds: 1 },
-      expireInSeconds: 0.5,
+      expireInSeconds: 1,
     });
 
     // Fire the first run.
@@ -56,8 +56,8 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
       return page.items.length >= 1;
     });
 
-    // Push past the produced job's 500ms deadline; the maintenance tick expires it.
-    h.clock.advance(1000);
+    // Push past the produced job's 1-second deadline; the maintenance tick expires it.
+    h.clock.advance(2000);
     await waitFor(async () => (await queue.getJob({ jobId }))?.status === JobStatus.EXPIRED);
     expect((await queue.getJob({ jobId }))!.status).toBe(JobStatus.EXPIRED);
   });
@@ -157,5 +157,24 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     // Advance past the TTL; the retention sweep (maintenance tick) removes it.
     h.clock.advance(5000);
     await waitFor(async () => (await queue.getJob({ jobId: res.jobId! })) === null);
+  });
+
+  it('rejects an unknown schedule key instead of quietly running the job now', async () => {
+    const queue = h.pq.createQueue('typo');
+    // The old absolute-Date `startAfter` is gone, and `startEvery` never existed without its unit.
+    // Dropping either silently would look like the scheduler losing the job.
+    await expect(
+      queue.addJob({ data: {}, schedule: { startAfter: new Date() } } as never),
+    ).rejects.toThrow(/Unknown 'schedule' option on queue 'typo': 'startAfter'/);
+    await expect(queue.addJob({ data: {}, schedule: { startEvery: 30 } } as never)).rejects.toThrow(
+      /Unknown 'schedule' option on queue 'typo': 'startEvery'/,
+    );
+  });
+
+  it('refuses a one-off delay combined with a recurring cadence', async () => {
+    const queue = h.pq.createQueue('both');
+    await expect(
+      queue.addJob({ data: {}, schedule: { startAfterSeconds: 5, startEverySeconds: 10 } }),
+    ).rejects.toThrow(/Cannot combine 'schedule.startAfterSeconds'/);
   });
 });

@@ -49,7 +49,8 @@ type Errors = Partial<
 
 /**
  * The shortest interval worth scheduling, in seconds; below this the scheduler poll dominates
- * anyway. Durations in PortQueue are always seconds, so this field is a plain number of them.
+ * anyway. PortQueue takes every duration as a whole number of seconds, so both timing fields here
+ * are plain integer counts of them.
  */
 const MIN_INTERVAL_SECONDS = 1;
 
@@ -109,7 +110,6 @@ export function AddJobForm({
   const [retryMaxAttempts, setRetryMaxAttempts] = useState<number | null>(null);
   const [instancePattern, setInstancePattern] = useState<string>('');
   const [startAfterSeconds, setStartAfterSeconds] = useState<number | null>(null);
-  const [startAt, setStartAt] = useState<string>('');
   const [cron, setCron] = useState<string>('');
   const [everySeconds, setEverySeconds] = useState<number | null>(null);
   const [timezone, setTimezone] = useState<string>('');
@@ -126,7 +126,6 @@ export function AddJobForm({
     setRetryMaxAttempts(null);
     setInstancePattern('');
     setStartAfterSeconds(null);
-    setStartAt('');
     setCron('');
     setEverySeconds(null);
     setTimezone('');
@@ -169,14 +168,12 @@ export function AddJobForm({
       }
     }
 
-    if (mode === 'once') {
-      if (startAfterSeconds !== null && startAt) {
-        next.startAfter = 'Set a delay in seconds or an exact date — not both.';
-      } else if (startAfterSeconds !== null && startAfterSeconds < 0) {
-        next.startAfter = 'A delay cannot be negative.';
-      } else if (startAt && Number.isNaN(new Date(startAt).getTime())) {
-        next.startAfter = 'Not a date the browser understands (try 2026-01-01T00:00:00Z).';
-      }
+    if (
+      mode === 'once' &&
+      startAfterSeconds !== null &&
+      (!Number.isInteger(startAfterSeconds) || startAfterSeconds < 0)
+    ) {
+      next.startAfter = 'A delay must be a whole number of seconds, 0 or more.';
     }
 
     if (mode === 'recurring') {
@@ -185,8 +182,8 @@ export function AddJobForm({
         else next.cron = validateCron(cron);
       } else if (everySeconds === null) {
         next.every = 'An interval is required for this cadence.';
-      } else if (everySeconds < MIN_INTERVAL_SECONDS) {
-        next.every = `The interval must be at least ${MIN_INTERVAL_SECONDS} second.`;
+      } else if (!Number.isInteger(everySeconds) || everySeconds < MIN_INTERVAL_SECONDS) {
+        next.every = `The interval must be a whole number of seconds, at least ${MIN_INTERVAL_SECONDS}.`;
       }
     }
 
@@ -210,7 +207,6 @@ export function AddJobForm({
       ...(typeof retryMaxAttempts === 'number' ? { retryMaxAttempts } : {}),
       ...(instancePattern ? { preferredInstanceKeyPattern: instancePattern } : {}),
       ...(mode === 'once' && startAfterSeconds !== null ? { startAfterSeconds } : {}),
-      ...(mode === 'once' && startAt ? { startAfter: new Date(startAt).toISOString() } : {}),
       ...(mode === 'recurring' && cadence === 'cron'
         ? { cron: timezone ? { pattern: cron, tz: timezone } : cron }
         : {}),
@@ -331,36 +327,21 @@ export function AddJobForm({
           </Field>
 
           {mode === 'once' ? (
-            <>
-              <Field
-                label="Start after (seconds)"
-                hint="Optional delay from now. Every duration in PortQueue is seconds."
-                error={errors.startAfter}
-                htmlFor="add-job-start-after"
-              >
-                <InputNumber
-                  id="add-job-start-after"
-                  min={0}
-                  placeholder="e.g. 30"
-                  invalid={errors.startAfter !== undefined}
-                  value={startAfterSeconds}
-                  onChange={setStartAfterSeconds}
-                />
-              </Field>
-              <Field
-                label="…or start at"
-                hint="An exact instant instead of a delay — an ISO date"
-                htmlFor="add-job-start-at"
-              >
-                <Input
-                  id="add-job-start-at"
-                  placeholder="e.g. 2026-01-01T00:00:00Z"
-                  invalid={errors.startAfter !== undefined}
-                  value={startAt}
-                  onChange={(e) => setStartAt(e.target.value)}
-                />
-              </Field>
-            </>
+            <Field
+              label="Start after (seconds)"
+              hint="Optional delay from now. Every duration in PortQueue is seconds."
+              error={errors.startAfter}
+              htmlFor="add-job-start-after"
+            >
+              <InputNumber
+                id="add-job-start-after"
+                min={0}
+                placeholder="e.g. 30"
+                invalid={errors.startAfter !== undefined}
+                value={startAfterSeconds}
+                onChange={setStartAfterSeconds}
+              />
+            </Field>
           ) : (
             <>
               {/* One cadence, picked explicitly, and only the chosen field is rendered — so

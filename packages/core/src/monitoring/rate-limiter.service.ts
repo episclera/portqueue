@@ -1,4 +1,4 @@
-import { secondsToMs } from '../util/seconds';
+import { wholeSecondsToMs } from '../util/seconds';
 import type { Clock } from '../util/clock';
 
 /**
@@ -19,7 +19,7 @@ export class RateLimiterService {
     private readonly clock: Clock,
   ) {
     this.max = options.max;
-    this.windowMs = secondsToMs(options.durationSeconds, 'limiter.rateDurationSeconds');
+    this.windowMs = wholeSecondsToMs(options.durationSeconds, 'limiter.rateDurationSeconds');
     this.tokens = options.max;
     this.lastRefill = clock.now();
   }

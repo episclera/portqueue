@@ -2,7 +2,7 @@ import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { DeduplicationReason } from '../options/enums';
 import { InvalidOptionsError, QueuePausedError } from '../errors/errors';
-import { assertSeconds, secondsToMs } from '../util/seconds';
+import { wholeSeconds, wholeSecondsToMs } from '../util/seconds';
 import { CronExpression } from '../scheduling/cron';
 import type { AddJobOptions, CronSpec, ScheduleOptions } from '../options/job-options';
 import type { AddJobResult, ScheduleInfo } from './results';
@@ -24,20 +24,14 @@ export class ProducerService {
     const merged = await hooks.runBeforeAdd(queue, options as AddJobOptions<unknown>);
     const opts = merged as AddJobOptions<TData>;
 
+    if (opts.schedule) this.rejectUnknownScheduleKeys(queue, opts.schedule);
+
     const isRecurring = opts.schedule?.startEverySeconds != null || opts.schedule?.cron != null;
-    const oneOffDelay = opts.schedule?.startAfter ?? opts.schedule?.startAfterSeconds;
-    if (isRecurring && oneOffDelay != null) {
+    if (isRecurring && opts.schedule?.startAfterSeconds != null) {
       throw new InvalidOptionsError(
-        `Cannot combine 'schedule.startAfter'/'schedule.startAfterSeconds' with a recurring ` +
+        `Cannot combine 'schedule.startAfterSeconds' with a recurring ` +
           `'schedule.startEverySeconds'/'schedule.cron' on queue '${queue}'. ` +
           `A start delay applies to a one-off job; recurring modes schedule repeated runs.`,
-        { queue },
-      );
-    }
-    if (opts.schedule?.startAfter != null && opts.schedule?.startAfterSeconds != null) {
-      throw new InvalidOptionsError(
-        `A one-off job on queue '${queue}' must set at most one of 'schedule.startAfter' (an ` +
-          `absolute Date) or 'schedule.startAfterSeconds' (a delay in seconds) — not both.`,
         { queue },
       );
     }
@@ -84,7 +78,6 @@ export class ProducerService {
       job: opts,
       ...(queueOptions.defaultJobOptions ? { queueDefaults: queueOptions.defaultJobOptions } : {}),
       ...(queueOptions.retention ? { queueRetention: queueOptions.retention } : {}),
-      ...(opts.schedule?.startAfter != null ? { startAfter: opts.schedule.startAfter } : {}),
       ...(opts.schedule?.startAfterSeconds != null
         ? { startAfterSeconds: opts.schedule.startAfterSeconds }
         : {}),
@@ -244,7 +237,7 @@ export class ProducerService {
     const cron = opts.schedule?.cron != null ? normalizeCron(opts.schedule.cron) : null;
     const everySeconds =
       opts.schedule?.startEverySeconds != null
-        ? assertSeconds(opts.schedule.startEverySeconds, 'schedule.startEverySeconds')
+        ? wholeSeconds(opts.schedule.startEverySeconds, 'schedule.startEverySeconds')
         : null;
     // No pattern-based dedup: identical recurrences on a queue are allowed to coexist. When the
     // caller wants exactly one, they pass an idempotencyKey — that dedup ran in addJob() above, so
@@ -257,9 +250,7 @@ export class ProducerService {
     // relative to each run's fire time. See {@link ScheduledJobOptions}.
     const jobOptions: ScheduledJobOptions = {
       expireInSeconds:
-        opts.expireInSeconds != null
-          ? assertSeconds(opts.expireInSeconds, 'expireInSeconds')
-          : null,
+        opts.expireInSeconds != null ? wholeSeconds(opts.expireInSeconds, 'expireInSeconds') : null,
       retryBackoff: resolved.retryBackoff,
       retryBackoffFactor: resolved.retryBackoffFactor,
       retryMaxDelaySeconds: resolved.retryMaxDelaySeconds,
@@ -302,6 +293,30 @@ export class ProducerService {
     };
   }
 
+  /**
+   * Reject any key the `schedule` group doesn't define. Without this an unknown key — a typo, or an
+   * option that no longer exists like the old absolute-`Date` `startAfter` — is silently dropped and
+   * the job runs immediately, which looks like the scheduler losing it. TypeScript already catches
+   * this; the check is for JavaScript callers and hand-built payloads.
+   */
+  private rejectUnknownScheduleKeys(queue: string, schedule: ScheduleOptions): void {
+    const allowed: ReadonlySet<string> = new Set<keyof ScheduleOptions>([
+      'startAfterSeconds',
+      'startEverySeconds',
+      'cron',
+    ]);
+    const unknown = Object.keys(schedule).filter((key) => !allowed.has(key));
+    if (unknown.length > 0) {
+      throw new InvalidOptionsError(
+        `Unknown 'schedule' option${unknown.length > 1 ? 's' : ''} on queue '${queue}': ` +
+          `${unknown.map((k) => `'${k}'`).join(', ')}. Valid keys are 'startAfterSeconds' (a ` +
+          `one-off delay in seconds), 'startEverySeconds' (a recurring interval in seconds) and ` +
+          `'cron'. Every duration is a whole number of seconds; there is no absolute-Date form.`,
+        { queue },
+      );
+    }
+  }
+
   private validateSchedule(queue: string, opts: AddJobOptions<unknown>): void {
     if (opts.schedule?.cron != null && opts.schedule?.startEverySeconds != null) {
       throw new InvalidOptionsError(
@@ -316,7 +331,7 @@ export class ProducerService {
       const { pattern, tz } = normalizeCron(schedule.cron);
       return new CronExpression(pattern, tz).next(now);
     }
-    return now + secondsToMs(schedule.startEverySeconds!, 'schedule.startEverySeconds');
+    return now + wholeSecondsToMs(schedule.startEverySeconds!, 'schedule.startEverySeconds');
   }
 
   async getSchedules(queue: string): Promise<ScheduleInfo[]> {

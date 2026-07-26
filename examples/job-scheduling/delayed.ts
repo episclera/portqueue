@@ -1,12 +1,12 @@
 /**
- * Delayed (one-off) jobs — `schedule.startAfterSeconds` and `schedule.startAfter`.
+ * Delayed (one-off) jobs — `schedule.startAfterSeconds`.
  *
  * Run with: `npm run example:schedule-delayed` (from the repo root) or `npm run delayed` here.
  *
- * Scheduling lives on `addJob` itself; there is no separate `schedule()` method. A delay is
- * `startAfterSeconds` (seconds from now — every PortQueue duration is seconds) or `startAfter`
- * (an absolute `Date`). Backed by PGLite under the
- * repo-root `tmp/` folder, so there's no external database to install or start.
+ * Scheduling lives on `addJob` itself; there is no separate `schedule()` method. A one-off delay
+ * is `startAfterSeconds` — a whole number of seconds from now, the only way the tool expresses a
+ * delay. Backed by PGLite under the repo-root `tmp/` folder, so there's no external database to
+ * install or start.
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,17 +35,18 @@ async function main(): Promise<void> {
   // Runs immediately.
   await reminders.addJob({ data: { message: 'this one runs now' } });
 
-  // Runs ~3 seconds from now. Durations are always seconds — no unit strings to get wrong.
+  // Runs ~3 seconds from now. Durations are always whole seconds — no unit strings to get wrong.
   await reminders.addJob({
     data: { message: 'this one runs in 3s' },
     schedule: { startAfterSeconds: 3 },
   });
 
-  // Runs at an absolute time (5 seconds from now, computed here as a Date).
+  // There is no absolute-Date option: `startAfterSeconds` is the only way to delay a job, so for a
+  // known wall-clock instant you subtract now and pass the difference in seconds.
   const at = new Date(Date.now() + 5_000);
   await reminders.addJob({
     data: { message: `this one runs at ${at.toISOString()}` },
-    schedule: { startAfter: at },
+    schedule: { startAfterSeconds: Math.round((at.getTime() - Date.now()) / 1000) },
   });
 
   console.log(`Enqueued 3 reminders (now, +3s, +5s). Waiting for them to run…\n`);

@@ -1,11 +1,12 @@
 import { BackoffStrategy, RetentionMode } from './enums';
 import type { JobOptions } from './job-options';
 import type { RetentionOptions } from './common';
-import { assertSeconds, secondsToMs } from '../util/seconds';
+import { wholeSeconds, wholeSecondsToMs } from '../util/seconds';
 
 /**
  * The fully-resolved per-job settings frozen onto a `job` row. Instants (`startAfter`, `expireAt`)
- * are epoch ms; every duration is seconds, exactly as the caller gave it.
+ * are epoch ms; every duration is a whole number of seconds, exactly as the
+ * caller gave it.
  */
 export interface ResolvedJobOptions {
   priority: number;
@@ -33,19 +34,17 @@ export class OptionResolver {
     job: JobOptions;
     queueDefaults?: JobOptions;
     queueRetention?: RetentionOptions;
-    /** One-off start instant from the job's `schedule` group (not a mergeable default). */
-    startAfter?: Date;
-    /** One-off start delay in seconds from the job's `schedule` group. */
+    /** One-off start delay in seconds from the job's `schedule` group (not a mergeable default). */
     startAfterSeconds?: number;
     now: number;
   }): ResolvedJobOptions {
     const { job, queueDefaults, queueRetention, now } = options;
     const merged: JobOptions = { ...queueDefaults, ...job };
 
-    const startAfter = this.resolveStartAfter(options.startAfter, options.startAfterSeconds, now);
+    const startAfter = this.resolveStartAfter(options.startAfterSeconds, now);
     const expireAt =
       merged.expireInSeconds != null
-        ? startAfter + secondsToMs(merged.expireInSeconds, 'expireInSeconds')
+        ? startAfter + wholeSecondsToMs(merged.expireInSeconds, 'expireInSeconds')
         : null;
 
     const backoff = merged.retry?.backoff;
@@ -58,34 +57,27 @@ export class OptionResolver {
       retryMaxAttempts: merged.retry?.maxAttempts ?? 1,
       retryDelaySeconds:
         merged.retry?.delaySeconds != null
-          ? assertSeconds(merged.retry.delaySeconds, 'retry.delaySeconds')
+          ? wholeSeconds(merged.retry.delaySeconds, 'retry.delaySeconds')
           : 0,
       retryBackoff: backoff?.strategy ?? BackoffStrategy.FIXED,
       retryBackoffFactor: backoff?.factor ?? null,
       retryMaxDelaySeconds:
         backoff?.maxDelaySeconds != null
-          ? assertSeconds(backoff.maxDelaySeconds, 'retry.backoff.maxDelaySeconds')
+          ? wholeSeconds(backoff.maxDelaySeconds, 'retry.backoff.maxDelaySeconds')
           : null,
       retryJitter: backoff?.jitter ?? false,
       retentionMode: retention?.mode ?? RetentionMode.KEEP_FOREVER,
       retentionTtlSeconds:
         retention?.ttlSeconds != null
-          ? assertSeconds(retention.ttlSeconds, 'retention.ttlSeconds')
+          ? wholeSeconds(retention.ttlSeconds, 'retention.ttlSeconds')
           : null,
       idempotencyKey: merged.idempotencyKey ?? null,
       singletonKey: merged.singletonKey ?? null,
     };
   }
 
-  private resolveStartAfter(
-    startAfter: Date | undefined,
-    startAfterSeconds: number | undefined,
-    now: number,
-  ): number {
-    if (startAfter != null) return startAfter.getTime();
-    if (startAfterSeconds != null) {
-      return now + secondsToMs(startAfterSeconds, 'schedule.startAfterSeconds');
-    }
-    return now;
+  private resolveStartAfter(startAfterSeconds: number | undefined, now: number): number {
+    if (startAfterSeconds == null) return now;
+    return now + wholeSecondsToMs(startAfterSeconds, 'schedule.startAfterSeconds');
   }
 }

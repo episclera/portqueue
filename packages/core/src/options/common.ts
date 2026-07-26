@@ -6,7 +6,7 @@ export interface BackoffOptions {
   strategy: BackoffStrategy;
   /** Growth factor for EXPONENTIAL (default 2); ignored for FIXED. */
   factor?: number;
-  /** Cap on the computed delay, **in seconds**. */
+  /** Cap on the computed delay, in **whole seconds**. */
   maxDelaySeconds?: number;
   /** Apply jitter to spread retries across instances. */
   jitter?: boolean;
@@ -16,7 +16,7 @@ export interface BackoffOptions {
 export interface RetryOptions {
   /** Max attempts including the first (default 1 — no retry). */
   maxAttempts?: number;
-  /** Delay before a retry, **in seconds**. */
+  /** Delay before a retry, in **whole seconds**. */
   delaySeconds?: number;
   /** Exponential/fixed backoff applied to `delaySeconds`. */
   backoff?: BackoffOptions;
@@ -25,7 +25,10 @@ export interface RetryOptions {
 /** Retention policy. Default is keep-forever. */
 export interface RetentionOptions {
   mode: RetentionMode;
-  /** How long after finishing before deletion is allowed, **in seconds** (required for DELETE_AFTER). */
+  /**
+   * How long after finishing before deletion is allowed, in **whole seconds** (required for
+   * DELETE_AFTER).
+   */
   ttlSeconds?: number;
   /** Which finished statuses the policy applies to (default: [COMPLETED]). */
   statuses?: JobStatus[];
@@ -36,7 +39,8 @@ export interface RetentionOptions {
  * claimed at once, how often it polls, the lock window, the rate cap, and system-pressure
  * backpressure. Omit the whole group to run with sensible defaults (unbounded rate, concurrency 1).
  *
- * Every duration here is **in seconds**.
+ * Every duration here is **in seconds**. `rateDurationSeconds` is stored with the job and must be a
+ * whole number; the poll and lock cadences never leave the process, so they may be fractional.
  */
 export interface LimiterOptions {
   /** Max handlers running concurrently in this worker (default 1). */
@@ -46,7 +50,7 @@ export interface LimiterOptions {
    * `rateDurationSeconds` window. Both are required together to enable rate limiting.
    */
   rateMax?: number;
-  /** The window for `rateMax`, **in seconds** — e.g. `60` for "per minute". */
+  /** The window for `rateMax`, in **whole seconds** — e.g. `60` for "per minute". */
   rateDurationSeconds?: number;
   /**
    * Pause claiming while system pressure (CPU/memory/event-loop) is high. Default `false` —
@@ -61,11 +65,14 @@ export interface LimiterOptions {
   lockDurationSeconds?: number;
 }
 
-/** System-pressure backpressure config. Durations are **in seconds**. */
+/**
+ * System-pressure backpressure config. Durations are **in seconds**; these are in-process sampling
+ * knobs rather than stored values, so sub-second values are allowed and expected.
+ */
 export interface SystemMonitorOptions {
   /** How often pressure is sampled, **in seconds** (default 2). */
   sampleIntervalSeconds?: number;
-  /** Mean event-loop delay that counts as pressure, **in seconds** (default 0.2). */
+  /** Mean event-loop delay that counts as pressure, **in seconds** (default 0.2, i.e. 200 ms). */
   maxEventLoopDelaySeconds?: number;
   maxCpuPercent?: number;
   maxMemoryPercent?: number;

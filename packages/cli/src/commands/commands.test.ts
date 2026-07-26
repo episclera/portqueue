@@ -156,21 +156,13 @@ describe('addCommand', () => {
     expect(calls.addJob[0]).toMatchObject({ schedule: { startAfterSeconds: 45 } });
   });
 
-  it('reads --start-after as an absolute instant when it is a date', async () => {
-    const { calls } = await run(addCommand, {
-      queue: 'emails',
-      data: '{"x":1}',
-      'start-after': '2026-01-01T00:00:00Z',
-    });
-    expect(calls.addJob[0]).toMatchObject({
-      schedule: { startAfter: new Date('2026-01-01T00:00:00Z') },
-    });
-  });
-
-  it('rejects a --start-after that is neither seconds nor a date', async () => {
+  it('rejects a --start-after that is not whole seconds', async () => {
     await expect(
-      run(addCommand, { queue: 'emails', data: '{"x":1}', 'start-after': '5 fortnights' }),
-    ).rejects.toThrow(/neither a number of seconds nor an ISO date/);
+      run(addCommand, { queue: 'emails', data: '{"x":1}', 'start-after': '2026-01-01T00:00:00Z' }),
+    ).rejects.toThrow(/not a whole number of seconds/);
+    await expect(
+      run(addCommand, { queue: 'emails', data: '{"x":1}', 'start-after': '1.5' }),
+    ).rejects.toThrow(/not a whole number of seconds/);
   });
 });
 

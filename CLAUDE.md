@@ -10,18 +10,50 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
 - **Keep the docs in sync with the public API.** Every time the public API of the tool (`@portqueue/core`), the dashboard, or the CLI changes — new/renamed/removed options, methods, DTOs, events, endpoints, or CLI flags — check the Docusaurus site under `docs/` and improve the developer-facing docs if needed (guides, API reference, dashboard/CLI pages, and register any new page in `docs/sidebars.ts`).
 - **Keep the examples list in sync.** Every time you add a new example under `examples/`, list it (with a link) on the Examples docs page (`docs/docs/examples.md`) and in the examples index (`examples/README.md`). Add a launcher under `scripts/dev/examples/` and a matching `example:*` script in the root `package.json`.
 
+## Always end with a short change report
+Finish **every** prompt — fix, refactor, feature, docs tweak, anything that touched a file — with a
+brief report printed directly in the Claude Code console. Keep it scannable, not exhaustive:
+
+- **What changed** — a handful of bullets in plain language, grouped by area (core / dashboard / CLI
+  / docs), naming the file or option only where it helps the reader find it.
+- **What it affects** — behaviour or API that is now different, anything that could break a caller,
+  and whether tests/lint/build were run and passed. Say so plainly if something failed or was
+  skipped.
+- **Worth your attention** — the one or two things the user should actually look at or decide:
+  a judgement call made on their behalf, a manual step they must take (drop a dev database, run an
+  install), a trade-off worth confirming.
+
+Aim for something read in under a minute. No restating the whole diff, no repeating the same point
+in three sections, and no section at all when there is nothing to put in it.
+
 ## Design invariants
-- **Seconds are the only unit of time in the API, and the smallest one.** Every duration a caller
-  can set — public option, internal option, DB column, DTO field, CLI flag, dashboard field, event
-  payload — is a **number of seconds** and its name says so (`expireInSeconds`,
-  `lockDurationSeconds`, `retry_delay_seconds`, `--every <seconds>`, `durationSeconds`). There is no
-  duration-string parsing anywhere: `'1m'` reads as a month to some people and a minute to others,
-  so it is a type error rather than a silent misconfiguration. Fractions are legal where sub-second
-  values are meaningful (`pollIntervalSeconds: 0.5`), which is why the persisted duration columns
-  are float types. The one place seconds meet milliseconds is `util/seconds.ts` — the clock,
-  `setTimeout`/`setInterval` and every stored *instant* are epoch-ms, so a duration is multiplied by
-  1000 exactly once, at the boundary, by `secondsToMs`. **Never** add a `*Ms` option, column, or
-  payload field; never accept a unit string. Instants stay `Date` on the public surface.
+- **Seconds are the only unit of time in the API.** Every duration a caller can set — public option,
+  internal option, DB column, DTO field, CLI flag, dashboard field, event payload — is a number of
+  **seconds** and its name says so (`expireInSeconds`, `lockDurationSeconds`, `retry_delay_seconds`,
+  `--every <seconds>`, `durationSeconds`). There is no duration-string parsing anywhere: `'1m'` reads
+  as a month to some people and a minute to others, so it is a type error rather than a silent
+  misconfiguration. **Never** add a `*Ms` option, column, or payload field, and never accept a unit
+  string. Instants stay `Date` on the public surface. `util/seconds.ts` is the one place seconds meet
+  milliseconds — the clock, `setTimeout`/`setInterval` and every stored *instant* are epoch-ms, so a
+  duration is multiplied by 1000 exactly once, at that boundary.
+- **A duration that reaches the database is a *whole* number of seconds.** That is every option
+  describing a job's own timing — `expireInSeconds`, `retry.delaySeconds`,
+  `retry.backoff.maxDelaySeconds`, `retention.ttlSeconds`, `schedule.startAfterSeconds`,
+  `schedule.startEverySeconds`, `limiter.rateDurationSeconds`. Their columns are **integer** types
+  and `wholeSeconds()` rejects a fraction up front, so an engine never silently truncates one. Never
+  widen a duration column to a float to make a fractional value fit — reject the value instead.
+  The exception, and it is the only one: the process-local loop cadences that are never stored —
+  `tickIntervalSeconds`, `limiter.pollIntervalSeconds`, `limiter.lockDurationSeconds`,
+  `instance.heartbeatIntervalSeconds`, `monitor.sampleIntervalSeconds`,
+  `monitor.maxEventLoopDelaySeconds`, `shutdown({ timeoutSeconds })` — accept fractions, because they
+  are timer intervals and thresholds where sub-second values are genuinely meaningful (a 200 ms
+  event-loop-delay threshold is useful; a 1 s one is not). They still carry the `Seconds` suffix and
+  still never appear in a row.
+- **One option per thing — never two spellings of the same setting.** If an option already exists,
+  extend or rename it; do not add a second option that reaches the same outcome by another route (an
+  absolute `Date` beside a seconds delay, a unit string beside a number, a singular beside a plural).
+  Two doors to one room double the validation, the docs, the tests and the ways a caller can be
+  wrong. A delay is `startAfterSeconds` and nothing else; a caller who has an instant subtracts.
 - **Cron parsing is `cron-parser`'s job, not ours.** `scheduling/cron.ts` is a thin wrapper that
   adds eager `InvalidOptionsError` validation and an epoch-ms `next()`; the syntax we support is
   whatever that package supports (5- and 6-field, ranges, lists, steps, names, `L`/`#`/`W`/`?`).
