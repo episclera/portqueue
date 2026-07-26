@@ -11,7 +11,7 @@
 - **Operate** — [Scaling horizontally](https://episclera.github.io/portqueue/docs/scale-horizontally) · [Dashboard](https://episclera.github.io/portqueue/docs/dashboard) · [CLI](https://episclera.github.io/portqueue/docs/cli)
 - **Reference** — [API reference](https://episclera.github.io/portqueue/docs/api-reference)
 
-PortQueue treats your relational database as the single source of truth for background jobs — no Redis, no broker. Write your queue code once and run it on **Postgres, Oracle, PGLite, or SQLite** (or plug in a custom driver for any engine).
+PortQueue treats your relational database as the single source of truth for background jobs — no Redis, no broker. Write your queue code once and run it on **Postgres, MySQL, Oracle, PGLite, or SQLite** (or plug in a custom driver for any engine).
 
 ## Why PortQueue
 
@@ -28,7 +28,7 @@ PortQueue treats your relational database as the single source of truth for back
 ```bash
 npm install @portqueue/core
 # plus the client for your database, e.g.
-npm install pg   # or: better-sqlite3, oracledb, @electric-sql/pglite
+npm install pg   # or: mysql2, oracledb, @electric-sql/pglite, better-sqlite3
 ```
 
 ```ts
