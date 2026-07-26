@@ -62,14 +62,16 @@ export class Worker {
     this.stopping = false;
     const row = await this.runtime.registry.ensure(this.config.queue);
     this.queueName = row.name;
-    this.unsubscribeWakeup = this.runtime.wakeup.subscribe(
-      this.config.queue,
-      () => void this.pump(),
+    this.unsubscribeWakeup = this.runtime.wakeup.subscribe(this.config.queue, () =>
+      this.runtime.background.run(() => this.pump()),
     );
-    this.pollTimer = setInterval(() => void this.pump(), this.config.pollIntervalMs);
+    this.pollTimer = setInterval(
+      () => this.runtime.background.run(() => this.pump()),
+      this.config.pollIntervalMs,
+    );
     this.pollTimer.unref?.();
     this.runtime.events.emit(PortQueueEvent.WORKER_STARTED, { queue: this.config.queue });
-    void this.pump();
+    this.runtime.background.run(() => this.pump());
   }
 
   /** @internal Number of in-flight handlers (used for graceful drain). */
@@ -123,7 +125,7 @@ export class Worker {
             .finally(() => {
               this.activeCount -= 1;
               // A freed slot may allow another claim.
-              void this.pump();
+              this.runtime.background.run(() => this.pump());
             });
         }
       }
@@ -150,9 +152,13 @@ export class Worker {
     // Abort any still-running handlers and release their locks for fast reclaim.
     for (const [jobId, controller] of this.execution.active) {
       controller.abort();
-      void this.runtime.driver
-        .extendLock({ jobId, lockDurationMs: -1, now: this.runtime.clock.now() })
-        .catch(() => undefined);
+      this.runtime.background.run(() =>
+        this.runtime.driver.extendLock({
+          jobId,
+          lockDurationMs: -1,
+          now: this.runtime.clock.now(),
+        }),
+      );
     }
     this.started = false;
     this.runtime.events.emit(PortQueueEvent.WORKER_STOPPED, { queue: this.config.queue });

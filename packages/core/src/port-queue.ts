@@ -13,6 +13,7 @@ import { ReadService } from './monitoring/stats.service';
 import { CompletionService } from './consumer/completion.service';
 import { ClientRegistryService } from './client/client-registry.service';
 import { ClientLifecycleService } from './client/client-lifecycle.service';
+import { BackgroundWork } from './client/background-work';
 import { DashboardService } from './dashboard/dashboard.service';
 import { CliService } from './cli/cli.service';
 import { Queue } from './producer/queue';
@@ -40,7 +41,7 @@ import type {
 const INSTANCE_REMOVAL_STALE_MS = 30 * 60_000;
 
 /**
- * The top-level client. One per database. Owns connection, migration,
+ * The top-level client. Owns connection, migration,
  * shared services, and produces Queue/Worker handles. A thin facade — all real work lives
  * in focused services. Construction wires dependencies only; no I/O until `init()`.
  *
@@ -99,6 +100,7 @@ export class PortQueue<TQueues extends string = string> {
       options,
       registry,
       wakeup,
+      background: new BackgroundWork(),
       instanceKey: options.instance?.instanceKey ?? null,
       instances: null,
       isRunning: () => this.state.running,
@@ -141,10 +143,7 @@ export class PortQueue<TQueues extends string = string> {
   }
 
   // --- Handles ---
-  createQueue<TData = unknown>(
-    name: TQueues,
-    options: QueueOptions = {},
-  ): Queue<TData> {
+  createQueue<TData = unknown>(name: TQueues, options: QueueOptions = {}): Queue<TData> {
     this.runtime.registry.define(name, options);
     // Register queue-scoped hooks once (QueueOptions.hooks).
     if (options.hooks && !this.hookedQueues.has(name)) {

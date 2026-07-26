@@ -71,7 +71,10 @@ export class ClientLifecycleService {
       );
       this.monitor.start();
     }
-    this.tickTimer = setInterval(() => void this.tick(), tickInterval);
+    this.tickTimer = setInterval(
+      () => this.runtime.background.run(() => this.tick()),
+      tickInterval,
+    );
     this.tickTimer.unref?.();
 
     // 6b. Multi-instance liveness: register + start heartbeating before workers claim.
@@ -91,7 +94,7 @@ export class ClientLifecycleService {
 
     events.emit(PortQueueEvent.CLIENT_STARTED, { instanceKey: this.runtime.instanceKey });
     // Run an immediate maintenance tick so due schedules/expiry aren't delayed a full interval.
-    void this.tick();
+    this.runtime.background.run(() => this.tick());
   }
 
   private async tick(): Promise<void> {
@@ -134,6 +137,14 @@ export class ClientLifecycleService {
     }
 
     this.monitor?.stop();
+    // A tick, pump, heartbeat or NOTIFY fired without an await may still be mid-query. Let it
+    // settle before the driver goes away — PGLite frees its WASM heap on disconnect and faults
+    // if a query is still running in it.
+    if (!(await this.runtime.background.drain(options.timeoutMs))) {
+      this.runtime.logger.warn(
+        'Background work did not finish within the shutdown timeout; disconnecting anyway.',
+      );
+    }
     await this.runtime.driver.disconnect();
     events.emit(PortQueueEvent.CLIENT_STOPPED, { instanceKey: this.runtime.instanceKey });
   }

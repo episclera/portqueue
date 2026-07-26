@@ -120,11 +120,15 @@ export class ProducerService {
       if (opts.tx?.onCommit) {
         opts.tx.onCommit(() => {
           this.runtime.wakeup.signal(queue);
-          void this.notifier.notifyJobAdded(queue, job.preferredInstanceKeyPattern);
+          this.runtime.background.run(() =>
+            this.notifier.notifyJobAdded(queue, job.preferredInstanceKeyPattern),
+          );
         });
       } else if (!opts.tx) {
         this.runtime.wakeup.signal(queue);
-        void this.notifier.notifyJobAdded(queue, job.preferredInstanceKeyPattern);
+        this.runtime.background.run(() =>
+          this.notifier.notifyJobAdded(queue, job.preferredInstanceKeyPattern),
+        );
       }
       events.emit(PortQueueEvent.JOB_ADDED, { jobId: inserted.id, queue, deduplicated: false });
     } else {

@@ -1,5 +1,6 @@
 import type { Driver } from '../drivers/driver.interface';
 import type { DriverContext } from '../drivers/driver-context';
+import type { BackgroundWork } from './background-work';
 import type { Logger } from '../logging/logger.interface';
 import type { Clock } from '../util/clock';
 import type { EventBusService } from '../events/event-bus.service';
@@ -25,6 +26,8 @@ export interface Runtime {
   options: PortQueueOptions;
   registry: QueueRegistry;
   wakeup: Wakeup;
+  /** Unawaited work in flight (ticks, pumps, heartbeats, NOTIFY), drained before disconnect. */
+  background: BackgroundWork;
   /** The multi-instance key for this process, or null when the process is unnamed. */
   instanceKey: string | null;
   /** The heartbeat/liveness service — present only when an `instanceKey` is set. Set during init. */

@@ -238,7 +238,7 @@ The single argument to `new PortQueue(...)`.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `graceful` | `boolean` | `true` | Let in-flight handlers finish before disconnecting. |
-| `timeoutMs` | `number` | `30000` | Max time to wait for a graceful drain. |
+| `timeoutMs` | `number` | `30000` | Max time to wait for a graceful drain, and for background work (maintenance tick, heartbeat, notify) to finish before the driver disconnects. |
 
 ### InstanceOptions
 

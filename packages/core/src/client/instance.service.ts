@@ -25,7 +25,7 @@ export class InstanceService {
   /** Register the row and begin heartbeating. */
   async start(): Promise<void> {
     await this.beat();
-    this.timer = setInterval(() => void this.beat(), this.intervalMs);
+    this.timer = setInterval(() => this.runtime.background.run(() => this.beat()), this.intervalMs);
     this.timer.unref?.();
   }
 
