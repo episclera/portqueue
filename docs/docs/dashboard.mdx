@@ -8,6 +8,7 @@ keywords: [portqueue, dashboard, job queue monitoring, react, express, node.js, 
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
+import { Shot } from '@site/src/components/Shot';
 
 # Dashboard
 
@@ -22,19 +23,82 @@ links to these docs and the GitHub repo pinned at its foot, and the live-updates
 light/dark toggle in the top bar. Every page opens with a full-width subheader carrying its title,
 a one-line description, and the page's actions.
 
-- **Overview** — activity cards for active, pending, failed, completed and stalled jobs, then the
-  per-queue table (totals and per-status counts) with pause/resume.
-- **Instances** — every registered instance with liveness, per-instance job counts, and
-  per-instance pause/resume (only populated for servers that set an [instance key](./scale-horizontally.md#give-each-server-an-identity-key)).
-- **Schedules** — recurring definitions across queues, with per-schedule enable/disable and bulk
-  unschedule. Each schedule id links to its own page.
-- **Schedule detail** — one recurring definition (cadence, timezone, next and last run, state)
-  above a table of the jobs it has produced, so "did last night's run succeed?" is answerable
-  without hunting through the queue's full job list.
-- **Queue / Job detail** — drill into a queue's jobs, or into a single job: its full record
-  (queue, status, priority, attempts, the instance that processed it and any preferred-instance
-  pattern, lock, idempotency key, schedule), its `data` and return value, the failure message, a
-  lifecycle timeline, and every lifecycle timestamp — including the ones the job never reached.
+The screenshots below follow the theme you are reading in — switch it in the top-right and they
+swap with the rest of the site.
+
+### Overview
+
+<Shot
+  name="home"
+  alt="The PortQueue dashboard overview page: activity cards above a table of queues with per-status counts"
+>
+
+Activity cards for active, pending, failed, completed and stalled jobs, then the per-queue table:
+state, usage, the total and the per-status counts, with pause/resume on each row. A queue's name
+links to its own page.
+
+</Shot>
+
+### Instances
+
+<Shot
+  name="instances"
+  alt="The instances page: one row per registered instance with liveness, job counts and pause controls"
+>
+
+Every registered instance with its liveness, its own job counts, and per-instance pause/resume —
+one row per process, so a single wedged server is visible as one stale row rather than as a dip in
+the totals. Only populated for servers that set an
+[instance key](./scale-horizontally.md#give-each-server-an-identity-key).
+
+</Shot>
+
+### Schedules
+
+<Shot
+  name="schedules"
+  alt="The schedules page: recurring definitions with cadence, timezone, next and last run"
+>
+
+Recurring definitions across every queue — cadence, timezone, next and last run — with per-schedule
+enable/disable and bulk unschedule. Disabling keeps the definition and stops it firing, which is
+the reversible half of "make this stop". Each (truncated) schedule id links to its own page.
+
+</Shot>
+
+### Schedule detail
+
+One recurring definition — cadence, timezone, next and last run, state — above a table of the jobs
+it has produced. That second table is the point of the page: "did last night's run succeed?" is
+answerable there without hunting through the queue's full job list.
+
+### Queue detail
+
+<Shot
+  name="queue"
+  alt="A queue's detail page: status cards above the paged, searchable jobs table"
+>
+
+One queue's activity cards, then its jobs table — paged and searchable, with per-row retry, cancel
+and remove, and bulk actions over a selection. Pause/resume, **Add job** and (for a queue no
+running process declares) **Remove queue** sit in the subheader. Job ids are truncated to their
+first and last characters — enough to recognise one, short enough to keep the row readable.
+
+</Shot>
+
+### Job detail
+
+<Shot
+  name="job-details"
+  alt="A job's detail page: the full record, its payload and return value, and the lifecycle timeline"
+>
+
+One job's full record — queue, status, priority, attempts, the instance that processed it and any
+preferred-instance pattern, lock, idempotency key, schedule — with its `data` and return value, the
+failure message, a lifecycle timeline, and every lifecycle timestamp, including the ones the job
+never reached.
+
+</Shot>
 
 ### Tables
 
@@ -42,8 +106,9 @@ Every table works the same way:
 
 - **`Results (n)`** in the card's top-left is the total number of matching rows in the database,
   not just the rows on screen.
-- **Filters** opens a dialog of the filters that table supports; **search** sits next to it.
-  Applied filters then appear as dismissible chips under the toolbar, each removable on its own.
+- **Filters** opens a dialog of the filters that table supports; **search** sits next to it. Each
+  filter is a single choice — a status, a state — with **Any** to drop it. Applied filters then
+  appear as dismissible chips under the toolbar, each removable on its own.
 - **20 rows a page**, with numbered pagination at the bottom of the card. Every table is paged,
   searched and filtered **in the database** — no table loads more than the page you are looking at.
 - The page, the search term and the applied filters are all kept in the URL
@@ -67,8 +132,24 @@ says so — narrow it with a status filter to reach older jobs.
 
 Each page polls the handful of queries it needs every 30 seconds, and refetches immediately after
 any action you take. **Pause** in the top bar stops the interval and freezes the data; **Refresh
-now** beside it fetches once, whether or not polling is running. Relative timestamps ("3 minutes
-ago") keep counting on their own, and every one of them carries the exact timestamp on hover.
+now** beside it fetches once, whether or not polling is running. Nothing is served from a cache
+between visits either — landing on a page (or coming back to it) always asks the server, so you are
+never reading a snapshot from a previous visit.
+
+### Dates and times
+
+Every timestamp in the dashboard is the same thing in the same shape: the exact moment, in your
+browser's timezone, with that timezone's UTC offset named.
+
+```text
+12 Mar. 2026 13:23:01 UTC+2
+```
+
+There are no relative labels ("3 minutes ago") anywhere. A relative label reads as friendlier and
+answers less: correlating a failure with a deploy or a log line needs the clock time, and a label
+computed at render time is only true until the next one. Timestamps here never move on their own,
+whatever the live-updates control is set to. The UTC instant is on the element's `datetime`
+attribute (and on hover) for anyone comparing against a UTC log.
 
 ## Mount on an existing app
 
