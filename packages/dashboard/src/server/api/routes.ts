@@ -33,7 +33,6 @@ import {
   serializeStats,
 } from './serialize';
 import { ActionKind, type ActionRequestDto, type ActionResultDto } from '../../shared/dto';
-import { JOB_SEARCH_SCAN_LIMIT } from '../../shared/constants';
 
 export interface RouterOptions {
   portQueue: PortQueue;
@@ -218,7 +217,6 @@ export function createRouter(options: RouterOptions): {
       const page = await dashboard.getJobs({
         ...buildJobsQuery(params),
         ...(params.get('search') ? { search: params.get('search')! } : {}),
-        searchScanLimit: JOB_SEARCH_SCAN_LIMIT,
       });
       return json(200, serializeJobPage(page));
     }

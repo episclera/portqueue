@@ -90,15 +90,12 @@ export function serializeStats(s: QueueStats): StatsDto {
   };
 }
 
-export function serializeJobPage(
-  page: Page<JobSnapshot> & { searchTruncated?: boolean },
-): JobPageDto {
+export function serializeJobPage(page: Page<JobSnapshot>): JobPageDto {
   return {
     items: page.items.map(serializeJob),
     cursor: page.cursor,
     hasMore: page.hasMore,
     total: page.total,
-    ...(page.searchTruncated ? { searchTruncated: true } : {}),
   };
 }
 

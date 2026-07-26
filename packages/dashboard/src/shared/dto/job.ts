@@ -38,11 +38,6 @@ export interface JobPageDto {
   items: JobDto[];
   cursor: string | null;
   hasMore: boolean;
-  /** Rows matching the query across every page. */
+  /** Rows matching the query across every page. A search counts every match, not a window. */
   total: number;
-  /**
-   * True when a `search` matched inside a truncated scan window, so `total` counts only the
-   * jobs that were scanned. Absent when the query wasn't a search.
-   */
-  searchTruncated?: boolean;
 }

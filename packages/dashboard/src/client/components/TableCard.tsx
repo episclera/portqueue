@@ -44,8 +44,6 @@ export interface TableCardProps {
   };
   /** Leading control on the toolbar's right side — e.g. the bulk-actions button. */
   toolbarLeading?: React.ReactNode;
-  /** Rendered at the start of the controls, e.g. the search-truncated notice. */
-  toolbarNotice?: React.ReactNode;
   /** Label for the pagination landmark, e.g. "Jobs pagination". */
   paginationLabel?: string;
   children: React.ReactNode;
@@ -165,7 +163,6 @@ export function TableCard({
   search,
   filters,
   toolbarLeading,
-  toolbarNotice,
   paginationLabel = 'Pagination',
   children,
 }: TableCardProps): React.ReactElement {
@@ -185,7 +182,6 @@ export function TableCard({
       <Toolbar>
         <Results>Results ({total})</Results>
         <Controls>
-          {toolbarNotice}
           {toolbarLeading}
           {filters ? (
             <Button

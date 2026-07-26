@@ -15,6 +15,7 @@
 import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { InvalidOptionsError } from '../errors/errors';
+import { toSnapshot } from '../jobs/snapshot';
 import {
   DASHBOARD_MAX_LIMIT,
   JobBatchAction,
@@ -37,6 +38,14 @@ import type { TransactionHandle } from '../tx/transaction-handle';
 
 /** The default liveness window when the host set no explicit heartbeat interval. */
 const DEFAULT_HEARTBEAT_MS = 15000;
+
+/**
+ * Rows a free-text job search reads per round trip. A search scans the whole matching set (see
+ * {@link DashboardService.getJobs}); this only decides how many rows travel at a time — big enough
+ * that a large table doesn't turn into thousands of queries, small enough that one chunk is never a
+ * memory problem.
+ */
+const SEARCH_CHUNK_SIZE = 1000;
 
 /** Clamp a caller-supplied page window to something the database is happy to serve. */
 function pageWindow(query: DashboardPageQuery): { limit: number; offset: number } {
@@ -232,33 +241,63 @@ export class DashboardService {
   // --- Jobs --------------------------------------------------------------------------------
 
   /**
-   * A page of jobs, optionally narrowed by a free-text search. Without a search this is the
-   * public paged read. With one it filters a bounded scan window — the engine carries no text
-   * index, so a search reads the most recent {@link searchScanLimit} matching rows and filters
-   * those, reporting `searchTruncated` when the window (not the term) was the limiting factor.
+   * A page of jobs, optionally narrowed by a free-text search. Without a search this is the public
+   * paged read.
+   *
+   * With one, the whole matching set is searched — every job the other filters allow, oldest
+   * included. The engine carries no text index on ids, payloads or failure messages, so the term is
+   * matched in JS; that is done over a **chunked scan** ({@link SEARCH_CHUNK_SIZE} rows a round
+   * trip) rather than by loading the table into memory. Only the rows that fall inside the
+   * requested page are kept — everything else is counted and dropped — so memory is bounded by the
+   * page size, not by the table.
+   *
+   * A search therefore costs O(rows / chunk) queries and reports a `total` that is the true number
+   * of matches. The alternative, a bounded window, silently answered a different question: "the
+   * most recent N jobs matched nothing" reads exactly like "nothing matched".
    */
   async getJobs<TData = unknown>(
-    query: GetJobsQuery & JobSearchQuery & { searchScanLimit?: number } = {},
-  ): Promise<Page<JobSnapshot<TData>> & { searchTruncated: boolean }> {
+    query: GetJobsQuery & JobSearchQuery = {},
+  ): Promise<Page<JobSnapshot<TData>>> {
     const term = query.search?.trim().toLowerCase();
-    const { search: _search, searchScanLimit, ...base } = query;
-    if (!term) {
-      const page = await this.reads.getJobs<TData>(base);
-      return { ...page, searchTruncated: false };
-    }
+    const { search: _search, ...base } = query;
+    if (!term) return this.reads.getJobs<TData>(base);
 
-    const scanLimit = Math.max(Math.trunc(searchScanLimit ?? 500), 1);
     const limit = Math.min(Math.max(Math.trunc(base.limit ?? 50), 1), DASHBOARD_MAX_LIMIT);
     const offset = Math.max(Math.trunc(base.offset ?? 0), 0);
-    const scan = await this.reads.getJobs<TData>({ ...base, limit: scanLimit, offset: 0 });
-    const matched = scan.items.filter((job) => matchesJobSearch(job, term));
-    const items = matched.slice(offset, offset + limit);
+    const order = base.order ?? 'desc';
+    const filter = {
+      ...(base.queue ? { queueName: base.queue } : {}),
+      ...(base.statuses ? { statuses: base.statuses } : {}),
+      ...(base.scheduleId ? { scheduleId: base.scheduleId } : {}),
+    };
+
+    const now = this.runtime.clock.now();
+    const items: JobSnapshot<TData>[] = [];
+    let matches = 0;
+
+    for (let scanned = 0; ; scanned += SEARCH_CHUNK_SIZE) {
+      const records = await this.runtime.driver.getJobs({
+        ...filter,
+        limit: SEARCH_CHUNK_SIZE,
+        offset: scanned,
+        order,
+      });
+      for (const record of records) {
+        const job = toSnapshot<TData>(record, record.queueName, now);
+        if (!matchesJobSearch(job, term)) continue;
+        // Keep only the slice the caller asked for; the rest of the matches just move `total`.
+        if (matches >= offset && items.length < limit) items.push(job);
+        matches += 1;
+      }
+      // A short chunk is the end of the table — the only place this loop stops.
+      if (records.length < SEARCH_CHUNK_SIZE) break;
+    }
+
     return {
       items,
       cursor: null,
-      hasMore: offset + items.length < matched.length,
-      total: matched.length,
-      searchTruncated: scan.items.length >= scanLimit,
+      hasMore: offset + items.length < matches,
+      total: matches,
     };
   }
 

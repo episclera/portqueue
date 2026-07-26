@@ -8,7 +8,6 @@
  */
 import type { JobSnapshot, PortQueue } from '@portqueue/core';
 import { createRouter } from './routes';
-import { JOB_SEARCH_SCAN_LIMIT } from '../../shared/constants';
 import type { JobPageDto } from '../../shared/dto';
 
 const job = (id: string, status = 'COMPLETED'): JobSnapshot =>
@@ -35,13 +34,12 @@ interface FacadeQuery {
   offset?: number;
   order?: string;
   search?: string;
-  searchScanLimit?: number;
 }
 
 /** A PortQueue whose facade records the query it was handed and replays a fixed page. */
 function fakePq(
   items: JobSnapshot[],
-  extra: { total?: number; searchTruncated?: boolean } = {},
+  extra: { total?: number } = {},
 ): { pq: PortQueue; queries: FacadeQuery[] } {
   const queries: FacadeQuery[] = [];
   const pq = {
@@ -53,7 +51,6 @@ function fakePq(
           cursor: null,
           hasMore: false,
           total: extra.total ?? items.length,
-          searchTruncated: extra.searchTruncated ?? false,
         };
       },
     },
@@ -97,22 +94,11 @@ describe('GET /api/jobs', () => {
     expect(queries[0]?.scheduleId).toBe('sch-1');
   });
 
-  it('passes the search term through with the scan-window limit', async () => {
+  it('passes the search term through, with no scan window to cap it', async () => {
     const { pq, queries } = fakePq([job('alpha-1')]);
     await read(pq, '/portqueue/api/jobs?search=alpha');
     expect(queries[0]?.search).toBe('alpha');
-    expect(queries[0]?.searchScanLimit).toBe(JOB_SEARCH_SCAN_LIMIT);
-  });
-
-  it('surfaces searchTruncated so the UI can warn that older jobs went unscanned', async () => {
-    const { pq } = fakePq([job('alpha-1')], { searchTruncated: true });
-    const page = await read(pq, '/portqueue/api/jobs?search=alpha');
-    expect(page.searchTruncated).toBe(true);
-  });
-
-  it('omits searchTruncated entirely when the scan was complete', async () => {
-    const { pq } = fakePq([job('alpha-1')]);
-    const page = await read(pq, '/portqueue/api/jobs?search=alpha');
-    expect('searchTruncated' in page).toBe(false);
+    // Nothing bounds the search: core scans every row the other filters allow.
+    expect(Object.keys(queries[0] ?? {})).not.toContain('searchScanLimit');
   });
 });

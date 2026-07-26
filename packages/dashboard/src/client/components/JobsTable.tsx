@@ -10,7 +10,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { Mono, StatusTag, Table, Text, Tooltip } from '@portqueue/ui';
+import { Mono, StatusTag, Table, Tooltip } from '@portqueue/ui';
 import type { DropdownItem, TableColumn } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums';
 import { ActionKind, type JobDto, type JobPageDto } from '../../shared/dto';
@@ -19,7 +19,6 @@ import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import { ACTIONS_CONFIG, STALLED, STATUSES_CONFIG, statusLabel } from '../constants/labels';
-import { JOB_SEARCH_SCAN_LIMIT } from '../../shared/constants';
 import { truncate } from './format';
 import { Time } from './Time';
 import { TableCard } from './TableCard';
@@ -206,19 +205,6 @@ export function JobsTable({ queue, scheduleId, prefix = 'jobs' }: JobsTableProps
     },
   ];
 
-  // The scan-window notice belongs beside the result count, where someone reading "Results (12)"
-  // will see why it might not be all of them — not below the card where it is easy to miss.
-  const truncatedNotice = jobs.data?.searchTruncated ? (
-    <Tooltip
-      title={`Only the most recent ${JOB_SEARCH_SCAN_LIMIT} jobs were searched. Add a status filter to reach older ones.`}
-      placement="bottom"
-    >
-      <Text $tone="muted" $small>
-        ⚠️ Partial search
-      </Text>
-    </Tooltip>
-  ) : null;
-
   return (
     <>
       <TableCard
@@ -242,7 +228,6 @@ export function JobsTable({ queue, scheduleId, prefix = 'jobs' }: JobsTableProps
           onClear: (key, value) => params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
         }}
         toolbarLeading={<BulkActionsButton count={selected.length} items={bulkItems} />}
-        toolbarNotice={truncatedNotice}
       >
         <Table<JobDto>
           rowKey={(r) => r.id}
