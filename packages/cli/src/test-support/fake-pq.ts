@@ -34,6 +34,7 @@ export interface FakePqOverrides {
   removeScheduleOk?: boolean;
   removed?: number;
   doctor?: unknown;
+  instances?: unknown;
 }
 
 const DEFAULT_JOB = {
@@ -43,6 +44,19 @@ const DEFAULT_JOB = {
   retryAttempt: 1,
   retryMaxAttempts: 3,
   createdAt: new Date('2026-07-22T00:00:00.000Z'),
+};
+
+const DEFAULT_INSTANCE = {
+  instanceKey: 'worker-eu-1',
+  processingPaused: false,
+  alive: true,
+  createdAt: new Date('2026-07-22T00:00:00.000Z'),
+  updatedAt: new Date('2026-07-22T00:02:00.000Z'),
+  lastSeenAt: new Date('2026-07-22T00:02:00.000Z'),
+  cpuPercent: 12.5,
+  memoryPercent: 94.2,
+  rssBytes: 1_572_864,
+  counts: { COMPLETED: 8, FAILED: 1 },
 };
 
 const DEFAULT_DOCTOR = {
@@ -125,6 +139,7 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
     getJobs: async () =>
       overrides.jobPage ?? { items: [DEFAULT_JOB], hasMore: false, cursor: null, total: 1 },
     getJob: async () => ('job' in overrides ? overrides.job : DEFAULT_JOB),
+    getInstances: async () => overrides.instances ?? [DEFAULT_INSTANCE],
     createQueue: (name: string) => {
       calls.createQueue.push(name);
       return queue;

@@ -25,6 +25,7 @@ import {
   type GetInstancesQuery,
   type GetQueuesQuery,
   type GetSchedulesQuery,
+  type JobInstanceFilter,
   type JobSearchQuery,
   type Page,
   type ScheduleWithQueue,
@@ -142,11 +143,7 @@ export class DashboardService {
   async getInstances(query: GetInstancesQuery = {}): Promise<Page<InstanceInfo>> {
     const { limit, offset } = pageWindow(query);
     const now = this.runtime.clock.now();
-    const staleAfter =
-      (this.runtime.options.instance?.heartbeatIntervalSeconds ?? DEFAULT_HEARTBEAT_SECONDS) *
-      3 *
-      1000;
-    const seenSince = now - staleAfter;
+    const seenSince = now - this.instanceStaleAfterMs();
     const filter = {
       ...(query.search ? { search: query.search } : {}),
       ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
@@ -170,12 +167,51 @@ export class DashboardService {
         createdAt: new Date(row.createdAt),
         updatedAt: new Date(row.updatedAt),
         lastSeenAt: new Date(row.lastSeenAt),
+        cpuPercent: row.cpuPercent,
+        memoryPercent: row.memoryPercent,
+        rssBytes: row.rssBytes,
         counts: counts[row.instanceKey] ?? emptyCounts(),
       })),
       cursor: null,
       hasMore: offset + rows.length < total,
       total,
     };
+  }
+
+  /**
+   * One instance by key, with the same liveness, health and attribution the list carries — for the
+   * instance detail page. `PortQueue.getInstances()` returns every instance and has no by-key read,
+   * so fetching one would otherwise mean listing all of them and filtering client-side.
+   */
+  async getInstance(options: { instanceKey: string }): Promise<InstanceInfo | null> {
+    const row = await this.runtime.driver.getInstance({ instanceKey: options.instanceKey });
+    if (!row) return null;
+    const seenSince = this.runtime.clock.now() - this.instanceStaleAfterMs();
+    const counts = await this.runtime.driver.countJobsByStatusPerInstance({
+      instanceKeys: [row.instanceKey],
+    });
+    return {
+      instanceKey: row.instanceKey,
+      processingPaused: row.processingPaused,
+      alive: row.lastSeenAt >= seenSince,
+      createdAt: new Date(row.createdAt),
+      updatedAt: new Date(row.updatedAt),
+      lastSeenAt: new Date(row.lastSeenAt),
+      cpuPercent: row.cpuPercent,
+      memoryPercent: row.memoryPercent,
+      rssBytes: row.rssBytes,
+      counts: counts[row.instanceKey] ?? emptyCounts(),
+    };
+  }
+
+  /**
+   * How long an instance may go unheard-from before it counts as stale: three heartbeats, so a
+   * single missed beat (a slow query, a GC pause) doesn't flip a healthy instance to "stale".
+   */
+  private instanceStaleAfterMs(): number {
+    const beatSeconds =
+      this.runtime.options.instance?.heartbeatIntervalSeconds ?? DEFAULT_HEARTBEAT_SECONDS;
+    return beatSeconds * 3 * 1000;
   }
 
   /**
@@ -255,7 +291,7 @@ export class DashboardService {
    * most recent N jobs matched nothing" reads exactly like "nothing matched".
    */
   async getJobs<TData = unknown>(
-    query: GetJobsQuery & JobSearchQuery = {},
+    query: GetJobsQuery & JobSearchQuery & JobInstanceFilter = {},
   ): Promise<Page<JobSnapshot<TData>>> {
     const term = query.search?.trim().toLowerCase();
     const { search: _search, ...base } = query;
@@ -268,6 +304,7 @@ export class DashboardService {
       ...(base.queue ? { queueName: base.queue } : {}),
       ...(base.statuses ? { statuses: base.statuses } : {}),
       ...(base.scheduleId ? { scheduleId: base.scheduleId } : {}),
+      ...(base.instanceKey ? { processedOnInstanceKey: base.instanceKey } : {}),
     };
 
     const now = this.runtime.clock.now();

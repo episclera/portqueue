@@ -4,7 +4,7 @@ import { PortQueueEvent } from '../events/event-name.enum';
 import { SubscriberService } from '../pubsub/subscriber.service';
 import { SchedulerService } from '../scheduling/scheduler.service';
 import { RetentionService } from '../retention/retention.service';
-import { SystemMonitorService } from '../monitoring/system-monitor.service';
+import { SystemMonitorService, type SystemMetrics } from '../monitoring/system-monitor.service';
 import { InstanceService } from './instance.service';
 import { MigrationRunner } from '../drivers/shared/migration-runner.service';
 import type { Runtime } from './runtime';
@@ -36,6 +36,11 @@ export class ClientLifecycleService {
     return this.monitor?.pressureHigh ?? false;
   }
 
+  /** This process's latest health sample, for the instance heartbeat to persist. */
+  get systemMetrics(): SystemMetrics | null {
+    return this.monitor?.metrics ?? null;
+  }
+
   async init(): Promise<void> {
     if (this.initialized) return;
     this.initialized = true;
@@ -62,15 +67,12 @@ export class ClientLifecycleService {
     // 5/6. Scheduler + retention + monitor, driven by one coordinated tick.
     this.scheduler = new SchedulerService(this.runtime);
     this.retention = new RetentionService(this.runtime);
-    if (options.monitor !== false) {
-      this.monitor = new SystemMonitorService(
-        options.monitor ?? { maxEventLoopDelaySeconds: 0.2, sampleIntervalSeconds: 2 },
-        events,
-        logger,
-        () => this.runtime.wakeup.signalAll(),
-      );
-      this.monitor.start();
-    }
+    // Always monitor: the instance heartbeat persists these metrics, so they are not optional.
+    // `systemLimiter` only decides whether a breached threshold also pauses claiming.
+    this.monitor = new SystemMonitorService(options.systemLimiter, events, logger, () =>
+      this.runtime.wakeup.signalAll(),
+    );
+    this.monitor.start();
     this.tickTimer = setInterval(
       () => this.runtime.background.run(() => this.tick()),
       tickIntervalSeconds * 1000,
@@ -83,6 +85,7 @@ export class ClientLifecycleService {
         this.runtime,
         this.runtime.instanceKey,
         options.instance?.heartbeatIntervalSeconds ?? 15,
+        () => this.systemMetrics,
       );
       this.runtime.instances = instances;
       await instances.start();

@@ -80,7 +80,6 @@ function newClient(driver: Driver): PortQueue {
   return new PortQueue({
     driver,
     logger: new NoopLogger(),
-    monitor: false,
     clock: new FakeClock(1_700_000_000_000),
     tickIntervalSeconds: 0.05,
   });

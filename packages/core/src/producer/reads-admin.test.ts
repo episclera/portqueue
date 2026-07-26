@@ -150,6 +150,30 @@ describe('client reads & admin (sqlite)', () => {
     expect(await h.pq.removeInstance({ instanceKey: 'ghost' })).toBe(false);
   });
 
+  it('records an instance’s health on each beat and keeps the last reading when one is missing', async () => {
+    const now = h.clock.now();
+    await h.driver.upsertInstance({
+      instanceKey: 'w1',
+      now,
+      metrics: { cpuPercent: 42.5, memoryPercent: 18.25, rssBytes: 1_572_864 },
+    });
+    const first = await h.driver.getInstance({ instanceKey: 'w1' });
+    expect(first).toMatchObject({ cpuPercent: 42.5, memoryPercent: 18.25, rssBytes: 1_572_864 });
+
+    // A beat without a sample must bump liveness without blanking the metrics — a null there
+    // would read as "this instance reports nothing" rather than "we have no fresher number".
+    await h.driver.upsertInstance({ instanceKey: 'w1', now: now + 1000 });
+    const second = await h.driver.getInstance({ instanceKey: 'w1' });
+    expect(second!.lastSeenAt).toBe(now + 1000);
+    expect(second).toMatchObject({ cpuPercent: 42.5, memoryPercent: 18.25, rssBytes: 1_572_864 });
+  });
+
+  it('reports null health for an instance that has never sent a sample', async () => {
+    await h.driver.upsertInstance({ instanceKey: 'fresh', now: h.clock.now() });
+    const row = await h.driver.getInstance({ instanceKey: 'fresh' });
+    expect(row).toMatchObject({ cpuPercent: null, memoryPercent: null, rssBytes: null });
+  });
+
   it('removes a queue only when it is not registered in this process', async () => {
     // A queue row that exists in the DB but was never declared on this client (e.g. left by a
     // process that has since stopped) can be removed.

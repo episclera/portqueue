@@ -2,6 +2,7 @@ import { addCommand } from './add';
 import { cancelCommand } from './cancel';
 import { dashboardCommand } from './dashboard';
 import { doctorCommand } from './doctor';
+import { instanceCommand, instancesCommand } from './instances';
 import { jobCommand, jobsCommand } from './jobs';
 import { listenCommand } from './listen';
 import { migrateCommand } from './migrate';
@@ -27,6 +28,8 @@ export const COMMANDS: readonly Command[] = [
   jobsCommand,
   jobCommand,
   schedulesCommand,
+  instancesCommand,
+  instanceCommand,
   // Actions
   addCommand,
   retryCommand,

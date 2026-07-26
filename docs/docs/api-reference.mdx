@@ -645,14 +645,14 @@ and thresholds are meaningful there.
 
 The single argument to `new PortQueue(...)`.
 
-| Option                | Type                                                       | Default        | Description                                                                                                 |
-| --------------------- | ---------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------- |
-| `driver`              | `Driver`                                                   | — **required** | A driver instance (see [Drivers](#drivers)).                                                                |
-| `logger`              | `Logger \| LoggerOptions`                                  | console logger | A logger you supply, or `{ level?, pretty? }` for the built-in one.                                         |
-| `migration`           | `MigrationMode`                                            | `AUTO`         | `AUTO` (apply pending on init), `MANUAL` (call `migrate()` yourself), or `VALIDATE_ONLY` (fail if pending). |
-| `instance`            | [`InstanceOptions`](#instanceoptions)                      | —              | This process's identity & heartbeat.                                                                        |
-| `monitor`             | [`SystemMonitorOptions`](#systemmonitoroptions) `\| false` | —              | System-pressure thresholds; `false` disables sampling.                                                      |
-| `tickIntervalSeconds` | `number`                                                   | `5`            | Scheduler / retention / monitor tick interval, in seconds.                                                  |
+| Option                | Type                                            | Default        | Description                                                                                                 |
+| --------------------- | ----------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------- |
+| `driver`              | `Driver`                                        | — **required** | A driver instance (see [Drivers](#drivers)).                                                                |
+| `logger`              | `Logger \| LoggerOptions`                       | console logger | A logger you supply, or `{ level?, pretty? }` for the built-in one.                                         |
+| `migration`           | `MigrationMode`                                 | `AUTO`         | `AUTO` (apply pending on init), `MANUAL` (call `migrate()` yourself), or `VALIDATE_ONLY` (fail if pending). |
+| `instance`            | [`InstanceOptions`](#instanceoptions)           | —              | This process's identity & heartbeat.                                                                        |
+| `systemLimiter`       | [`SystemLimiterOptions`](#systemlimiteroptions) | —              | Pressure thresholds that pause claiming. Omitted by default, so nothing throttles.                          |
+| `tickIntervalSeconds` | `number`                                        | `5`            | Scheduler / retention / monitor tick interval, in seconds.                                                  |
 
 ### ShutdownOptions
 
@@ -668,12 +668,22 @@ The single argument to `new PortQueue(...)`.
 | `instanceKey`              | `string` | anonymous | Stable, human-meaningful name for this process (e.g. `'worker-eu-1'`). Naming it lets you target, list, and pause it; unnamed processes still run jobs. |
 | `heartbeatIntervalSeconds` | `number` | `15`      | How often the instance row's `last_seen_at` is refreshed, in seconds.                                                                                   |
 
-### SystemMonitorOptions
+### SystemLimiterOptions
 
-Workers pause on pressure only when they opt in via `limiter.respectSystemPressure`. Omitting
-`monitor` samples with `{ maxEventLoopDelaySeconds: 0.2, sampleIntervalSeconds: 2 }`; your own object
-_replaces_ that default (unset thresholds are never checked), and `monitor: false` turns sampling
-off entirely. See [Rate limiting & backpressure](./guides/rate-limiting.md#every-monitor-option).
+**Passing this object is what turns backpressure on.** Every worker on the client then stops
+claiming while any threshold you set is breached, and resumes once every watched metric has fallen
+to `resumeHysteresis` of its own limit. There is no per-worker opt-in: define a `systemLimiter` and
+they all respect it, omit it (the default) and none do.
+
+Only the thresholds you set are checked, and there are no defaults to merge with — `{}` samples but
+can never throttle. Durations here may be fractional, since they are in-process sampling knobs
+rather than stored values.
+
+This process's CPU, memory share and RSS are measured **regardless** — the instance heartbeat
+records them, so the dashboard can show per-instance health, and there is no option to switch that
+off. Event-loop delay is the exception: measuring it means keeping a `perf_hooks` histogram enabled,
+so it is only sampled once `maxEventLoopDelaySeconds` gives it a purpose. See
+[Rate limiting & backpressure](./guides/rate-limiting.md#every-systemlimiter-option).
 
 | Option                     | Type     | Default                     | Description                                                              |
 | -------------------------- | -------- | --------------------------- | ------------------------------------------------------------------------ |
@@ -768,15 +778,14 @@ The argument to `createWorker`.
 
 All **worker-local** — no cluster-wide coordination.
 
-| Option                  | Type      | Default       | Description                                                                         |
-| ----------------------- | --------- | ------------- | ----------------------------------------------------------------------------------- |
-| `concurrency`           | `number`  | `1`           | Max handlers running at once in this worker.                                        |
-| `rateMax`               | `number`  | —             | Max jobs started per `rateDurationSeconds` window (set with `rateDurationSeconds`). |
-| `rateDurationSeconds`   | `number`  | —             | The window for `rateMax`, in seconds — e.g. `60`.                                   |
-| `respectSystemPressure` | `boolean` | `false`       | Pause claiming while system pressure is high.                                       |
-| `batchSize`             | `number`  | `concurrency` | Max jobs claimed per fetch.                                                         |
-| `pollIntervalSeconds`   | `number`  | `5`           | Poll cadence when `LISTEN`/`NOTIFY` is unavailable, in seconds.                     |
-| `lockDurationSeconds`   | `number`  | `30`          | Visibility timeout / heartbeat window for a claimed job, in seconds.                |
+| Option                | Type     | Default       | Description                                                                         |
+| --------------------- | -------- | ------------- | ----------------------------------------------------------------------------------- |
+| `concurrency`         | `number` | `1`           | Max handlers running at once in this worker.                                        |
+| `rateMax`             | `number` | —             | Max jobs started per `rateDurationSeconds` window (set with `rateDurationSeconds`). |
+| `rateDurationSeconds` | `number` | —             | The window for `rateMax`, in seconds — e.g. `60`.                                   |
+| `batchSize`           | `number` | `concurrency` | Max jobs claimed per fetch.                                                         |
+| `pollIntervalSeconds` | `number` | `5`           | Poll cadence when `LISTEN`/`NOTIFY` is unavailable, in seconds.                     |
+| `lockDurationSeconds` | `number` | `30`          | Visibility timeout / heartbeat window for a claimed job, in seconds.                |
 
 ### GetJobsQuery
 

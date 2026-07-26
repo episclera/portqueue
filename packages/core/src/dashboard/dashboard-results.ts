@@ -72,6 +72,15 @@ export interface JobSearchQuery {
   search?: string;
 }
 
+/**
+ * Narrow a job read to the instance that claimed the rows (`processed_on_instance_key`). Lives on
+ * the facade rather than the public `GetJobsQuery`: it backs the instance detail page's "jobs
+ * processed here" table, which is a dashboard view, not something the public read surface promises.
+ */
+export interface JobInstanceFilter {
+  instanceKey?: string;
+}
+
 /** What a bulk row action does to each selected job. */
 export enum JobBatchAction {
   RETRY = 'RETRY',

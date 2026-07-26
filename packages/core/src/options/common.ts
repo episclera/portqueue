@@ -36,8 +36,11 @@ export interface RetentionOptions {
 
 /**
  * Everything that tunes a worker's throughput, grouped in one place: how many jobs run and are
- * claimed at once, how often it polls, the lock window, the rate cap, and system-pressure
- * backpressure. Omit the whole group to run with sensible defaults (unbounded rate, concurrency 1).
+ * claimed at once, how often it polls, the lock window, and the rate cap. Omit the whole group to
+ * run with sensible defaults (unbounded rate, concurrency 1).
+ *
+ * Whether a worker pauses under system pressure is **not** set here — it follows from
+ * `systemLimiter` on the PortQueue: define one and every worker respects it, omit it and none do.
  *
  * Every duration here is **in seconds**. `rateDurationSeconds` is stored with the job and must be a
  * whole number; the poll and lock cadences never leave the process, so they may be fractional.
@@ -52,11 +55,6 @@ export interface LimiterOptions {
   rateMax?: number;
   /** The window for `rateMax`, in **whole seconds** — e.g. `60` for "per minute". */
   rateDurationSeconds?: number;
-  /**
-   * Pause claiming while system pressure (CPU/memory/event-loop) is high. Default `false` —
-   * the worker consumes as much as it can; opt in to trade throughput for stability.
-   */
-  respectSystemPressure?: boolean;
   /** Max jobs claimed per fetch (defaults to `concurrency`). */
   batchSize?: number;
   /** Poll cadence when LISTEN/NOTIFY is unavailable, **in seconds** (default 5). */
@@ -66,18 +64,35 @@ export interface LimiterOptions {
 }
 
 /**
- * System-pressure backpressure config. Durations are **in seconds**; these are in-process sampling
- * knobs rather than stored values, so sub-second values are allowed and expected.
+ * Thresholds on **this process's own** health that pause job claiming while they are breached.
+ *
+ * Passing this object is what turns system backpressure on: every worker on the client then stops
+ * claiming while any threshold is over, and resumes once every watched metric has fallen to
+ * `resumeHysteresis` of its limit. Omit it (the default) and nothing throttles — the metrics are
+ * still sampled and still recorded against the instance row, they simply don't gate anything.
+ *
+ * Only the thresholds you set are checked, and this object **replaces** nothing — there is no
+ * default threshold to merge with. `{}` samples but can never throttle.
+ *
+ * Durations are **in seconds** and may be fractional: these are in-process sampling knobs, not
+ * stored values, so a 200 ms event-loop threshold (`0.2`) is both meaningful and expected.
  */
-export interface SystemMonitorOptions {
+export interface SystemLimiterOptions {
   /** How often pressure is sampled, **in seconds** (default 2). */
   sampleIntervalSeconds?: number;
-  /** Mean event-loop delay that counts as pressure, **in seconds** (default 0.2, i.e. 200 ms). */
+  /**
+   * Mean event-loop delay that counts as pressure, **in seconds** — e.g. `0.2` for 200 ms. The best
+   * single signal that the process is saturated, and the only metric that isn't measured at all
+   * until you set a threshold for it (it needs a `perf_hooks` histogram kept enabled).
+   */
   maxEventLoopDelaySeconds?: number;
+  /** Process CPU above this percentage counts as pressure (summed across cores). */
   maxCpuPercent?: number;
+  /** RSS above this share of total machine memory counts as pressure. */
   maxMemoryPercent?: number;
+  /** RSS above this many bytes counts as pressure. */
   maxRssBytes?: number;
-  /** Fraction (0-1) below the threshold metrics must fall to before resuming. */
+  /** Fraction (0-1) of its own threshold every metric must fall to before resuming (default 0.8). */
   resumeHysteresis?: number;
 }
 

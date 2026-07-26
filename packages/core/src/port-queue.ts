@@ -187,7 +187,6 @@ export class PortQueue<TQueues extends string = string> {
       // poll on this same cadence. Lower it via `limiter.pollIntervalSeconds` for snappier pickup.
       pollIntervalSeconds: limiter.pollIntervalSeconds ?? 5,
       ...(rate ? { limiter: rate } : {}),
-      respectSystemPressure: limiter.respectSystemPressure ?? false,
       dontAutoretryFor: options.dontAutoretryFor ?? [],
       queueOptions: this.runtime.registry.getOptions(options.queue),
     };

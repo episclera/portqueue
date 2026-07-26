@@ -37,6 +37,12 @@ To make a server targetable, give its process a stable `instance.instanceKey`. A
 a heartbeat row, honours job affinity, and can be paused on its own from the dashboard; an
 anonymous one runs jobs but can't be addressed.
 
+Each heartbeat also records that process's **CPU, memory share and RSS**, so the instances list and
+the `portqueue instances` command show how every server is doing at the moment it was last heard
+from. That happens for any keyed instance — it does not require a
+[`systemLimiter`](./guides/rate-limiting.md#system-pressure-backpressure), which only decides whether
+those numbers also pause claiming.
+
 ```ts
 const pq = new PortQueue({
   driver,

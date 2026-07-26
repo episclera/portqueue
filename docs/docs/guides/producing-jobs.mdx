@@ -280,3 +280,40 @@ const emailsPage = await emailsQueue.getJobs({ statuses: [JobStatus.FAILED] }); 
 const emailsStats = await emailsQueue.getQueueStats(); // per-status counts
 const emailsSchedules = await emailsQueue.getSchedules(); // recurring definitions
 ```
+
+## There is no `updateJob` or `updateSchedule` — by design
+
+PortQueue has no `update*` method on any entity, and this is deliberate rather than an omission.
+
+**A job's settings are a set, not a bag of independent fields.** They were resolved together at
+insert time — `startAfter` and `expireAt` are absolute instants derived from each other, the retry
+counters are interpreted against `retryMaxAttempts`, the retention policy is read against the
+status. Changing one after the fact can produce a combination the queue never creates on its own: a
+job that expires before it becomes eligible, a retry budget already spent, a row whose lifecycle
+timestamps no longer describe what happened to it. That isn't a trap only beginners fall into —
+which fields may safely move, and when, depends on internals a queue has no business asking a
+developer to know.
+
+**Worse, a row can change underneath the update.** A job's status is owned by whichever worker holds
+its lock. Between reading a job and writing your change, it can be claimed, retried, completed or
+reclaimed as stalled. An update would either silently overwrite that or need a whole concurrency
+protocol to refuse it — for an operation that has a simpler, correct alternative.
+
+**And updating destroys history.** A finished job is a record of what happened: this payload, these
+attempts, this failure, at these times. Editing it in place makes the reporting lie — throughput,
+failure rates and any audit of "what did we actually run" are all read from these rows.
+
+### What to do instead
+
+Add a new entity rather than editing an old one. The right move depends on where the job is:
+
+| Situation                                                               | Do this                                                                                                                                                           |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Finished** job (`COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED`)        | Leave it. It's your history, and [retention](./retention.md) deletes it on schedule. Add a new job for what you need now.                                         |
+| **Pending or delayed** job that shouldn't run as configured             | `queue.cancelJob({ jobId })` so it never becomes eligible, then `addJob` with the settings you want.                                                              |
+| **Recurring schedule** that needs a different cron, interval or payload | `queue.removeSchedule({ scheduleId })` so it stops spawning jobs, then `addJob` with the new definition. See [Changing a schedule](./scheduling.md#unscheduling). |
+| **Active** job                                                          | Nothing to update — it's running. Let it finish, or cancel cooperatively (the handler observes `job.signal`) and add a replacement.                               |
+
+Cancel-then-add and remove-then-add cost one extra call, and in exchange every row stays a truthful
+record of one attempt at one configuration. If you want the replacement to be created exactly once
+even under a retry of your own code, give it an `idempotencyKey`.

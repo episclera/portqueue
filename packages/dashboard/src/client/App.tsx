@@ -14,6 +14,7 @@ import { JobDetailPage } from './pages/JobDetail';
 import { SchedulesPage } from './pages/Schedules';
 import { ScheduleDetailPage } from './pages/ScheduleDetail';
 import { InstancesPage } from './pages/Instances';
+import { InstanceDetailPage } from './pages/InstanceDetail';
 
 export interface AppProps {
   onThemeChange: (mode: ThemeMode) => void;
@@ -30,6 +31,7 @@ function Routes(): React.ReactElement {
       <RouteSwitch>
         <Route exact path="/" component={OverviewPage} />
         <Route exact path="/instances" component={InstancesPage} />
+        <Route exact path="/instances/:key" component={InstanceDetailPage} />
         <Route exact path="/queues/:name" component={QueueDetailPage} />
         <Route exact path="/jobs/:id" component={JobDetailPage} />
         <Route exact path="/schedules" component={SchedulesPage} />

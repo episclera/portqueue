@@ -313,6 +313,19 @@ describe('schedules page', () => {
 });
 
 describe('instances page', () => {
+  const INSTANCE = {
+    instanceKey: 'worker-eu-1',
+    processingPaused: false,
+    alive: true,
+    createdAt: '2026-07-22T00:00:00.000Z',
+    updatedAt: '2026-07-22T00:02:00.000Z',
+    lastSeenAt: '2026-07-22T00:02:00.000Z',
+    cpuPercent: 12.5,
+    memoryPercent: 94.2,
+    rssBytes: 1_572_864,
+    counts: { COMPLETED: 8, FAILED: 1 },
+  };
+
   it('teaches how to name an instance when none are registered', async () => {
     harness().renderApp('#/instances');
     expect(await screen.findByText('No instances registered.')).toBeInTheDocument();
@@ -322,5 +335,47 @@ describe('instances page', () => {
   it('shows an error state when the instances query fails', async () => {
     harness({ failures: { '/instances': { status: 500 } } }).renderApp('#/instances');
     expect(await screen.findByText('Could not load instances')).toBeInTheDocument();
+  });
+
+  it('lists health and a single processed total rather than a per-status breakdown', async () => {
+    harness({ responses: { ...RESPONSES, '/instances': page([INSTANCE]) } }).renderApp(
+      '#/instances',
+    );
+    expect(await screen.findByText('worker-eu-1')).toBeInTheDocument();
+    expect(screen.getByText('12.5%')).toBeInTheDocument();
+    expect(screen.getByText('94.2%')).toBeInTheDocument();
+    expect(screen.getByText('1.5 MiB')).toBeInTheDocument();
+    // Total processed only — the eight per-status columns belong to the detail page's table.
+    expect(screen.getByRole('columnheader', { name: 'Processed' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Completed' })).not.toBeInTheDocument();
+  });
+
+  it('opens an instance’s own page with health cards and the jobs it processed', async () => {
+    // Only the by-key response: the stub matches the first key the URL starts with, so a
+    // `/instances` entry would shadow `/instances/worker-eu-1`.
+    harness({
+      responses: { ...RESPONSES, '/instances/worker-eu-1': INSTANCE },
+    }).renderApp('#/instances/worker-eu-1');
+
+    expect(await screen.findByText('CPU')).toBeInTheDocument();
+    expect(screen.getByText('Memory')).toBeInTheDocument();
+    expect(screen.getByText('RSS')).toBeInTheDocument();
+    expect(screen.getByText('Processed')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Jobs processed' })).toBeInTheDocument();
+    expect(screen.getByText('12.5%')).toBeInTheDocument();
+    expect(screen.getByText('1.5 MiB')).toBeInTheDocument();
+  });
+
+  it('asks the server only for the jobs this instance claimed', async () => {
+    const h = harness({
+      responses: { ...RESPONSES, '/instances/worker-eu-1': INSTANCE },
+    });
+    h.renderApp('#/instances/worker-eu-1');
+    await screen.findByText('CPU');
+    await waitFor(() =>
+      expect(
+        h.requests.some((r) => r.url.includes('/jobs') && r.params.instanceKey === 'worker-eu-1'),
+      ).toBe(true),
+    );
   });
 });

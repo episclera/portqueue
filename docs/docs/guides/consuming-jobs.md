@@ -26,9 +26,12 @@ pq.createWorker({
 ```
 
 Every throughput and claim knob lives under one `limiter` group: `concurrency`, `rateMax` +
-`rateDurationSeconds`, `respectSystemPressure`, `batchSize`, `pollIntervalSeconds`, and
-`lockDurationSeconds` — every one of those durations in seconds.
-Omit the group for sensible defaults.
+`rateDurationSeconds`, `batchSize`, `pollIntervalSeconds`, and `lockDurationSeconds` — every one of
+those durations in seconds. Omit the group for sensible defaults.
+
+Pausing under system pressure isn't set here: define
+[`systemLimiter`](./rate-limiting.md#system-pressure-backpressure) on the PortQueue and every worker
+respects it.
 
 ### `batchSize` vs `concurrency`
 

@@ -16,7 +16,6 @@ export interface WorkerConfig {
   lockDurationSeconds: number;
   pollIntervalSeconds: number;
   limiter?: { max: number; durationSeconds: number };
-  respectSystemPressure: boolean;
   dontAutoretryFor: Array<ErrorClass | string>;
   queueOptions: QueueOptions;
 }
@@ -91,7 +90,9 @@ export class Worker {
       while (!this.stopping) {
         const capacity = this.config.concurrency - this.activeCount;
         if (capacity <= 0) break;
-        if (this.config.respectSystemPressure && this.isPressureHigh()) break;
+        // Pressure is only ever high when the client was given a `systemLimiter`; without one this
+        // reads false forever, which is why there is no per-worker opt-in to carry.
+        if (this.isPressureHigh()) break;
 
         // Observe cluster-wide pause state.
         const row = await this.runtime.registry.refresh(this.config.queue);

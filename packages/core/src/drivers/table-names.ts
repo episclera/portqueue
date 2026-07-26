@@ -90,6 +90,9 @@ export enum InstanceColumn {
   CREATED_AT = 'created_at',
   UPDATED_AT = 'updated_at',
   LAST_SEEN_AT = 'last_seen_at',
+  CPU_PERCENT = 'cpu_percent',
+  MEMORY_PERCENT = 'memory_percent',
+  RSS_BYTES = 'rss_bytes',
 }
 
 export enum MigrationColumn {

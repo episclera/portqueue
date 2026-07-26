@@ -22,13 +22,15 @@ Everything you can set on `createWorker({ limiter })`, all scoped to that single
 | `concurrency` | Max handlers running **in parallel** in this worker (default 1). |
 | `rateMax` | Token-bucket cap: max jobs started per window. Requires `rateDurationSeconds`. |
 | `rateDurationSeconds` | The window for `rateMax`, in seconds — e.g. `60`. Requires `rateMax`. |
-| `respectSystemPressure` | Pause claiming while system pressure is high (default **`false`**). |
 | `batchSize` | Max jobs claimed per fetch (defaults to `concurrency`). |
 | `pollIntervalSeconds` | Poll cadence when LISTEN/NOTIFY is unavailable, in seconds. |
 | `lockDurationSeconds` | Visibility timeout / heartbeat window for a claimed job, in seconds (default 30). |
 
 None of these are persisted or shared: they tune how hard *this* process pulls from the queue.
 To change fleet-wide throughput, add or remove workers/instances.
+
+Whether a worker pauses under system pressure is **not** a `limiter` option — it follows from
+`systemLimiter` on the PortQueue (below).
 
 ## Worker-local rate cap
 
@@ -44,16 +46,16 @@ local rate cap. (Cluster-wide *pause* is still available via queue and instance 
 ```ts
 const pq = new PortQueue({
   driver,
-  monitor: { maxEventLoopDelaySeconds: 0.2, maxCpuPercent: 85, resumeHysteresis: 0.8 }, // delay threshold in seconds
+  // Defining this is what makes every worker respect pressure. Omit it and none do.
+  systemLimiter: { maxEventLoopDelaySeconds: 0.2, maxCpuPercent: 85, resumeHysteresis: 0.8 },
 });
 
 pq.createWorker({
   queue: 'third-party',
   limiter: {
     concurrency: 10,
-    rateMax: 50,                       // this worker's local cap…
-    rateDurationSeconds: 60,           // …per 60-second window
-    respectSystemPressure: true,       // opt in — default is false
+    rateMax: 50, // this worker's local cap…
+    rateDurationSeconds: 60, // …per 60-second window
   },
 });
 ```
@@ -62,34 +64,49 @@ pq.createWorker({
 
 ## System-pressure backpressure
 
-The client samples **this process's own** health and raises a pressure flag when a threshold you set
-is breached; workers with `limiter.respectSystemPressure: true` then stop claiming until it clears
-(with hysteresis, to avoid flapping). Sampling is **on by default** with
-`{ maxEventLoopDelaySeconds: 0.2, sampleIntervalSeconds: 2 }`; `monitor: false` turns it off entirely.
+`systemLimiter` is both the configuration and the switch. Pass it and **every** worker on the client
+stops claiming while any threshold you set is breached, resuming once every watched metric has
+fallen back (see `resumeHysteresis`). Omit it — the default — and nothing throttles.
+
+There is deliberately no per-worker opt-in. A limiter describes the health of *the process*, and one
+worker continuing to claim while its siblings back off would defeat the point; the earlier
+`limiter.respectSystemPressure` flag also made it easy to configure thresholds that silently did
+nothing.
+
+:::info Monitoring always runs; only limiting is opt-in
+CPU, memory share and RSS are measured whether or not you set a `systemLimiter` — the instance
+heartbeat records them, which is what the dashboard's per-instance health and the
+`portqueue instances` command read. That can't be switched off. **Event-loop delay is the
+exception**: measuring it keeps a `perf_hooks` histogram enabled for the life of the process, so it
+is only sampled when `maxEventLoopDelaySeconds` gives it a purpose.
+:::
+
 Pressure gating and the rate limits above throttle claiming independently — they compose.
 
-### Every `monitor` option
+### Every `systemLimiter` option
 
 | Option | Type | Default | What it does |
 |---|---|---|---|
 | `sampleIntervalSeconds` | `number` | `2` | How often metrics are sampled, in seconds. Every threshold is checked once per sample, so this is also the worst-case reaction time. |
-| `maxEventLoopDelaySeconds` | `number` | `0.2` (default config only) | Pressure when the **mean** event-loop delay since the last sample exceeds this many seconds (`0.2` = 200 ms). The best single signal that the process is saturated. |
+| `maxEventLoopDelaySeconds` | `number` | unset | Pressure when the **mean** event-loop delay since the last sample exceeds this many seconds (`0.2` = 200 ms). The best single signal that the process is saturated, and the only metric not measured at all until you set it. |
 | `maxCpuPercent` | `number` | unset | Pressure when this process's CPU use since the last sample exceeds this. It's process CPU summed across cores, so a busy multi-core box can read well over 100. |
 | `maxMemoryPercent` | `number` | unset | Pressure when RSS exceeds this share of **total machine memory** (`os.totalmem()`) — not of a container limit. |
 | `maxRssBytes` | `number` | unset | Pressure when RSS exceeds this absolute byte count. Use it when a cgroup/container cap is the real ceiling, since `maxMemoryPercent` can't see it. |
 | `resumeHysteresis` | `number` | `0.8` | Fraction (0–1) of the breached threshold the metric must fall back to before workers resume — `0.8` with `maxCpuPercent: 85` resumes at 68. Lower is more conservative. |
 
-Every threshold is optional and **only the ones you set are checked**. Your `monitor` object
-*replaces* the default rather than merging with it, so `monitor: { maxCpuPercent: 85 }` no longer
-watches event-loop delay, and `monitor: {}` samples but can never report pressure.
+Every threshold is optional and **only the ones you set are checked**; there are no defaults to
+merge with, so `systemLimiter: {}` samples but can never report pressure.
 
-Thresholds are evaluated in a fixed order — `maxEventLoopDelaySeconds`, `maxCpuPercent`, `maxRssBytes`,
-`maxMemoryPercent` — and the **first breach wins**: that's the metric reported on the event.
+Thresholds are evaluated in a fixed order — `maxEventLoopDelaySeconds`, `maxCpuPercent`,
+`maxRssBytes`, `maxMemoryPercent` — and the **first breach wins**: that's the metric reported on the
+event. Recovery is stricter than the breach: **every** watched metric must fall to
+`threshold × resumeHysteresis` before claiming resumes, so a metric hovering at its limit can't
+toggle pressure on alternate samples.
 
 ```ts
 const pq = new PortQueue({
   driver,
-  monitor: {
+  systemLimiter: {
     sampleIntervalSeconds: 2,        // sampling cadence, in seconds
     maxEventLoopDelaySeconds: 0.2,   // 200 ms of mean event-loop delay
     maxCpuPercent: 85,

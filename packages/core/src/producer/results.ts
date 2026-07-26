@@ -91,6 +91,13 @@ export interface InstanceInfo {
   createdAt: Date;
   updatedAt: Date;
   lastSeenAt: Date;
+  /**
+   * The instance's health at its last heartbeat. Percentages are 0-100 — CPU is summed across
+   * cores, so it can exceed 100 — and `rssBytes` is absolute. Null until its first beat.
+   */
+  cpuPercent: number | null;
+  memoryPercent: number | null;
+  rssBytes: number | null;
   /** Job counts by status attributed to this instance (by `processedOnInstanceKey`). */
   counts: Record<JobStatus, number>;
 }

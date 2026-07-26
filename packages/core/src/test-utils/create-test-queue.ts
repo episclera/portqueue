@@ -24,7 +24,7 @@ export interface TestQueueHandle {
 
 /**
  * Spin up a clean in-memory PortQueue on the chosen test driver.
- * Uses a FakeClock and a very fast tick, with the system monitor disabled.
+ * Uses a FakeClock and a very fast tick. No `systemLimiter`, so nothing throttles on pressure.
  */
 export async function createTestQueue(
   engine: TestEngine,
@@ -35,7 +35,6 @@ export async function createTestQueue(
   const pq = new PortQueue({
     driver,
     logger: new NoopLogger(),
-    monitor: false,
     clock,
     tickIntervalSeconds: 0.05,
     ...options,

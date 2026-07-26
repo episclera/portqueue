@@ -17,8 +17,9 @@ export interface WorkerOptions<
   handler: JobHandler<TData, TResult>;
   /**
    * Worker throughput & claim tuning in one group: `concurrency`, `rateMax`/`rateDurationSeconds`,
-   * `respectSystemPressure`, `batchSize`, `pollIntervalSeconds`, and `lockDurationSeconds`. Every
-   * duration is in seconds. Omit it for sensible defaults.
+   * `batchSize`, `pollIntervalSeconds`, and `lockDurationSeconds`. Every duration is in seconds.
+   * Omit it for sensible defaults. Whether this worker pauses under system pressure is not set
+   * here — it follows from `systemLimiter` on the PortQueue.
    */
   limiter?: LimiterOptions;
   /** Celery-style non-retryable errors — matched by `instanceof` or `error.name`. */

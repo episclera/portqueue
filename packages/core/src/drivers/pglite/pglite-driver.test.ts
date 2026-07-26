@@ -26,7 +26,7 @@ describe('PgliteDriver extends PostgresDriver', () => {
 
   it('boots its own connection, migrates to v1 and serves the inherited SQL', async () => {
     const driver = new PgliteDriver();
-    const pq = new PortQueue<'emails'>({ driver, logger: new NoopLogger(), monitor: false });
+    const pq = new PortQueue<'emails'>({ driver, logger: new NoopLogger() });
     await pq.init();
     try {
       const probe = await driver.probe();

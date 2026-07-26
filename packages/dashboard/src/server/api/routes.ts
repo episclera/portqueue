@@ -21,9 +21,11 @@ import {
   PauseMode,
   type PortQueue,
   type GetJobsQuery,
+  type JobInstanceFilter,
   type AddJobOptions,
 } from '@portqueue/core';
 import {
+  serializeInstance,
   serializeInstancePage,
   serializeJob,
   serializeJobPage,
@@ -106,15 +108,17 @@ function parseStatuses(raw: string | null): JobStatus[] | undefined {
   return out.length ? out : undefined;
 }
 
-function buildJobsQuery(params: URLSearchParams): GetJobsQuery {
+function buildJobsQuery(params: URLSearchParams): GetJobsQuery & JobInstanceFilter {
   const { limit, offset } = paging(params);
-  const q: GetJobsQuery = { limit, offset };
+  const q: GetJobsQuery & JobInstanceFilter = { limit, offset };
   const queue = params.get('queue');
   if (queue) q.queue = queue;
   const statuses = parseStatuses(params.get('statuses'));
   if (statuses) q.statuses = statuses;
   const scheduleId = params.get('scheduleId');
   if (scheduleId) q.scheduleId = scheduleId;
+  const instanceKey = params.get('instanceKey');
+  if (instanceKey) q.instanceKey = instanceKey;
   const cursor = params.get('cursor');
   if (cursor) q.cursor = cursor;
   const order = params.get('order');
@@ -187,6 +191,15 @@ export function createRouter(options: RouterOptions): {
           : {}),
       });
       return json(200, serializeInstancePage(page));
+    }
+
+    const instanceMatch = /^\/api\/instances\/([^/]+)$/.exec(path);
+    if (instanceMatch?.[1]) {
+      const instance = await dashboard.getInstance({
+        instanceKey: decodeURIComponent(instanceMatch[1]),
+      });
+      if (!instance) return json(404, { error: 'Instance not found' });
+      return json(200, serializeInstance(instance));
     }
 
     if (path === '/api/schedules') {

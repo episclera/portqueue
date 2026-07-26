@@ -35,13 +35,13 @@ const KNOWN_ENGINES = new Set<string>(Object.values(CliEngine));
 /**
  * Builds the CLI's own short-lived PortQueue from connection flags. It never loads the user's
  * app config: it constructs a driver from `--driver`/`--connection-string` (or `DATABASE_URL`)
- * and returns a client with `monitor: false`, no `instanceKey`, and no workers.
+ * and returns a client with no `systemLimiter`, no `instanceKey`, and no workers.
  */
 export async function buildPortQueue(flags: DriverFlags): Promise<PortQueue> {
   const connectionString = flags.connectionString ?? process.env.DATABASE_URL;
   const engine = resolveEngine(flags.driver, connectionString);
   const driver = await createDriver(engine, connectionString, flags);
-  return new PortQueue({ driver, monitor: false });
+  return new PortQueue({ driver });
 }
 
 /** Determines the engine from `--driver`, else infers it from the connection string scheme. */

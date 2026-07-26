@@ -41,7 +41,7 @@ export type {
   RetentionOptions,
   RetryOptions,
   LimiterOptions,
-  SystemMonitorOptions,
+  SystemLimiterOptions,
   Page,
 } from './options/common';
 
@@ -113,6 +113,7 @@ export type {
   GetInstancesQuery,
   GetQueuesQuery,
   GetSchedulesQuery,
+  JobInstanceFilter,
   JobSearchQuery,
   ScheduleWithQueue,
 } from './dashboard/dashboard-results';

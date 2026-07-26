@@ -44,13 +44,22 @@ links to its own page.
 
 <Shot
   name="instances"
-  alt="The instances page: one row per registered instance with liveness, job counts and pause controls"
+  alt="The instances page: one row per registered instance with liveness, health metrics and pause controls"
 >
 
-Every registered instance with its liveness, its own job counts, and per-instance pause/resume —
-one row per process, so a single wedged server is visible as one stale row rather than as a dip in
-the totals. Only populated for servers that set an
-[instance key](./scale-horizontally.md#give-each-server-an-identity-key).
+Every registered instance with its liveness, the CPU / memory / RSS it recorded on its last
+heartbeat, how many jobs it has processed, and per-instance pause/resume — one row per process, so a
+single wedged server is visible as one stale row rather than as a dip in the totals. A metric is
+coloured only once it is worth attention, so a healthy fleet reads as plain text. Only populated for
+servers that set an [instance key](./scale-horizontally.md#give-each-server-an-identity-key).
+
+Each instance key links to its own page: health cards for CPU, memory and RSS, the total processed,
+and below them the jobs that instance claimed — which is the question a list of instances can't
+answer ("this one looks busy — busy with what?").
+
+Health metrics are recorded whether or not you configure a
+[`systemLimiter`](./guides/rate-limiting.md#system-pressure-backpressure); that option decides
+whether the numbers also throttle claiming, not whether they are collected.
 
 </Shot>
 
@@ -82,8 +91,7 @@ running process declares) **Remove queue** sit in the subheader. Job ids are tru
 first and last characters — enough to recognise one, short enough to keep the row readable.
 
 The **Add job** form mirrors `addJob`, so its timing fields are the same seconds the API takes:
-_Start after (seconds)_ for a one-off delay (or _…or start at_ for an exact ISO instant), and
-_Every (seconds)_ for a fixed-interval recurrence.
+_Start after (seconds)_ for a one-off delay and _Every (seconds)_ for a fixed-interval recurrence.
 
 </Shot>
 

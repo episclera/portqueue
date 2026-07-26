@@ -23,7 +23,13 @@ export class ReadService {
     return toSnapshot<TData>(record, record.queueName, this.runtime.clock.now());
   }
 
-  async getJobs<TData = unknown>(query: GetJobsQuery): Promise<Page<JobSnapshot<TData>>> {
+  /**
+   * A page of jobs. `instanceKey` is not part of the public `GetJobsQuery` — it is here for the
+   * dashboard facade's instance detail view, which reads jobs by the instance that claimed them.
+   */
+  async getJobs<TData = unknown>(
+    query: GetJobsQuery & { instanceKey?: string },
+  ): Promise<Page<JobSnapshot<TData>>> {
     const limit = Math.min(query.limit ?? 50, 500);
     // An explicit offset wins; otherwise decode the cursor (which encodes the next offset).
     const offset =
@@ -36,6 +42,7 @@ export class ReadService {
       ...(query.queue ? { queueName: query.queue } : {}),
       ...(query.statuses ? { statuses: query.statuses } : {}),
       ...(query.scheduleId ? { scheduleId: query.scheduleId } : {}),
+      ...(query.instanceKey ? { processedOnInstanceKey: query.instanceKey } : {}),
     };
     const records = await this.runtime.driver.getJobs({
       ...filter,
@@ -95,6 +102,9 @@ export class ReadService {
       createdAt: new Date(row.createdAt),
       updatedAt: new Date(row.updatedAt),
       lastSeenAt: new Date(row.lastSeenAt),
+      cpuPercent: row.cpuPercent,
+      memoryPercent: row.memoryPercent,
+      rssBytes: row.rssBytes,
       counts: counts[row.instanceKey] ?? emptyStatusCounts(),
     }));
   }

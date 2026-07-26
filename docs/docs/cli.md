@@ -10,7 +10,7 @@ keywords: [portqueue, cli, command line, job queue, postgres queue, database que
 
 `@portqueue/cli` operates a PortQueue from the terminal. It **builds its own short-lived
 instance** from the connection flags you pass — it never loads your app's code or a config
-file. The CLI runs with monitoring off, no `instanceKey`, and no workers, so it never picks
+file. The CLI runs with no `systemLimiter`, no `instanceKey`, and no workers, so it never picks
 up jobs or registers as an instance; it just connects, runs one command, and disconnects.
 
 ## Connecting
@@ -105,12 +105,14 @@ for the generated usage. Global connection flags apply to all of them.
 | `jobs` | `--queue <name> [--status <s>] [--schedule-id <id>] [--limit <n> --cursor <c>]` | Paged job list |
 | `job` | `--id <jobId>` | Full detail for a single job |
 | `schedules` | `[--queue <name>]` | List recurring definitions. Without `--queue`, every queue's |
+| `instances` | | List instances with liveness, health at the last heartbeat (CPU / memory / RSS) and jobs processed |
+| `instance` | `--key <instanceKey>` | One instance: its health, liveness and job counts by status |
 
 ### Actions
 
 | Command | Usage | What it does |
 | --- | --- | --- |
-| `add` | `--queue <name> --data <json\|@file> [--priority <n>] [--start-after <seconds\|ISO date>] [--idempotency-key <k>] [--retry-max-attempts <n>] [--cron "<expr>" --timezone <tz> \| --every <seconds>]` | Enqueue a one-off job or create a recurring schedule. `--data` is inline JSON or `@path/to/file.json`. `--start-after` and `--every` are in **seconds** |
+| `add` | `--queue <name> --data <json\|@file> [--priority <n>] [--start-after <seconds>] [--idempotency-key <k>] [--retry-max-attempts <n>] [--cron "<expr>" --timezone <tz> \| --every <seconds>]` | Enqueue a one-off job or create a recurring schedule. `--data` is inline JSON or `@path/to/file.json`. `--start-after` and `--every` are in **seconds** |
 | `retry` | `--id <jobId>` | Requeue a failed/completed job (re-arms its own row) |
 | `cancel` | `--id <jobId>` | Cancel a pending or active job |
 | `remove` | `(--id <jobId> \| --schedule-id <id>)` | Remove a single job **or** a schedule. An ACTIVE job is skipped — cancel it first |

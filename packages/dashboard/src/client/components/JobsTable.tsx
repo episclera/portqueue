@@ -4,8 +4,8 @@
  * which is **one** transactional request, not a fan-out — and every row carries the same three
  * actions as icon buttons.
  *
- * Reused by the queue detail page and the schedule detail page; `scheduleId` narrows it to the
- * jobs one schedule produced.
+ * Reused by the queue, schedule and instance detail pages: `scheduleId` narrows it to the jobs one
+ * schedule produced, `instanceKey` to the jobs one instance claimed.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -31,6 +31,8 @@ export interface JobsTableProps {
   queue?: string;
   /** Narrow to the jobs one schedule produced. */
   scheduleId?: string;
+  /** Narrow to the jobs one instance claimed. */
+  instanceKey?: string;
   /** URL param prefix, so two job tables on one page don't share state. */
   prefix?: string;
 }
@@ -56,6 +58,7 @@ const CANCELLABLE: JobStatus[] = [JobStatus.PENDING, JobStatus.ACTIVE, JobStatus
 export function JobsTable({
   queue,
   scheduleId,
+  instanceKey,
   prefix = 'jobs',
 }: JobsTableProps): React.ReactElement {
   const { run, runBatch } = useAction();
@@ -68,6 +71,7 @@ export function JobsTable({
   const listParams = {
     ...(queue ? { queue } : {}),
     ...(scheduleId ? { scheduleId } : {}),
+    ...(instanceKey ? { instanceKey } : {}),
     ...(statusesKey ? { statuses: statusesKey } : {}),
     ...(params.search ? { search: params.search } : {}),
     offset: params.offset,

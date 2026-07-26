@@ -12,6 +12,7 @@ import type {
   ActionRequestDto,
   ActionResultDto,
   DashboardConfigDto,
+  InstanceDto,
   InstancePageDto,
   JobDto,
   JobPageDto,
@@ -101,6 +102,8 @@ export interface JobListParams extends ListParams {
   queue?: string;
   statuses?: string;
   scheduleId?: string;
+  /** Narrow to the jobs one instance claimed — the instance detail page's table. */
+  instanceKey?: string;
   order?: string;
 }
 
@@ -113,6 +116,8 @@ export const api = {
   getSchedule: (scheduleId: string) =>
     get<ScheduleDto>(`/schedules/${encodeURIComponent(scheduleId)}`),
   getInstances: (params: InstanceListParams = {}) => get<InstancePageDto>('/instances', params),
+  getInstance: (instanceKey: string) =>
+    get<InstanceDto>(`/instances/${encodeURIComponent(instanceKey)}`),
 
   action: async (body: ActionRequestDto): Promise<ActionResultDto> => {
     const res = await http.post<ActionResultDto>('/actions', body);

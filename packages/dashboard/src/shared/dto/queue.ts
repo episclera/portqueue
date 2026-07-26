@@ -30,7 +30,7 @@ export interface StatsDto {
   counts: CountsDto;
 }
 
-/** An instance row with liveness + per-instance job attribution (mirrors core `InstanceInfo`). */
+/** An instance row with liveness, health + per-instance job attribution (mirrors `InstanceInfo`). */
 export interface InstanceDto {
   instanceKey: string;
   processingPaused: boolean;
@@ -38,6 +38,13 @@ export interface InstanceDto {
   createdAt: string;
   updatedAt: string;
   lastSeenAt: string;
+  /**
+   * The instance's health at its last heartbeat. Percentages are 0-100 (CPU is summed across
+   * cores, so it can exceed 100); `rssBytes` is absolute. Null until the instance's first beat.
+   */
+  cpuPercent: number | null;
+  memoryPercent: number | null;
+  rssBytes: number | null;
   counts: CountsDto;
 }
 

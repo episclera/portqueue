@@ -1,8 +1,14 @@
 /**
- * Instances page: every registered instance with liveness, per-instance job attribution, and
- * per-instance pause/resume. Server-paged; only populated when instances run with an `instanceKey`.
+ * Instances page: every registered instance with its liveness, health at the last heartbeat, total
+ * jobs processed, and per-instance pause/resume. Server-paged; only populated when instances run
+ * with an `instanceKey`.
+ *
+ * The per-status count breakdown deliberately isn't here. Eight numeric columns beside the health
+ * metrics made the row unreadable and none of them answered a question this page is for; the
+ * instance detail page carries the full jobs table instead.
  */
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Content, Mono, PageHeader, Table, Tag } from '@portqueue/ui';
 import type { TableColumn } from '@portqueue/ui';
 import { ActionKind, type InstanceDto, type InstancePageDto } from '../../shared/dto';
@@ -18,7 +24,16 @@ import {
 } from '../constants/labels';
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
-import { countColumns, dateColumn } from '../components/table-columns';
+import { dateColumn } from '../components/table-columns';
+import {
+  CPU_THRESHOLDS,
+  MEMORY_THRESHOLDS,
+  MetricValue,
+  formatBytes,
+  formatPercent,
+  metricTone,
+} from '../components/metrics';
+import { totalCount } from '../components/format';
 import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
 
@@ -65,7 +80,11 @@ export function InstancesPage(): React.ReactElement {
     {
       title: 'Instance',
       key: 'instanceKey',
-      render: (r) => <Mono>{r.instanceKey}</Mono>,
+      render: (r) => (
+        <Link to={`/instances/${encodeURIComponent(r.instanceKey)}`}>
+          <Mono>{r.instanceKey}</Mono>
+        </Link>
+      ),
     },
     {
       title: 'Liveness',
@@ -83,7 +102,44 @@ export function InstancesPage(): React.ReactElement {
         <Tag tone={r.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(r)}</Tag>
       ),
     },
-    ...countColumns<InstanceDto>(),
+    {
+      title: 'CPU',
+      key: 'cpuPercent',
+      align: 'right',
+      render: (r) => (
+        <MetricValue tone={metricTone(r.cpuPercent, CPU_THRESHOLDS)}>
+          {formatPercent(r.cpuPercent)}
+        </MetricValue>
+      ),
+    },
+    {
+      title: 'Memory',
+      key: 'memoryPercent',
+      align: 'right',
+      render: (r) => (
+        <MetricValue tone={metricTone(r.memoryPercent, MEMORY_THRESHOLDS)}>
+          {formatPercent(r.memoryPercent)}
+        </MetricValue>
+      ),
+    },
+    {
+      // RSS is the same quantity as the memory share, so it takes that reading's tone rather than
+      // an absolute byte threshold — what counts as "a lot" depends on the machine.
+      title: 'RSS',
+      key: 'rssBytes',
+      align: 'right',
+      render: (r) => (
+        <MetricValue tone={metricTone(r.memoryPercent, MEMORY_THRESHOLDS)}>
+          {formatBytes(r.rssBytes)}
+        </MetricValue>
+      ),
+    },
+    {
+      title: 'Processed',
+      key: 'processed',
+      align: 'right',
+      render: (r) => totalCount(r.counts),
+    },
     // The clock time of the last heartbeat. Whether that is recent is what the Liveness column
     // already answers, so this column doesn't need to count on its own.
     dateColumn<InstanceDto>('Last Seen', 'lastSeenAt', (r) => r.lastSeenAt),
@@ -147,7 +203,7 @@ export function InstancesPage(): React.ReactElement {
     <>
       <PageHeader
         title="Instances"
-        subtitle="Liveness and per-instance job attribution across the cluster."
+        subtitle="Liveness, health at the last heartbeat, and jobs processed across the cluster."
       />
       <Content>
         <TableCard

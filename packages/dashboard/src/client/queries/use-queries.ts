@@ -36,10 +36,20 @@ export const queryKeys = {
   schedules: (params?: unknown) => ['schedules', params ?? {}] as const,
   schedule: (scheduleId: string) => ['schedule', scheduleId] as const,
   instances: (params?: unknown) => ['instances', params ?? {}] as const,
+  instance: (instanceKey: string) => ['instance', instanceKey] as const,
 };
 
 /** The root of each key family, for the broad invalidation a mutation does. */
-export const queryRoots = ['queues', 'stats', 'jobs', 'job', 'schedules', 'schedule', 'instances'];
+export const queryRoots = [
+  'queues',
+  'stats',
+  'jobs',
+  'job',
+  'schedules',
+  'schedule',
+  'instances',
+  'instance',
+];
 
 /**
  * A query that reconciles on an interval while live-updates are on. Use it for the handful of

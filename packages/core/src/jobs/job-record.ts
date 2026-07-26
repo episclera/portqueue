@@ -88,6 +88,17 @@ export interface QueueRow {
   updatedAt: number;
 }
 
+/**
+ * The health of an instance at its last heartbeat. Percentages are 0-100 (CPU is summed across
+ * cores, so it can exceed 100); `rssBytes` is absolute. Recorded on every beat, so it describes the
+ * moment the instance was last heard from.
+ */
+export interface InstanceMetrics {
+  cpuPercent: number;
+  memoryPercent: number;
+  rssBytes: number;
+}
+
 /** The normalized in-memory shape of an `instance` row. */
 export interface InstanceRow {
   instanceKey: string;
@@ -95,6 +106,10 @@ export interface InstanceRow {
   createdAt: number;
   updatedAt: number;
   lastSeenAt: number;
+  /** Null until the instance's first heartbeat has carried a sample. */
+  cpuPercent: number | null;
+  memoryPercent: number | null;
+  rssBytes: number | null;
 }
 
 export interface ScheduleRow {

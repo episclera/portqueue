@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { addCommand } from './add';
 import { cancelCommand } from './cancel';
 import { doctorCommand } from './doctor';
+import { instanceCommand, instancesCommand } from './instances';
 import { jobCommand, jobsCommand } from './jobs';
 import { migrateCommand } from './migrate';
 import { pauseCommand, resumeCommand } from './pause';
@@ -98,6 +99,63 @@ describe('schedulesCommand', () => {
   it('never registers a queue in this process', async () => {
     const { calls } = await run(schedulesCommand, { queue: 'emails' }, { schedules: SCHEDULES });
     expect(calls.createQueue).toEqual([]);
+  });
+});
+
+describe('instancesCommand', () => {
+  it('lists liveness, health and a processed total', async () => {
+    const { stdout } = await run(instancesCommand, {});
+    expect(stdout).toContain('worker-eu-1');
+    expect(stdout).toContain('12.5%');
+    expect(stdout).toContain('94.2%');
+    expect(stdout).toContain('1.5 MiB');
+    // 8 completed + 1 failed, as one number rather than a column per status.
+    expect(stdout).toContain('9');
+  });
+
+  it('prints an em dash for an instance that has not beaten yet', async () => {
+    const { stdout } = await run(
+      instancesCommand,
+      {},
+      {
+        instances: [
+          {
+            instanceKey: 'fresh',
+            processingPaused: false,
+            alive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            lastSeenAt: new Date(),
+            cpuPercent: null,
+            memoryPercent: null,
+            rssBytes: null,
+            counts: {},
+          },
+        ],
+      },
+    );
+    expect(stdout).toContain('—');
+    expect(stdout).not.toContain('0.0%');
+  });
+
+  it('never registers a queue in this process', async () => {
+    const { calls } = await run(instancesCommand, {});
+    expect(calls.createQueue).toEqual([]);
+  });
+});
+
+describe('instanceCommand', () => {
+  it('prints one instance with its health and per-status counts', async () => {
+    const { stdout } = await run(instanceCommand, { key: 'worker-eu-1' });
+    expect(stdout).toContain('Instance worker-eu-1');
+    expect(stdout).toContain('12.5%');
+    expect(stdout).toContain('COMPLETED');
+    expect(stdout).toContain('TOTAL');
+  });
+
+  it('throws when the key is missing or unknown', async () => {
+    await expect(run(instanceCommand, {})).rejects.toThrow(/Missing required --key/);
+    await expect(run(instanceCommand, { key: 'nope' })).rejects.toThrow(/not found/);
   });
 });
 

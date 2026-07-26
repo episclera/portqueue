@@ -109,7 +109,10 @@ function v1(t: PhysicalName): string[] {
         processing_paused NUMBER(5) DEFAULT 0 NOT NULL,
         created_at NUMBER(19) NOT NULL,
         updated_at NUMBER(19) NOT NULL,
-        last_seen_at NUMBER(19) NOT NULL
+        last_seen_at NUMBER(19) NOT NULL,
+        cpu_percent BINARY_DOUBLE,
+        memory_percent BINARY_DOUBLE,
+        rss_bytes NUMBER(19)
       )`,
     ),
     createIfAbsent(

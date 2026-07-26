@@ -1,7 +1,7 @@
 import type { Driver } from '../drivers/driver.interface';
 import type { Logger, LoggerOptions } from '../logging/logger.interface';
 import type { MigrationMode } from './enums';
-import type { SystemMonitorOptions } from './common';
+import type { SystemLimiterOptions } from './common';
 
 /**
  * This process's instance identity. Provide an `instanceKey` to name the instance so it can be
@@ -27,8 +27,12 @@ export interface PortQueueOptions {
   migration?: MigrationMode;
   /** This process's instance identity & multi-instance settings. */
   instance?: InstanceOptions;
-  /** System-pressure backpressure; `false` disables. */
-  monitor?: SystemMonitorOptions | false;
+  /**
+   * Thresholds on this process's own CPU / memory / event-loop that pause job claiming while
+   * breached ({@link SystemLimiterOptions}). Omitted by default — nothing throttles unless you
+   * define it. This process's health is measured either way; only the throttling is opt-in.
+   */
+  systemLimiter?: SystemLimiterOptions;
   /** Interval for scheduler/retention/monitor ticks, **in seconds**. Default 5. */
   tickIntervalSeconds?: number;
   /** @internal Inject a clock for deterministic tests. */

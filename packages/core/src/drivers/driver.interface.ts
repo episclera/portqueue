@@ -2,6 +2,7 @@ import type { DatabaseEngine } from '../options/enums';
 import type { JobStatus } from '../jobs/job-state.enum';
 import type {
   InsertedJobRow,
+  InstanceMetrics,
   InstanceRow,
   JobRecord,
   NewJobRecord,
@@ -268,7 +269,16 @@ export interface Driver {
   deleteQueue(options: { name: string; tx?: TransactionHandle }): Promise<boolean>;
 
   // Instance liveness & per-instance pause
-  upsertInstance(options: { instanceKey: string; now: number }): Promise<InstanceRow>;
+  /**
+   * Record a heartbeat: bump `last_seen_at` and, when the caller has a sample, this instance's
+   * health. Metrics are COALESCEd, so a beat without one keeps the previous reading rather than
+   * blanking it. Must never touch the independently-controlled pause flag.
+   */
+  upsertInstance(options: {
+    instanceKey: string;
+    now: number;
+    metrics?: InstanceMetrics;
+  }): Promise<InstanceRow>;
   /** Instance rows, optionally narrowed and paged. No options returns every instance. */
   listInstances(options?: InstanceListFilter & PageWindow): Promise<InstanceRow[]>;
   /** Total instances matching a {@link listInstances} filter, ignoring paging. */

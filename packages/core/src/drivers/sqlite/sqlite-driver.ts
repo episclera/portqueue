@@ -37,6 +37,7 @@ import type {
 } from '../driver.interface';
 import type {
   InsertedJobRow,
+  InstanceMetrics,
   InstanceRow,
   JobRecord,
   NewJobRecord,
@@ -383,6 +384,9 @@ export class SqliteDriver implements Driver {
       createdAt: Number(row[InstanceColumn.CREATED_AT]),
       updatedAt: Number(row[InstanceColumn.UPDATED_AT]),
       lastSeenAt: Number(row[InstanceColumn.LAST_SEEN_AT]),
+      cpuPercent: this.numOrNull(row[InstanceColumn.CPU_PERCENT]),
+      memoryPercent: this.numOrNull(row[InstanceColumn.MEMORY_PERCENT]),
+      rssBytes: this.numOrNull(row[InstanceColumn.RSS_BYTES]),
     };
   }
 
@@ -1251,20 +1255,40 @@ export class SqliteDriver implements Driver {
   }
 
   // --- Instance liveness & per-instance pause ---
-  async upsertInstance(options: { instanceKey: string; now: number }): Promise<InstanceRow> {
+  async upsertInstance(options: {
+    instanceKey: string;
+    now: number;
+    metrics?: InstanceMetrics;
+  }): Promise<InstanceRow> {
     // Update-first, then insert if absent — NOT a database UPSERT (`ON CONFLICT`/`MERGE`), which
     // sharded engines reject unless the conflict target is the shard key. The heartbeat's common
     // case is "row exists", so the guarded UPDATE ... RETURNING resolves it in one round-trip and
     // never touches the (independently controlled) pause flag; only the first beat falls through
     // to INSERT. A rare create race can leave two rows; listInstances dedupes by key.
+    const m = options.metrics;
     const updated = await this.execute(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.LAST_SEEN_AT} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(2)} RETURNING *`,
-      [options.now, options.now, options.instanceKey],
+      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.LAST_SEEN_AT} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}, ${InstanceColumn.CPU_PERCENT} = COALESCE(${this.ph(2)}, ${InstanceColumn.CPU_PERCENT}), ${InstanceColumn.MEMORY_PERCENT} = COALESCE(${this.ph(3)}, ${InstanceColumn.MEMORY_PERCENT}), ${InstanceColumn.RSS_BYTES} = COALESCE(${this.ph(4)}, ${InstanceColumn.RSS_BYTES}) WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(5)} RETURNING *`,
+      [
+        options.now,
+        options.now,
+        m?.cpuPercent ?? null,
+        m?.memoryPercent ?? null,
+        m?.rssBytes ?? null,
+        options.instanceKey,
+      ],
     );
     if (updated.rows[0]) return this.mapInstance(updated.rows[0]);
     const inserted = await this.execute(
-      `INSERT INTO ${this.t(TableName.INSTANCE)} (${InstanceColumn.INSTANCE_KEY}, ${InstanceColumn.PROCESSING_PAUSED}, ${InstanceColumn.CREATED_AT}, ${InstanceColumn.UPDATED_AT}, ${InstanceColumn.LAST_SEEN_AT}) VALUES (${this.ph(0)}, 0, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}) RETURNING *`,
-      [options.instanceKey, options.now, options.now, options.now],
+      `INSERT INTO ${this.t(TableName.INSTANCE)} (${InstanceColumn.INSTANCE_KEY}, ${InstanceColumn.PROCESSING_PAUSED}, ${InstanceColumn.CREATED_AT}, ${InstanceColumn.UPDATED_AT}, ${InstanceColumn.LAST_SEEN_AT}, ${InstanceColumn.CPU_PERCENT}, ${InstanceColumn.MEMORY_PERCENT}, ${InstanceColumn.RSS_BYTES}) VALUES (${this.ph(0)}, 0, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)}, ${this.ph(5)}, ${this.ph(6)}) RETURNING *`,
+      [
+        options.instanceKey,
+        options.now,
+        options.now,
+        options.now,
+        m?.cpuPercent ?? null,
+        m?.memoryPercent ?? null,
+        m?.rssBytes ?? null,
+      ],
     );
     return this.mapInstance(inserted.rows[0]!);
   }
