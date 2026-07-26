@@ -5,9 +5,13 @@
  * A job that is still in flight polls; a settled one doesn't. Its row can't change again once it
  * has reached a terminal status, so there is nothing to reconcile — but an ACTIVE or RETRY job
  * used to sit frozen here too, which was simply wrong.
+ *
+ * Two of the actions leave the page, because after them this URL no longer shows what the user
+ * asked for: a clone follows the record it just created, and a removal goes back to the queue,
+ * since the removed job's own page has nothing left to render.
  */
 import React, { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useHistory, useParams } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -22,6 +26,7 @@ import {
   Stack,
   StatusTag,
   Title,
+  useToast,
 } from '@portqueue/ui';
 import styled from 'styled-components';
 import { JobStatus } from '../queries/enums';
@@ -162,6 +167,8 @@ export function JobDetailPage(): React.ReactElement {
   const { id } = useParams<{ id: string }>();
   const jobId = decodeURIComponent(id);
   const { run } = useAction();
+  const history = useHistory();
+  const toast = useToast();
 
   // Poll only while the record can still change. TanStack keeps the previous data across the
   // switch, so a job settling mid-view simply stops refetching rather than remounting.
@@ -172,11 +179,13 @@ export function JobDetailPage(): React.ReactElement {
 
   const [cloneOpen, setCloneOpen] = useState(false);
 
-  // A settled job needs no further reconciliation; stop the interval the moment it settles.
+  // A settled job needs no further reconciliation; stop the interval the moment it settles. Keyed
+  // on the id too: this page stays mounted when it navigates to another job (a clone does exactly
+  // that), and the previous job's terminal status must not leave the new one frozen.
   useEffect(() => {
     const status = job.data?.status;
-    if (status && TERMINAL.includes(status)) setTerminal(true);
-  }, [job.data?.status]);
+    setTerminal(status !== undefined && TERMINAL.includes(status));
+  }, [jobId, job.data?.status]);
 
   if (job.error) {
     return (
@@ -224,6 +233,25 @@ export function JobDetailPage(): React.ReactElement {
   const isFailed = j.status === JobStatus.FAILED;
   const rawStatus = j.stalled ? STALLED : j.status;
   const status = statusLabel(rawStatus);
+  const queuePath = `/queues/${encodeURIComponent(j.queue)}`;
+
+  /**
+   * Remove this job, then leave for its queue — there is no record left to show here. The outcome
+   * is reported from the result rather than assumed: core refuses to remove a **running** job, and
+   * that refusal has to keep the user on the page instead of sending them off with "Removed".
+   */
+  const remove = async (): Promise<void> => {
+    const result = await run({ kind: ActionKind.REMOVE, queue: j.queue, jobId: j.id }, undefined, {
+      silent: true,
+    });
+    if (!result) return;
+    if (!result.ok) {
+      toast.info('This job is still running. Cancel it first, then remove it.');
+      return;
+    }
+    toast.success('Removed');
+    history.push(queuePath);
+  };
 
   const actions = (
     <Inline gap={2} wrap>
@@ -242,6 +270,10 @@ export function JobDetailPage(): React.ReactElement {
       {j.status === JobStatus.ACTIVE && (
         <Popconfirm
           title="Cancel this job?"
+          // Labelled with the action, as the row popovers are: a bare "OK" next to "Cancel" reads
+          // as if the dismiss button were the one that cancels the job.
+          okText={ACTIONS_CONFIG.cancel.label}
+          cancelText="Keep"
           onConfirm={() =>
             void run({ kind: ActionKind.CANCEL, queue: j.queue, jobId: j.id }, 'Cancelled')
           }
@@ -251,10 +283,10 @@ export function JobDetailPage(): React.ReactElement {
       )}
       <Popconfirm
         title="Remove this job permanently?"
+        okText={ACTIONS_CONFIG.remove.label}
+        cancelText="Keep"
         okDanger
-        onConfirm={() =>
-          void run({ kind: ActionKind.REMOVE, queue: j.queue, jobId: j.id }, 'Removed')
-        }
+        onConfirm={() => void remove()}
       >
         <Button variant="danger" icon={ACTIONS_CONFIG.remove.icon}>
           {ACTIONS_CONFIG.remove.label}
@@ -283,7 +315,7 @@ export function JobDetailPage(): React.ReactElement {
         subtitle={
           <Inline gap={2} align="center">
             <StatusTag status={rawStatus} label={status} />
-            <Link to={`/queues/${encodeURIComponent(j.queue)}`}>{j.queue}</Link>
+            <Link to={queuePath}>{j.queue}</Link>
           </Inline>
         }
         extra={actions}
@@ -297,7 +329,7 @@ export function JobDetailPage(): React.ReactElement {
                   <Mono>{j.id}</Mono>
                 </Item>
                 <Item label="Queue">
-                  <Link to={`/queues/${encodeURIComponent(j.queue)}`}>{j.queue}</Link>
+                  <Link to={queuePath}>{j.queue}</Link>
                 </Item>
                 <Item label="Status">{status}</Item>
                 <Item label="Stalled">{j.stalled ? 'Yes' : 'No'}</Item>
@@ -370,6 +402,14 @@ export function JobDetailPage(): React.ReactElement {
         queue={j.queue}
         onClose={() => setCloneOpen(false)}
         initial={{ data: j.data, priority: j.priority }}
+        // Follow what the clone produced: a one-off job has its own detail page, and the modal's
+        // Recurring mode creates a schedule instead, which has one too.
+        onCreated={(result) => {
+          if (result.jobId) history.push(`/jobs/${encodeURIComponent(result.jobId)}`);
+          else if (result.scheduleId) {
+            history.push(`/schedules/${encodeURIComponent(result.scheduleId)}`);
+          }
+        }}
       />
     </>
   );

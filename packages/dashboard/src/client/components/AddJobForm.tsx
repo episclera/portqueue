@@ -21,7 +21,7 @@ import {
   Stack,
   Textarea,
 } from '@portqueue/ui';
-import { ActionKind, type AddJobRequestDto } from '../../shared/dto';
+import { ActionKind, type ActionResultDto, type AddJobRequestDto } from '../../shared/dto';
 import { useAction } from '../queries/use-action';
 
 export interface AddJobFormProps {
@@ -30,6 +30,12 @@ export interface AddJobFormProps {
   onClose: () => void;
   /** Prefill for clone: JSON string of data + optional priority. */
   initial?: { data?: unknown; priority?: number };
+  /**
+   * Called with the server's result once the job (or schedule) was created, after the modal has
+   * closed. The caller decides what that means — a clone from a job's own page follows the new
+   * record, a plain add from a queue page stays put.
+   */
+  onCreated?: (result: ActionResultDto) => void;
 }
 
 type Mode = 'once' | 'recurring';
@@ -77,7 +83,13 @@ export function validateCron(expr: string): string | undefined {
   return undefined;
 }
 
-export function AddJobForm({ open, queue, onClose, initial }: AddJobFormProps): React.ReactElement {
+export function AddJobForm({
+  open,
+  queue,
+  onClose,
+  initial,
+  onCreated,
+}: AddJobFormProps): React.ReactElement {
   const { run } = useAction();
   const [mode, setMode] = useState<Mode>('once');
   const [cadence, setCadence] = useState<Cadence>('cron');
@@ -187,12 +199,14 @@ export function AddJobForm({ open, queue, onClose, initial }: AddJobFormProps): 
     };
 
     setSubmitting(true);
-    const ok = await run(
+    const result = await run(
       { kind: ActionKind.ADD, queue, add },
       mode === 'recurring' ? 'Schedule created' : 'Job added',
     );
     setSubmitting(false);
-    if (ok) onClose();
+    if (!result) return;
+    onClose();
+    onCreated?.(result);
   };
 
   const footer = (

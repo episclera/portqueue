@@ -63,7 +63,9 @@ the totals. Only populated for servers that set an
 
 Recurring definitions across every queue — cadence, timezone, next and last run — with per-schedule
 enable/disable and bulk unschedule. Disabling keeps the definition and stops it firing, which is
-the reversible half of "make this stop". Each (truncated) schedule id links to its own page.
+the reversible half of "make this stop". Each (truncated) schedule id links to its own page, which
+lists the jobs that schedule produced; removing it there returns to this list, since the definition
+is gone.
 
 </Shot>
 
@@ -92,6 +94,11 @@ One job's full record — queue, status, priority, attempts, the instance that p
 preferred-instance pattern, lock, idempotency key, schedule — with its `data` and return value, the
 failure message, a lifecycle timeline, and every lifecycle timestamp, including the ones the job
 never reached.
+
+Retry, clone, cancel and remove sit in the subheader. Two of them leave the page, because this URL
+stops being the right one: a clone opens the new job's own page (or the new schedule's, when the
+form is switched to Recurring), and a removal returns to the queue. A running job is never removed —
+that refusal is reported and keeps you here, so cancel it first.
 
 </Shot>
 

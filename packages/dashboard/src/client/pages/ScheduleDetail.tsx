@@ -4,9 +4,12 @@
  * The second card is the point of the page. A job's detail view links its `scheduleId` here, and
  * the jobs table is filtered to that id — which is what "which runs did this schedule produce,
  * and did they succeed?" needs, and what a link to the bare schedules list never answered.
+ *
+ * Removing the schedule leaves for the schedules list: the definition is gone, so this page has
+ * nothing left to show.
  */
 import React from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useHistory, useParams } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -75,6 +78,7 @@ export function ScheduleDetailPage(): React.ReactElement {
   const { id } = useParams<{ id: string }>();
   const scheduleId = decodeURIComponent(id);
   const { run } = useAction();
+  const history = useHistory();
 
   // Polled: `nextRunAt` and `lastRunAt` move on their own as the scheduler fires.
   const schedule = usePolledQuery<ScheduleDto>(queryKeys.schedule(scheduleId), () =>
@@ -116,12 +120,24 @@ export function ScheduleDetailPage(): React.ReactElement {
     );
   }
 
+  /** Remove the definition, then leave for the list — this page's record no longer exists. */
+  const remove = async (): Promise<void> => {
+    const result = await run(
+      { kind: ActionKind.REMOVE_SCHEDULE, queue: s.queue, scheduleId: s.scheduleId },
+      'Schedule removed',
+    );
+    if (result) history.push('/schedules');
+  };
+
   const actions = (
     <Inline gap={2} wrap>
       {s.enabled ? (
         <Popconfirm
           title="Stop this schedule from firing?"
           description="The definition is kept, so you can re-enable it later."
+          // Labelled with the action, as the row popovers are, rather than a bare "OK".
+          okText="Disable"
+          cancelText="Keep"
           onConfirm={() =>
             void run(
               {
@@ -157,13 +173,10 @@ export function ScheduleDetailPage(): React.ReactElement {
       <Popconfirm
         title="Remove this schedule?"
         description="It stops firing permanently. Jobs it already created are kept."
+        okText={ACTIONS_CONFIG.remove.label}
+        cancelText="Keep"
         okDanger
-        onConfirm={() =>
-          void run(
-            { kind: ActionKind.REMOVE_SCHEDULE, queue: s.queue, scheduleId: s.scheduleId },
-            'Schedule removed',
-          )
-        }
+        onConfirm={() => void remove()}
       >
         <Button variant="danger" icon={ACTIONS_CONFIG.remove.icon}>
           {ACTIONS_CONFIG.remove.label}

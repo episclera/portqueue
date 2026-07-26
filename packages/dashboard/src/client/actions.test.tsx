@@ -53,11 +53,17 @@ const SCHEDULE = {
   enabled: true,
 };
 
+/** The clone the server hands back — a second record, with its own detail page. */
+const CLONE = { ...JOB, id: 'job-cloned-999' };
+
 const RESPONSES: Record<string, unknown> = {
   '/queues': QUEUES,
   '/stats': STATS,
   '/jobs': { items: [JOB], cursor: null, hasMore: false, total: 1 },
+  [`/jobs/${JOB.id}`]: JOB,
+  [`/jobs/${CLONE.id}`]: CLONE,
   '/schedules': page([SCHEDULE]),
+  [`/schedules/${SCHEDULE.scheduleId}`]: SCHEDULE,
   '/instances': page([]),
 };
 
@@ -289,6 +295,82 @@ describe('schedule actions', () => {
       kind: ActionKind.REMOVE_SCHEDULE,
       scheduleIds: [SCHEDULE.scheduleId],
     });
+  });
+});
+
+describe('detail page redirects', () => {
+  /**
+   * An action that destroys or replaces the record a detail page is about has to move the user:
+   * staying put leaves them on a URL that either no longer resolves or still describes the old
+   * record. These assert the destination, since that is the whole behaviour.
+   */
+  it('follows the clone to its own job page', async () => {
+    const h = harness({ actionResult: { ok: true, jobId: CLONE.id } });
+    h.renderApp(`#/jobs/${JOB.id}`);
+    await screen.findByRole('button', { name: /Clone/ });
+
+    fireEvent.click(screen.getByRole('button', { name: /Clone/ }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.click(within(modal).getByRole('button', { name: 'Add job' }));
+
+    await waitFor(() => expect(window.location.hash).toBe(`#/jobs/${CLONE.id}`));
+  });
+
+  it('follows a cloned recurring definition to its schedule page', async () => {
+    const h = harness({ actionResult: { ok: true, scheduleId: SCHEDULE.scheduleId } });
+    h.renderApp(`#/jobs/${JOB.id}`);
+    await screen.findByRole('button', { name: /Clone/ });
+
+    fireEvent.click(screen.getByRole('button', { name: /Clone/ }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
+    fireEvent.change(within(modal).getByLabelText(/Cron expression/), {
+      target: { value: '0 * * * *' },
+    });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
+
+    await waitFor(() =>
+      expect(window.location.hash).toBe(`#/schedules/${SCHEDULE.scheduleId}`),
+    );
+  });
+
+  it('leaves for the queue after the job is removed', async () => {
+    const h = harness({ actionResult: { ok: true, affected: 1 } });
+    h.renderApp(`#/jobs/${JOB.id}`);
+    await screen.findByRole('button', { name: /Remove/ });
+
+    fireEvent.click(screen.getByRole('button', { name: /Remove/ }));
+    const popover = await screen.findByRole('dialog');
+    fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(window.location.hash).toBe(`#/queues/${JOB.queue}`));
+  });
+
+  it('stays put, and says why, when the removal was refused', async () => {
+    // Core never removes a running job. Redirecting on a refusal would claim it was gone.
+    const h = harness({ actionResult: { ok: false, affected: 0 } });
+    h.renderApp(`#/jobs/${JOB.id}`);
+    await screen.findByRole('button', { name: /Remove/ });
+
+    fireEvent.click(screen.getByRole('button', { name: /Remove/ }));
+    const popover = await screen.findByRole('dialog');
+    fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
+
+    expect(await screen.findByText(/still running/i)).toBeInTheDocument();
+    expect(window.location.hash).toBe(`#/jobs/${JOB.id}`);
+  });
+
+  it('leaves for the schedules list after the schedule is removed', async () => {
+    const h = harness();
+    h.renderApp(`#/schedules/${SCHEDULE.scheduleId}`);
+    // The page header's action, not the identically named one on a produced job's row below it.
+    const [remove] = await screen.findAllByRole('button', { name: /Remove/ });
+
+    fireEvent.click(remove!);
+    const popover = await screen.findByRole('dialog');
+    fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(window.location.hash).toBe('#/schedules'));
   });
 });
 
