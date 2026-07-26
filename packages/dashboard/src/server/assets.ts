@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
+import { DASHBOARD_TITLE } from '../shared/constants';
 import type { DashboardConfigDto } from '../shared/dto';
 
 const HTML_MIME = 'text/html; charset=utf-8';
@@ -192,9 +193,9 @@ function injectConfig(html: string, config: DashboardConfigDto, nonce: string): 
 
 /**
  * JSON for embedding inside a `<script>` element. `JSON.stringify` does not escape `<`, so a
- * developer-supplied title of `</script>…` would otherwise close the element early and let what
- * follows be parsed as markup. Escaping `<` and `>` — plus U+2028/U+2029, which are legal inside
- * a JSON string but count as line terminators to a JS parser — makes the value inert while
+ * developer-supplied `basePath` of `</script>…` would otherwise close the element early and let
+ * what follows be parsed as markup. Escaping `<` and `>` — plus U+2028/U+2029, which are legal
+ * inside a JSON string but count as line terminators to a JS parser — makes the value inert while
  * keeping it valid JSON.
  */
 export function serializeConfig(config: DashboardConfigDto): string {
@@ -212,7 +213,7 @@ function inlineShell(config: DashboardConfigDto): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${escapeHtml(config.title)}</title>
+<title>${DASHBOARD_TITLE}</title>
 <style>
   :root { color-scheme: light dark; }
   body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background:#f7f8fa; color:#1a1d23; }
@@ -225,7 +226,7 @@ function inlineShell(config: DashboardConfigDto): string {
 </head>
 <body>
 <div class="wrap"><div class="card">
-<h1>${escapeHtml(config.title)}</h1>
+<h1>${DASHBOARD_TITLE}</h1>
 <p>The PortQueue dashboard server is mounted at <code>${escapeHtml(config.basePath)}</code>, but the client bundle has not been built into this package yet.</p>
 <p>Build it with <code>npm run build:client</code> in <code>@portqueue/dashboard</code>, then reload. The JSON API is already live at <code>${escapeHtml(config.basePath)}/api</code>.</p>
 </div></div>

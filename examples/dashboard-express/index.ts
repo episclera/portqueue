@@ -78,7 +78,7 @@ async function main(): Promise<void> {
 
   // Mount the dashboard. `dashboard.express()` is standard `(req, res, next)` middleware and
   // owns only its own base path, falling through to your routes otherwise.
-  const dashboard = createDashboard({ portQueue: pq, title: 'PortQueue — Express example' });
+  const dashboard = createDashboard({ portQueue: pq });
   app.use(dashboard.express());
 
   const server = app.listen(PORT, HOST, () => {

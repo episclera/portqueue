@@ -7,13 +7,6 @@ export interface DashboardOptions {
   portQueue: PortQueue;
   /** Mount path (default `/portqueue`). */
   basePath?: string;
-  /** Header/title text. */
-  title?: string;
-  /**
-   * Theme the dashboard opens with for a visitor who has not chosen one. A visitor's own choice
-   * (the header switcher, stored in `localStorage`) always takes precedence. Default `'system'`.
-   */
-  theme?: 'light' | 'dark' | 'system';
   /**
    * Where the dashboard reports problems it can only notice at startup — most usefully a missing
    * client bundle, which otherwise looks like a working server. Defaults to `console`.

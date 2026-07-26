@@ -29,11 +29,7 @@ declare global {
 }
 
 export const config: DashboardConfigDto = (typeof window !== 'undefined' &&
-  window.__PORTQUEUE_DASHBOARD__) || {
-  basePath: '/portqueue',
-  title: 'PortQueue Dashboard',
-  theme: 'system',
-};
+  window.__PORTQUEUE_DASHBOARD__) || { basePath: '/portqueue' };
 
 /** The axios client. Exported so tests can stub its adapter. */
 export const http: AxiosInstance = axios.create({

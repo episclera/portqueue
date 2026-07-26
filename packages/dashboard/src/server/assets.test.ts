@@ -2,11 +2,7 @@
 import { rewriteAssetUrls, safeResolve, serializeConfig, serveAsset } from './assets';
 import type { DashboardConfigDto } from '../shared/dto';
 
-const config: DashboardConfigDto = {
-  basePath: '/portqueue',
-  title: 'My Dashboard',
-  theme: 'system',
-};
+const config: DashboardConfigDto = { basePath: '/portqueue' };
 
 // In tests the module resolves to src/server/, so no built client bundle is present:
 // serveAsset falls back to the inline shell for navigations and 404s for asset paths.
@@ -16,7 +12,7 @@ describe('serveAsset (no built client)', () => {
     expect(asset.status).toBe(200);
     expect(asset.contentType).toContain('text/html');
     const html = String(asset.body);
-    expect(html).toContain('My Dashboard');
+    expect(html).toContain('PortQueue Dashboard');
     expect(html).toContain('/portqueue');
     // Runtime config is injected for the SPA to read on boot.
     expect(html).toContain('window.__PORTQUEUE_DASHBOARD__');
@@ -51,19 +47,19 @@ describe('serveAsset (no built client)', () => {
   });
 });
 
-// A developer-supplied title is not attacker input, but it reaches an inline <script> verbatim.
+// A developer-supplied basePath is not attacker input, but it reaches an inline <script> verbatim.
 describe('serializeConfig', () => {
-  it('escapes `<` so a title cannot close the script element', () => {
-    const title = '</script><script>alert(1)</script>';
-    const out = serializeConfig({ ...config, title });
+  it('escapes `<` so a value cannot close the script element', () => {
+    const basePath = '</script><script>alert(1)</script>';
+    const out = serializeConfig({ basePath });
     expect(out).not.toContain('</script>');
     expect(out).toContain('\\u003c');
     // Still valid JSON: the escapes sit inside the string literal, not around it.
-    expect((JSON.parse(out) as DashboardConfigDto).title).toBe(title);
+    expect((JSON.parse(out) as DashboardConfigDto).basePath).toBe(basePath);
   });
 
   it('escapes the line terminators that are legal in JSON but not in JS source', () => {
-    const out = serializeConfig({ ...config, title: 'a b c' });
+    const out = serializeConfig({ basePath: 'a\u2028b\u2029c' });
     expect(out).toContain('\\u2028');
     expect(out).toContain('\\u2029');
   });

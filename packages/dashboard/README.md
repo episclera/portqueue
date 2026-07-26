@@ -1,6 +1,6 @@
 # @portqueue/dashboard
 
-A self-hostable React dashboard that plugs into your existing Node HTTP server (raw Node, Express, Koa, Fastify) as middleware and rides on a `PortQueue` instance you provide — it never opens its own DB connection.
+A self-hostable React dashboard that plugs into your existing Node HTTP server (raw Node, Express, Koa, Fastify, NestJS) as middleware and rides on a `PortQueue` instance you provide — it never opens its own DB connection.
 
 ```bash
 npm install @portqueue/dashboard
@@ -10,15 +10,15 @@ npm install @portqueue/dashboard
 import express from 'express';
 import { createDashboard } from '@portqueue/dashboard';
 
-const dashboard = createDashboard({
-  portQueue: pq,
-  basePath: '/portqueue',
-  auth: { mode: 'basic', username: 'admin', password: process.env.PQ_PASS! },
-  readOnly: false,
-});
+const dashboard = createDashboard({ portQueue: pq, basePath: '/portqueue' });
 
 const app = express();
-app.use('/portqueue', dashboard.express());
+// `basePath` is the mount point, so the middleware goes on at the root.
+app.use(dashboard.express());
 ```
 
-Overview / queue / job / schedules pages, live updates (SSE + 30s reconcile), pause/resume, retry, bulk actions. **MIT** — free for commercial use, no obligations.
+Overview, instances, schedules, queue and job pages, with pause/resume, retry, cancel, remove and transactional bulk actions. Every table is paged, searched and filtered in the database.
+
+The dashboard ships **no authentication of its own** — put your existing session/SSO/API-key middleware in front of the mount. See the [dashboard docs](https://episclera.github.io/portqueue/docs/dashboard) for the per-framework recipes.
+
+**MIT** — free for commercial use, no obligations.

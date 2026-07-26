@@ -36,11 +36,7 @@ export interface DashboardEngine {
 
 export function createEngine(options: DashboardOptions): DashboardEngine {
   const basePath = normalizeBase(options.basePath ?? '/portqueue');
-  const config: DashboardConfigDto = {
-    basePath,
-    title: options.title ?? 'PortQueue Dashboard',
-    theme: options.theme ?? 'system',
-  };
+  const config: DashboardConfigDto = { basePath };
   const router = createRouter({ portQueue: options.portQueue, basePath });
   const logger = options.logger ?? console;
 

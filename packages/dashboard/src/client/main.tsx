@@ -1,7 +1,7 @@
 /**
- * Client entry. Mounts the SPA: the shared `@portqueue/ui` styled-components theme (seeded from
- * the host's configured default, then the visitor's own choice), the toast provider, the
- * TanStack Query cache, and the global LiveProvider.
+ * Client entry. Mounts the SPA: the shared `@portqueue/ui` styled-components theme (the visitor's
+ * own choice, or the OS preference), the toast provider, the TanStack Query cache, and the global
+ * LiveProvider.
  */
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, ToastProvider, useThemeMode } from '@portqueue/ui';
 import { App } from './App';
 import { LiveProvider } from './components/LiveProvider';
-import { config } from './queries/api';
+import { DASHBOARD_TITLE } from '../shared/constants';
 
 /**
  * Cache defaults for every query.
@@ -36,9 +36,9 @@ const queryClient = new QueryClient({
 });
 
 function Root(): React.ReactElement {
-  // The host's `theme` option is the default for a visitor who has not picked one; the header
-  // switcher (persisted in localStorage) always wins over it.
-  const { effective, setMode } = useThemeMode(config.theme);
+  // The visitor owns the theme: the header switcher, persisted in localStorage, over the OS
+  // preference until they pick one. The host has no say — see `DashboardConfigDto`.
+  const { effective, setMode } = useThemeMode();
   return (
     <ThemeProvider mode={effective} applyGlobalStyles>
       <ToastProvider>
@@ -54,7 +54,7 @@ function Root(): React.ReactElement {
 
 const container = document.getElementById('root');
 if (container) {
-  document.title = config.title;
+  document.title = DASHBOARD_TITLE;
   createRoot(container).render(
     <React.StrictMode>
       <Root />

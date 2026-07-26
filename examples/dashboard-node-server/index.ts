@@ -72,7 +72,7 @@ async function main(): Promise<void> {
   });
 
   // Mount the dashboard and serve it from a bare node:http server.
-  const dashboard = createDashboard({ portQueue: pq, title: 'PortQueue — node:http example' });
+  const dashboard = createDashboard({ portQueue: pq });
   const handler = dashboard.node();
 
   const server = createServer((req, res) => {
