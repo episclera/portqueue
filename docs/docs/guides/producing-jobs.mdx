@@ -283,25 +283,17 @@ const emailsSchedules = await emailsQueue.getSchedules(); // recurring definitio
 
 ## There is no `updateJob` or `updateSchedule` — by design
 
-PortQueue has no `update*` method on any entity, and this is deliberate rather than an omission.
+PortQueue has no `update*` method on any entity. Three reasons:
 
-**A job's settings are a set, not a bag of independent fields.** They were resolved together at
-insert time — `startAfter` and `expireAt` are absolute instants derived from each other, the retry
-counters are interpreted against `retryMaxAttempts`, the retention policy is read against the
-status. Changing one after the fact can produce a combination the queue never creates on its own: a
-job that expires before it becomes eligible, a retry budget already spent, a row whose lifecycle
-timestamps no longer describe what happened to it. That isn't a trap only beginners fall into —
-which fields may safely move, and when, depends on internals a queue has no business asking a
-developer to know.
-
-**Worse, a row can change underneath the update.** A job's status is owned by whichever worker holds
-its lock. Between reading a job and writing your change, it can be claimed, retried, completed or
-reclaimed as stalled. An update would either silently overwrite that or need a whole concurrency
-protocol to refuse it — for an operation that has a simpler, correct alternative.
-
-**And updating destroys history.** A finished job is a record of what happened: this payload, these
-attempts, this failure, at these times. Editing it in place makes the reporting lie — throughput,
-failure rates and any audit of "what did we actually run" are all read from these rows.
+- **A job's settings are a set, not independent fields.** They were resolved together at insert time
+  — `startAfter` and `expireAt` are derived instants, the retry counters are read against
+  `retryMaxAttempts`. Editing one can produce a combination the queue never creates on its own, like
+  a job that expires before it becomes eligible.
+- **A row can change underneath the update.** Status is owned by whichever worker holds the lock;
+  between your read and your write the job can be claimed, retried, completed or reclaimed as
+  stalled.
+- **Updating destroys history.** Throughput, failure rates and "what did we actually run" are all
+  read from these rows.
 
 ### What to do instead
 
@@ -315,5 +307,5 @@ Add a new entity rather than editing an old one. The right move depends on where
 | **Active** job                                                          | Nothing to update — it's running. Let it finish, or cancel cooperatively (the handler observes `job.signal`) and add a replacement.                               |
 
 Cancel-then-add and remove-then-add cost one extra call, and in exchange every row stays a truthful
-record of one attempt at one configuration. If you want the replacement to be created exactly once
-even under a retry of your own code, give it an `idempotencyKey`.
+record of one attempt at one configuration. Give the replacement an `idempotencyKey` if it must be
+created exactly once.
