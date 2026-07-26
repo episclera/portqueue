@@ -855,7 +855,12 @@ export class MysqlDriver implements Driver {
   }
 
   async requeueJob(options: { jobId: string; now: number; tx?: TransactionHandle }): Promise<InsertedJobRow> {
-    const job = await this.getJob({ jobId: options.jobId });
+    // On the caller's transaction when there is one. A read issued outside an in-flight
+    // transaction blocks behind it on a single-connection engine — a deadlock, not a slow query.
+    const job = await this.getJob({
+      jobId: options.jobId,
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
     if (!job) throw new DriverQueryError(`Cannot requeue: job '${options.jobId}' not found.`);
     // Re-arm this job's own row: back to PENDING, reset retry counters/lock/timestamps.
     await this.runMaybeTx(
@@ -874,10 +879,11 @@ export class MysqlDriver implements Driver {
   }
 
   // --- Reading ---
-  async getJob(options: { jobId: string }): Promise<JobRecord | null> {
-    const res = await this.execute(
+  async getJob(options: { jobId: string; tx?: TransactionHandle }): Promise<JobRecord | null> {
+    const res = await this.runMaybeTx(
       `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} = ${this.ph(0)}`,
       [options.jobId],
+      options.tx,
     );
     return res.rows[0] ? this.mapJob(res.rows[0]) : null;
   }
@@ -1222,7 +1228,12 @@ export class MysqlDriver implements Driver {
     now: number;
     tx?: TransactionHandle;
   }): Promise<QueueRow> {
-    const existing = await this.getQueueByName({ name: options.name });
+    // Both reads run on the caller's transaction: outside it they would deadlock a
+    // single-connection engine, and the read-back below would not see the row just inserted.
+    const existing = await this.getQueueByName({
+      name: options.name,
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
     if (existing) return existing;
     // Get-or-create, not an UPSERT. No unique index on name; a rare creation race can leave two
     // rows, and listQueues/getQueueByName dedupe by name so callers never see both.
@@ -1231,15 +1242,22 @@ export class MysqlDriver implements Driver {
       [options.name, options.now, options.now],
       options.tx,
     );
-    const row = await this.getQueueByName({ name: options.name });
+    const row = await this.getQueueByName({
+      name: options.name,
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
     if (!row) throw new DriverQueryError(`Failed to ensure queue '${options.name}'.`);
     return row;
   }
 
-  async getQueueByName(options: { name: string }): Promise<QueueRow | null> {
-    const res = await this.execute(
+  async getQueueByName(options: {
+    name: string;
+    tx?: TransactionHandle;
+  }): Promise<QueueRow | null> {
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
       [options.name],
+      options.tx,
     );
     return res.rows[0] ? this.mapQueue(res.rows[0]) : null;
   }

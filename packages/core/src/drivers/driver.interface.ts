@@ -163,7 +163,12 @@ export interface Driver {
   requeueJob(options: { jobId: string; now: number; tx?: TransactionHandle }): Promise<InsertedJobRow>;
 
   // Reading
-  getJob(options: { jobId: string }): Promise<JobRecord | null>;
+  /**
+   * One job row by id. Takes `tx` because a mutating driver method may need to read the row it is
+   * about to change: on a single-connection engine (SQLite, PGLite) a read issued outside the
+   * in-flight transaction queues *behind* it and deadlocks the connection for good.
+   */
+  getJob(options: { jobId: string; tx?: TransactionHandle }): Promise<JobRecord | null>;
   getJobs(options: {
     queueName?: string;
     statuses?: JobStatus[];
@@ -247,7 +252,8 @@ export interface Driver {
     now: number;
     tx?: TransactionHandle;
   }): Promise<QueueRow>;
-  getQueueByName(options: { name: string }): Promise<QueueRow | null>;
+  /** One queue row by name. Takes `tx` for the same reason {@link Driver.getJob} does. */
+  getQueueByName(options: { name: string; tx?: TransactionHandle }): Promise<QueueRow | null>;
   /** Delete a queue row by name (manual admin removal; the tool never calls this on its own). */
   deleteQueue(options: { name: string; tx?: TransactionHandle }): Promise<boolean>;
 
