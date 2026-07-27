@@ -12,12 +12,13 @@ Scheduling lives on `addJob` itself — there is **no separate `schedule()` meth
 method covers one-off and recurring production, selected by which prop you set under the
 `schedule` group:
 
-| `schedule` prop | Mode |
-|---|---|
-| _(none / omit `schedule`)_ | one-off, runs immediately |
-| `schedule.startAfterSeconds` | one-off, delayed by N **seconds** |
-| `schedule.startEverySeconds` | recurring, fixed interval in **seconds** |
-| `schedule.cron` | recurring, cron expression |
+| `schedule` prop | Type | Default | Mode |
+|---|---|---|---|
+| `schedule.startAfterSeconds` | `number` | — (runs immediately) | one-off, delayed by N **seconds** |
+| `schedule.startEverySeconds` | `number` | — (not recurring) | recurring, fixed interval in **seconds** |
+| `schedule.cron` | `CronSpec` | — (not recurring) | recurring, cron expression |
+
+Omit the `schedule` group entirely — the default — and the job is one-off and runs immediately.
 
 The timing props are **mutually exclusive**: a one-off delay never combines with a recurring mode.
 

@@ -77,15 +77,15 @@ The connection lives in one place, and `"$@"` passes the rest through — so eve
 
 ## Global flags
 
-| Flag | Description |
-| --- | --- |
-| `--driver <engine>` | `postgres` \| `pglite` \| `sqlite` \| `mysql` \| `oracle` |
-| `--connection-string <s>` | DB connection string (also via `DATABASE_URL`) |
-| `--schema <name>` | Optional storage schema |
-| `--table-prefix <name>` | Optional table prefix (default `pq_`) |
-| `--namespace <name>` | Optional pub/sub namespace |
-| `--json` | Machine-readable output |
-| `--no-color` | Disable ANSI color |
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--driver <engine>` | inferred from the connection-string scheme | `postgres` \| `pglite` \| `sqlite` \| `mysql` \| `oracle`. Required for `sqlite` and `pglite`, which have no URL scheme |
+| `--connection-string <s>` | `DATABASE_URL` | DB connection string |
+| `--schema <name>` | driver default (none) | Optional storage schema |
+| `--table-prefix <name>` | `pq_` | Optional table prefix |
+| `--namespace <name>` | `portqueue` | Optional pub/sub namespace |
+| `--json` | off | Machine-readable output |
+| `--no-color` | color on for a TTY, off when piped or when `NO_COLOR` is set | Disable ANSI color |
 
 The `--schema`, `--table-prefix`, and `--namespace` flags must match the values your app
 configures on its driver, so the CLI reads and writes the same tables and channels. (The
@@ -107,6 +107,10 @@ for the generated usage. Global connection flags apply to all of them.
 | `schedules` | `[--queue <name>]` | List recurring definitions. Without `--queue`, every queue's |
 | `instances` | `[--limit <n> --offset <n>]` | List instances with liveness, that process's health at the last heartbeat (CPU / memory) and jobs processed |
 | `instance` | `--key <instanceKey>` | One instance: its process's health, liveness and job counts by status |
+
+Wherever `--limit` and `--offset` appear they mean the same thing and carry the same defaults as the
+API's [`PageQuery`](./api-reference.mdx#pagequery): `--limit` defaults to `50` and is capped at
+`500`, `--offset` defaults to `0`.
 
 `CPU (proc)` is that Node process's CPU as a share of **all the cores available to it** (0–100%);
 `Mem (proc)` is used heap over V8's limit, not machine RAM. Either prints amber from 75% and red

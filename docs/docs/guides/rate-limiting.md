@@ -17,14 +17,14 @@ to run with defaults (concurrency 1, unbounded rate).
 
 Everything you can set on `createWorker({ limiter })`, all scoped to that single worker/instance:
 
-| Option | What it does |
-|---|---|
-| `concurrency` | Max handlers running **in parallel** in this worker (default 1). |
-| `rateMax` | Token-bucket cap: max jobs started per window. Requires `rateDurationSeconds`. |
-| `rateDurationSeconds` | The window for `rateMax`, in seconds — e.g. `60`. Requires `rateMax`. |
-| `batchSize` | Max jobs claimed per fetch (defaults to `concurrency`). |
-| `pollIntervalSeconds` | Poll cadence when LISTEN/NOTIFY is unavailable, in seconds. |
-| `lockDurationSeconds` | Visibility timeout / heartbeat window for a claimed job, in seconds (default 30). |
+| Option | Type | Default | What it does |
+|---|---|---|---|
+| `concurrency` | `number` | `1` | Max handlers running **in parallel** in this worker. |
+| `rateMax` | `number` | unset (unbounded) | Token-bucket cap: max jobs started per window. Requires `rateDurationSeconds`. |
+| `rateDurationSeconds` | `number` | unset | The window for `rateMax`, in seconds — e.g. `60`. Requires `rateMax`. |
+| `batchSize` | `number` | `concurrency` | Max jobs claimed per fetch. |
+| `pollIntervalSeconds` | `number` | `5` | Poll cadence when LISTEN/NOTIFY is unavailable, in seconds. |
+| `lockDurationSeconds` | `number` | `30` | Visibility timeout / heartbeat window for a claimed job, in seconds. |
 
 None of these are persisted or shared: they tune how hard *this* process pulls from the queue.
 To change fleet-wide throughput, add or remove workers/instances.

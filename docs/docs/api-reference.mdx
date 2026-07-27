@@ -728,12 +728,12 @@ real ceiling is well below the host's. Event-loop delay is the exception on meas
 `maxEventLoopDelaySeconds` gives it a purpose. See
 [Rate limiting & backpressure](./guides/rate-limiting.md#every-systemlimiter-option).
 
-| Option                     | Type     | Default                     | Description                                                                                                                                              |
-| -------------------------- | -------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sampleIntervalSeconds`    | `number` | `2`                         | How often to sample system metrics, in seconds.                                                                                                          |
-| `maxEventLoopDelaySeconds` | `number` | `0.2` (default config only) | Mean event-loop delay above this, in seconds, counts as pressure.                                                                                        |
-| `maxCpuPercent`            | `number` | unset                       | This process's CPU above this share (0–100) of the cores available to it counts as pressure — core-count independent, so `85` means the same on any box. |
-| `maxMemoryPercent`         | `number` | unset                       | This process's used heap above this share (0–100) of V8's heap limit counts as pressure.                                                                 |
+| Option                     | Type     | Default   | Description                                                                                                                                              |
+| -------------------------- | -------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sampleIntervalSeconds`    | `number` | `2`       | How often to sample system metrics, in seconds.                                                                                                          |
+| `maxEventLoopDelaySeconds` | `number` | unset     | Mean event-loop delay above this, in seconds, counts as pressure (`0.2` = 200 ms). Not measured at all until you set it.                                 |
+| `maxCpuPercent`            | `number` | unset     | This process's CPU above this share (0–100) of the cores available to it counts as pressure — core-count independent, so `85` means the same on any box. |
+| `maxMemoryPercent`         | `number` | unset     | This process's used heap above this share (0–100) of V8's heap limit counts as pressure.                                                                 |
 
 ### QueueOptions
 
@@ -798,11 +798,11 @@ Per-job settings (highest precedence). Also the base of [`AddJobOptions`](#addjo
 
 Exactly one timing mode may be set.
 
-| Option              | Type       | Description                                     |
-| ------------------- | ---------- | ----------------------------------------------- |
-| `startAfterSeconds` | `number`   | One-off: delay this many seconds from now.      |
-| `startEverySeconds` | `number`   | Recurring: seconds between runs, e.g. `30`.     |
-| `cron`              | `CronSpec` | Recurring: a cron string, or `{ pattern, tz }`. |
+| Option              | Type       | Default          | Description                                     |
+| ------------------- | ---------- | ---------------- | ----------------------------------------------- |
+| `startAfterSeconds` | `number`   | — (runs now)     | One-off: delay this many seconds from now.      |
+| `startEverySeconds` | `number`   | — (not recurring) | Recurring: seconds between runs, e.g. `30`.    |
+| `cron`              | `CronSpec` | — (not recurring) | Recurring: a cron string, or `{ pattern, tz }`. |
 
 ### WorkerOptions
 
@@ -834,51 +834,51 @@ The paging window every list read accepts. `getJobs`, `getSchedules` and `getIns
 it, so `limit`/`offset` mean the same thing wherever they appear, and each returns a
 [`Page<T>`](#result-types) of `{ items, total }`.
 
-| Option   | Type     | Description                            |
-| -------- | -------- | -------------------------------------- |
-| `limit`  | `number` | Page size (default 50, capped at 500). |
-| `offset` | `number` | Row offset, for numbered pagination.   |
+| Option   | Type     | Default | Description                          |
+| -------- | -------- | ------- | ------------------------------------ |
+| `limit`  | `number` | `50`    | Page size, capped at `500`.          |
+| `offset` | `number` | `0`     | Row offset, for numbered pagination. |
 
 ### GetJobsQuery
 
 `PageQuery` plus the job filters. Jobs always come back newest first; there is no sort option.
 
-| Option       | Type          | Description                                        |
-| ------------ | ------------- | -------------------------------------------------- |
-| `queue`      | `string`      | Filter to one queue (implicit on `Queue.getJobs`). |
-| `statuses`   | `JobStatus[]` | Filter by status.                                  |
-| `scheduleId` | `string`      | Jobs minted by one schedule.                       |
-| `limit`      | `number`      | Page size (default 50, capped at 500).             |
-| `offset`     | `number`      | Row offset, for numbered pagination.               |
+| Option       | Type          | Default   | Description                                        |
+| ------------ | ------------- | --------- | -------------------------------------------------- |
+| `queue`      | `string`      | all queues | Filter to one queue (implicit on `Queue.getJobs`). |
+| `statuses`   | `JobStatus[]` | all statuses | Filter by status.                                |
+| `scheduleId` | `string`      | —         | Jobs minted by one schedule.                       |
+| `limit`      | `number`      | `50`      | Page size, capped at `500`.                        |
+| `offset`     | `number`      | `0`       | Row offset, for numbered pagination.               |
 
 ### GetSchedulesQuery
 
 `PageQuery` plus one filter, for `Queue.getSchedules`. Returns a `Page<ScheduleInfo>`.
 
-| Option    | Type      | Description                                                             |
-| --------- | --------- | ----------------------------------------------------------------------- |
-| `enabled` | `boolean` | `true` → only armed schedules, `false` → only disarmed, omitted → both. |
-| `limit`   | `number`  | Page size (default 50, capped at 500).                                  |
-| `offset`  | `number`  | Row offset, for numbered pagination.                                    |
+| Option    | Type      | Default | Description                                                             |
+| --------- | --------- | ------- | ----------------------------------------------------------------------- |
+| `enabled` | `boolean` | both    | `true` → only armed schedules, `false` → only disarmed, omitted → both. |
+| `limit`   | `number`  | `50`    | Page size, capped at `500`.                                             |
+| `offset`  | `number`  | `0`     | Row offset, for numbered pagination.                                    |
 
 ### GetInstancesQuery
 
 `PageQuery` and nothing more, for `pq.getInstances()`. Returns a `Page<InstanceInfo>`.
 
-| Option   | Type     | Description                            |
-| -------- | -------- | -------------------------------------- |
-| `limit`  | `number` | Page size (default 50, capped at 500). |
-| `offset` | `number` | Row offset, for numbered pagination.   |
+| Option   | Type     | Default | Description                          |
+| -------- | -------- | ------- | ------------------------------------ |
+| `limit`  | `number` | `50`    | Page size, capped at `500`.          |
+| `offset` | `number` | `0`     | Row offset, for numbered pagination. |
 
 ### GetQueuesQuery
 
 `PageQuery` and nothing more, for `pq.getQueues()`. Returns a `Page<QueueInfo>` — each row with its
 per-status counts, and `total` for every queue in the database.
 
-| Option   | Type     | Description                            |
-| -------- | -------- | -------------------------------------- |
-| `limit`  | `number` | Page size (default 50, capped at 500). |
-| `offset` | `number` | Row offset, for numbered pagination.   |
+| Option   | Type     | Default | Description                          |
+| -------- | -------- | ------- | ------------------------------------ |
+| `limit`  | `number` | `50`    | Page size, capped at `500`.          |
+| `offset` | `number` | `0`     | Row offset, for numbered pagination. |
 
 ---
 
