@@ -105,8 +105,8 @@ for the generated usage. Global connection flags apply to all of them.
 | `jobs` | `--queue <name> [--status <s>] [--schedule-id <id>] [--limit <n> --cursor <c>]` | Paged job list |
 | `job` | `--id <jobId>` | Full detail for a single job |
 | `schedules` | `[--queue <name>]` | List recurring definitions. Without `--queue`, every queue's |
-| `instances` | | List instances with liveness, machine health at the last heartbeat (CPU / memory) and jobs processed |
-| `instance` | `--key <instanceKey>` | One instance: its machine's health, liveness and job counts by status |
+| `instances` | | List instances with liveness, that process's health at the last heartbeat (CPU / memory) and jobs processed |
+| `instance` | `--key <instanceKey>` | One instance: its process's health, liveness and job counts by status |
 
 ### Actions
 

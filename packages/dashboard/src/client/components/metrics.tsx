@@ -1,5 +1,5 @@
 /**
- * Rendering for the machine-health metrics an instance records on every heartbeat.
+ * Rendering for the process-health metrics an instance records on every heartbeat.
  *
  * One module so the instances table and the instance detail page agree on both the formatting and
  * the point at which a number counts as "high" — a value that reads as a warning in a table and as
@@ -15,21 +15,25 @@ interface Thresholds {
 }
 
 /**
- * Both metrics are shares of the whole machine (0-100), so the same scale reads the same way for
- * each: busy is fine, sustained near-full is the warning sign.
+ * The two metrics are on different scales, so they don't share one.
+ *
+ * CPU is a share of **one core**, the way `top` reports a process, so 100 means the main thread is
+ * pegged — the warning sits just under it and anything past it is a process that has run out of
+ * single-threaded headroom. Memory is a share of V8's heap limit, where 100 is the OOM abort, so
+ * it turns red earlier: a heap that stays near its ceiling is one allocation from a crash.
  */
-export const CPU_THRESHOLDS: Thresholds = { warn: 70, danger: 90 };
+export const CPU_THRESHOLDS: Thresholds = { warn: 80, danger: 100 };
 export const MEMORY_THRESHOLDS: Thresholds = { warn: 75, danger: 90 };
 
 /**
- * What the numbers are, wherever they are shown. Every surface says "machine" out loud: the same
- * figures repeat for two instances on one host, and a reader who assumes they are this Node
- * process's usage would draw the wrong conclusion from both.
+ * What the numbers are, wherever they are shown. Every surface says "process" out loud: a reader
+ * who takes these for the machine's load would size a box off them, and a reader who takes the
+ * memory share for machine RAM would miss that the ceiling is `--max-old-space-size`.
  */
 export const METRIC_HINTS = {
-  cpu: 'Machine-wide CPU: the share of all cores busy since the last heartbeat, for the whole host — not this Node process',
+  cpu: 'This Node process’s CPU since the last heartbeat, as a share of one core (like `top`) — 100% is one core saturated, and threaded work can exceed it. Not the machine’s load',
   memory:
-    'Machine-wide memory: used memory as a share of the host’s total — not this Node process’s heap or RSS',
+    'This Node process’s used heap as a share of the limit V8 would abort at (--max-old-space-size) — not the machine’s memory',
 };
 
 export type MetricTone = 'normal' | 'warn' | 'danger';

@@ -64,13 +64,14 @@ export interface LimiterOptions {
 }
 
 /**
- * Thresholds on the **machine's** health that pause job claiming while they are breached.
+ * Thresholds on **this process's** health that pause job claiming while they are breached.
  *
- * CPU and memory are read for the whole host (`os.cpus()` time deltas and
- * `os.totalmem()`/`os.freemem()`), not for this Node process. That is deliberate: a worker that
- * throttles on its own CPU keeps claiming while the box it shares with the database is saturated,
- * and "30% of one core" is not a number an operator can act on. Event-loop delay is the one
- * process-local signal here, and the best evidence that *this* process is the one in trouble.
+ * CPU and memory are read for the Node process, not the host: CPU time this process burned
+ * (`process.cpuUsage()`) over the wall time of the sample, and heap used over the heap limit V8
+ * would kill it at (`v8.getHeapStatistics()`). Host-wide readings were tried and are the wrong
+ * signal — Linux and macOS both count allocated-but-idle memory as used, so `os.freemem()` reports
+ * 90%+ on a machine doing nothing and a memory threshold never clears; and a process in a container
+ * has its own limits well under the host's, so the host number is not the ceiling it dies at.
  *
  * Passing this object is what turns system backpressure on: every worker on the client then stops
  * claiming while any threshold is over, and resumes once every watched metric has fallen to
@@ -92,9 +93,16 @@ export interface SystemLimiterOptions {
    * until you set a threshold for it (it needs a `perf_hooks` histogram kept enabled).
    */
   maxEventLoopDelaySeconds?: number;
-  /** Machine CPU busy above this percentage of total CPU time counts as pressure (0-100). */
+  /**
+   * This process's CPU above this percentage of **one core**'s time counts as pressure. `100` is
+   * one core saturated; work on libuv or worker threads can push the reading past it, so on a
+   * 4-core box a sensible cap is nearer `300` than `85`.
+   */
   maxCpuPercent?: number;
-  /** Used machine memory above this share of total memory counts as pressure (0-100). */
+  /**
+   * This process's used heap above this share of V8's heap limit counts as pressure (0-100). The
+   * limit is what `--max-old-space-size` sets, not machine RAM.
+   */
   maxMemoryPercent?: number;
   /** Fraction (0-1) of its own threshold every metric must fall to before resuming (default 0.8). */
   resumeHysteresis?: number;

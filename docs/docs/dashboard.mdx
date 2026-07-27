@@ -47,15 +47,15 @@ links to its own page.
   alt="The instances page: one row per registered instance with liveness, health metrics and pause controls"
 >
 
-Every registered instance with its liveness, the CPU and memory of the **machine** it recorded on its
-last heartbeat, how many jobs it has processed, and per-instance pause/resume — one row per process,
-so a single wedged server is visible as one stale row rather than as a dip in the totals. Both
-metrics are host-wide shares rather than this Node process's usage (hovering either says so), which
-also means two instances on one box show the same figures. A metric is coloured only once it is worth
-attention, so a healthy fleet reads as plain text. Only populated for servers that set an
+Every registered instance with its liveness, the CPU and memory of the **Node process** it recorded
+on its last heartbeat, how many jobs it has processed, and per-instance pause/resume — one row per
+process, so a single wedged server is visible as one stale row rather than as a dip in the totals.
+CPU is a share of one core and memory a share of V8's heap limit, not host-wide figures (hovering
+either says so), so two instances on one box show their own numbers. A metric is coloured only once
+it is worth attention, so a healthy fleet reads as plain text. Only populated for servers that set an
 [instance key](./scale-horizontally.md#give-each-server-an-identity-key).
 
-Each instance key links to its own page: machine-health cards for CPU and memory, the total
+Each instance key links to its own page: process-health cards for CPU and memory, the total
 processed, and below them the jobs that instance claimed — which is the question a list of instances
 can't answer ("this one looks busy — busy with what?"). That page's subheader carries the same two
 controls as the row here — pause/resume, and remove once the instance has been unseen for 30

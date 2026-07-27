@@ -30,7 +30,7 @@ export interface StatsDto {
   counts: CountsDto;
 }
 
-/** An instance row with liveness, host health + per-instance job attribution (mirrors `InstanceInfo`). */
+/** An instance row with liveness, process health + per-instance job attribution (mirrors `InstanceInfo`). */
 export interface InstanceDto {
   instanceKey: string;
   processingPaused: boolean;
@@ -39,8 +39,9 @@ export interface InstanceDto {
   updatedAt: string;
   lastSeenAt: string;
   /**
-   * The health of the **machine** this instance runs on, at its last heartbeat: both are 0-100
-   * shares of the whole host, not of the Node process. Null until the instance's first beat.
+   * The health of the **Node process** behind this instance, at its last heartbeat: `cpuPercent` is
+   * a share of one core (so it can exceed 100), `memoryPercent` is used heap over V8's heap limit.
+   * Neither is machine-wide. Null until the instance's first beat.
    */
   cpuPercent: number | null;
   memoryPercent: number | null;

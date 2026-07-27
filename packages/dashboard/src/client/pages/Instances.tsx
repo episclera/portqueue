@@ -1,7 +1,7 @@
 /**
- * Instances page: every registered instance with its liveness, the health of the machine it runs on
- * at the last heartbeat, total jobs processed, and per-instance pause/resume. Server-paged; only
- * populated when instances run with an `instanceKey`.
+ * Instances page: every registered instance with its liveness, the health of the Node process it
+ * runs at the last heartbeat, total jobs processed, and per-instance pause/resume. Server-paged;
+ * only populated when instances run with an `instanceKey`.
  *
  * The per-status count breakdown deliberately isn't here. Eight numeric columns beside the health
  * metrics made the row unreadable and none of them answered a question this page is for; the
@@ -102,7 +102,10 @@ export function InstancesPage(): React.ReactElement {
       ),
     },
     {
-      title: 'CPU',
+      // Both health columns name their subject in the header, not only in the hover: the hover is
+      // for the reader who wonders, the header is for the reader who doesn't and would otherwise
+      // read these as the machine's load.
+      title: 'CPU (process)',
       key: 'cpuPercent',
       align: 'right',
       render: (r) => (
@@ -114,7 +117,7 @@ export function InstancesPage(): React.ReactElement {
       ),
     },
     {
-      title: 'Memory',
+      title: 'Memory (process)',
       key: 'memoryPercent',
       align: 'right',
       render: (r) => (
@@ -194,7 +197,7 @@ export function InstancesPage(): React.ReactElement {
     <>
       <PageHeader
         title="Instances"
-        subtitle="Liveness, the health of each machine at its last heartbeat, and jobs processed across the cluster."
+        subtitle="Liveness, the health of each instance's process at its last heartbeat, and jobs processed across the cluster."
       />
       <Content>
         <TableCard

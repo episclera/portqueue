@@ -1,14 +1,14 @@
 /**
- * Instance detail: the health of the machine this instance runs on in one row of cards, every job it
- * has processed in a table below, and the same pause/resume + remove controls the instances list row
- * carries — an operator who followed a link here shouldn't have to go back to the list to act on
- * what they see.
+ * Instance detail: the health of the Node process behind this instance in one row of cards, every
+ * job it has processed in a table below, and the same pause/resume + remove controls the instances
+ * list row carries — an operator who followed a link here shouldn't have to go back to the list to
+ * act on what they see.
  *
  * The two halves answer different questions and both need the instance as their subject. The cards
- * are the host health it recorded on its last heartbeat — the instances list shows the same numbers,
- * but a row of columns is where you notice a number, not where you sit and read it. The table is
- * filtered to the jobs this instance claimed, which is the question the instances list can't answer
- * at all: "this one looks busy — busy with what?"
+ * are the process health it recorded on its last heartbeat — the instances list shows the same
+ * numbers, but a row of columns is where you notice a number, not where you sit and read it. The
+ * table is filtered to the jobs this instance claimed, which is the question the instances list
+ * can't answer at all: "this one looks busy — busy with what?"
  */
 import React from 'react';
 import { Link, useHistory, useParams } from 'react-router-dom';
@@ -115,13 +115,13 @@ export function InstanceDetailPage(): React.ReactElement {
 
   const cards: { label: string; value: string; tone: StatisticTone; hint: string }[] = [
     {
-      label: 'CPU (machine)',
+      label: 'CPU (process)',
       value: formatPercent(i.cpuPercent),
       tone: CARD_TONE[cpuTone],
       hint: METRIC_HINTS.cpu,
     },
     {
-      label: 'Memory (machine)',
+      label: 'Memory (process)',
       value: formatPercent(i.memoryPercent),
       tone: CARD_TONE[memoryTone],
       hint: METRIC_HINTS.memory,
@@ -225,8 +225,8 @@ export function InstanceDetailPage(): React.ReactElement {
             {cards.map((card) => (
               <Col key={card.label} span={CARD_SPAN}>
                 <Card>
-                  {/* Hover says what the number is: both health cards read the whole machine, and
-                      an operator who takes them for this process's usage misreads them. */}
+                  {/* Hover says what the number is: both health cards read this Node process, and
+                      an operator who takes them for the machine's load misreads them. */}
                   <Tooltip title={card.hint} placement="bottom" block>
                     <Statistic label={card.label} value={card.value} tone={card.tone} />
                   </Tooltip>

@@ -37,11 +37,12 @@ To make a server targetable, give its process a stable `instance.instanceKey`. A
 a heartbeat row, honours job affinity, and can be paused on its own from the dashboard; an
 anonymous one runs jobs but can't be addressed.
 
-Each heartbeat also records the **CPU and memory of the machine that server runs on** — host-wide
-shares, not the Node process's own usage — so the instances list and the `portqueue instances`
-command show how every box is doing at the moment it was last heard from. Two instances on one
-machine therefore report the same numbers; the instance key tells you where the reading was taken.
-That happens for any keyed instance — it does not require a
+Each heartbeat also records the **CPU and memory of that server's Node process** — CPU as a share of
+one core, heap as a share of the limit V8 would abort at — so the instances list and the
+`portqueue instances` command show how every process is doing at the moment it was last heard from.
+They are deliberately not host-wide numbers: two instances on one machine report their own figures,
+and a host memory reading would count memory the OS merely allocated elsewhere. That happens for any
+keyed instance — it does not require a
 [`systemLimiter`](./guides/rate-limiting.md#system-pressure-backpressure), which only decides whether
 those numbers also pause claiming.
 

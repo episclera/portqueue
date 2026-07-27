@@ -45,8 +45,34 @@ your own pruning); keep failed jobs longer than completed.
 
 ## Backpressure & rate limits
 
-Enable the `SystemMonitor` and set a worker-local
+Set a [`systemLimiter`](./guides/rate-limiting.md#system-pressure-backpressure) and a worker-local
 [rate limiter](./guides/rate-limiting.md) for third-party APIs.
+
+Its thresholds read **this Node process**, not the machine: `maxCpuPercent` is a share of one core
+(so `100` is one core pegged and a multi-core box wants a cap nearer `200`–`300`), and
+`maxMemoryPercent` is used heap over the limit V8 would abort at.
+
+### Give Node the memory the box has
+
+V8's heap limit is **not** the machine's RAM. Node picks a default from available memory and caps
+it in the low gigabytes, so a 64 GB server can run a process that dies at ~4 GB while `free` shows
+tens of gigabytes idle — and `memoryPercent` will read 90% right before it does.
+
+**If this process is the only significant thing on the machine, raise the limit explicitly** so the
+heap can actually use the hardware you paid for:
+
+```bash
+# Leave headroom for the OS, other processes, and Node's off-heap memory (buffers, native addons):
+# a rule of thumb is ~75% of the RAM the process may have.
+node --max-old-space-size=6144 dist/worker.js   # 6 GB heap
+# or, when you don't control the argv:
+NODE_OPTIONS="--max-old-space-size=6144" node dist/worker.js
+```
+
+In a container, size it against the **container's** limit, not the host's — Node does not read the
+cgroup limit when choosing its default, so an unset heap limit on a small container is the usual
+cause of an OOM kill with no Node-side error. Setting it also makes `memoryPercent` meaningful:
+the percentage is only useful once its denominator is a number you chose.
 
 ## Execution locality
 
@@ -100,7 +126,8 @@ until `init()` resolved.
 - [ ] Handlers idempotent; `idempotencyKey`/`singletonKey` where relevant.
 - [ ] Retries with jitter + cap; `dontAutoretryFor` for non-retryable errors.
 - [ ] Retention on; failed kept longer than completed.
-- [ ] `SystemMonitor` on; worker-local rate limiter set for third-party APIs.
+- [ ] `systemLimiter` set (thresholds read this process, not the host); worker-local rate limiter set for third-party APIs.
+- [ ] `--max-old-space-size` set to fit the machine or container, not left at Node's default.
 - [ ] Stable `instance.instanceKey` on every process (even a single one); jobs that need locality targeted by capability pattern; heartbeat interval tuned.
 - [ ] `PortQueueEvent.ERROR` subscribed; metrics/tracing via hooks.
 - [ ] Dashboard/CLI behind auth; payloads kept small (no built-in size cap).

@@ -351,30 +351,33 @@ describe('instances page', () => {
     expect(await screen.findByText('Could not load instances')).toBeInTheDocument();
   });
 
-  it('lists machine health and a single processed total rather than a per-status breakdown', async () => {
+  it('lists process health and a single processed total rather than a per-status breakdown', async () => {
     harness({ responses: { ...RESPONSES, '/instances': page([INSTANCE]) } }).renderApp(
       '#/instances',
     );
     expect(await screen.findByText('worker-eu-1')).toBeInTheDocument();
     expect(screen.getByText('12.5%')).toBeInTheDocument();
     expect(screen.getByText('94.2%')).toBeInTheDocument();
-    // Two host shares, no per-process byte figure.
+    // The headers name their subject, so a reader who never hovers still knows whose numbers these
+    // are — and there is no per-process byte figure.
+    expect(screen.getByRole('columnheader', { name: 'CPU (process)' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Memory (process)' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'RSS' })).not.toBeInTheDocument();
     // Total processed only — the eight per-status columns belong to the detail page's table.
     expect(screen.getByRole('columnheader', { name: 'Processed' })).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Completed' })).not.toBeInTheDocument();
   });
 
-  it('opens an instance’s own page with machine health cards and the jobs it processed', async () => {
+  it('opens an instance’s own page with process health cards and the jobs it processed', async () => {
     // Only the by-key response: the stub matches the first key the URL starts with, so a
     // `/instances` entry would shadow `/instances/worker-eu-1`.
     harness({
       responses: { ...RESPONSES, '/instances/worker-eu-1': INSTANCE },
     }).renderApp('#/instances/worker-eu-1');
 
-    // The cards name their subject: these are the host's numbers, not the Node process's.
-    expect(await screen.findByText('CPU (machine)')).toBeInTheDocument();
-    expect(screen.getByText('Memory (machine)')).toBeInTheDocument();
+    // The cards name their subject: these are the Node process's numbers, not the host's.
+    expect(await screen.findByText('CPU (process)')).toBeInTheDocument();
+    expect(screen.getByText('Memory (process)')).toBeInTheDocument();
     expect(screen.queryByText('RSS')).not.toBeInTheDocument();
     expect(screen.getByText('Processed')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Jobs processed' })).toBeInTheDocument();
@@ -382,18 +385,18 @@ describe('instances page', () => {
     expect(screen.getByText('94.2%')).toBeInTheDocument();
   });
 
-  it('says on hover that the health cards read the machine, not the Node process', async () => {
+  it('says on hover that the health cards read this process, not the machine', async () => {
     harness({
       responses: { ...RESPONSES, '/instances/worker-eu-1': INSTANCE },
     }).renderApp('#/instances/worker-eu-1');
 
     // The tooltip's trigger is the wrapper around the card body, so hover it rather than the label.
-    const cpuCard = (await screen.findByText('CPU (machine)')).closest('span');
+    const cpuCard = (await screen.findByText('CPU (process)')).closest('span');
     fireEvent.mouseEnter(cpuCard!);
 
     const tip = await screen.findByRole('tooltip');
-    expect(tip).toHaveTextContent(/machine-wide cpu/i);
-    expect(tip).toHaveTextContent(/not this Node process/i);
+    expect(tip).toHaveTextContent(/this Node process/i);
+    expect(tip).toHaveTextContent(/not the machine/i);
   });
 
   it('asks the server only for the jobs this instance claimed', async () => {
@@ -401,7 +404,7 @@ describe('instances page', () => {
       responses: { ...RESPONSES, '/instances/worker-eu-1': INSTANCE },
     });
     h.renderApp('#/instances/worker-eu-1');
-    await screen.findByText('CPU (machine)');
+    await screen.findByText('CPU (process)');
     await waitFor(() =>
       expect(
         h.requests.some((r) => r.url.includes('/jobs') && r.params.instanceKey === 'worker-eu-1'),

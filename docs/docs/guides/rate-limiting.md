@@ -68,22 +68,26 @@ pq.createWorker({
 stops claiming while any threshold you set is breached, resuming once every watched metric has
 fallen back (see `resumeHysteresis`). Omit it — the default — and nothing throttles.
 
-There is deliberately no per-worker opt-in. A limiter describes the health of *the machine*, and one
+There is deliberately no per-worker opt-in. A limiter describes the health of *the process*, and one
 worker continuing to claim while its siblings back off would defeat the point; the earlier
 `limiter.respectSystemPressure` flag also made it easy to configure thresholds that silently did
 nothing.
 
-:::info CPU and memory are the machine's, not this process's
-`maxCpuPercent` and `maxMemoryPercent` read the **whole host** — CPU time across every core
-(`os.cpus()`), and used memory over `os.totalmem()`. That is the number worth throttling on: a
-worker that watches only its own CPU keeps claiming while the box it shares with the database is
-saturated, and "30% of one core" isn't a figure an operator can act on. Two PortQueue processes on
-one machine therefore report the same CPU and memory. Event-loop delay is the one threshold here
-that is about *this* process — and the best evidence that it is the one in trouble.
+:::info CPU and memory are this process's, not the machine's
+`maxCpuPercent` is this Node process's CPU over the sample window as a share of **one core** — the
+figure `top` shows for a process, so `100` is one core saturated and threaded work can go past it.
+`maxMemoryPercent` is the process's used heap as a share of the limit **V8 would abort at**
+(`--max-old-space-size`), not of machine RAM.
+
+Host-wide readings were tried and are the wrong signal. Linux and macOS both count memory that is
+merely *allocated* as used, so `os.freemem()` reports 90%+ on a machine doing nothing much and a
+memory threshold never clears. And a process in a container has a limit far below the host's — the
+host number is not the ceiling it dies at. Two PortQueue processes on one box now report their own
+figures, not a shared one.
 :::
 
 :::info Monitoring always runs; only limiting is opt-in
-Machine CPU and memory are measured whether or not you set a `systemLimiter` — the instance
+Process CPU and heap are measured whether or not you set a `systemLimiter` — the instance
 heartbeat records them, which is what the dashboard's per-instance health and the
 `portqueue instances` command read. That can't be switched off. **Event-loop delay is the
 exception**: measuring it keeps a `perf_hooks` histogram enabled for the life of the process, so it
@@ -98,9 +102,9 @@ Pressure gating and the rate limits above throttle claiming independently — th
 |---|---|---|---|
 | `sampleIntervalSeconds` | `number` | `2` | How often metrics are sampled, in seconds. Every threshold is checked once per sample, so this is also the worst-case reaction time. |
 | `maxEventLoopDelaySeconds` | `number` | unset | Pressure when the **mean** event-loop delay since the last sample exceeds this many seconds (`0.2` = 200 ms). The best single signal that the process is saturated, and the only metric not measured at all until you set it. |
-| `maxCpuPercent` | `number` | unset | Pressure when the **machine's** CPU busy share since the last sample exceeds this (0–100, across every core). |
-| `maxMemoryPercent` | `number` | unset | Pressure when the **machine's** used memory exceeds this share of `os.totalmem()` (0–100) — not of a container limit. |
-| `resumeHysteresis` | `number` | `0.8` | Fraction (0–1) of the breached threshold the metric must fall back to before workers resume — `0.8` with `maxCpuPercent: 85` resumes at 68. Lower is more conservative. |
+| `maxCpuPercent` | `number` | unset | Pressure when **this process's** CPU since the last sample exceeds this share of one core. `100` is one core pegged; on a multi-core box a useful cap is nearer `200`–`300` than `85`. |
+| `maxMemoryPercent` | `number` | unset | Pressure when **this process's** used heap exceeds this share of V8's heap limit (0–100) — the limit `--max-old-space-size` sets, not machine RAM. |
+| `resumeHysteresis` | `number` | `0.8` | Fraction (0–1) of the breached threshold the metric must fall back to before workers resume — `0.8` with `maxCpuPercent: 200` resumes at 160. Lower is more conservative. |
 
 Every threshold is optional and **only the ones you set are checked**; there are no defaults to
 merge with, so `systemLimiter: {}` samples but can never report pressure.
@@ -117,8 +121,8 @@ const pq = new PortQueue({
   systemLimiter: {
     sampleIntervalSeconds: 2,        // sampling cadence, in seconds
     maxEventLoopDelaySeconds: 0.2,   // 200 ms of mean event-loop delay
-    maxCpuPercent: 85,               // machine CPU busy share
-    maxMemoryPercent: 90,            // machine memory used share
+    maxCpuPercent: 200,              // this process at 2 cores' worth of CPU
+    maxMemoryPercent: 85,            // this process's heap, as a share of V8's limit
     resumeHysteresis: 0.8,
   },
 });

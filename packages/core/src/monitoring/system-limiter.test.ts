@@ -4,10 +4,11 @@
  * There is no per-worker opt-in to test, which is the point — the old `respectSystemPressure` flag
  * made it easy to configure thresholds that silently did nothing.
  *
- * The readings themselves are the machine's, not this process's — the assertions below compare them
- * against `os` directly, since a process-RSS share would pass a "> 0" check just as happily.
+ * The readings are this process's, not the machine's — the assertions below compare them against
+ * `process`/`v8` directly, since a host-wide share would pass a "> 0" check just as happily (and on
+ * a typical Linux or macOS box would sit above 90% the whole time).
  */
-import { freemem, totalmem } from 'node:os';
+import { getHeapStatistics } from 'node:v8';
 import { createTestQueue, waitFor, type TestQueueHandle } from '../test-utils/create-test-queue';
 
 describe('systemLimiter', () => {
@@ -17,7 +18,7 @@ describe('systemLimiter', () => {
   });
 
   it('stops every worker claiming while a threshold is breached', async () => {
-    // A 0% memory-share threshold can never be satisfied, so pressure is permanently high.
+    // A 0% heap-share threshold can never be satisfied, so pressure is permanently high.
     h = await createTestQueue('sqlite', {
       systemLimiter: { maxMemoryPercent: 0, sampleIntervalSeconds: 0.05 },
     });
@@ -51,9 +52,9 @@ describe('systemLimiter', () => {
     await waitFor(() => ran.length === 1);
   });
 
-  it('records the machine’s health on the instance row even with no limiter configured', async () => {
-    // Monitoring is unconditional: the heartbeat persists host CPU/memory so the dashboard and CLI
-    // can show where each instance runs. Only the throttling is opt-in.
+  it('records this process’s own health on the instance row even with no limiter configured', async () => {
+    // Monitoring is unconditional: the heartbeat persists process CPU/heap so the dashboard and CLI
+    // can show how each instance is doing. Only the throttling is opt-in.
     h = await createTestQueue('sqlite', {
       instance: { instanceKey: 'w-health', heartbeatIntervalSeconds: 0.05 },
     });
@@ -63,12 +64,15 @@ describe('systemLimiter', () => {
     });
     const row = await h.driver.getInstance({ instanceKey: 'w-health' });
 
-    // Machine memory, within a few points of what `os` reports right now — this process's RSS is a
-    // fraction of a percent of a developer machine, so the old per-process share would fail here.
-    const machineMemoryPercent = ((totalmem() - freemem()) / totalmem()) * 100;
-    expect(row!.memoryPercent).toBeCloseTo(machineMemoryPercent, 0);
-    // Both are shares of the whole host, so neither can exceed 100 the way summed process CPU did.
+    // A share of V8's heap limit, within a couple of points of what this test process is holding
+    // right now. A host-memory share would be far higher on a typical machine, and would not track
+    // the heap at all.
+    const heap = getHeapStatistics();
+    const heapPercent = (heap.used_heap_size / heap.heap_size_limit) * 100;
+    expect(row!.memoryPercent).toBeGreaterThan(0);
+    expect(Math.abs(row!.memoryPercent! - heapPercent)).toBeLessThan(5);
+    // Process CPU is a share of one core, so it stays well under 100 for a test that mostly waits —
+    // but it is never negative, whatever the wall clock does between samples.
     expect(row!.cpuPercent).toBeGreaterThanOrEqual(0);
-    expect(row!.cpuPercent).toBeLessThanOrEqual(100);
   });
 });

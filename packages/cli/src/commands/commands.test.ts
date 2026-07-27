@@ -103,10 +103,12 @@ describe('schedulesCommand', () => {
 });
 
 describe('instancesCommand', () => {
-  it('lists liveness, host health and a processed total', async () => {
+  it('lists liveness, process health and a processed total', async () => {
     const { stdout } = await run(instancesCommand, {});
     expect(stdout).toContain('worker-eu-1');
-    // Machine CPU and memory shares — there is no per-process byte figure any more.
+    // Process CPU and heap shares, each column saying whose they are.
+    expect(stdout).toContain('CPU (proc)');
+    expect(stdout).toContain('Mem (proc)');
     expect(stdout).toContain('12.5%');
     expect(stdout).toContain('94.2%');
     expect(stdout).not.toContain('RSS');
@@ -148,6 +150,9 @@ describe('instanceCommand', () => {
   it('prints one instance with its health and per-status counts', async () => {
     const { stdout } = await run(instanceCommand, { key: 'worker-eu-1' });
     expect(stdout).toContain('Instance worker-eu-1');
+    // Spelled out in the detail view: whose CPU, and what the memory share is of.
+    expect(stdout).toContain('CPU (process, % of one core)');
+    expect(stdout).toContain('Memory (process, % of heap limit)');
     expect(stdout).toContain('12.5%');
     expect(stdout).toContain('COMPLETED');
     expect(stdout).toContain('TOTAL');

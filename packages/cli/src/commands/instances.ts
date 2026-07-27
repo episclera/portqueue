@@ -5,9 +5,10 @@ import { CommandGroup, type Command } from './types';
 import type { InstanceInfo } from '@portqueue/core';
 
 /**
- * Health metrics describe the **machine** an instance runs on, and are recorded on every heartbeat,
- * so an unseen instance still reports the numbers from the last beat we heard. Before an instance's
- * first beat they are null, which prints as `—` rather than a misleading `0`.
+ * Health metrics describe the **Node process** an instance runs — CPU as a share of one core, heap
+ * as a share of V8's limit — and are recorded on every heartbeat, so an unseen instance still
+ * reports the numbers from the last beat we heard. Before an instance's first beat they are null,
+ * which prints as `—` rather than a misleading `0`.
  */
 function percent(value: number | null): string {
   return value === null ? '—' : `${value.toFixed(1)}%`;
@@ -21,13 +22,15 @@ function processed(instance: InstanceInfo): number {
 export const instancesCommand: Command = {
   name: 'instances',
   group: CommandGroup.Monitoring,
-  summary: 'List instances with liveness, host health and jobs processed',
+  summary: 'List instances with liveness, process health and jobs processed',
   async run({ pq, flags }) {
     const instances = await pq.getInstances();
     if (flagBool(flags, 'json')) return printJson(instances);
     heading('Instances');
     table(
-      ['Instance', 'Live', 'Paused', 'CPU', 'Memory', 'Processed', 'Last Seen'],
+      // The two health columns say whose numbers they are in the header, since a bare "CPU" in a
+      // terminal reads as the box's load.
+      ['Instance', 'Live', 'Paused', 'CPU (proc)', 'Mem (proc)', 'Processed', 'Last Seen'],
       instances.map((i) => [
         i.instanceKey,
         i.alive ? 'yes' : color('no', 'dim'),
@@ -45,7 +48,7 @@ export const instancesCommand: Command = {
 export const instanceCommand: Command = {
   name: 'instance',
   group: CommandGroup.Monitoring,
-  summary: 'One instance: host health at its last heartbeat + jobs by status',
+  summary: 'One instance: process health at its last heartbeat + jobs by status',
   usage: '--key <instanceKey>',
   async run({ pq, flags }) {
     const instanceKey = flagString(flags, 'key');
@@ -62,9 +65,10 @@ export const instanceCommand: Command = {
       [
         ['Live', instance.alive ? 'yes' : color('no', 'dim')],
         ['Paused', instance.processingPaused ? 'yes' : color('no', 'dim')],
-        // Named as machine-wide, since the same numbers repeat for two instances on one host.
-        ['CPU (machine)', percent(instance.cpuPercent)],
-        ['Memory (machine)', percent(instance.memoryPercent)],
+        // Spelled out here, where there is room: a share of one core, and a share of V8's heap
+        // limit — neither is the machine's.
+        ['CPU (process, % of one core)', percent(instance.cpuPercent)],
+        ['Memory (process, % of heap limit)', percent(instance.memoryPercent)],
         ['Last seen', relativeTime(instance.lastSeenAt)],
         ['First seen', relativeTime(instance.createdAt)],
       ],

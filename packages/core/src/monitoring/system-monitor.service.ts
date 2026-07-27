@@ -1,5 +1,6 @@
-import { monitorEventLoopDelay } from 'node:perf_hooks';
-import { cpus, freemem, totalmem } from 'node:os';
+import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
+import { cpuUsage } from 'node:process';
+import { getHeapStatistics } from 'node:v8';
 import { PortQueueEvent } from '../events/event-name.enum';
 import type { SystemLimiterOptions } from '../options/common';
 import type { EventBusService } from '../events/event-bus.service';
@@ -8,17 +9,28 @@ import type { Logger } from '../logging/logger.interface';
 type EventLoopDelayMonitor = ReturnType<typeof monitorEventLoopDelay>;
 
 /**
- * One sample of the **machine's** health, not this process's. Both percentages are 0-100 shares of
- * the whole host: CPU is busy time across every core, memory is used memory over total memory.
+ * One sample of **this Node process's** health, not the machine's.
  *
- * Machine-wide is the reading an operator acts on. A Node process at 30% of one core tells you
- * nothing about whether the box it shares with a database and three other services can take more
- * work — and a queue that throttles on its own CPU keeps claiming while the host thrashes.
+ * Per-process is the only reading that means anything here. A host figure says "the box is at 92%"
+ * on a machine where the OS has merely *allocated* nearly all of RAM to page cache and other
+ * processes — which is what Linux and macOS both do, so `os.freemem()` sits above 90% used on an
+ * idle laptop and a memory threshold fires forever. It also says nothing about the process that is
+ * actually running the jobs: a container with a 512 MB cap on a 64 GB host reads as healthy right
+ * up to the moment it is killed.
  */
 export interface SystemMetrics {
-  /** Share of total CPU time the machine spent busy since the previous sample (0-100). */
+  /**
+   * CPU this process burned since the previous sample, as a percentage of **one core**'s wall time
+   * — the same convention `top` and `ps` use. A pegged main thread reads ~100; work spread over
+   * libuv threads or worker threads can exceed 100.
+   */
   cpuPercent: number;
-  /** Used machine memory as a share of `os.totalmem()`, not of a container limit. */
+  /**
+   * Heap this process is holding as a share of the heap V8 will let it grow to
+   * (`v8.getHeapStatistics().heap_size_limit`, which `--max-old-space-size` sets), 0-100.
+   * 100 is the OOM abort, so this is the memory number worth throttling on — unlike a share of
+   * machine RAM, which a process is never allowed to reach.
+   */
   memoryPercent: number;
   /** Mean event-loop delay in seconds, or null when it isn't being watched. */
   eventLoopDelaySeconds: number | null;
@@ -31,50 +43,30 @@ interface Reading {
   threshold: number;
 }
 
-/** Busy and total CPU time across every core, in the units `os.cpus()` reports. */
-interface CpuTimes {
-  idle: number;
-  total: number;
-}
-
 /**
- * Sum every core's time counters. These are monotonic since boot, so a percentage only means
- * something as a difference between two reads.
- */
-function readCpuTimes(): CpuTimes {
-  let idle = 0;
-  let total = 0;
-  for (const core of cpus()) {
-    for (const [mode, milliseconds] of Object.entries(core.times)) {
-      total += milliseconds;
-      if (mode === 'idle') idle += milliseconds;
-    }
-  }
-  return { idle, total };
-}
-
-/**
- * Samples the **machine's** health, and optionally throttles on it.
+ * Samples **this process's** health, and optionally throttles on it.
  *
- * **Monitoring is unconditional.** Host CPU and memory are sampled for as long as the client runs,
+ * **Monitoring is unconditional.** Process CPU and heap are sampled for as long as the client runs,
  * because the instance heartbeat persists them — that is what makes the dashboard's per-instance
- * metrics possible, so there is no option to turn it off. Both numbers describe the whole host, so
- * two PortQueue processes on one box report the same figures; the instance row says *where* the
- * reading was taken, not whose memory it was.
+ * metrics possible, so there is no option to turn it off. Both numbers belong to the process that
+ * took them, so two PortQueue processes on one box report their own figures and the instance row
+ * says whose reading it was.
  *
  * **Limiting is opt-in.** Only when the caller passes `systemLimiter` does a breached threshold
  * raise the backpressure flag that stops workers claiming (with hysteresis on the way down, so a
  * metric hovering at its limit doesn't flap). Event-loop delay is the one metric that isn't sampled
- * unless asked for — and the one that is genuinely about this process rather than the host: reading
- * it means keeping a `perf_hooks` histogram enabled for the process's lifetime, so it is enabled
- * only when `maxEventLoopDelaySeconds` gives it a purpose.
+ * unless asked for: reading it means keeping a `perf_hooks` histogram enabled for the process's
+ * lifetime, so it is enabled only when `maxEventLoopDelaySeconds` gives it a purpose.
  *
  * Uses only Node built-ins. Pressure transitions are observed via the event bus, never a callback.
  */
 export class SystemMonitorService {
   private timer: NodeJS.Timeout | null = null;
   private histogram: EventLoopDelayMonitor | null = null;
-  private lastCpuTimes = readCpuTimes();
+  private lastCpu = cpuUsage();
+  // `performance.now()` rather than the clock: a monotonic origin, so a system clock that steps
+  // backwards mid-sample can't produce a negative window and a CPU percentage to match.
+  private lastSampleAt = performance.now();
   private _pressureHigh = false;
   private _metrics: SystemMetrics = {
     cpuPercent: 0,
@@ -155,16 +147,26 @@ export class SystemMonitorService {
 
   /** Read every metric, whether or not a threshold watches it. */
   private measure(): SystemMetrics {
-    const previous = this.lastCpuTimes;
-    const current = readCpuTimes();
-    this.lastCpuTimes = current;
-    const elapsed = current.total - previous.total;
-    const busy = elapsed - (current.idle - previous.idle);
-    // Two samples inside one clock tick leave no CPU time to divide by; keeping the previous
-    // reading is honest, where reporting 0% would claim an idle machine.
-    const cpuPercent = elapsed > 0 ? (busy / elapsed) * 100 : this._metrics.cpuPercent;
+    // `cpuUsage()` is cumulative microseconds of CPU time (user + system) since the process
+    // started. Divided by the wall time of the window it is "cores busy", where 100 is one core
+    // saturated — the figure `top` shows for a process. Read the absolute value once and subtract,
+    // rather than taking `cpuUsage(previous)` and re-reading: two reads would leave the microseconds
+    // between them out of the next window.
+    const now = performance.now();
+    const current = cpuUsage();
+    const elapsedMicros = (now - this.lastSampleAt) * 1000;
+    const usedMicros = current.user - this.lastCpu.user + (current.system - this.lastCpu.system);
+    this.lastCpu = current;
+    this.lastSampleAt = now;
+    // Two samples inside one timer resolution leave no wall time to divide by; keeping the previous
+    // reading is honest, where reporting 0% would claim an idle process.
+    const cpuPercent =
+      elapsedMicros > 0 ? (usedMicros / elapsedMicros) * 100 : this._metrics.cpuPercent;
 
-    const total = totalmem();
+    // The heap limit, not machine RAM: it is the ceiling this process actually dies at, and the one
+    // `--max-old-space-size` moves. `used_heap_size` is what V8 reports as live after its last GC.
+    const heap = getHeapStatistics();
+
     let eventLoopDelaySeconds: number | null = null;
     if (this.histogram) {
       // The histogram reports nanoseconds and is reset each sample, so this is the mean since the
@@ -174,7 +176,7 @@ export class SystemMonitorService {
     }
     return {
       cpuPercent,
-      memoryPercent: ((total - freemem()) / total) * 100,
+      memoryPercent: (heap.used_heap_size / heap.heap_size_limit) * 100,
       eventLoopDelaySeconds,
     };
   }
