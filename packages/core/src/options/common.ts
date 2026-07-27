@@ -67,16 +67,17 @@ export interface LimiterOptions {
  * Thresholds on **this process's** health that pause job claiming while they are breached.
  *
  * CPU and memory are read for the Node process, not the host: CPU time this process burned
- * (`process.cpuUsage()`) over the wall time of the sample, and heap used over the heap limit V8
- * would kill it at (`v8.getHeapStatistics()`). Host-wide readings were tried and are the wrong
- * signal — Linux and macOS both count allocated-but-idle memory as used, so `os.freemem()` reports
- * 90%+ on a machine doing nothing and a memory threshold never clears; and a process in a container
- * has its own limits well under the host's, so the host number is not the ceiling it dies at.
+ * (`process.cpuUsage()`) over the core-time available to it, and heap used over the heap limit V8
+ * would kill it at (`v8.getHeapStatistics()`). Both are 0-100. Host-wide readings were tried and
+ * are the wrong signal — Linux and macOS both count allocated-but-idle memory as used, so
+ * `os.freemem()` reports 90%+ on a machine doing nothing and a memory threshold never clears; and a
+ * process in a container has its own limits well under the host's, so the host number is not the
+ * ceiling it dies at.
  *
  * Passing this object is what turns system backpressure on: every worker on the client then stops
- * claiming while any threshold is over, and resumes once every watched metric has fallen to
- * `resumeHysteresis` of its limit. Omit it (the default) and nothing throttles — the metrics are
- * still sampled and still recorded against the instance row, they simply don't gate anything.
+ * claiming while any threshold is over, and resumes once every watched metric is back at or under
+ * its limit. Omit it (the default) and nothing throttles — the metrics are still sampled and still
+ * recorded against the instance row, they simply don't gate anything.
  *
  * Only the thresholds you set are checked, and this object **replaces** nothing — there is no
  * default threshold to merge with. `{}` samples but can never throttle.
@@ -94,9 +95,9 @@ export interface SystemLimiterOptions {
    */
   maxEventLoopDelaySeconds?: number;
   /**
-   * This process's CPU above this percentage of **one core**'s time counts as pressure. `100` is
-   * one core saturated; work on libuv or worker threads can push the reading past it, so on a
-   * 4-core box a sensible cap is nearer `300` than `85`.
+   * This process's CPU above this share of **all the cores available to it** counts as pressure
+   * (0-100). Machine-relative, so the same `85` means the same thing on a 2-core container and a
+   * 64-core box.
    */
   maxCpuPercent?: number;
   /**
@@ -104,8 +105,6 @@ export interface SystemLimiterOptions {
    * limit is what `--max-old-space-size` sets, not machine RAM.
    */
   maxMemoryPercent?: number;
-  /** Fraction (0-1) of its own threshold every metric must fall to before resuming (default 0.8). */
-  resumeHysteresis?: number;
 }
 
 /** Page result — cursor for streaming, `total` for numbered pagination. */

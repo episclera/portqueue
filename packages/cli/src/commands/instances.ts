@@ -5,10 +5,10 @@ import { CommandGroup, type Command } from './types';
 import type { InstanceInfo } from '@portqueue/core';
 
 /**
- * Health metrics describe the **Node process** an instance runs — CPU as a share of one core, heap
- * as a share of V8's limit — and are recorded on every heartbeat, so an unseen instance still
- * reports the numbers from the last beat we heard. Before an instance's first beat they are null,
- * which prints as `—` rather than a misleading `0`.
+ * Health metrics describe the **Node process** an instance runs — CPU as a share of the cores
+ * available to it, heap as a share of V8's limit — and are recorded on every heartbeat, so an
+ * unseen instance still reports the numbers from the last beat we heard. Before an instance's first
+ * beat they are null, which prints as `—` rather than a misleading `0`.
  */
 function percent(value: number | null): string {
   return value === null ? '—' : `${value.toFixed(1)}%`;
@@ -65,9 +65,9 @@ export const instanceCommand: Command = {
       [
         ['Live', instance.alive ? 'yes' : color('no', 'dim')],
         ['Paused', instance.processingPaused ? 'yes' : color('no', 'dim')],
-        // Spelled out here, where there is room: a share of one core, and a share of V8's heap
-        // limit — neither is the machine's.
-        ['CPU (process, % of one core)', percent(instance.cpuPercent)],
+        // Spelled out here, where there is room: a share of the cores available, and a share of
+        // V8's heap limit — neither is the machine's.
+        ['CPU (process, % of all cores)', percent(instance.cpuPercent)],
         ['Memory (process, % of heap limit)', percent(instance.memoryPercent)],
         ['Last seen', relativeTime(instance.lastSeenAt)],
         ['First seen', relativeTime(instance.createdAt)],

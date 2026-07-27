@@ -108,6 +108,10 @@ for the generated usage. Global connection flags apply to all of them.
 | `instances` | | List instances with liveness, that process's health at the last heartbeat (CPU / memory) and jobs processed |
 | `instance` | `--key <instanceKey>` | One instance: its process's health, liveness and job counts by status |
 
+`CPU (proc)` is that Node process's CPU as a share of **all the cores available to it** (0–100%);
+`Mem (proc)` is used heap over V8's limit, not machine RAM. Both print plain — the CLI never colours
+them, because no reading is high or low on its own.
+
 ### Actions
 
 | Command | Usage | What it does |

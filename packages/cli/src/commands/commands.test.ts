@@ -151,7 +151,7 @@ describe('instanceCommand', () => {
     const { stdout } = await run(instanceCommand, { key: 'worker-eu-1' });
     expect(stdout).toContain('Instance worker-eu-1');
     // Spelled out in the detail view: whose CPU, and what the memory share is of.
-    expect(stdout).toContain('CPU (process, % of one core)');
+    expect(stdout).toContain('CPU (process, % of all cores)');
     expect(stdout).toContain('Memory (process, % of heap limit)');
     expect(stdout).toContain('12.5%');
     expect(stdout).toContain('COMPLETED');

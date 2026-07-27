@@ -39,9 +39,9 @@ export interface InstanceDto {
   updatedAt: string;
   lastSeenAt: string;
   /**
-   * The health of the **Node process** behind this instance, at its last heartbeat: `cpuPercent` is
-   * a share of one core (so it can exceed 100), `memoryPercent` is used heap over V8's heap limit.
-   * Neither is machine-wide. Null until the instance's first beat.
+   * The health of the **Node process** behind this instance, at its last heartbeat, both 0-100:
+   * `cpuPercent` over the cores available to it, `memoryPercent` over V8's heap limit. Neither is
+   * machine-wide. Null until the instance's first beat.
    */
   cpuPercent: number | null;
   memoryPercent: number | null;

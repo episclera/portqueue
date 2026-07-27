@@ -1,3 +1,4 @@
+import { availableParallelism } from 'node:os';
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { cpuUsage } from 'node:process';
 import { getHeapStatistics } from 'node:v8';
@@ -20,9 +21,12 @@ type EventLoopDelayMonitor = ReturnType<typeof monitorEventLoopDelay>;
  */
 export interface SystemMetrics {
   /**
-   * CPU this process burned since the previous sample, as a percentage of **one core**'s wall time
-   * — the same convention `top` and `ps` use. A pegged main thread reads ~100; work spread over
-   * libuv threads or worker threads can exceed 100.
+   * CPU this process burned since the previous sample as a share of **every core available to
+   * it**, 0-100: core-seconds used over cores × wall time.
+   *
+   * `top`'s per-core figure was the obvious alternative and is the wrong one here — it reads past
+   * 100 whenever work spreads across libuv or worker threads, so it can't be compared between a
+   * 2-core container and a 64-core box or shown beside a memory percentage.
    */
   cpuPercent: number;
   /**
@@ -53,10 +57,10 @@ interface Reading {
  * says whose reading it was.
  *
  * **Limiting is opt-in.** Only when the caller passes `systemLimiter` does a breached threshold
- * raise the backpressure flag that stops workers claiming (with hysteresis on the way down, so a
- * metric hovering at its limit doesn't flap). Event-loop delay is the one metric that isn't sampled
- * unless asked for: reading it means keeping a `perf_hooks` histogram enabled for the process's
- * lifetime, so it is enabled only when `maxEventLoopDelaySeconds` gives it a purpose.
+ * raise the backpressure flag that stops workers claiming, and clearing every threshold lower it
+ * again. Event-loop delay is the one metric that isn't sampled unless asked for: reading it means
+ * keeping a `perf_hooks` histogram enabled for the process's lifetime, so it is enabled only when
+ * `maxEventLoopDelaySeconds` gives it a purpose.
  *
  * Uses only Node built-ins. Pressure transitions are observed via the event bus, never a callback.
  */
@@ -67,6 +71,10 @@ export class SystemMonitorService {
   // `performance.now()` rather than the clock: a monotonic origin, so a system clock that steps
   // backwards mid-sample can't produce a negative window and a CPU percentage to match.
   private lastSampleAt = performance.now();
+  // Cores this process may actually run on — `availableParallelism()` honours CPU affinity and
+  // container limits, where `cpus().length` reports the whole host. Read once: it can't change
+  // for a running process, and `|| 1` keeps a hostile value from producing a division by zero.
+  private readonly cores = availableParallelism() || 1;
   private _pressureHigh = false;
   private _metrics: SystemMetrics = {
     cpuPercent: 0,
@@ -130,28 +138,23 @@ export class SystemMonitorService {
       return;
     }
 
-    // Hysteresis: every watched metric must fall to a fraction of its own threshold before workers
-    // resume, so one hovering at its limit doesn't toggle pressure on alternate samples. Comparing
-    // against the live readings is the point — an earlier version compared a "nothing breached"
-    // sentinel, which made any dip below the threshold count as recovered.
+    // Nothing breached: every watched metric is back at or under its own threshold, so claiming
+    // resumes on the very next sample that clears.
     if (this._pressureHigh) {
-      const hysteresis = this.limiter.resumeHysteresis ?? 0.8;
-      if (readings.every((r) => r.value <= r.threshold * hysteresis)) {
-        this._pressureHigh = false;
-        this.logger.info('System pressure normal; workers resume claiming.');
-        this.events.emit(PortQueueEvent.SYSTEM_PRESSURE_NORMAL, {});
-        this.onResume();
-      }
+      this._pressureHigh = false;
+      this.logger.info('System pressure normal; workers resume claiming.');
+      this.events.emit(PortQueueEvent.SYSTEM_PRESSURE_NORMAL, {});
+      this.onResume();
     }
   }
 
   /** Read every metric, whether or not a threshold watches it. */
   private measure(): SystemMetrics {
     // `cpuUsage()` is cumulative microseconds of CPU time (user + system) since the process
-    // started. Divided by the wall time of the window it is "cores busy", where 100 is one core
-    // saturated — the figure `top` shows for a process. Read the absolute value once and subtract,
-    // rather than taking `cpuUsage(previous)` and re-reading: two reads would leave the microseconds
-    // between them out of the next window.
+    // started. Over the wall time of the window that is "cores busy"; divided again by the cores
+    // available it is a 0-100 share of this process's whole CPU budget. Read the absolute value
+    // once and subtract, rather than taking `cpuUsage(previous)` and re-reading: two reads would
+    // leave the microseconds between them out of the next window.
     const now = performance.now();
     const current = cpuUsage();
     const elapsedMicros = (now - this.lastSampleAt) * 1000;
@@ -159,9 +162,13 @@ export class SystemMonitorService {
     this.lastCpu = current;
     this.lastSampleAt = now;
     // Two samples inside one timer resolution leave no wall time to divide by; keeping the previous
-    // reading is honest, where reporting 0% would claim an idle process.
+    // reading is honest, where reporting 0% would claim an idle process. The clamp covers CPU
+    // accounting and the monotonic clock being sampled separately, which can put a window a
+    // fraction over its own core-time budget.
     const cpuPercent =
-      elapsedMicros > 0 ? (usedMicros / elapsedMicros) * 100 : this._metrics.cpuPercent;
+      elapsedMicros > 0
+        ? Math.min(100, (usedMicros / (elapsedMicros * this.cores)) * 100)
+        : this._metrics.cpuPercent;
 
     // The heap limit, not machine RAM: it is the ceiling this process actually dies at, and the one
     // `--max-old-space-size` moves. `used_heap_size` is what V8 reports as live after its last GC.

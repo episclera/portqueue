@@ -48,9 +48,10 @@ links to its own page.
 >
 
 One row per registered instance: liveness, the CPU and memory of that **Node process** at its last
-heartbeat, jobs processed, and pause/resume. CPU is a share of one core, memory a share of V8's heap
-limit — not host-wide figures. Only populated for servers that set an
-[instance key](./scale-horizontally.md#give-each-server-an-identity-key).
+heartbeat, jobs processed, and pause/resume. CPU is a share of all the cores available to the
+process, memory a share of V8's heap limit — both 0–100%, and neither host-wide. Neither number is
+ever coloured: no single value means the process is unhealthy. Only populated for servers that set
+an [instance key](./scale-horizontally.md#give-each-server-an-identity-key).
 
 Each key links to its own page: health cards plus the jobs that instance claimed, with pause/resume
 and remove (available once it has been unseen for 30 minutes). A job's **Processed on instance**

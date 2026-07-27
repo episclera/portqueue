@@ -92,9 +92,9 @@ export interface InstanceInfo {
   updatedAt: Date;
   lastSeenAt: Date;
   /**
-   * The health of the **Node process** behind this instance, at its last heartbeat: `cpuPercent` is
-   * a percentage of one core (so it can exceed 100), `memoryPercent` is used heap over V8's heap
-   * limit. Neither is a machine-wide figure. Null until its first beat.
+   * The health of the **Node process** behind this instance, at its last heartbeat, both 0-100:
+   * `cpuPercent` over the cores available to it, `memoryPercent` over V8's heap limit. Neither is a
+   * machine-wide figure. Null until its first beat.
    */
   cpuPercent: number | null;
   memoryPercent: number | null;

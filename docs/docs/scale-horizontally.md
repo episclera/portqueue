@@ -38,8 +38,9 @@ a heartbeat row, honours job affinity, and can be paused on its own from the das
 anonymous one runs jobs but can't be addressed.
 
 Each heartbeat also records the **CPU and memory of that server's Node process** — CPU as a share of
-one core, heap as a share of the limit V8 would abort at — so the instances list and the
-`portqueue instances` command show how every process is doing at the moment it was last heard from.
+the cores available to it, heap as a share of the limit V8 would abort at — so the instances list and
+the `portqueue instances` command show how every process is doing at the moment it was last heard
+from.
 They are deliberately not host-wide numbers: two instances on one machine report their own figures,
 and a host memory reading would count memory the OS merely allocated elsewhere. That happens for any
 keyed instance — it does not require a

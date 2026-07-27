@@ -8,13 +8,19 @@
  * `process`/`v8` directly, since a host-wide share would pass a "> 0" check just as happily (and on
  * a typical Linux or macOS box would sit above 90% the whole time).
  */
+import { performance } from 'node:perf_hooks';
+import { cpuUsage } from 'node:process';
 import { getHeapStatistics } from 'node:v8';
+import { SystemMonitorService, type SystemMetrics } from './system-monitor.service';
 import { createTestQueue, waitFor, type TestQueueHandle } from '../test-utils/create-test-queue';
+import type { EventBusService } from '../events/event-bus.service';
+import type { Logger } from '../logging/logger.interface';
 
 describe('systemLimiter', () => {
-  let h: TestQueueHandle;
+  let h: TestQueueHandle | undefined;
   afterEach(async () => {
-    await h.cleanup();
+    await h?.cleanup();
+    h = undefined;
   });
 
   it('stops every worker claiming while a threshold is breached', async () => {
@@ -58,11 +64,12 @@ describe('systemLimiter', () => {
     h = await createTestQueue('sqlite', {
       instance: { instanceKey: 'w-health', heartbeatIntervalSeconds: 0.05 },
     });
+    const handle = h;
     await waitFor(async () => {
-      const row = await h.driver.getInstance({ instanceKey: 'w-health' });
+      const row = await handle.driver.getInstance({ instanceKey: 'w-health' });
       return row?.memoryPercent != null;
     });
-    const row = await h.driver.getInstance({ instanceKey: 'w-health' });
+    const row = await handle.driver.getInstance({ instanceKey: 'w-health' });
 
     // A share of V8's heap limit, within a couple of points of what this test process is holding
     // right now. A host-memory share would be far higher on a typical machine, and would not track
@@ -71,8 +78,39 @@ describe('systemLimiter', () => {
     const heapPercent = (heap.used_heap_size / heap.heap_size_limit) * 100;
     expect(row!.memoryPercent).toBeGreaterThan(0);
     expect(Math.abs(row!.memoryPercent! - heapPercent)).toBeLessThan(5);
-    // Process CPU is a share of one core, so it stays well under 100 for a test that mostly waits —
-    // but it is never negative, whatever the wall clock does between samples.
+    // CPU is a share of every core available to the process, so it is bounded 0-100 whatever the
+    // core count — the whole point of dividing by `availableParallelism()`.
     expect(row!.cpuPercent).toBeGreaterThanOrEqual(0);
+    expect(row!.cpuPercent).toBeLessThanOrEqual(100);
+  });
+
+  it('reports CPU on a 0-100 scale even when the process burns more than one core', async () => {
+    // Two-plus cores' worth of CPU over the window read ~200/~400 on the old per-core scale. Faking
+    // the measurement inputs rather than actually spinning cores keeps this fast and deterministic;
+    // the service is exercised directly, since the numbers it produces are the thing under test.
+    const monitor = new SystemMonitorService(
+      undefined,
+      { emit: () => {} } as unknown as EventBusService,
+      { info: () => {}, warn: () => {} } as unknown as Logger,
+      () => {},
+    );
+    const state = monitor as unknown as {
+      cores: number;
+      lastCpu: ReturnType<typeof cpuUsage>;
+      lastSampleAt: number;
+      measure(): SystemMetrics;
+    };
+    // One second of wall time in which the process used every core it has: fully saturated, 100%.
+    const used = state.cores * 1_000_000;
+    const now = cpuUsage();
+    state.lastSampleAt = performance.now() - 1000;
+    state.lastCpu = { user: now.user - used, system: now.system };
+    expect(state.measure().cpuPercent).toBeCloseTo(100, 0);
+
+    // Twice that is over budget, and clamps rather than reporting a share above 100.
+    const next = cpuUsage();
+    state.lastSampleAt = performance.now() - 1000;
+    state.lastCpu = { user: next.user - used * 2, system: next.system };
+    expect(state.measure().cpuPercent).toBe(100);
   });
 });

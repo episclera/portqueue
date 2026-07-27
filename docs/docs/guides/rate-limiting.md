@@ -47,7 +47,7 @@ local rate cap. (Cluster-wide *pause* is still available via queue and instance 
 const pq = new PortQueue({
   driver,
   // Defining this is what makes every worker respect pressure. Omit it and none do.
-  systemLimiter: { maxEventLoopDelaySeconds: 0.2, maxCpuPercent: 85, resumeHysteresis: 0.8 },
+  systemLimiter: { maxEventLoopDelaySeconds: 0.2, maxCpuPercent: 85 },
 });
 
 pq.createWorker({
@@ -65,8 +65,8 @@ pq.createWorker({
 ## System-pressure backpressure
 
 `systemLimiter` is both the configuration and the switch. Pass it and **every** worker on the client
-stops claiming while any threshold you set is breached, resuming once every watched metric has
-fallen back (see `resumeHysteresis`). Omit it — the default — and nothing throttles.
+stops claiming while any threshold you set is breached, resuming on the first sample where every
+watched metric is back at or under its limit. Omit it — the default — and nothing throttles.
 
 There is deliberately no per-worker opt-in. A limiter describes the health of *the process*, and one
 worker continuing to claim while its siblings back off would defeat the point; the earlier
@@ -74,10 +74,10 @@ worker continuing to claim while its siblings back off would defeat the point; t
 nothing.
 
 :::info CPU and memory are this process's, not the machine's
-`maxCpuPercent` is this Node process's CPU over the sample window as a share of **one core** — the
-figure `top` shows for a process, so `100` is one core saturated and threaded work can go past it.
-`maxMemoryPercent` is the process's used heap as a share of the limit **V8 would abort at**
-(`--max-old-space-size`), not of machine RAM.
+`maxCpuPercent` is this Node process's CPU over the sample window as a share of **all the cores
+available to it** (`os.availableParallelism()`), 0–100 — `85` means it is using 85% of the CPU the
+host will give it, whether that host has 2 cores or 64. `maxMemoryPercent` is the process's used
+heap as a share of the limit **V8 would abort at** (`--max-old-space-size`), not of machine RAM.
 
 Host-wide readings were tried and are the wrong signal. Linux and macOS both count memory that is
 merely *allocated* as used, so `os.freemem()` reports 90%+ on a machine doing nothing much and a
@@ -102,18 +102,26 @@ Pressure gating and the rate limits above throttle claiming independently — th
 |---|---|---|---|
 | `sampleIntervalSeconds` | `number` | `2` | How often metrics are sampled, in seconds. Every threshold is checked once per sample, so this is also the worst-case reaction time. |
 | `maxEventLoopDelaySeconds` | `number` | unset | Pressure when the **mean** event-loop delay since the last sample exceeds this many seconds (`0.2` = 200 ms). The best single signal that the process is saturated, and the only metric not measured at all until you set it. |
-| `maxCpuPercent` | `number` | unset | Pressure when **this process's** CPU since the last sample exceeds this share of one core. `100` is one core pegged; on a multi-core box a useful cap is nearer `200`–`300` than `85`. |
+| `maxCpuPercent` | `number` | unset | Pressure when **this process's** CPU since the last sample exceeds this share (0–100) of the cores available to it. `85` is a reasonable cap on any core count. |
 | `maxMemoryPercent` | `number` | unset | Pressure when **this process's** used heap exceeds this share of V8's heap limit (0–100) — the limit `--max-old-space-size` sets, not machine RAM. |
-| `resumeHysteresis` | `number` | `0.8` | Fraction (0–1) of the breached threshold the metric must fall back to before workers resume — `0.8` with `maxCpuPercent: 200` resumes at 160. Lower is more conservative. |
 
 Every threshold is optional and **only the ones you set are checked**; there are no defaults to
 merge with, so `systemLimiter: {}` samples but can never report pressure.
 
+:::info `maxCpuPercent` is core-count independent
+It is a share of everything the host will give this process (`os.availableParallelism()`), so `85`
+means the same on a 2-core container and a 64-core server, and never reads past 100. Earlier
+versions reported a share of *one* core, where a cap looked like `600` on 8 cores — divide any such
+cap by your core count.
+
+When you want "the process is saturated" rather than "it is busy", use `maxEventLoopDelaySeconds`:
+a process can sit at 30% CPU and still be unable to keep up.
+:::
+
 Thresholds are evaluated in a fixed order — `maxEventLoopDelaySeconds`, `maxCpuPercent`,
 `maxMemoryPercent` — and the **first breach wins**: that's the metric reported on the
-event. Recovery is stricter than the breach: **every** watched metric must fall to
-`threshold × resumeHysteresis` before claiming resumes, so a metric hovering at its limit can't
-toggle pressure on alternate samples.
+event. Recovery needs **every** watched metric back at or under its threshold, not just the one
+that breached, and takes effect on the first sample where that holds.
 
 ```ts
 const pq = new PortQueue({
@@ -121,9 +129,8 @@ const pq = new PortQueue({
   systemLimiter: {
     sampleIntervalSeconds: 2,        // sampling cadence, in seconds
     maxEventLoopDelaySeconds: 0.2,   // 200 ms of mean event-loop delay
-    maxCpuPercent: 200,              // this process at 2 cores' worth of CPU
+    maxCpuPercent: 85,               // this process at 85% of the cores it can use
     maxMemoryPercent: 85,            // this process's heap, as a share of V8's limit
-    resumeHysteresis: 0.8,
   },
 });
 

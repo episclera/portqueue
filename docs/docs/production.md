@@ -48,9 +48,18 @@ your own pruning); keep failed jobs longer than completed.
 Set a [`systemLimiter`](./guides/rate-limiting.md#system-pressure-backpressure) and a worker-local
 [rate limiter](./guides/rate-limiting.md) for third-party APIs.
 
-Its thresholds read **this Node process**, not the machine: `maxCpuPercent` is a share of one core
-(so `100` is one core pegged and a multi-core box wants a cap nearer `200`–`300`), and
-`maxMemoryPercent` is used heap over the limit V8 would abort at.
+Its thresholds read **this Node process**, not the machine: `maxCpuPercent` is a share (0–100) of
+all the cores available to the process, and `maxMemoryPercent` is used heap over the limit V8 would
+abort at.
+
+:::info `maxCpuPercent` is a share of the whole CPU budget
+The reading is this process's CPU divided by the core-time available to it
+(`os.availableParallelism()`), so `85` means the same on a 2-core container and a 64-core server —
+no `cores × 100` arithmetic, and it never reads past 100.
+
+If you only want the single-threaded saturation signal, `maxEventLoopDelaySeconds` is the better
+metric: a process can sit at 30% CPU and still be too far behind to keep up.
+:::
 
 ### Give Node the memory the box has
 

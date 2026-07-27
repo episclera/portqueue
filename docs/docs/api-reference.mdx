@@ -671,8 +671,8 @@ The single argument to `new PortQueue(...)`.
 ### SystemLimiterOptions
 
 **Passing this object is what turns backpressure on.** Every worker on the client then stops
-claiming while any threshold you set is breached, and resumes once every watched metric has fallen
-to `resumeHysteresis` of its own limit. There is no per-worker opt-in: define a `systemLimiter` and
+claiming while any threshold you set is breached, and resumes once every watched metric is back at
+or under its own limit. There is no per-worker opt-in: define a `systemLimiter` and
 they all respect it, omit it (the default) and none do.
 
 Only the thresholds you set are checked, and there are no defaults to merge with — `{}` samples but
@@ -681,8 +681,8 @@ rather than stored values.
 
 **This process's** CPU and heap are measured **regardless** — the instance heartbeat records them,
 so the dashboard can show how each instance is doing, and there is no option to switch that off.
-`cpuPercent` is CPU over the sample window as a share of **one core** (so it can exceed 100 on a
-multi-core box), and `memoryPercent` is used heap over V8's heap limit — neither is a machine-wide
+`cpuPercent` is CPU over the sample window as a share of **all the cores available to the process**
+(0–100), and `memoryPercent` is used heap over V8's heap limit — neither is a machine-wide
 figure, because a host memory reading counts allocated-but-idle memory as used and a container's
 real ceiling is well below the host's. Event-loop delay is the exception on measurement: keeping a
 `perf_hooks` histogram enabled costs something, so it is only sampled once
@@ -693,9 +693,8 @@ real ceiling is well below the host's. Event-loop delay is the exception on meas
 | -------------------------- | -------- | --------------------------- | ---------------------------------------------------------------------------------- |
 | `sampleIntervalSeconds`    | `number` | `2`                         | How often to sample system metrics, in seconds.                                    |
 | `maxEventLoopDelaySeconds` | `number` | `0.2` (default config only) | Mean event-loop delay above this, in seconds, counts as pressure.                  |
-| `maxCpuPercent`            | `number` | unset                       | This process's CPU above this share of one core counts as pressure (`100` = 1 core). |
+| `maxCpuPercent`            | `number` | unset                       | This process's CPU above this share (0–100) of the cores available to it counts as pressure — core-count independent, so `85` means the same on any box. |
 | `maxMemoryPercent`         | `number` | unset                       | This process's used heap above this share (0–100) of V8's heap limit counts as pressure. |
-| `resumeHysteresis`         | `number` | `0.8`                       | Fraction (0–1) below the threshold metrics must fall to before resuming.           |
 
 ### QueueOptions
 
@@ -812,7 +811,7 @@ Reads return objects, never bare ids. The main shapes:
 - **JobSnapshot** — the full read-side view of a job (all timestamps as `Date`, plus a derived `stalled` flag).
 - **ScheduleInfo** — `scheduleId`, `cron?`, `everySeconds?`, `timezone?`, `nextRunAt?`, `lastRunAt?`, `enabled`, `idempotencyKey?`.
 - **QueueInfo** — `name`, `processingPaused`, `acceptingPaused`, `counts`, `inUse`.
-- **InstanceInfo** — `instanceKey`, `processingPaused`, `alive`, `createdAt`, `updatedAt`, `lastSeenAt`, `counts`, plus `cpuPercent`/`memoryPercent` — that **process's** CPU (share of one core) and heap (share of V8's limit) at its last heartbeat, `null` before the first beat.
+- **InstanceInfo** — `instanceKey`, `processingPaused`, `alive`, `createdAt`, `updatedAt`, `lastSeenAt`, `counts`, plus `cpuPercent`/`memoryPercent` — that **process's** CPU (share of the cores available to it) and heap (share of V8's limit), both 0–100, at its last heartbeat, `null` before the first beat.
 - **QueueStats** — `queue?`, `counts` (a `JobStatus` → count map).
 - **Page&lt;T&gt;** — `items`, `cursor`, `hasMore`, `total` (rows matching the query, ignoring paging).
 

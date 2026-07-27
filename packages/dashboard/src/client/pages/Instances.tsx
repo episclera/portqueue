@@ -27,14 +27,7 @@ import {
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
 import { dateColumn } from '../components/table-columns';
-import {
-  CPU_THRESHOLDS,
-  MEMORY_THRESHOLDS,
-  METRIC_HINTS,
-  MetricValue,
-  formatPercent,
-  metricTone,
-} from '../components/metrics';
+import { METRIC_HINTS, MetricValue, formatPercent } from '../components/metrics';
 import { totalCount } from '../components/format';
 import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
@@ -110,9 +103,7 @@ export function InstancesPage(): React.ReactElement {
       align: 'right',
       render: (r) => (
         <Tooltip title={METRIC_HINTS.cpu} placement="bottom">
-          <MetricValue tone={metricTone(r.cpuPercent, CPU_THRESHOLDS)}>
-            {formatPercent(r.cpuPercent)}
-          </MetricValue>
+          <MetricValue>{formatPercent(r.cpuPercent)}</MetricValue>
         </Tooltip>
       ),
     },
@@ -122,9 +113,7 @@ export function InstancesPage(): React.ReactElement {
       align: 'right',
       render: (r) => (
         <Tooltip title={METRIC_HINTS.memory} placement="bottom">
-          <MetricValue tone={metricTone(r.memoryPercent, MEMORY_THRESHOLDS)}>
-            {formatPercent(r.memoryPercent)}
-          </MetricValue>
+          <MetricValue>{formatPercent(r.memoryPercent)}</MetricValue>
         </Tooltip>
       ),
     },

@@ -90,10 +90,9 @@ export interface QueueRow {
 
 /**
  * The health of the **Node process** an instance runs, at that instance's last heartbeat — CPU it
- * burned as a percentage of one core, and heap it holds as a share of V8's heap limit. Not the
- * machine's: a host reading counts memory the OS merely allocated elsewhere, and says nothing about
- * the process doing the work. Recorded on every beat, so it describes the moment the instance was
- * last heard from.
+ * burned as a share of the cores available to it, and heap it holds as a share of V8's heap limit,
+ * both 0-100. Not the machine's: a host reading counts memory the OS merely allocated elsewhere,
+ * and says nothing about the process doing the work.
  */
 export interface InstanceMetrics {
   cpuPercent: number;
