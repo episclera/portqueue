@@ -93,7 +93,7 @@ await pq.init();`,
     connect: `import { PortQueue } from '@portqueue/core';
 import { SqliteDriver } from '@portqueue/core/drivers/sqlite';
 
-const pq = new PortQueue({ driver: new SqliteDriver({ file: './queue.db' }) });
+const pq = new PortQueue({ driver: new SqliteDriver({ path: './queue.db' }) });
 await pq.init();`,
   },
 ];
