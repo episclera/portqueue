@@ -52,6 +52,8 @@ import type { TransactionHandle, TxQueryResult } from '../../tx/transaction-hand
 export interface SqliteDriverOptions {
   /** File path, or `:memory:` (default) for an in-process database. */
   path?: string;
+  /** An existing `better-sqlite3` `Database` to share with the app. */
+  database?: unknown;
   /** Prefix for all created tables (default 'pq_'). */
   tablePrefix?: string;
   /** Logical prefix for pub/sub channels when multiple PortQueues share one DB. */
@@ -115,13 +117,16 @@ const JOB_COLUMNS = [
 
 /**
  * SQLite driver — standalone: it owns its entire SQL surface (no shared base class) so a
- * SQLite-specific change never touches another engine. Uses Node's built-in `node:sqlite`
- * (no native dependency), a single writer serialized in-process. No SKIP LOCKED (the
- * single-writer model makes the guarded-UPDATE claim naturally exclusive) and no
- * LISTEN/NOTIFY (interval polling instead). `?`-style positional placeholders, RETURNING
- * everywhere. No method emits a relational JOIN — relationships resolve by name/key lookups,
- * and the schema carries no unique index, so name-uniqueness and idempotency/singleton dedup
- * are enforced here in code. App-generated UUIDs.
+ * SQLite-specific change never touches another engine. Uses `better-sqlite3`, a single writer
+ * serialized in-process. No SKIP LOCKED (the single-writer model makes the guarded-UPDATE claim
+ * naturally exclusive) and no LISTEN/NOTIFY (interval polling instead). `?`-style positional
+ * placeholders, RETURNING everywhere. No method emits a relational JOIN — relationships resolve
+ * by name/key lookups, and the schema carries no unique index, so name-uniqueness and
+ * idempotency/singleton dedup are enforced here in code. App-generated UUIDs.
+ *
+ * `better-sqlite3` rather than the built-in `node:sqlite`: the builtin needs
+ * `--experimental-sqlite` on Node 22 and is only unflagged from Node 24, so a driver built on it
+ * would fail across most of this package's supported range for a reason no caller could guess.
  */
 export class SqliteDriver implements Driver {
   readonly engine = DatabaseEngine.SQLITE;
@@ -135,9 +140,12 @@ export class SqliteDriver implements Driver {
   private db: SqliteDatabase | null = null;
   private lock: Promise<unknown> = Promise.resolve();
   private readonly path: string;
+  /** Set when the app passed its own `Database`; that connection is never closed by us. */
+  private readonly borrowed: SqliteDatabase | null;
 
   constructor(options: SqliteDriverOptions = {}) {
     this.path = options.path ?? ':memory:';
+    this.borrowed = (options.database as SqliteDatabase | undefined) ?? null;
     this.context = new DriverContext({
       ...(options.tablePrefix !== undefined ? { tablePrefix: options.tablePrefix } : {}),
       ...(options.namespace !== undefined ? { namespace: options.namespace } : {}),
@@ -146,19 +154,24 @@ export class SqliteDriver implements Driver {
 
   // --- Connection management ---
   async connect(): Promise<void> {
-    let mod: { DatabaseSync: new (path: string) => SqliteDatabase };
+    // An app-supplied Database is used as-is: it may already be open in a transaction, and its
+    // PRAGMAs are the app's business, not ours.
+    if (this.borrowed) {
+      this.db = this.borrowed;
+      return;
+    }
+    type DatabaseCtor = new (path: string) => SqliteDatabase;
+    let Database: DatabaseCtor;
     try {
-      mod = (await import('node:sqlite')) as unknown as {
-        DatabaseSync: new (path: string) => SqliteDatabase;
-      };
+      // Dynamic specifier so TS doesn't require the optional peer's types at build time. The
+      // constructor is the module's sole export, reached through `default` under ESM interop.
+      const mod = (await import('better-sqlite3' as string)) as { default?: DatabaseCtor };
+      Database = (mod.default ?? mod) as unknown as DatabaseCtor;
     } catch {
-      throw new MissingPeerDependencyError(
-        'node:sqlite (Node 22+, run with a recent Node)',
-        'SQLite',
-      );
+      throw new MissingPeerDependencyError('better-sqlite3', 'SQLite');
     }
     try {
-      this.db = new mod.DatabaseSync(this.path);
+      this.db = new Database(this.path);
       this.db.exec('PRAGMA journal_mode=WAL;');
       this.db.exec('PRAGMA busy_timeout=5000;');
       this.db.exec('PRAGMA foreign_keys=ON;');
@@ -168,11 +181,12 @@ export class SqliteDriver implements Driver {
   }
 
   async disconnect(): Promise<void> {
-    this.db?.close();
+    // Only close what we opened — a borrowed Database outlives this driver.
+    if (!this.borrowed) this.db?.close();
     this.db = null;
   }
 
-  /** Serialize all access (node:sqlite is synchronous; transactions must not interleave). */
+  /** Serialize all access (better-sqlite3 is synchronous; transactions must not interleave). */
   private runExclusive<T>(fn: () => T | Promise<T>): Promise<T> {
     const next = this.lock.then(() => fn());
     this.lock = next.catch(() => undefined);

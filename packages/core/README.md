@@ -8,7 +8,7 @@ npm install @portqueue/core
 npm install pg              # Postgres
 npm install oracledb        # Oracle
 npm install @electric-sql/pglite   # PGLite (embedded/edge/tests)
-npm install better-sqlite3  # SQLite (or use Node's built-in node:sqlite)
+npm install better-sqlite3  # SQLite
 ```
 
 ```ts

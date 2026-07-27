@@ -19,7 +19,7 @@ Two drivers are purpose-built for this:
 
 - **PGLite** — a full Postgres compiled to WASM. If you run Postgres in production, this
   mirrors it faithfully (same dialect, same `INSERT … ON CONFLICT`, real constraints).
-- **SQLite** — Node's built-in `node:sqlite`, zero dependencies, extremely fast to spin up.
+- **SQLite** — `better-sqlite3`, a single small dependency, extremely fast to spin up.
 
 Both can run **in memory**, so there's nothing to install, no container to boot, and
 nothing to clean up on disk.
