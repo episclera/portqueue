@@ -119,10 +119,6 @@ function buildJobsQuery(params: URLSearchParams): GetJobsQuery & JobInstanceFilt
   if (scheduleId) q.scheduleId = scheduleId;
   const instanceKey = params.get('instanceKey');
   if (instanceKey) q.instanceKey = instanceKey;
-  const cursor = params.get('cursor');
-  if (cursor) q.cursor = cursor;
-  const order = params.get('order');
-  if (order === 'asc' || order === 'desc') q.order = order;
   return q;
 }
 
@@ -395,7 +391,9 @@ async function runAction(portQueue: PortQueue, action: ActionRequestDto): Promis
       try {
         // Adding is the one action that legitimately produces onto a queue, so it uses the
         // public producer path — and with it every validation core already enforces.
-        const result = await portQueue.createQueue(queueName).addJob(buildAddOptions(action.add));
+        const result = await portQueue
+          .createQueue({ name: queueName })
+          .addJob(buildAddOptions(action.add));
         return json(200, {
           ok: true,
           ...(result.jobId ? { jobId: result.jobId } : {}),

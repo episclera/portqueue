@@ -67,7 +67,7 @@ const STATS = { counts: { ACTIVE: 2, RETRY: 0, FAILED: 1, COMPLETED: 8, STALLED:
 const RESPONSES: Record<string, unknown> = {
   '/queues': QUEUES,
   '/stats': STATS,
-  '/jobs': { items: [JOB], cursor: null, hasMore: false, total: 42 },
+  '/jobs': { items: [JOB], total: 42 },
   [`/jobs/${JOB.id}`]: JOB,
   '/schedules': page([SCHEDULE]),
   [`/schedules/${SCHEDULE.scheduleId}`]: SCHEDULE,

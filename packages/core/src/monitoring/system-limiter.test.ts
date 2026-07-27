@@ -30,7 +30,7 @@ describe('systemLimiter', () => {
     });
 
     const ran: string[] = [];
-    const queue = h.pq.createQueue('pressured');
+    const queue = h.pq.createQueue({ name: 'pressured' });
     h.pq.createWorker({
       queue: 'pressured',
       limiter: { pollIntervalSeconds: 0.02 },
@@ -48,7 +48,7 @@ describe('systemLimiter', () => {
   it('claims normally when no systemLimiter is configured', async () => {
     h = await createTestQueue('sqlite');
     const ran: string[] = [];
-    const queue = h.pq.createQueue('unpressured');
+    const queue = h.pq.createQueue({ name: 'unpressured' });
     h.pq.createWorker({
       queue: 'unpressured',
       limiter: { pollIntervalSeconds: 0.02 },

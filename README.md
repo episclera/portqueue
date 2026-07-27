@@ -40,7 +40,7 @@ const pq = new PortQueue({
 });
 await pq.init();
 
-const emailsQueue = pq.createQueue('emails');
+const emailsQueue = pq.createQueue({ name: 'emails' });
 pq.createWorker({
   queue: 'emails',
   concurrency: 10,

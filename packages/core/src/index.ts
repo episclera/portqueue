@@ -33,7 +33,7 @@ export {
 
 // Option types (the disjoint bags)
 export type { PortQueueOptions, ShutdownOptions, InstanceOptions } from './options/client-options';
-export type { QueueOptions } from './options/queue-options';
+export type { QueueOptions, CreateQueueOptions } from './options/queue-options';
 export type { WorkerOptions, ErrorClass } from './options/worker-options';
 export type { JobOptions, AddJobOptions, ScheduleOptions, CronSpec } from './options/job-options';
 export type {
@@ -43,6 +43,7 @@ export type {
   LimiterOptions,
   SystemLimiterOptions,
   Page,
+  PageQuery,
 } from './options/common';
 
 // Result & snapshot types
@@ -54,6 +55,9 @@ export type {
   InstanceInfo,
   QueueStats,
   GetJobsQuery,
+  GetSchedulesQuery,
+  GetInstancesQuery,
+  GetQueuesQuery,
 } from './producer/results';
 
 // Events & hooks types
@@ -110,9 +114,9 @@ export { JobBatchAction } from './dashboard/dashboard-results';
 export type {
   BatchResult,
   DashboardStats,
-  GetInstancesQuery,
-  GetQueuesQuery,
-  GetSchedulesQuery,
+  DashboardInstancesQuery,
+  DashboardQueuesQuery,
+  DashboardSchedulesQuery,
   JobInstanceFilter,
   JobSearchQuery,
   ScheduleWithQueue,

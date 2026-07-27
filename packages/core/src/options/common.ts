@@ -107,11 +107,23 @@ export interface SystemLimiterOptions {
   maxMemoryPercent?: number;
 }
 
-/** Page result — cursor for streaming, `total` for numbered pagination. */
+/**
+ * The paging window every list read accepts. One shape for all of them, so `limit`/`offset` mean
+ * the same thing wherever they appear and no read grows a second way to ask for a page.
+ */
+export interface PageQuery {
+  /** Rows to return (default 50, capped at 500). */
+  limit?: number;
+  /** Row offset for numbered pagination. */
+  offset?: number;
+}
+
+/**
+ * One page of an offset-paged read. There is no `hasMore` flag: a caller who wants one derives it
+ * from `offset + items.length < total`, and one number can't disagree with itself the way two can.
+ */
 export interface Page<T> {
   items: T[];
-  cursor: string | null;
-  hasMore: boolean;
-  /** Total rows matching the query, ignoring `limit`/`offset`/`cursor`. */
+  /** Total rows matching the query, ignoring `limit`/`offset`. */
   total: number;
 }

@@ -207,7 +207,6 @@ export function runConformance(options: ConformanceOptions): void {
         statuses: [JobStatus.PENDING],
         limit: 100,
         offset: 0,
-        order: 'asc',
       });
       expect(committed.some((j) => j.idempotencyKey === 'tx-commit')).toBe(true);
 
@@ -223,7 +222,7 @@ export function runConformance(options: ConformanceOptions): void {
           },
         })
         .catch(() => undefined);
-      const after = await driver.getJobs({ queueName, limit: 100, offset: 0, order: 'asc' });
+      const after = await driver.getJobs({ queueName, limit: 100, offset: 0 });
       expect(after.some((j) => j.idempotencyKey === 'tx-rollback')).toBe(false);
     });
 

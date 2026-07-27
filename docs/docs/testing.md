@@ -61,7 +61,7 @@ afterEach(async () => {
 });
 
 it('processes a job', async () => {
-  const queue = pq.createQueue<{ to: string }>('emails');
+  const queue = pq.createQueue<{ to: string }>({ name: 'emails' });
   const seen: string[] = [];
   pq.createWorker<{ to: string }>({
     queue: 'emails',

@@ -102,10 +102,10 @@ for the generated usage. Global connection flags apply to all of them.
 | --- | --- | --- |
 | `stats` | `[--queue <name>] [--watch]` | Job counts by state. `--watch` refreshes live |
 | `queues` | | List queues with counts + paused state |
-| `jobs` | `--queue <name> [--status <s>] [--schedule-id <id>] [--limit <n> --cursor <c>]` | Paged job list |
+| `jobs` | `--queue <name> [--status <s>] [--schedule-id <id>] [--limit <n> --offset <n>]` | Paged job list |
 | `job` | `--id <jobId>` | Full detail for a single job |
 | `schedules` | `[--queue <name>]` | List recurring definitions. Without `--queue`, every queue's |
-| `instances` | | List instances with liveness, that process's health at the last heartbeat (CPU / memory) and jobs processed |
+| `instances` | `[--limit <n> --offset <n>]` | List instances with liveness, that process's health at the last heartbeat (CPU / memory) and jobs processed |
 | `instance` | `--key <instanceKey>` | One instance: its process's health, liveness and job counts by status |
 
 `CPU (proc)` is that Node process's CPU as a share of **all the cores available to it** (0–100%);

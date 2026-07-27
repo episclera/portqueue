@@ -7,7 +7,7 @@ import type { KoaContext } from './types';
 
 /** The engine only reaches the PortQueue on API paths; asset paths never touch it. */
 const fakePq = {
-  _dashboard: { getQueues: async () => ({ items: [], total: 0, hasMore: false }) },
+  _dashboard: { getQueues: async () => ({ items: [], total: 0 }) },
 } as unknown as PortQueue;
 
 /** Silence the "no client bundle" warning the engine emits at mount time in these tests. */
@@ -58,7 +58,7 @@ describe('engine.serve', () => {
     const res = makeRes();
     await engine.serve(makeReq({ url: '/portqueue/api/queues' }), res);
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(String(res.body))).toEqual({ items: [], total: 0, hasMore: false });
+    expect(JSON.parse(String(res.body))).toEqual({ items: [], total: 0 });
   });
 
   it('warns once at mount time when no client bundle is packaged', async () => {

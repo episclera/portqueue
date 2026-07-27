@@ -32,7 +32,6 @@ interface FacadeQuery {
   scheduleId?: string;
   limit?: number;
   offset?: number;
-  order?: string;
   search?: string;
 }
 
@@ -48,8 +47,6 @@ function fakePq(
         queries.push(query);
         return {
           items,
-          cursor: null,
-          hasMore: false,
           total: extra.total ?? items.length,
         };
       },

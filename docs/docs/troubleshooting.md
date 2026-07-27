@@ -25,7 +25,7 @@ on message strings.
 import { PortQueueError, PortQueueErrorCode } from '@portqueue/core';
 
 try {
-  const emailsQueue = pq.createQueue('emails');
+  const emailsQueue = pq.createQueue({ name: 'emails' });
   await emailsQueue.addJob({ data });
 } catch (err) {
   if (err instanceof PortQueueError && err.code === PortQueueErrorCode.QUEUE_PAUSED) {

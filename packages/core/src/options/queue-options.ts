@@ -14,3 +14,9 @@ export interface QueueOptions {
   /** Queue-scoped participation hooks. */
   hooks?: HookRegistration[];
 }
+
+/** What `pq.createQueue({ … })` takes: the queue's name plus its definition options. */
+export interface CreateQueueOptions<TName extends string = string> extends QueueOptions {
+  /** The queue name — the key every job, worker and schedule on it is filed under. */
+  name: TName;
+}

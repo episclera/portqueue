@@ -56,7 +56,7 @@ export const addCommand: Command = {
     else if (every !== undefined) schedule.startEverySeconds = every;
     if (Object.keys(schedule).length > 0) options.schedule = schedule;
 
-    const result = await pq.createQueue(queue).addJob(options as never);
+    const result = await pq.createQueue({ name: queue }).addJob(options as never);
     if (flagBool(flags, 'json')) return printJson(result);
     if (result.scheduleId) {
       success(

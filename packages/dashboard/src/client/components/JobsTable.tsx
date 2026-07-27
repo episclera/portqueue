@@ -76,7 +76,6 @@ export function JobsTable({
     ...(params.search ? { search: params.search } : {}),
     offset: params.offset,
     limit: PAGE_SIZE,
-    order: 'desc',
   };
 
   const jobs = usePolledQuery<JobPageDto>(queryKeys.jobs(listParams), () =>

@@ -923,7 +923,6 @@ export class OracleDriver implements Driver {
     processedOnInstanceKey?: string;
     limit: number;
     offset: number;
-    order: 'asc' | 'desc';
   }): Promise<JobRecord[]> {
     const params: unknown[] = [];
     const where = this.jobFilterClauses(options, params);
@@ -932,7 +931,7 @@ export class OracleDriver implements Driver {
     const offsetPh = this.ph(params.length);
     params.push(options.offset);
     const res = await this.execute(
-      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ${where} ORDER BY ${JobColumn.CREATED_AT} ${options.order === 'asc' ? 'ASC' : 'DESC'} LIMIT ${limitPh} OFFSET ${offsetPh}`,
+      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ${where} ORDER BY ${JobColumn.CREATED_AT} DESC LIMIT ${limitPh} OFFSET ${offsetPh}`,
       params,
     );
     return res.rows.map((r) => this.mapJob(r));

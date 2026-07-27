@@ -104,7 +104,6 @@ export interface JobListParams extends ListParams {
   scheduleId?: string;
   /** Narrow to the jobs one instance claimed — the instance detail page's table. */
   instanceKey?: string;
-  order?: string;
 }
 
 export const api = {

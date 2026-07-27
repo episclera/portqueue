@@ -65,7 +65,7 @@ only; no I/O until `init()`.
     </span>
   </li>
   <li>
-    <span className="api-badge">createQueue&lt;TData&gt;(name, options?)</span>{' '}
+    <span className="api-badge">createQueue&lt;TData&gt;(options)</span>{' '}
     <span className="api-note">
       →{' '}
       <a href="#queue">
@@ -74,7 +74,7 @@ only; no I/O until `init()`.
     </span>
     <ul>
       <li>
-        <span className="api-badge is-opt">name</span>{' '}
+        <span className="api-badge">name</span>{' '}
         <span className="api-note">
           <code>TQueues</code> — the queue name
         </span>
@@ -99,9 +99,20 @@ only; no I/O until `init()`.
     </ul>
   </li>
   <li>
-    <span className="api-badge">getQueues()</span>{' '}
+    <span className="api-badge">getQueues(query?)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;QueueInfo[]&gt;</code>
+      → <code>Promise&lt;Page&lt;QueueInfo&gt;&gt;</code>
+    </span>
+    <ul>
+      <li>
+        <a href="#getqueuesquery">GetQueuesQuery</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge">getQueue(&#123; name &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;QueueInfo | null&gt;</code>
     </span>
   </li>
   <li>
@@ -111,7 +122,7 @@ only; no I/O until `init()`.
     </span>
   </li>
   <li>
-    <span className="api-badge">getStats()</span>{' '}
+    <span className="api-badge">getQueuesStats()</span>{' '}
     <span className="api-note">
       → <code>Promise&lt;QueueStats&gt;</code> — all queues combined
     </span>
@@ -176,10 +187,21 @@ only; no I/O until `init()`.
     </span>
   </li>
   <li>
-    <span className="api-badge">getInstances()</span>{' '}
+    <span className="api-badge">getInstances(query?)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;InstanceInfo[]&gt;</code> — see{' '}
+      → <code>Promise&lt;Page&lt;InstanceInfo&gt;&gt;</code> — see{' '}
       <a href="./scale-horizontally.md">Scaling</a>
+    </span>
+    <ul>
+      <li>
+        <a href="#getinstancesquery">GetInstancesQuery</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge">getInstance(&#123; instanceKey &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;InstanceInfo | null&gt;</code>
     </span>
   </li>
   <li>
@@ -206,7 +228,7 @@ only; no I/O until `init()`.
 
 ## Queue
 
-A producer handle for one queue, from `pq.createQueue(name, options?)`. All producing methods
+A producer handle for one queue, from `pq.createQueue({ name, ...options })`. All producing methods
 accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides/transactions.mdx).
 
 <ul className="api-tree">
@@ -222,9 +244,20 @@ accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides
     </ul>
   </li>
   <li>
-    <span className="api-badge">getSchedules()</span>{' '}
+    <span className="api-badge">getSchedules(query?)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;ScheduleInfo[]&gt;</code>
+      → <code>Promise&lt;Page&lt;ScheduleInfo&gt;&gt;</code>
+    </span>
+    <ul>
+      <li>
+        <a href="#getschedulesquery">GetSchedulesQuery</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge">getSchedule(&#123; scheduleId &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;ScheduleInfo | null&gt;</code> — scoped to this queue
     </span>
   </li>
   <li>
@@ -695,16 +728,16 @@ real ceiling is well below the host's. Event-loop delay is the exception on meas
 `maxEventLoopDelaySeconds` gives it a purpose. See
 [Rate limiting & backpressure](./guides/rate-limiting.md#every-systemlimiter-option).
 
-| Option                     | Type     | Default                     | Description                                                                        |
-| -------------------------- | -------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| `sampleIntervalSeconds`    | `number` | `2`                         | How often to sample system metrics, in seconds.                                    |
-| `maxEventLoopDelaySeconds` | `number` | `0.2` (default config only) | Mean event-loop delay above this, in seconds, counts as pressure.                  |
+| Option                     | Type     | Default                     | Description                                                                                                                                              |
+| -------------------------- | -------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sampleIntervalSeconds`    | `number` | `2`                         | How often to sample system metrics, in seconds.                                                                                                          |
+| `maxEventLoopDelaySeconds` | `number` | `0.2` (default config only) | Mean event-loop delay above this, in seconds, counts as pressure.                                                                                        |
 | `maxCpuPercent`            | `number` | unset                       | This process's CPU above this share (0–100) of the cores available to it counts as pressure — core-count independent, so `85` means the same on any box. |
-| `maxMemoryPercent`         | `number` | unset                       | This process's used heap above this share (0–100) of V8's heap limit counts as pressure. |
+| `maxMemoryPercent`         | `number` | unset                       | This process's used heap above this share (0–100) of V8's heap limit counts as pressure.                                                                 |
 
 ### QueueOptions
 
-The second argument to `createQueue`.
+The definition options `createQueue` takes alongside `name`.
 
 | Option              | Type                                    | Default      | Description                                                            |
 | ------------------- | --------------------------------------- | ------------ | ---------------------------------------------------------------------- |
@@ -795,17 +828,57 @@ All **worker-local** — no cluster-wide coordination.
 | `pollIntervalSeconds` | `number` | `5`           | Poll cadence when `LISTEN`/`NOTIFY` is unavailable, in seconds.                     |
 | `lockDurationSeconds` | `number` | `30`          | Visibility timeout / heartbeat window for a claimed job, in seconds.                |
 
+### PageQuery
+
+The paging window every list read accepts. `getJobs`, `getSchedules` and `getInstances` all extend
+it, so `limit`/`offset` mean the same thing wherever they appear, and each returns a
+[`Page<T>`](#result-types) of `{ items, total }`.
+
+| Option   | Type     | Description                            |
+| -------- | -------- | -------------------------------------- |
+| `limit`  | `number` | Page size (default 50, capped at 500). |
+| `offset` | `number` | Row offset, for numbered pagination.   |
+
 ### GetJobsQuery
 
-| Option       | Type              | Description                                                                  |
-| ------------ | ----------------- | ---------------------------------------------------------------------------- |
-| `queue`      | `string`          | Filter to one queue (implicit on `Queue.getJobs`).                           |
-| `statuses`   | `JobStatus[]`     | Filter by status.                                                            |
-| `scheduleId` | `string`          | Jobs minted by one schedule.                                                 |
-| `limit`      | `number`          | Page size.                                                                   |
-| `cursor`     | `string`          | Opaque cursor from the previous page.                                        |
-| `offset`     | `number`          | Row offset, for numbered pagination. Wins over `cursor` when both are given. |
-| `order`      | `'asc' \| 'desc'` | Sort direction.                                                              |
+`PageQuery` plus the job filters. Jobs always come back newest first; there is no sort option.
+
+| Option       | Type          | Description                                        |
+| ------------ | ------------- | -------------------------------------------------- |
+| `queue`      | `string`      | Filter to one queue (implicit on `Queue.getJobs`). |
+| `statuses`   | `JobStatus[]` | Filter by status.                                  |
+| `scheduleId` | `string`      | Jobs minted by one schedule.                       |
+| `limit`      | `number`      | Page size (default 50, capped at 500).             |
+| `offset`     | `number`      | Row offset, for numbered pagination.               |
+
+### GetSchedulesQuery
+
+`PageQuery` plus one filter, for `Queue.getSchedules`. Returns a `Page<ScheduleInfo>`.
+
+| Option    | Type      | Description                                                             |
+| --------- | --------- | ----------------------------------------------------------------------- |
+| `enabled` | `boolean` | `true` → only armed schedules, `false` → only disarmed, omitted → both. |
+| `limit`   | `number`  | Page size (default 50, capped at 500).                                  |
+| `offset`  | `number`  | Row offset, for numbered pagination.                                    |
+
+### GetInstancesQuery
+
+`PageQuery` and nothing more, for `pq.getInstances()`. Returns a `Page<InstanceInfo>`.
+
+| Option   | Type     | Description                            |
+| -------- | -------- | -------------------------------------- |
+| `limit`  | `number` | Page size (default 50, capped at 500). |
+| `offset` | `number` | Row offset, for numbered pagination.   |
+
+### GetQueuesQuery
+
+`PageQuery` and nothing more, for `pq.getQueues()`. Returns a `Page<QueueInfo>` — each row with its
+per-status counts, and `total` for every queue in the database.
+
+| Option   | Type     | Description                            |
+| -------- | -------- | -------------------------------------- |
+| `limit`  | `number` | Page size (default 50, capped at 500). |
+| `offset` | `number` | Row offset, for numbered pagination.   |
 
 ---
 
@@ -819,7 +892,8 @@ Reads return objects, never bare ids. The main shapes:
 - **QueueInfo** — `name`, `processingPaused`, `acceptingPaused`, `counts`, `inUse`.
 - **InstanceInfo** — `instanceKey`, `processingPaused`, `alive`, `createdAt`, `updatedAt`, `lastSeenAt`, `counts`, plus `cpuPercent`/`memoryPercent` — that **process's** CPU (share of the cores available to it) and heap (share of V8's limit), both 0–100, at its last heartbeat, `null` before the first beat.
 - **QueueStats** — `queue?`, `counts` (a `JobStatus` → count map).
-- **Page&lt;T&gt;** — `items`, `cursor`, `hasMore`, `total` (rows matching the query, ignoring paging).
+- **Page&lt;T&gt;** — `items` and `total` (rows matching the query, ignoring paging). There is no
+  `hasMore` flag: `offset + items.length < total` tells you whether another page follows.
 
 ---
 

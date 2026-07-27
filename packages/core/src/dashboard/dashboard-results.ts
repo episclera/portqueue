@@ -5,7 +5,7 @@
  */
 import type { JobStatus } from '../jobs/job-state.enum';
 import type { Page } from '../options/common';
-import type { InstanceInfo, QueueInfo, ScheduleInfo } from '../producer/results';
+import type { GetSchedulesQuery, InstanceInfo, QueueInfo, ScheduleInfo } from '../producer/results';
 
 export type { Page };
 
@@ -25,7 +25,12 @@ export interface PausedFilter {
   processingPaused?: boolean;
 }
 
-export interface GetQueuesQuery extends DashboardPageQuery, PausedFilter {
+/**
+ * The dashboard's queue query: the public paging window plus the narrowing only the dashboard's
+ * queues table offers. Named for the facade rather than reusing the public {@link GetQueuesQuery},
+ * which carries paging and nothing else.
+ */
+export interface DashboardQueuesQuery extends DashboardPageQuery, PausedFilter {
   /** Case-insensitive substring of the queue name. */
   search?: string;
   /**
@@ -35,16 +40,27 @@ export interface GetQueuesQuery extends DashboardPageQuery, PausedFilter {
   inUse?: boolean;
 }
 
-export interface GetInstancesQuery extends DashboardPageQuery, PausedFilter {
+/**
+ * The dashboard's instance query: the public paging window plus the narrowing only the dashboard's
+ * instances table offers. Named for the facade rather than reusing the public
+ * {@link GetInstancesQuery}, which carries paging and nothing else.
+ */
+export interface DashboardInstancesQuery extends DashboardPageQuery, PausedFilter {
   /** Case-insensitive substring of the instance key. */
   search?: string;
   /** `true` → only instances inside the liveness window, `false` → only stale ones. */
   alive?: boolean;
 }
 
-export interface GetSchedulesQuery extends DashboardPageQuery {
+/**
+ * The dashboard's schedule query: the public {@link GetSchedulesQuery} (paging + `enabled`) plus
+ * the two things only the dashboard's cross-queue schedules table needs. Named for the facade
+ * rather than reusing `GetSchedulesQuery`, because the public read is scoped to one `Queue` handle
+ * and this one deliberately spans every queue.
+ */
+export interface DashboardSchedulesQuery extends GetSchedulesQuery {
+  /** Narrow to one queue. Omitted, the page spans every queue. */
   queue?: string;
-  enabled?: boolean;
   /** Case-insensitive substring matched against the schedule id, queue name and cron pattern. */
   search?: string;
 }

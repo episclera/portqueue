@@ -18,7 +18,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('produces a job from an interval schedule and stamps scheduleId', async () => {
-    const queue = h.pq.createQueue('reports');
+    const queue = h.pq.createQueue({ name: 'reports' });
     const res = await queue.addJob({
       data: { report: 'daily' },
       schedule: { startEverySeconds: 1 },
@@ -37,7 +37,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('carries per-job options (expireInSeconds) from a recurring add onto every spawned job', async () => {
-    const queue = h.pq.createQueue('carry');
+    const queue = h.pq.createQueue({ name: 'carry' });
     // No worker: a produced run just sits until it expires. The recurring add sets
     // expireInSeconds, which must ride along and apply to each spawned job (relative to its own
     // fire time). Without carry-through the produced job would have no deadline and never expire.
@@ -63,29 +63,57 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('lists schedules and removes them', async () => {
-    const queue = h.pq.createQueue('sched');
+    const queue = h.pq.createQueue({ name: 'sched' });
     const res = await queue.addJob({ data: {}, schedule: { cron: '0 0 * * *' } });
     let schedules = await queue.getSchedules();
-    expect(schedules).toHaveLength(1);
-    expect(schedules[0]!.cron).toBe('0 0 * * *');
+    expect(schedules.total).toBe(1);
+    expect(schedules.items[0]!.cron).toBe('0 0 * * *');
 
     const removed = await queue.removeSchedule({ scheduleId: res.scheduleId! });
     expect(removed).toBe(true);
     schedules = await queue.getSchedules();
-    expect(schedules).toHaveLength(0);
+    expect(schedules.total).toBe(0);
+  });
+
+  it('pages schedules by offset, reports the filter total, and narrows by enabled', async () => {
+    const queue = h.pq.createQueue({ name: 'sched-paged' });
+    for (let i = 0; i < 5; i += 1) {
+      await queue.addJob({ data: { i }, schedule: { cron: `${i} 0 * * *` } });
+    }
+
+    const page1 = await queue.getSchedules({ limit: 2, offset: 0 });
+    expect(page1.items).toHaveLength(2);
+    expect(page1.total).toBe(5); // the total ignores the window
+
+    const last = await queue.getSchedules({ limit: 2, offset: 4 });
+    expect(last.items).toHaveLength(1);
+    expect(last.total).toBe(5);
+    const firstIds = page1.items.map((s) => s.scheduleId);
+    expect(last.items.every((s) => !firstIds.includes(s.scheduleId))).toBe(true);
+
+    // `enabled` narrows both the page and the total, not just the rows on it.
+    expect((await queue.getSchedules({ enabled: true })).total).toBe(5);
+    expect((await queue.getSchedules({ enabled: false })).total).toBe(0);
+
+    // The singular read is scoped to its own queue.
+    const one = page1.items[0]!;
+    expect((await queue.getSchedule({ scheduleId: one.scheduleId }))?.cron).toBe(one.cron);
+    expect(await queue.getSchedule({ scheduleId: 'nope' })).toBeNull();
+    const other = h.pq.createQueue({ name: 'sched-other' });
+    expect(await other.getSchedule({ scheduleId: one.scheduleId })).toBeNull();
   });
 
   it('allows identical recurrences on a queue to coexist (no dedup without a key)', async () => {
-    const queue = h.pq.createQueue('sched-dup');
+    const queue = h.pq.createQueue({ name: 'sched-dup' });
     const a = await queue.addJob({ data: { n: 1 }, schedule: { cron: '0 0 * * *' } });
     const b = await queue.addJob({ data: { n: 2 }, schedule: { cron: '0 0 * * *' } });
     expect(b.scheduleId).not.toBe(a.scheduleId);
     expect(b.deduplicated).toBe(false);
-    expect(await queue.getSchedules()).toHaveLength(2);
+    expect((await queue.getSchedules()).total).toBe(2);
   });
 
   it('deduplicates schedules by idempotency key (keeps the first, unchanged)', async () => {
-    const queue = h.pq.createQueue('sched-idem');
+    const queue = h.pq.createQueue({ name: 'sched-idem' });
     const a = await queue.addJob({
       data: { n: 1 },
       schedule: { cron: '0 0 * * *' },
@@ -99,12 +127,12 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     expect(b.deduplicated).toBe(true);
     expect(b.scheduleId).toBe(a.scheduleId);
     const schedules = await queue.getSchedules();
-    expect(schedules).toHaveLength(1);
-    expect(schedules[0]!.idempotencyKey).toBe('daily');
+    expect(schedules.total).toBe(1);
+    expect(schedules.items[0]!.idempotencyKey).toBe('daily');
   });
 
   it('idempotency key dedups per table — one-off and recurring keys are independent', async () => {
-    const queue = h.pq.createQueue('sched-cross');
+    const queue = h.pq.createQueue({ name: 'sched-cross' });
     // A one-off add only checks the jobs table.
     const job = await queue.addJob({ data: {}, idempotencyKey: 'shared' });
     // A recurring add with the same key checks only the schedule table, so it is NOT deduped
@@ -117,7 +145,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     expect(sched.deduplicated).toBe(false);
     expect(sched.scheduleId).toBeTruthy();
     expect(sched.jobId).toBeUndefined();
-    expect(await queue.getSchedules()).toHaveLength(1);
+    expect((await queue.getSchedules()).total).toBe(1);
 
     // A second one-off add with that key dedups against the existing job (jobs table only).
     const dupJob = await queue.addJob({ data: {}, idempotencyKey: 'shared' });
@@ -133,11 +161,11 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
     });
     expect(dupSched.deduplicated).toBe(true);
     expect(dupSched.scheduleId).toBe(sched.scheduleId);
-    expect(await queue.getSchedules()).toHaveLength(1);
+    expect((await queue.getSchedules()).total).toBe(1);
   });
 
   it('deletes finished jobs after their retention TTL elapses', async () => {
-    const queue = h.pq.createQueue('ephemeral');
+    const queue = h.pq.createQueue({ name: 'ephemeral' });
     h.pq.createWorker({ queue: 'ephemeral', handler: async () => 'done' });
     const res = await queue.addJob({
       data: {},
@@ -160,7 +188,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('rejects an unknown schedule key instead of quietly running the job now', async () => {
-    const queue = h.pq.createQueue('typo');
+    const queue = h.pq.createQueue({ name: 'typo' });
     // The old absolute-Date `startAfter` is gone, and `startEvery` never existed without its unit.
     // Dropping either silently would look like the scheduler losing the job.
     await expect(
@@ -172,7 +200,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('refuses a one-off delay combined with a recurring cadence', async () => {
-    const queue = h.pq.createQueue('both');
+    const queue = h.pq.createQueue({ name: 'both' });
     await expect(
       queue.addJob({ data: {}, schedule: { startAfterSeconds: 5, startEverySeconds: 10 } }),
     ).rejects.toThrow(/Cannot combine 'schedule.startAfterSeconds'/);

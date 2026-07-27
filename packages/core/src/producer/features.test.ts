@@ -26,7 +26,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('dontAutoretryFor short-circuits retries to FAILED', async () => {
-    const queue = h.pq.createQueue('nr');
+    const queue = h.pq.createQueue({ name: 'nr' });
     let calls = 0;
     h.pq.createWorker({
       queue: 'nr',
@@ -44,7 +44,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('matches dontAutoretryFor by error name string too', async () => {
-    const queue = h.pq.createQueue('nr2');
+    const queue = h.pq.createQueue({ name: 'nr2' });
     let calls = 0;
     h.pq.createWorker({
       queue: 'nr2',
@@ -64,7 +64,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('exponential backoff lands the retry in the future', async () => {
-    const queue = h.pq.createQueue('bk');
+    const queue = h.pq.createQueue({ name: 'bk' });
     const res = await queue.addJob({
       data: {},
       retry: {
@@ -74,7 +74,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
       },
     });
     // Claim + fail once at the driver level to observe the RETRY scheduling.
-    const row = await h.pq.createQueue('bk').ensure();
+    const row = await h.pq.createQueue({ name: 'bk' }).ensure();
     void row;
     h.pq.createWorker({
       queue: 'bk',
@@ -91,7 +91,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('enforces singletonKey (only one active/pending at a time)', async () => {
-    const queue = h.pq.createQueue('sng');
+    const queue = h.pq.createQueue({ name: 'sng' });
     const a = await queue.addJob({ data: { n: 1 }, singletonKey: 'only' });
     const b = await queue.addJob({ data: { n: 2 }, singletonKey: 'only' });
     expect(b.deduplicated).toBe(true);
@@ -100,7 +100,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('does not run a delayed job until it becomes due', async () => {
-    const queue = h.pq.createQueue('delayed');
+    const queue = h.pq.createQueue({ name: 'delayed' });
     const done: string[] = [];
     h.pq.createWorker({
       queue: 'delayed',
@@ -115,7 +115,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('expires a PENDING job past its expireInSeconds deadline', async () => {
-    const queue = h.pq.createQueue('exp');
+    const queue = h.pq.createQueue({ name: 'exp' });
     // No worker — it must expire before ever running.
     const res = await queue.addJob({ data: {}, expireInSeconds: 1 });
     h.clock.advance(2000);
@@ -125,7 +125,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('cancels a not-yet-active job', async () => {
-    const queue = h.pq.createQueue('cancel');
+    const queue = h.pq.createQueue({ name: 'cancel' });
     const res = await queue.addJob({ data: {}, schedule: { startAfterSeconds: 60 } });
     const ok = await queue.cancelJob({ jobId: res.jobId! });
     expect(ok).toBe(true);
@@ -133,7 +133,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('cooperatively cancels a running job via job.signal', async () => {
-    const queue = h.pq.createQueue('coop');
+    const queue = h.pq.createQueue({ name: 'coop' });
     let aborted = false;
     h.pq.createWorker({
       queue: 'coop',
@@ -157,7 +157,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('runs BEFORE_ADD (mutate) and AFTER_PROCESS hooks', async () => {
-    const queue = h.pq.createQueue<{ tenant?: string }>('hooked');
+    const queue = h.pq.createQueue<{ tenant?: string }>({ name: 'hooked' });
     const outcomes: string[] = [];
     h.pq.useHook({
       phase: HookPhase.BEFORE_ADD,
@@ -189,7 +189,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('vetoes an add when a BEFORE_ADD hook throws', async () => {
-    const queue = h.pq.createQueue('veto');
+    const queue = h.pq.createQueue({ name: 'veto' });
     h.pq.useHook({
       phase: HookPhase.BEFORE_ADD,
       queue: 'veto',
@@ -201,17 +201,17 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('filters events by queue', async () => {
-    const a = h.pq.createQueue('qa');
-    h.pq.createQueue('qb');
+    const a = h.pq.createQueue({ name: 'qa' });
+    h.pq.createQueue({ name: 'qb' });
     const seen: string[] = [];
     h.pq.on(PortQueueEvent.JOB_ADDED, (p) => seen.push(p.queue), { queue: 'qa' });
     await a.addJob({ data: {} });
-    await h.pq.createQueue('qb').addJob({ data: {} });
+    await h.pq.createQueue({ name: 'qb' }).addJob({ data: {} });
     expect(seen).toEqual(['qa']);
   });
 
   it('removes jobs by id and by status', async () => {
-    const queue = h.pq.createQueue('rm');
+    const queue = h.pq.createQueue({ name: 'rm' });
     const a = await queue.addJob({ data: { n: 1 } });
     const b = await queue.addJob({ data: { n: 2 } });
     expect(await queue.removeJob({ jobId: a.jobId! })).toBe(true);
@@ -222,7 +222,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('applies a worker-local rate limiter', async () => {
-    const queue = h.pq.createQueue('rate');
+    const queue = h.pq.createQueue({ name: 'rate' });
     const started: string[] = [];
     h.pq.createWorker({
       queue: 'rate',

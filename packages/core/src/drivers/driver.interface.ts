@@ -180,6 +180,7 @@ export interface Driver {
    * in-flight transaction queues *behind* it and deadlocks the connection for good.
    */
   getJob(options: { jobId: string; tx?: TransactionHandle }): Promise<JobRecord | null>;
+  /** A page of job rows, always newest-first by `created_at`. There is no caller-chosen order. */
   getJobs(options: {
     queueName?: string;
     statuses?: JobStatus[];
@@ -187,7 +188,6 @@ export interface Driver {
     processedOnInstanceKey?: string;
     limit: number;
     offset: number;
-    order: 'asc' | 'desc';
   }): Promise<JobRecord[]>;
   countJobsByStatus(options: {
     queueName?: string;

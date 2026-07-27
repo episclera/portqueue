@@ -13,7 +13,7 @@ export const retryCommand: Command = {
   async run({ pq, flags }) {
     const snap = await pq.getJob({ jobId: requireFlag(flags, 'id') });
     if (!snap) throw new CliError(`Job '${flagString(flags, 'id')}' not found.`);
-    const res = await pq.createQueue(snap.queue).retryJob({ jobId: snap.id });
+    const res = await pq.createQueue({ name: snap.queue }).retryJob({ jobId: snap.id });
     success(`Requeued job ${snap.id} → ${res.jobId}.`);
   },
 };

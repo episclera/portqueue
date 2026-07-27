@@ -22,9 +22,9 @@ import {
   type BatchResult,
   type DashboardPageQuery,
   type DashboardStats,
-  type GetInstancesQuery,
-  type GetQueuesQuery,
-  type GetSchedulesQuery,
+  type DashboardInstancesQuery,
+  type DashboardQueuesQuery,
+  type DashboardSchedulesQuery,
   type JobInstanceFilter,
   type JobSearchQuery,
   type Page,
@@ -85,7 +85,7 @@ export class DashboardService {
    * over just this page's queue names, so the cost is two queries per page rather than one per
    * queue.
    */
-  async getQueues(query: GetQueuesQuery = {}): Promise<Page<QueueInfo>> {
+  async getQueues(query: DashboardQueuesQuery = {}): Promise<Page<QueueInfo>> {
     const { limit, offset } = pageWindow(query);
     const filter = {
       ...(query.search ? { search: query.search } : {}),
@@ -100,8 +100,6 @@ export class DashboardService {
       const rows = matching.slice(offset, offset + limit);
       return {
         items: await this.withQueueCounts(rows),
-        cursor: null,
-        hasMore: offset + rows.length < matching.length,
         total: matching.length,
       };
     }
@@ -112,8 +110,6 @@ export class DashboardService {
     ]);
     return {
       items: await this.withQueueCounts(rows),
-      cursor: null,
-      hasMore: offset + rows.length < total,
       total,
     };
   }
@@ -140,7 +136,7 @@ export class DashboardService {
   }
 
   /** A page of instances with liveness and per-instance job attribution. */
-  async getInstances(query: GetInstancesQuery = {}): Promise<Page<InstanceInfo>> {
+  async getInstances(query: DashboardInstancesQuery = {}): Promise<Page<InstanceInfo>> {
     const { limit, offset } = pageWindow(query);
     const now = this.runtime.clock.now();
     const seenSince = now - this.instanceStaleAfterMs();
@@ -171,8 +167,6 @@ export class DashboardService {
         memoryPercent: row.memoryPercent,
         counts: counts[row.instanceKey] ?? emptyCounts(),
       })),
-      cursor: null,
-      hasMore: offset + rows.length < total,
       total,
     };
   }
@@ -217,7 +211,7 @@ export class DashboardService {
    * a single queue and requires a `Queue` handle — building one per queue is both an N+1 and the
    * registry-pollution bug described in this class's header.
    */
-  async getSchedules(query: GetSchedulesQuery = {}): Promise<Page<ScheduleWithQueue>> {
+  async getSchedules(query: DashboardSchedulesQuery = {}): Promise<Page<ScheduleWithQueue>> {
     const { limit, offset } = pageWindow(query);
     const filter = {
       ...(query.queue ? { queueName: query.queue } : {}),
@@ -240,8 +234,6 @@ export class DashboardService {
         enabled: s.enabled,
         idempotencyKey: s.idempotencyKey,
       })),
-      cursor: null,
-      hasMore: offset + rows.length < total,
       total,
     };
   }
@@ -297,7 +289,6 @@ export class DashboardService {
 
     const limit = Math.min(Math.max(Math.trunc(base.limit ?? 50), 1), DASHBOARD_MAX_LIMIT);
     const offset = Math.max(Math.trunc(base.offset ?? 0), 0);
-    const order = base.order ?? 'desc';
     const filter = {
       ...(base.queue ? { queueName: base.queue } : {}),
       ...(base.statuses ? { statuses: base.statuses } : {}),
@@ -314,7 +305,6 @@ export class DashboardService {
         ...filter,
         limit: SEARCH_CHUNK_SIZE,
         offset: scanned,
-        order,
       });
       for (const record of records) {
         const job = toSnapshot<TData>(record, record.queueName, now);
@@ -329,8 +319,6 @@ export class DashboardService {
 
     return {
       items,
-      cursor: null,
-      hasMore: offset + items.length < matches,
       total: matches,
     };
   }

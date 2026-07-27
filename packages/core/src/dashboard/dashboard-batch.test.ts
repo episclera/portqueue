@@ -30,7 +30,7 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
 
   /** `count` pending jobs on one queue, returning their ids. */
   async function seed(queue: string, count: number): Promise<string[]> {
-    const q = h.pq.createQueue(queue);
+    const q = h.pq.createQueue({ name: queue });
     const ids: string[] = [];
     for (let i = 0; i < count; i += 1) ids.push((await q.addJob({ data: { i } })).jobId!);
     return ids;
@@ -53,7 +53,7 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
   });
 
   it('re-arms a failed job rather than adding a new one', async () => {
-    const q = h.pq.createQueue<{ v: number }>('batched');
+    const q = h.pq.createQueue<{ v: number }>({ name: 'batched' });
     let attempts = 0;
     h.pq.createWorker({
       queue: 'batched',

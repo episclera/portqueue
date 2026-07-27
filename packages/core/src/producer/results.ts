@@ -1,7 +1,8 @@
 import type { JobStatus } from '../jobs/job-state.enum';
 import type { DeduplicationReason } from '../options/enums';
+import type { PageQuery } from '../options/common';
 
-export type { Page } from '../options/common';
+export type { Page, PageQuery } from '../options/common';
 
 /**
  * The structured result of producing a job. One shape for both the
@@ -108,14 +109,25 @@ export interface QueueStats {
   counts: Record<JobStatus, number>;
 }
 
-/** Query for paged job reads. */
-export interface GetJobsQuery {
+/**
+ * Query for paged job reads. Paging is `limit`/`offset` and nothing else — there is no cursor and
+ * no sort direction, because jobs always come back newest-first and one paging mechanism is enough
+ * (see the one-option-per-thing invariant in CLAUDE.md).
+ */
+export interface GetJobsQuery extends PageQuery {
   queue?: string;
   statuses?: JobStatus[];
   scheduleId?: string;
-  limit?: number;
-  cursor?: string;
-  /** Row offset for numbered pagination. Takes precedence over `cursor` when both are given. */
-  offset?: number;
-  order?: 'asc' | 'desc';
 }
+
+/** Query for a queue's paged schedule reads. Same `limit`/`offset` window as {@link GetJobsQuery}. */
+export interface GetSchedulesQuery extends PageQuery {
+  /** `true` → only armed schedules, `false` → only disarmed ones, absent → both. */
+  enabled?: boolean;
+}
+
+/** Query for paged instance reads. Same `limit`/`offset` window as {@link GetJobsQuery}. */
+export type GetInstancesQuery = PageQuery;
+
+/** Query for paged queue reads. Same `limit`/`offset` window as {@link GetJobsQuery}. */
+export type GetQueuesQuery = PageQuery;

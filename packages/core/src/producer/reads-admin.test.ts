@@ -13,32 +13,37 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('reports client-wide stats and queue listing', async () => {
-    const a = h.pq.createQueue('a');
-    const b = h.pq.createQueue('b');
+    const a = h.pq.createQueue({ name: 'a' });
+    const b = h.pq.createQueue({ name: 'b' });
     await a.addJob({ data: {} });
     await b.addJob({ data: {} });
     const queues = await h.pq.getQueues();
-    expect(queues.map((q) => q.name).sort()).toEqual(['a', 'b']);
-    const stats = await h.pq.getStats();
+    expect(queues.items.map((q) => q.name).sort()).toEqual(['a', 'b']);
+    const stats = await h.pq.getQueuesStats();
     expect(stats.counts.PENDING).toBe(2);
     const scoped = await h.pq.getQueueStats({ queue: 'a' });
     expect(scoped.queue).toBe('a');
     expect(scoped.counts.PENDING).toBe(1);
+    expect(queues.total).toBe(2);
   });
 
-  it('pages jobs with a cursor', async () => {
-    const q = h.pq.createQueue('paged');
-    for (let i = 0; i < 5; i += 1) await q.addJob({ data: { i } });
-    const page1 = await h.pq.getJobs({ queue: 'paged', limit: 2 });
-    expect(page1.items).toHaveLength(2);
-    expect(page1.hasMore).toBe(true);
-    const page2 = await h.pq.getJobs({ queue: 'paged', limit: 2, cursor: page1.cursor! });
-    expect(page2.items).toHaveLength(2);
-    expect(page2.items[0]!.id).not.toBe(page1.items[0]!.id);
+  it('reads one queue and one instance by key, and null for an unknown one', async () => {
+    h.pq.createQueue({ name: 'solo' });
+    await h.pq.createQueue({ name: 'solo' }).addJob({ data: {} });
+
+    const queue = await h.pq.getQueue({ name: 'solo' });
+    expect(queue).toMatchObject({ name: 'solo', inUse: true });
+    expect(queue!.counts.PENDING).toBe(1);
+    expect(await h.pq.getQueue({ name: 'ghost' })).toBeNull();
+
+    await h.driver.upsertInstance({ instanceKey: 'w1', now: h.clock.now() });
+    const instance = await h.pq.getInstance({ instanceKey: 'w1' });
+    expect(instance).toMatchObject({ instanceKey: 'w1', alive: true });
+    expect(await h.pq.getInstance({ instanceKey: 'ghost' })).toBeNull();
   });
 
   it('pages jobs by offset and reports the filter total on every page', async () => {
-    const q = h.pq.createQueue('offset-paged');
+    const q = h.pq.createQueue({ name: 'offset-paged' });
     for (let i = 0; i < 5; i += 1) await q.addJob({ data: { i } });
 
     const page1 = await h.pq.getJobs({ queue: 'offset-paged', limit: 2, offset: 0 });
@@ -46,20 +51,20 @@ describe('client reads & admin (sqlite)', () => {
 
     expect(page1.items).toHaveLength(2);
     expect(page1.total).toBe(5);
-    expect(page1.hasMore).toBe(true);
 
     // The last page is short, has nothing after it, and shares no row with the first.
     expect(page3.items).toHaveLength(1);
     expect(page3.total).toBe(5);
-    expect(page3.hasMore).toBe(false);
+    // "More follows" is a derivation from offset + items vs total, not a field on the page.
+    expect(4 + page3.items.length).toBe(page3.total);
     const firstIds = page1.items.map((j) => j.id);
     expect(page3.items.every((j) => !firstIds.includes(j.id))).toBe(true);
   });
 
   it('counts only the filtered rows in total', async () => {
-    const q = h.pq.createQueue('counted');
+    const q = h.pq.createQueue({ name: 'counted' });
     for (let i = 0; i < 3; i += 1) await q.addJob({ data: { i } });
-    await h.pq.createQueue('other').addJob({ data: {} });
+    await h.pq.createQueue({ name: 'other' }).addJob({ data: {} });
 
     const scoped = await h.pq.getJobs({ queue: 'counted', limit: 1 });
     expect(scoped.total).toBe(3);
@@ -74,16 +79,18 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('pauses and resumes via the client convenience methods', async () => {
-    h.pq.createQueue('cq');
+    h.pq.createQueue({ name: 'cq' });
     await h.pq.pauseQueue({ queue: 'cq', mode: PauseMode.ALL });
-    await expect(h.pq.createQueue('cq').addJob({ data: {} })).rejects.toThrow(/refusing new jobs/);
+    await expect(h.pq.createQueue({ name: 'cq' }).addJob({ data: {} })).rejects.toThrow(
+      /refusing new jobs/,
+    );
     await h.pq.resumeQueue({ queue: 'cq' });
-    const res = await h.pq.createQueue('cq').addJob({ data: {} });
+    const res = await h.pq.createQueue({ name: 'cq' }).addJob({ data: {} });
     expect(res.jobId).toBeTruthy();
   });
 
   it('re-runs a finished single-function job by re-arming its own row', async () => {
-    const q = h.pq.createQueue('re');
+    const q = h.pq.createQueue({ name: 're' });
     h.pq.createWorker({
       queue: 're',
       limiter: { pollIntervalSeconds: 0.02 },
@@ -107,7 +114,7 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('bulk-removes jobs by id and leaves the counts empty', async () => {
-    const q = h.pq.createQueue('bulk');
+    const q = h.pq.createQueue({ name: 'bulk' });
     const ids: string[] = [];
     for (let i = 0; i < 3; i += 1) ids.push((await q.addJob({ data: { i } })).jobId!);
     const removed = await q.removeJobs({ jobIds: ids });
@@ -117,7 +124,7 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('never removes an ACTIVE job — it must be cancelled first', async () => {
-    const q = h.pq.createQueue('rm-active');
+    const q = h.pq.createQueue({ name: 'rm-active' });
     const jobId = (await q.addJob({ data: {} })).jobId!;
     // Claim it so the row is ACTIVE, exactly as a worker would hold it.
     await h.driver.claimJobs({
@@ -182,7 +189,7 @@ describe('client reads & admin (sqlite)', () => {
     expect(await h.driver.getQueueByName({ name: 'orphan' })).toBeNull();
 
     // A queue still declared on this client is refused.
-    h.pq.createQueue('live');
+    h.pq.createQueue({ name: 'live' });
     await expect(h.pq.removeQueue({ name: 'live' })).rejects.toThrow(/still registered/);
   });
 });

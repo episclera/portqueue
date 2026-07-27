@@ -45,12 +45,7 @@ import { JobsTable } from '../components/JobsTable';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
 import { totalCount } from '../components/format';
-import {
-  METRIC_HINTS,
-  formatPercent,
-  metricTone,
-  type MetricTone,
-} from '../components/metrics';
+import { METRIC_HINTS, formatPercent, metricTone, type MetricTone } from '../components/metrics';
 
 /** Three cards on one row across a 24-column grid. */
 const CARD_SPAN = 8;

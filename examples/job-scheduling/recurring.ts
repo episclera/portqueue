@@ -45,7 +45,7 @@ async function main(): Promise<void> {
     };
   });
 
-  const healthchecks = pq.createQueue<Record<string, never>>('healthchecks');
+  const healthchecks = pq.createQueue<Record<string, never>>({ name: 'healthchecks' });
   pq.createWorker<Record<string, never>>({
     queue: 'healthchecks',
     handler: async () => {
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     },
   });
 
-  const reports = pq.createQueue<{ kind: string }>('reports');
+  const reports = pq.createQueue<{ kind: string }>({ name: 'reports' });
   pq.createWorker<{ kind: string }>({
     queue: 'reports',
     handler: async (job) => {

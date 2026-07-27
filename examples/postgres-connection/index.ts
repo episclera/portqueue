@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   await pq.init();
   console.log(`Connected to Postgres and migrated schema (${connectionString}).`);
 
-  const welcome = pq.createQueue<{ user: string }>('welcome');
+  const welcome = pq.createQueue<{ user: string }>({ name: 'welcome' });
 
   const done = new Promise<void>((resolve) => {
     pq.createWorker<{ user: string }>({

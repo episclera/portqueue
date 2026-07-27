@@ -126,19 +126,27 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
     shutdown: async () => {},
     _cli: cli,
     getQueueStats: async () => overrides.stats ?? { counts: { PENDING: 2, ACTIVE: 1 } },
-    getQueues: async () =>
-      overrides.queues ?? [
+    getQueues: async () => {
+      const items = (overrides.queues ?? [
         {
           name: 'emails',
           counts: { PENDING: 2, ACTIVE: 1, COMPLETED: 9, FAILED: 0 },
           acceptingPaused: false,
           processingPaused: false,
         },
-      ],
-    getJobs: async () =>
-      overrides.jobPage ?? { items: [DEFAULT_JOB], hasMore: false, cursor: null, total: 1 },
+      ]) as unknown[];
+      return { items, total: items.length };
+    },
+    getJobs: async () => overrides.jobPage ?? { items: [DEFAULT_JOB], total: 1 },
     getJob: async () => ('job' in overrides ? overrides.job : DEFAULT_JOB),
-    getInstances: async () => overrides.instances ?? [DEFAULT_INSTANCE],
+    getInstances: async () => {
+      const items = (overrides.instances ?? [DEFAULT_INSTANCE]) as unknown[];
+      return { items, total: items.length };
+    },
+    getInstance: async ({ instanceKey }: { instanceKey: string }) => {
+      const items = (overrides.instances ?? [DEFAULT_INSTANCE]) as { instanceKey: string }[];
+      return items.find((i) => i.instanceKey === instanceKey) ?? null;
+    },
     createQueue: (name: string) => {
       calls.createQueue.push(name);
       return queue;

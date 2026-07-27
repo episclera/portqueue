@@ -20,7 +20,7 @@ export const removeCommand: Command = {
     if (id) {
       const snap = await pq.getJob({ jobId: id });
       if (!snap) throw new CliError(`Job '${id}' not found.`);
-      const ok = await pq.createQueue(snap.queue).removeJob({ jobId: id });
+      const ok = await pq.createQueue({ name: snap.queue }).removeJob({ jobId: id });
       if (ok) success(`Removed job ${id}.`);
       else warn(`Job ${id} not removed.`);
     } else {

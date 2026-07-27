@@ -4,22 +4,24 @@ import { color, colorStatus, heading, printJson, relativeTime, table } from '../
 import { parseStatus, requireFlag } from './helpers';
 import { CommandGroup, type Command } from './types';
 
-/** `portqueue jobs [--queue] [--status] [--schedule-id] [--limit --cursor]` */
+/** `portqueue jobs [--queue] [--status] [--schedule-id] [--limit --offset]` */
 export const jobsCommand: Command = {
   name: 'jobs',
   group: CommandGroup.Monitoring,
   summary: 'Paged job list',
-  usage: '--queue <name> [--status <s>] [--schedule-id <id>] [--limit <n> --cursor <c>]',
+  usage: '--queue <name> [--status <s>] [--schedule-id <id>] [--limit <n> --offset <n>]',
   async run({ pq, flags }) {
     const status = parseStatus(flagString(flags, 'status'));
+    const limit = flagNumber(flags, 'limit');
+    const offset = flagNumber(flags, 'offset');
     const page = await pq.getJobs({
       ...(flagString(flags, 'queue') ? { queue: flagString(flags, 'queue')! } : {}),
       ...(status ? { statuses: [status] } : {}),
       ...(flagString(flags, 'schedule-id')
         ? { scheduleId: flagString(flags, 'schedule-id')! }
         : {}),
-      ...(flagNumber(flags, 'limit') ? { limit: flagNumber(flags, 'limit')! } : {}),
-      ...(flagString(flags, 'cursor') ? { cursor: flagString(flags, 'cursor')! } : {}),
+      ...(limit ? { limit } : {}),
+      ...(offset ? { offset } : {}),
     });
     if (flagBool(flags, 'json')) return printJson(page);
     heading('Jobs');
@@ -32,8 +34,10 @@ export const jobsCommand: Command = {
         relativeTime(j.createdAt),
       ]),
     );
-    if (page.hasMore) {
-      process.stdout.write(color(`\n… more — use --cursor ${page.cursor}\n`, 'dim'));
+    // The page carries no "hasMore" flag — the next offset is past the end or it isn't.
+    const next = (offset ?? 0) + page.items.length;
+    if (next < page.total) {
+      process.stdout.write(color(`\n… more — use --offset ${next}\n`, 'dim'));
     }
   },
 };

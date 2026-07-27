@@ -28,7 +28,8 @@ nothing is silently inherited) and override per job when a specific job needs to
 import { RetentionMode } from '@portqueue/core';
 
 // per-queue default
-const emailsQueue = pq.createQueue('emails', {
+const emailsQueue = pq.createQueue({
+  name: 'emails',
   retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 259_200 }, // 3 days, in seconds
 });
 
@@ -79,6 +80,6 @@ Manual pruning is always available:
 ```ts
 import { JobStatus } from '@portqueue/core';
 
-const emailsQueue = pq.createQueue('emails');
+const emailsQueue = pq.createQueue({ name: 'emails' });
 await emailsQueue.removeJobs({ statuses: [JobStatus.COMPLETED] });
 ```

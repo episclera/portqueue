@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   await pq.init();
 
   // A worker so the dashboard has completing jobs to show.
-  const emails = pq.createQueue<{ to: string; template: string }>('emails');
+  const emails = pq.createQueue<{ to: string; template: string }>({ name: 'emails' });
   pq.createWorker<{ to: string; template: string }>({
     queue: 'emails',
     limiter: { concurrency: 5 },
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     schedule: { startAfterSeconds: 30 }, // a delay, in seconds
   });
 
-  const reports = pq.createQueue<{ kind: string }>('reports');
+  const reports = pq.createQueue<{ kind: string }>({ name: 'reports' });
   // Every queue with jobs needs a worker, or its jobs just sit there as PENDING — including the
   // runs a recurring schedule keeps producing.
   pq.createWorker<{ kind: string }>({

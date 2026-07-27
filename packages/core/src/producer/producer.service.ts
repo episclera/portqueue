@@ -5,7 +5,7 @@ import { InvalidOptionsError, QueuePausedError } from '../errors/errors';
 import { wholeSeconds, wholeSecondsToMs } from '../util/seconds';
 import { CronExpression } from '../scheduling/cron';
 import type { AddJobOptions, CronSpec, ScheduleOptions } from '../options/job-options';
-import type { AddJobResult, ScheduleInfo } from './results';
+import type { AddJobResult, GetSchedulesQuery, Page, ScheduleInfo } from './results';
 import type { NewJobRecord, NewScheduleRow, ScheduledJobOptions } from '../jobs/job-record';
 import type { Runtime } from '../client/runtime';
 import type { NotifierService } from '../pubsub/notifier.service';
@@ -334,10 +334,42 @@ export class ProducerService {
     return now + wholeSecondsToMs(schedule.startEverySeconds!, 'schedule.startEverySeconds');
   }
 
-  async getSchedules(queue: string): Promise<ScheduleInfo[]> {
+  /**
+   * A page of one queue's schedules, with the total matching the filter. Same `limit`/`offset`
+   * window as the job reads; the count is a second query rather than a JOIN or a whole-table read.
+   */
+  async getSchedules(queue: string, query: GetSchedulesQuery = {}): Promise<Page<ScheduleInfo>> {
     await this.runtime.registry.ensure(queue);
-    const rows = await this.runtime.driver.listSchedules({ queueName: queue });
-    return rows.map((s) => ({
+    const limit = Math.min(query.limit ?? 50, 500);
+    const offset = Math.max(Math.trunc(query.offset ?? 0), 0);
+    const filter = {
+      queueName: queue,
+      ...(query.enabled !== undefined ? { enabled: query.enabled } : {}),
+    };
+    const [rows, total] = await Promise.all([
+      this.runtime.driver.listSchedules({ ...filter, limit, offset }),
+      this.runtime.driver.countSchedules(filter),
+    ]);
+    return {
+      items: rows.map((s) => ({
+        scheduleId: s.id,
+        cron: s.cron,
+        everySeconds: s.everySeconds,
+        timezone: s.timezone,
+        nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
+        lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,
+        enabled: s.enabled,
+        idempotencyKey: s.idempotencyKey,
+      })),
+      total,
+    };
+  }
+
+  /** One schedule by id, scoped to `queue` — a schedule on another queue reads as not found. */
+  async getSchedule(queue: string, scheduleId: string): Promise<ScheduleInfo | null> {
+    const s = await this.runtime.driver.getSchedule({ scheduleId });
+    if (!s || s.queueName !== queue) return null;
+    return {
       scheduleId: s.id,
       cron: s.cron,
       everySeconds: s.everySeconds,
@@ -346,7 +378,7 @@ export class ProducerService {
       lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,
       enabled: s.enabled,
       idempotencyKey: s.idempotencyKey,
-    }));
+    };
   }
 }
 

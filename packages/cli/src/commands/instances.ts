@@ -1,4 +1,4 @@
-import { flagBool, flagString } from '../args';
+import { flagBool, flagNumber, flagString } from '../args';
 import { CliError } from '../errors';
 import { color, heading, printJson, relativeTime, table } from '../output';
 import { CommandGroup, type Command } from './types';
@@ -29,20 +29,26 @@ function processed(instance: InstanceInfo): number {
   return Object.values(instance.counts).reduce((sum, n) => sum + n, 0);
 }
 
-/** `portqueue instances` */
+/** `portqueue instances [--limit <n> --offset <n>]` */
 export const instancesCommand: Command = {
   name: 'instances',
   group: CommandGroup.Monitoring,
   summary: 'List instances with liveness, process health and jobs processed',
+  usage: '[--limit <n> --offset <n>]',
   async run({ pq, flags }) {
-    const instances = await pq.getInstances();
-    if (flagBool(flags, 'json')) return printJson(instances);
+    const limit = flagNumber(flags, 'limit');
+    const offset = flagNumber(flags, 'offset');
+    const page = await pq.getInstances({
+      ...(limit ? { limit } : {}),
+      ...(offset ? { offset } : {}),
+    });
+    if (flagBool(flags, 'json')) return printJson(page);
     heading('Instances');
     table(
       // The two health columns say whose numbers they are in the header, since a bare "CPU" in a
       // terminal reads as the box's load.
       ['Instance', 'Live', 'Paused', 'CPU (proc)', 'Mem (proc)', 'Processed', 'Last Seen'],
-      instances.map((i) => [
+      page.items.map((i) => [
         i.instanceKey,
         i.alive ? 'yes' : color('no', 'dim'),
         i.processingPaused ? 'yes' : color('no', 'dim'),
@@ -52,6 +58,11 @@ export const instancesCommand: Command = {
         relativeTime(i.lastSeenAt),
       ]),
     );
+    // The page carries no "hasMore" flag — the next offset is past the end or it isn't.
+    const next = (offset ?? 0) + page.items.length;
+    if (next < page.total) {
+      process.stdout.write(color(`\n… more — use --offset ${next}\n`, 'dim'));
+    }
   },
 };
 
@@ -64,9 +75,7 @@ export const instanceCommand: Command = {
   async run({ pq, flags }) {
     const instanceKey = flagString(flags, 'key');
     if (!instanceKey) throw new CliError('Missing required --key.');
-    // Read through the list rather than a by-key lookup: the public API has no single-instance
-    // read, and the instances table is a handful of rows by nature.
-    const instance = (await pq.getInstances()).find((i) => i.instanceKey === instanceKey);
+    const instance = await pq.getInstance({ instanceKey });
     if (!instance) throw new CliError(`Instance '${instanceKey}' not found.`);
     if (flagBool(flags, 'json')) return printJson(instance);
 

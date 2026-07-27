@@ -32,7 +32,7 @@ them — no `Date`-shaped alternative to `startAfterSeconds`, no unit-string alt
 `schedule.startAfterSeconds` delays a one-off job by that many seconds from now:
 
 ```ts
-const emailsQueue = pq.createQueue('emails');
+const emailsQueue = pq.createQueue({ name: 'emails' });
 await emailsQueue.addJob({ data, schedule: { startAfterSeconds: 86_400 } }); // 24 hours, in seconds
 
 // For a known wall-clock instant, subtract — there is no absolute-Date option:
@@ -50,7 +50,7 @@ become the **template** for each produced run. `schedule.cron` is either a bare 
 (evaluated in UTC) or `{ pattern, tz }` for a timezone:
 
 ```ts
-const reportsQueue = pq.createQueue('reports');
+const reportsQueue = pq.createQueue({ name: 'reports' });
 const result = await reportsQueue.addJob({
   data: { kind: 'sales' },       // template for each run
   priority: 5,                   // job options apply to each run
@@ -91,7 +91,7 @@ cron), just add it twice. To keep exactly one, opt in with an `idempotencyKey` (
 ## Recurring — fixed interval
 
 ```ts
-const healthchecksQueue = pq.createQueue('healthchecks');
+const healthchecksQueue = pq.createQueue({ name: 'healthchecks' });
 // startEverySeconds is a plain number of seconds between runs.
 await healthchecksQueue.addJob({ data: {}, schedule: { startEverySeconds: 30 } });
 ```
@@ -118,7 +118,7 @@ Because identical recurrences coexist, the way to guarantee **only one** produce
 `idempotencyKey`. The key is the dedup identity, scoped to the queue, and it is **first-writer-wins**:
 
 ```ts
-const reportsQueue = pq.createQueue('reports');
+const reportsQueue = pq.createQueue({ name: 'reports' });
 const first = await reportsQueue.addJob({ data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
 const second = await reportsQueue.addJob({ data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
 // secondJob.deduplicated === true; secondJob.scheduleId === firstJob.scheduleId.
@@ -149,7 +149,7 @@ each schedule's `idempotencyKey` for inspection.
 Unschedule a **recurring** definition by its `scheduleId`:
 
 ```ts
-const reportsQueue = pq.createQueue('reports');
+const reportsQueue = pq.createQueue({ name: 'reports' });
 await reportsQueue.removeSchedule({ scheduleId: reportsJob.scheduleId });
 ```
 
@@ -173,6 +173,12 @@ delete the row outright. See [Cancel a job](./producing-jobs.mdx#cancel-a-job) a
 List a queue's recurring definitions — each carries the `scheduleId` you pass to `removeSchedule`:
 
 ```ts
-const reportsQueue = pq.createQueue('reports');
-const schedules = await reportsQueue.getSchedules(); // recurring definitions, each with a scheduleId
+const reportsQueue = pq.createQueue({ name: 'reports' });
+const schedules = await reportsQueue.getSchedules(); // { items, total }
+
+// Paged, and narrowed to the armed ones:
+const armed = await reportsQueue.getSchedules({ enabled: true, limit: 20, offset: 0 });
 ```
+
+`getSchedules` returns a `Page<ScheduleInfo>`: `items` for this window and `total` for every
+schedule matching the filter. Another page follows when `offset + items.length < total`.

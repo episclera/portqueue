@@ -21,7 +21,7 @@ import { Worker, type WorkerConfig } from './consumer/worker';
 import { InstanceActiveError, InvalidOptionsError, QueueInUseError } from './errors/errors';
 import { SystemClock } from './util/clock';
 import type { PortQueueOptions, ShutdownOptions } from './options/client-options';
-import type { QueueOptions } from './options/queue-options';
+import type { CreateQueueOptions } from './options/queue-options';
 import type { WorkerOptions } from './options/worker-options';
 import type { JobHandler } from './jobs/job';
 import type { Logger } from './logging/logger.interface';
@@ -29,7 +29,9 @@ import type { Runtime } from './client/runtime';
 import type { HookRegistration } from './events/hooks';
 import type { EventListener, Unsubscribe } from './events/event-name.enum';
 import type {
+  GetInstancesQuery,
   GetJobsQuery,
+  GetQueuesQuery,
   InstanceInfo,
   JobSnapshot,
   Page,
@@ -143,12 +145,13 @@ export class PortQueue<TQueues extends string = string> {
   }
 
   // --- Handles ---
-  createQueue<TData = unknown>(name: TQueues, options: QueueOptions = {}): Queue<TData> {
-    this.runtime.registry.define(name, options);
+  createQueue<TData = unknown>(options: CreateQueueOptions<TQueues>): Queue<TData> {
+    const { name, ...queueOptions } = options;
+    this.runtime.registry.define(name, queueOptions);
     // Register queue-scoped hooks once (QueueOptions.hooks).
-    if (options.hooks && !this.hookedQueues.has(name)) {
+    if (queueOptions.hooks && !this.hookedQueues.has(name)) {
       this.hookedQueues.add(name);
-      for (const hook of options.hooks) {
+      for (const hook of queueOptions.hooks) {
         this.hooks.register(hook.queue ? hook : { ...hook, queue: name });
       }
     }
@@ -202,16 +205,22 @@ export class PortQueue<TQueues extends string = string> {
   }
 
   // --- Cross-cutting reads ---
-  getQueues(): Promise<QueueInfo[]> {
-    return this.reads.getQueues();
+  /** A page of queues with their per-status counts, plus the total across every page. */
+  getQueues(options: GetQueuesQuery = {}): Promise<Page<QueueInfo>> {
+    return this.reads.getQueues(options);
+  }
+
+  /** One queue by name, with the same counts and `inUse` flag the list carries. */
+  getQueue(options: { name: TQueues | string }): Promise<QueueInfo | null> {
+    return this.reads.getQueue(options.name);
   }
 
   getQueueStats(options: { queue?: TQueues } = {}): Promise<QueueStats> {
     return this.reads.getQueueStats(options.queue);
   }
 
-  /** Client-wide stats across all queues (`pq.getStats`). */
-  getStats(): Promise<QueueStats> {
+  /** Client-wide stats across every queue — the same shape `getQueueStats` returns for one. */
+  getQueuesStats(): Promise<QueueStats> {
     return this.reads.getQueueStats();
   }
 
@@ -247,10 +256,12 @@ export class PortQueue<TQueues extends string = string> {
 
   // --- Direct queue control (convenience; also on Queue) ---
   async pauseQueue(options: { queue: TQueues; mode?: PauseMode }): Promise<void> {
-    await this.createQueue(options.queue).pause(options.mode ? { mode: options.mode } : {});
+    await this.createQueue({ name: options.queue }).pause(
+      options.mode ? { mode: options.mode } : {},
+    );
   }
   async resumeQueue(options: { queue: TQueues }): Promise<void> {
-    await this.createQueue(options.queue).resume();
+    await this.createQueue({ name: options.queue }).resume();
   }
 
   /**
@@ -269,9 +280,14 @@ export class PortQueue<TQueues extends string = string> {
   }
 
   // --- Instances (multi-instance mode) ---
-  /** All known instances with liveness + per-instance job attribution (for the dashboard/CLI). */
-  getInstances(): Promise<InstanceInfo[]> {
-    return this.reads.getInstances();
+  /** A page of known instances with liveness + per-instance job attribution, plus the total. */
+  getInstances(options: GetInstancesQuery = {}): Promise<Page<InstanceInfo>> {
+    return this.reads.getInstances(options);
+  }
+
+  /** One instance by key, with the same liveness, health and attribution the list carries. */
+  getInstance(options: { instanceKey: string }): Promise<InstanceInfo | null> {
+    return this.reads.getInstance(options.instanceKey);
   }
 
   /** Stop the named instance from claiming jobs (persisted; the target picks it up on heartbeat). */

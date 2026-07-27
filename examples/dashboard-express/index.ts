@@ -36,7 +36,7 @@ async function main(): Promise<void> {
   await pq.init();
 
   // A worker + seed jobs so the dashboard shows live data.
-  const emails = pq.createQueue<{ to: string; template: string }>('emails');
+  const emails = pq.createQueue<{ to: string; template: string }>({ name: 'emails' });
   pq.createWorker<{ to: string; template: string }>({
     queue: 'emails',
     limiter: { concurrency: 5 },
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
 
   // Every queue with jobs needs a worker, or its jobs just sit there as PENDING — including the
   // runs a recurring schedule keeps producing.
-  const reports = pq.createQueue<{ kind: string }>('reports');
+  const reports = pq.createQueue<{ kind: string }>({ name: 'reports' });
   pq.createWorker<{ kind: string }>({
     queue: 'reports',
     handler: async (job) => {

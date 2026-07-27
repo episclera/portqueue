@@ -81,7 +81,7 @@ export function serializeQueue(q: QueueInfo): QueueDto {
 }
 
 export function serializeQueuePage(page: Page<QueueInfo>): QueuePageDto {
-  return { items: page.items.map(serializeQueue), total: page.total, hasMore: page.hasMore };
+  return { items: page.items.map(serializeQueue), total: page.total };
 }
 
 export function serializeStats(s: QueueStats): StatsDto {
@@ -94,8 +94,6 @@ export function serializeStats(s: QueueStats): StatsDto {
 export function serializeJobPage(page: Page<JobSnapshot>): JobPageDto {
   return {
     items: page.items.map(serializeJob),
-    cursor: page.cursor,
-    hasMore: page.hasMore,
     total: page.total,
   };
 }
@@ -115,7 +113,7 @@ export function serializeSchedule(s: ScheduleWithQueue): ScheduleDto {
 }
 
 export function serializeSchedulePage(page: Page<ScheduleWithQueue>): SchedulePageDto {
-  return { items: page.items.map(serializeSchedule), total: page.total, hasMore: page.hasMore };
+  return { items: page.items.map(serializeSchedule), total: page.total };
 }
 
 /** Serialize an instance overview row. */
@@ -134,5 +132,5 @@ export function serializeInstance(i: InstanceInfo): InstanceDto {
 }
 
 export function serializeInstancePage(page: Page<InstanceInfo>): InstancePageDto {
-  return { items: page.items.map(serializeInstance), total: page.total, hasMore: page.hasMore };
+  return { items: page.items.map(serializeInstance), total: page.total };
 }

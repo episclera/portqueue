@@ -21,7 +21,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   it('adds, claims, and completes a job', async () => {
     const completed: string[] = [];
     h.pq.on(PortQueueEvent.JOB_COMPLETED, (p) => completed.push(p.jobId));
-    const queue = h.pq.createQueue<{ to: string }>('emails');
+    const queue = h.pq.createQueue<{ to: string }>({ name: 'emails' });
     h.pq.createWorker<{ to: string }>({
       queue: 'emails',
       handler: async (job) => ({ sent: job.data.to }),
@@ -38,7 +38,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
 
   it('retries a throwing handler then succeeds', async () => {
     let calls = 0;
-    const queue = h.pq.createQueue('flaky');
+    const queue = h.pq.createQueue({ name: 'flaky' });
     h.pq.createWorker({
       queue: 'flaky',
       handler: async () => {
@@ -55,7 +55,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('fails terminally after exhausting attempts', async () => {
-    const queue = h.pq.createQueue('doomed');
+    const queue = h.pq.createQueue({ name: 'doomed' });
     h.pq.createWorker({
       queue: 'doomed',
       handler: async () => {
@@ -72,7 +72,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
 
   it('processes higher priority first', async () => {
     const order: number[] = [];
-    const queue = h.pq.createQueue<{ n: number }>('prio');
+    const queue = h.pq.createQueue<{ n: number }>({ name: 'prio' });
     // Add before creating the worker so both jobs are pending when claiming starts.
     await queue.addJob({ data: { n: 1 }, priority: 1 });
     await queue.addJob({ data: { n: 2 }, priority: 10 });
@@ -88,7 +88,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('deduplicates by idempotency key', async () => {
-    const queue = h.pq.createQueue('idem');
+    const queue = h.pq.createQueue({ name: 'idem' });
     const a = await queue.addJob({ data: { x: 1 }, idempotencyKey: 'once' });
     const b = await queue.addJob({ data: { x: 2 }, idempotencyKey: 'once' });
     expect(b.deduplicated).toBe(true);
@@ -97,7 +97,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
 
   it('pauses and resumes processing cluster-wide', async () => {
     const done: string[] = [];
-    const queue = h.pq.createQueue('pausable');
+    const queue = h.pq.createQueue({ name: 'pausable' });
     h.pq.createWorker({ queue: 'pausable', handler: async (job) => void done.push(job.id) });
     await queue.pause({ mode: PauseMode.PROCESSING });
     const res = await queue.addJob({ data: {} });
@@ -109,7 +109,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('refuses new jobs when paused with ALL', async () => {
-    const queue = h.pq.createQueue('drain');
+    const queue = h.pq.createQueue({ name: 'drain' });
     await queue.pause({ mode: PauseMode.ALL });
     await expect(queue.addJob({ data: {} })).rejects.toThrow(/refusing new jobs/);
   });

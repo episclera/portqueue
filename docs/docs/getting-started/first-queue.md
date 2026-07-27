@@ -29,8 +29,8 @@ const pq = new PortQueue<QueueName>({
 });
 await pq.init();
 
-const emailsQueue = pq.createQueue<{ to: string; template: string }>(QueueName.Emails);
-// pq.createQueue('typo');  // ❌ compile error — not a QueueName
+const emailsQueue = pq.createQueue<{ to: string; template: string }>({ name: QueueName.Emails });
+// pq.createQueue({ name: 'typo' });  // ❌ compile error — not a QueueName
 ```
 
 The `TData` generic on `createQueue` is the **payload type** and flows through to the
@@ -83,7 +83,7 @@ the two tiers agree on the queue with no extra coordination.
 
 ```ts
 // api-server.ts — producer only, no worker here
-const emailsQueue = pq.createQueue(QueueName.Emails);
+const emailsQueue = pq.createQueue({ name: QueueName.Emails });
 await emailsQueue.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
 // → handled by the worker tier, not this process
 ```
@@ -91,7 +91,7 @@ await emailsQueue.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
 ## Controlling and observing
 
 - **Control processing** — pause/resume handling on the **queue** (persisted, cluster-wide):
-  `pq.createQueue(QueueName.Emails).pause()` / `.resume()`. There is no per-worker start/stop.
+  `pq.createQueue({ name: QueueName.Emails }).pause()` / `.resume()`. There is no per-worker start/stop.
 - **Observe** — subscribe on the **client**:
   `pq.on(PortQueueEvent.JOB_COMPLETED, cb, { queue: QueueName.Emails })`.
 - **Shut down** — `pq.shutdown({ graceful: true, timeoutSeconds: 30 })` drains every worker on the instance.

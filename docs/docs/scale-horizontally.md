@@ -166,8 +166,9 @@ await pq.removeInstance({ instanceKey: '10.0.9.9:ram-2gb:cpu-1cor' }); // throws
 ### Observing attribution
 
 Each processed job records the server that ran it in `processedOnInstanceKey`
-(`JobSnapshot.processedOnInstanceKey`), and `pq.getInstances()` returns liveness plus per-server
-counts for your own dashboards. `INSTANCE_PAUSED` / `INSTANCE_RESUMED` / `INSTANCE_REMOVED` are
+(`JobSnapshot.processedOnInstanceKey`), and `pq.getInstances({ limit, offset })` returns a page of
+liveness plus per-server counts for your own dashboards, with `total` alongside the rows.
+`INSTANCE_PAUSED` / `INSTANCE_RESUMED` / `INSTANCE_REMOVED` are
 emitted as events and streamed live to the dashboard.
 
 ## What keeps concurrent instances safe

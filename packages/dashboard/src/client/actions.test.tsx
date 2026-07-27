@@ -72,7 +72,7 @@ const INSTANCE = {
 const RESPONSES: Record<string, unknown> = {
   '/queues': QUEUES,
   '/stats': STATS,
-  '/jobs': { items: [JOB], cursor: null, hasMore: false, total: 1 },
+  '/jobs': { items: [JOB], total: 1 },
   [`/jobs/${JOB.id}`]: JOB,
   [`/jobs/${CLONE.id}`]: CLONE,
   '/schedules': page([SCHEDULE]),

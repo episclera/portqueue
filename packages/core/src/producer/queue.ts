@@ -5,6 +5,7 @@ import type { AddJobOptions } from '../options/job-options';
 import type {
   AddJobResult,
   GetJobsQuery,
+  GetSchedulesQuery,
   JobSnapshot,
   Page,
   QueueStats,
@@ -33,8 +34,14 @@ export class Queue<TData = unknown> {
     return this.producer.addJob(this.name, options);
   }
 
-  getSchedules(): Promise<ScheduleInfo[]> {
-    return this.producer.getSchedules(this.name);
+  /** A page of this queue's recurring schedules, with the total matching the filter. */
+  getSchedules(options: GetSchedulesQuery = {}): Promise<Page<ScheduleInfo>> {
+    return this.producer.getSchedules(this.name, options);
+  }
+
+  /** One of this queue's schedules by id. Null if unknown, or if it belongs to another queue. */
+  getSchedule(options: { scheduleId: string }): Promise<ScheduleInfo | null> {
+    return this.producer.getSchedule(this.name, options.scheduleId);
   }
 
   // --- Inspection (scoped to this queue) ---

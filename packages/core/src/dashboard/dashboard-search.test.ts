@@ -23,7 +23,7 @@ describe('dashboard job search (sqlite)', () => {
 
   /** `ROWS` jobs, oldest first, with the needle in the very first (so: last page of a desc scan). */
   async function seed(): Promise<void> {
-    const q = h.pq.createQueue<{ tag: string }>('searched');
+    const q = h.pq.createQueue<{ tag: string }>({ name: 'searched' });
     await q.addJob({ data: { tag: 'needle-oldest' } });
     for (let i = 1; i < ROWS; i += 1) await q.addJob({ data: { tag: `filler-${i}` } });
   }
@@ -49,7 +49,6 @@ describe('dashboard job search (sqlite)', () => {
     });
     expect(first.total).toBe(ROWS - 1);
     expect(first.items).toHaveLength(20);
-    expect(first.hasMore).toBe(true);
 
     // The final page of matches: short, nothing after it, and no overlap with the first.
     const last = await h.pq._dashboard.getJobs({
@@ -59,14 +58,16 @@ describe('dashboard job search (sqlite)', () => {
       offset: ROWS - 20,
     });
     expect(last.items).toHaveLength(19);
-    expect(last.hasMore).toBe(false);
+    expect(ROWS - 20 + last.items.length).toBe(last.total);
     const firstIds = first.items.map((j) => j.id);
     expect(last.items.every((j) => !firstIds.includes(j.id))).toBe(true);
   });
 
   it('searches only inside the other filters', async () => {
     await seed();
-    await h.pq.createQueue<{ tag: string }>('elsewhere').addJob({ data: { tag: 'needle-oldest' } });
+    await h.pq
+      .createQueue<{ tag: string }>({ name: 'elsewhere' })
+      .addJob({ data: { tag: 'needle-oldest' } });
 
     const scoped = await h.pq._dashboard.getJobs({
       queue: 'searched',
@@ -85,7 +86,7 @@ describe('dashboard job search (sqlite)', () => {
   });
 
   it('matches the payload, the idempotency key and the id, case-insensitively', async () => {
-    const q = h.pq.createQueue<{ to: string }>('fields');
+    const q = h.pq.createQueue<{ to: string }>({ name: 'fields' });
     const res = await q.addJob({ data: { to: 'ada@example.com' }, idempotencyKey: 'WELCOME-ada' });
 
     const byPayload = await h.pq._dashboard.getJobs({ queue: 'fields', search: 'ADA@example' });
@@ -96,7 +97,7 @@ describe('dashboard job search (sqlite)', () => {
   });
 
   it('returns the plain paged read when there is no term', async () => {
-    const q = h.pq.createQueue('unsearched');
+    const q = h.pq.createQueue({ name: 'unsearched' });
     for (let i = 0; i < 3; i += 1) await q.addJob({ data: { i } });
     const page = await h.pq._dashboard.getJobs({ queue: 'unsearched', limit: 2 });
     expect(page.total).toBe(3);

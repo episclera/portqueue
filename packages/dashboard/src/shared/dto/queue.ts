@@ -4,12 +4,13 @@ import type { CountsDto } from './job';
 /**
  * One page of rows plus the total matching the query. Every list endpoint returns this shape,
  * so a table's "Results (n)" and its rows can never disagree and paging is uniform across pages.
+ * A page that wants "is there more?" derives it from its own offset plus `items.length` against
+ * `total` — the server never sends a second, redundant flag that could contradict the count.
  */
 export interface PageDto<T> {
   items: T[];
   /** Rows matching the query across every page. */
   total: number;
-  hasMore: boolean;
 }
 
 /** Queue overview (mirrors core `QueueInfo`). */

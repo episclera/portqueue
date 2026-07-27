@@ -37,7 +37,7 @@ all. If you roll back, the job insert rolls back with your business row.
 ```ts
 import { fromKnex } from '@portqueue/core/tx';
 
-const emailsQueue = pq.createQueue<{ to: string }>('emails');
+const emailsQueue = pq.createQueue<{ to: string }>({ name: 'emails' });
 
 // 1. Open your own transaction.
 await knex.transaction(async (trx) => {

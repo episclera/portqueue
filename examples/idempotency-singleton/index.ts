@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
   await pq.init();
 
-  const emails = pq.createQueue<{ to: string }>('emails');
+  const emails = pq.createQueue<{ to: string }>({ name: 'emails' });
 
   // Idempotency: enqueue the "same" welcome email twice with one key.
   const first = await emails.addJob({

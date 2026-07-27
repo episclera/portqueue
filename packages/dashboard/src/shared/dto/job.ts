@@ -33,11 +33,9 @@ export interface JobDto {
   stalled: boolean;
 }
 
-/** Page of jobs — `cursor`/`hasMore` for streaming, `total` for numbered pagination. */
+/** Page of jobs. `total` counts every match; a search counts them all, not just this window. */
 export interface JobPageDto {
   items: JobDto[];
-  cursor: string | null;
-  hasMore: boolean;
   /** Rows matching the query across every page. A search counts every match, not a window. */
   total: number;
 }

@@ -74,7 +74,7 @@ const pq = new PortQueue<QueueName>({
 await pq.init();
 
 // Producer — add a job (data is a named key, never positional).
-const emailsQueue = pq.createQueue<{ to: string }>(QueueName.Emails);
+const emailsQueue = pq.createQueue<{ to: string }>({ name: QueueName.Emails });
 await emailsQueue.addJob({ data: { to: 'a@b.com' } });
 
 // Consumer — registering a worker is enough; it claims automatically.
