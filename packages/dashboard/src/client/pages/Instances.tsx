@@ -27,7 +27,7 @@ import {
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
 import { dateColumn } from '../components/table-columns';
-import { METRIC_HINTS, MetricValue, formatPercent } from '../components/metrics';
+import { METRIC_HINTS, MetricValue, formatPercent, metricTone } from '../components/metrics';
 import { totalCount } from '../components/format';
 import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
@@ -103,7 +103,7 @@ export function InstancesPage(): React.ReactElement {
       align: 'right',
       render: (r) => (
         <Tooltip title={METRIC_HINTS.cpu} placement="bottom">
-          <MetricValue>{formatPercent(r.cpuPercent)}</MetricValue>
+          <MetricValue tone={metricTone(r.cpuPercent)}>{formatPercent(r.cpuPercent)}</MetricValue>
         </Tooltip>
       ),
     },
@@ -113,7 +113,9 @@ export function InstancesPage(): React.ReactElement {
       align: 'right',
       render: (r) => (
         <Tooltip title={METRIC_HINTS.memory} placement="bottom">
-          <MetricValue>{formatPercent(r.memoryPercent)}</MetricValue>
+          <MetricValue tone={metricTone(r.memoryPercent)}>
+            {formatPercent(r.memoryPercent)}
+          </MetricValue>
         </Tooltip>
       ),
     },

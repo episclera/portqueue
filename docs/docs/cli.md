@@ -109,8 +109,8 @@ for the generated usage. Global connection flags apply to all of them.
 | `instance` | `--key <instanceKey>` | One instance: its process's health, liveness and job counts by status |
 
 `CPU (proc)` is that Node process's CPU as a share of **all the cores available to it** (0–100%);
-`Mem (proc)` is used heap over V8's limit, not machine RAM. Both print plain — the CLI never colours
-them, because no reading is high or low on its own.
+`Mem (proc)` is used heap over V8's limit, not machine RAM. Either prints amber from 75% and red
+from 85%.
 
 ### Actions
 

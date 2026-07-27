@@ -110,9 +110,7 @@ merge with, so `systemLimiter: {}` samples but can never report pressure.
 
 :::info `maxCpuPercent` is core-count independent
 It is a share of everything the host will give this process (`os.availableParallelism()`), so `85`
-means the same on a 2-core container and a 64-core server, and never reads past 100. Earlier
-versions reported a share of *one* core, where a cap looked like `600` on 8 cores — divide any such
-cap by your core count.
+means the same on a 2-core container and a 64-core server, and never reads past 100.
 
 When you want "the process is saturated" rather than "it is busy", use `maxEventLoopDelaySeconds`:
 a process can sit at 30% CPU and still be unable to keep up.

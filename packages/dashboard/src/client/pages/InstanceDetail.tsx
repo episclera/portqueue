@@ -45,10 +45,22 @@ import { JobsTable } from '../components/JobsTable';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
 import { totalCount } from '../components/format';
-import { METRIC_HINTS, formatPercent } from '../components/metrics';
+import {
+  METRIC_HINTS,
+  formatPercent,
+  metricTone,
+  type MetricTone,
+} from '../components/metrics';
 
 /** Three cards on one row across a 24-column grid. */
 const CARD_SPAN = 8;
+
+/** The metric colouring maps onto the card component's own tones. */
+const CARD_TONE: Record<MetricTone, StatisticTone> = {
+  normal: 'default',
+  warn: 'warning',
+  danger: 'danger',
+};
 
 export function InstanceDetailPage(): React.ReactElement {
   const { key } = useParams<{ key: string }>();
@@ -96,19 +108,17 @@ export function InstanceDetailPage(): React.ReactElement {
     );
   }
 
-  // Health readings are never toned: see `components/metrics` — there is no value that is "bad"
-  // on its own, so every card here is the default colour.
   const cards: { label: string; value: string; tone: StatisticTone; hint: string }[] = [
     {
       label: 'CPU (process)',
       value: formatPercent(i.cpuPercent),
-      tone: 'default',
+      tone: CARD_TONE[metricTone(i.cpuPercent)],
       hint: METRIC_HINTS.cpu,
     },
     {
       label: 'Memory (process)',
       value: formatPercent(i.memoryPercent),
-      tone: 'default',
+      tone: CARD_TONE[metricTone(i.memoryPercent)],
       hint: METRIC_HINTS.memory,
     },
     {

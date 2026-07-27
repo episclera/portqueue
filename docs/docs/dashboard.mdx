@@ -21,8 +21,10 @@ no app changes at all.
 
 Navigation lives in a left sidebar (it collapses behind a burger button on small screens), with
 links to these docs and the GitHub repo pinned at its foot, and the live-updates control and the
-light/dark toggle in the top bar. Every page opens with a full-width subheader carrying its title,
-a one-line description, and the page's actions.
+light/dark toggle in the top bar. Live updates refresh the current page's data every **15 seconds**
+and pause with the tab hidden; the control freezes them, and a refresh button fetches on demand
+either way. Every page opens with a full-width subheader carrying its title, a one-line description,
+and the page's actions.
 
 The screenshots below follow the theme you are reading in — switch it in the top-right and they
 swap with the rest of the site.
@@ -37,40 +39,6 @@ swap with the rest of the site.
 Activity cards for active, pending, failed, completed and stalled jobs, then the per-queue table:
 state, usage, the total and the per-status counts, with pause/resume on each row. A queue's name
 links to its own page.
-
-</Shot>
-
-### Instances
-
-<Shot
-  name="instances"
-  alt="The instances page: one row per registered instance with liveness, health metrics and pause controls"
->
-
-One row per registered instance: liveness, the CPU and memory of that **Node process** at its last
-heartbeat, jobs processed, and pause/resume. CPU is a share of all the cores available to the
-process, memory a share of V8's heap limit — both 0–100%, and neither host-wide. Neither number is
-ever coloured: no single value means the process is unhealthy. Only populated for servers that set
-an [instance key](./scale-horizontally.md#give-each-server-an-identity-key).
-
-Each key links to its own page: health cards plus the jobs that instance claimed, with pause/resume
-and remove (available once it has been unseen for 30 minutes). A job's **Processed on instance**
-links here too.
-
-</Shot>
-
-### Schedules
-
-<Shot
-  name="schedules"
-  alt="The schedules page: recurring definitions with cadence, timezone, next and last run"
->
-
-Recurring definitions across every queue — cadence, timezone, next and last run — with per-schedule
-enable/disable and bulk unschedule. Disabling keeps the definition and stops it firing, which is
-the reversible half of "make this stop". Each (truncated) schedule id links to its own page, which
-lists the jobs that schedule produced; removing it there returns to this list, since the definition
-is gone.
 
 </Shot>
 
@@ -107,6 +75,40 @@ Retry, clone, cancel and remove sit in the subheader. Two of them leave the page
 stops being the right one: a clone opens the new job's own page (or the new schedule's, when the
 form is switched to Recurring), and a removal returns to the queue. A running job is never removed —
 that refusal is reported and keeps you here, so cancel it first.
+
+</Shot>
+
+### Schedules
+
+<Shot
+  name="schedules"
+  alt="The schedules page: recurring definitions with cadence, timezone, next and last run"
+>
+
+Recurring definitions across every queue — cadence, timezone, next and last run — with per-schedule
+enable/disable and bulk unschedule. Disabling keeps the definition and stops it firing, which is
+the reversible half of "make this stop". Each (truncated) schedule id links to its own page, which
+lists the jobs that schedule produced; removing it there returns to this list, since the definition
+is gone.
+
+</Shot>
+
+### Instances
+
+<Shot
+  name="instances"
+  alt="The instances page: one row per registered instance with liveness, health metrics and pause controls"
+>
+
+One row per registered instance: liveness, the CPU and memory of that **Node process** at its last
+heartbeat, jobs processed, and pause/resume. CPU is a share of all the cores available to the
+process, memory a share of V8's heap limit — both 0–100%, and neither host-wide. Either turns
+**amber from 75% and red from 85%**. Only populated for servers that set an
+[instance key](./scale-horizontally.md#give-each-server-an-identity-key).
+
+Each key links to its own page: health cards plus the jobs that instance claimed, with pause/resume
+and remove (available once it has been unseen for 30 minutes). A job's **Processed on instance**
+links here too.
 
 </Shot>
 

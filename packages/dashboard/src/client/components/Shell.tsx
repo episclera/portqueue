@@ -259,7 +259,7 @@ function LiveToggle(): React.ReactElement {
         </Button>
       </Tooltip>
       {/* Always offered, not only while paused: wanting the freshest data right now is
-          independent of whether a 30s interval happens to also be running. */}
+          independent of whether the poll interval happens to also be running. */}
       <Tooltip title="Fetch the latest data now" placement="bottom">
         <Button
           size="sm"

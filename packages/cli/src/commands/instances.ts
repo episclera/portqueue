@@ -4,14 +4,25 @@ import { color, heading, printJson, relativeTime, table } from '../output';
 import { CommandGroup, type Command } from './types';
 import type { InstanceInfo } from '@portqueue/core';
 
+/** Where a health reading stops being comfortable — the same two points the dashboard uses. */
+const METRIC_WARN_PERCENT = 75;
+const METRIC_DANGER_PERCENT = 85;
+
 /**
  * Health metrics describe the **Node process** an instance runs — CPU as a share of the cores
  * available to it, heap as a share of V8's limit — and are recorded on every heartbeat, so an
  * unseen instance still reports the numbers from the last beat we heard. Before an instance's first
  * beat they are null, which prints as `—` rather than a misleading `0`.
+ *
+ * Both are 0-100 shares of a ceiling the process can't pass, so one pair of thresholds colours
+ * both: yellow from 75, red from 85.
  */
 function percent(value: number | null): string {
-  return value === null ? '—' : `${value.toFixed(1)}%`;
+  if (value === null) return '—';
+  const text = `${value.toFixed(1)}%`;
+  if (value >= METRIC_DANGER_PERCENT) return color(text, 'red');
+  if (value >= METRIC_WARN_PERCENT) return color(text, 'yellow');
+  return text;
 }
 
 function processed(instance: InstanceInfo): number {

@@ -1,17 +1,19 @@
 /**
  * Rendering for the process-health metrics an instance records on every heartbeat.
  *
- * One module so the instances table and the instance detail page agree on the formatting and on
- * what the numbers mean.
- *
- * **The readings are never coloured.** There is no value at which CPU or memory is "bad" on its
- * own: a batch worker is *meant* to run hot, and a heap near V8's limit is normal for a process
- * that was given a small one. A red number would be an alarm the dashboard cannot justify —
- * whether a process is under pressure is what the `systemLimiter` thresholds decide, against
- * limits only the operator knows.
+ * One module so the instances table and the instance detail page agree on the formatting, on what
+ * the numbers mean, and on the point at which one is worth an operator's attention — a value that
+ * reads as a warning in a table and as fine on a detail page would be worse than no colour at all.
  */
 import React from 'react';
 import styled from 'styled-components';
+
+/**
+ * Where a reading stops being comfortable. One pair for both metrics: now that CPU is a share of
+ * every available core rather than of one core, both are 0-100 shares of a ceiling the process
+ * cannot pass, so "75% of the way there" means the same thing for each.
+ */
+export const METRIC_THRESHOLDS = { warn: 75, danger: 85 };
 
 /**
  * What the numbers are, wherever they are shown. Every surface says "process" out loud: a reader
@@ -29,16 +31,38 @@ export function formatPercent(value: number | null): string {
   return value === null ? '—' : `${value.toFixed(1)}%`;
 }
 
-const Reading = styled.span`
+export type MetricTone = 'normal' | 'warn' | 'danger';
+
+/** Null reads as `normal`: no heartbeat yet is not a health problem. */
+export function metricTone(value: number | null): MetricTone {
+  if (value === null) return 'normal';
+  if (value >= METRIC_THRESHOLDS.danger) return 'danger';
+  if (value >= METRIC_THRESHOLDS.warn) return 'warn';
+  return 'normal';
+}
+
+const Toned = styled.span<{ $tone: MetricTone }>`
+  color: ${(p) =>
+    p.$tone === 'danger'
+      ? p.theme.color.danger
+      : p.$tone === 'warn'
+        ? p.theme.color.warning
+        : 'inherit'};
   font-variant-numeric: tabular-nums;
+  font-weight: ${(p) => (p.$tone === 'normal' ? 'inherit' : 600)};
 `;
 
 export interface MetricValueProps {
   /** The formatted text to show. */
   children: React.ReactNode;
+  tone: MetricTone;
 }
 
-/** A metric reading, in the normal text colour whatever its value. */
-export function MetricValue({ children }: MetricValueProps): React.ReactElement {
-  return <Reading>{children}</Reading>;
+/** A metric reading, coloured only once it is worth an operator's attention. */
+export function MetricValue({ children, tone }: MetricValueProps): React.ReactElement {
+  return (
+    <Toned $tone={tone} title={tone === 'normal' ? undefined : `Running ${tone}`}>
+      {children}
+    </Toned>
+  );
 }

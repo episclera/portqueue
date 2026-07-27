@@ -99,7 +99,7 @@ export const LIVE_TOGGLE_CONFIG = {
   live: {
     label: 'Pause',
     icon: '⏸️',
-    hint: 'Auto-updates are on (every 30s) — pause to freeze the data',
+    hint: 'Auto-updates are on (every 15s) — pause to freeze the data',
   },
   paused: {
     label: 'Resume',

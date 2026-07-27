@@ -21,7 +21,7 @@ import { useCallback } from 'react';
 import { useLive } from '../components/LiveProvider';
 
 /** The single shared refetch cadence for every polling query. */
-export const REFETCH_INTERVAL_MS = 30_000;
+export const REFETCH_INTERVAL_MS = 15_000;
 
 /**
  * Every query key in one place, so a mutation can invalidate exactly what it affected instead of
