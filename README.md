@@ -1,6 +1,6 @@
 # PortQueue
 
-**The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.**
+**A horizontally scalable, fault-tolerant, database-agnostic, performance-focused queue implementation.**
 
 ## Documentation
 

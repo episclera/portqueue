@@ -2,7 +2,7 @@
   "name": "portqueue-monorepo",
   "version": "0.0.0",
   "private": true,
-  "description": "The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.",
+  "description": "A horizontally scalable, fault-tolerant, database-agnostic, performance-focused queue implementation.",
   "license": "MIT",
   "type": "module",
   "engines": {

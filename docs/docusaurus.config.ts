@@ -59,7 +59,7 @@ function footerDocsItems(): Array<{ label: string; to: string }> {
 const config: Config = {
   title: 'PortQueue',
   tagline:
-    'The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.',
+    'A horizontally scalable, fault-tolerant, database-agnostic, performance-focused queue implementation.',
   favicon: 'img/favicon.svg',
 
   // GitHub Pages deployment (build_plan/15.10). Adjust `url` to the real Pages domain.
@@ -94,7 +94,7 @@ const config: Config = {
         name: 'PortQueue',
         url: 'https://episclera.github.io/portqueue/',
         description:
-          'The distributed, fault-tolerant, database-agnostic, performance-focused queue implementation.',
+          'A horizontally scalable, fault-tolerant, database-agnostic, performance-focused queue implementation.',
       }),
     },
     {
