@@ -27,88 +27,103 @@ either way. Every page opens with a full-width subheader carrying its title, a o
 and the page's actions.
 
 The screenshots below follow the theme you are reading in — switch it in the top-right and they
-swap with the rest of the site.
+swap with the rest of the site. Click any of them to see it full size.
 
-### Overview
+### Overview & queue details
 
 <Shot
-  name="home"
-  alt="The PortQueue dashboard overview page: activity cards above a table of queues with per-status counts"
+  shots={[
+    {
+      name: 'home',
+      alt: 'The PortQueue dashboard overview page: activity cards above a table of queues with per-status counts',
+    },
+    {
+      name: 'queue-details',
+      alt: "A queue's detail page: status cards above the paged, searchable jobs table",
+    },
+  ]}
 >
 
-Activity cards for active, pending, failed, completed and stalled jobs, then the per-queue table:
-state, usage, the total and the per-status counts, with pause/resume on each row. A queue's name
-links to its own page.
+The overview opens on activity cards — active, pending, failed, completed and stalled — above a
+table of every queue with its state, usage and per-status counts, pause/resume on each row, and the
+name linking through to the queue itself.
+
+A queue's own page narrows the same cards to that queue and lists its jobs: paged and searchable,
+with per-row retry, cancel and remove plus bulk actions over a selection. Pause/resume, **Add job**
+and (for a queue no running process declares) **Remove queue** sit in the subheader. The **Add job**
+form mirrors `addJob`, so its timing fields are the same seconds the API takes.
 
 </Shot>
 
-### Queue detail
+### Job details
 
 <Shot
-  name="queue"
-  alt="A queue's detail page: status cards above the paged, searchable jobs table"
+  shots={[
+    {
+      name: 'job-details',
+      alt: "A job's detail page: the full record, its payload and return value, and the lifecycle timeline",
+    },
+  ]}
 >
 
-One queue's activity cards, then its jobs table — paged and searchable, with per-row retry, cancel
-and remove, and bulk actions over a selection. Pause/resume, **Add job** and (for a queue no
-running process declares) **Remove queue** sit in the subheader. Job ids are truncated to their
-first and last characters — enough to recognise one, short enough to keep the row readable.
+One job's full record — queue, status, priority, attempts, the instance that processed it, lock,
+idempotency key and schedule — beside its `data`, return value, failure message and a lifecycle
+timeline, followed by every lifecycle timestamp including the ones the job never reached.
 
-The **Add job** form mirrors `addJob`, so its timing fields are the same seconds the API takes:
-_Start after (seconds)_ for a one-off delay and _Every (seconds)_ for a fixed-interval recurrence.
+Retry, clone, cancel and remove sit in the subheader. Two of them leave the page: a clone opens the
+new job's (or schedule's) own page, and a removal returns to the queue. A running job is never
+removed — cancel it first.
 
 </Shot>
 
-### Job detail
+### Instances list & details
 
 <Shot
-  name="job-details"
-  alt="A job's detail page: the full record, its payload and return value, and the lifecycle timeline"
->
-
-One job's full record — queue, status, priority, attempts, the instance that processed it and any
-preferred-instance pattern, lock, idempotency key, schedule — with its `data` and return value, the
-failure message, a lifecycle timeline, and every lifecycle timestamp, including the ones the job
-never reached.
-
-Retry, clone, cancel and remove sit in the subheader. Two of them leave the page, because this URL
-stops being the right one: a clone opens the new job's own page (or the new schedule's, when the
-form is switched to Recurring), and a removal returns to the queue. A running job is never removed —
-that refusal is reported and keeps you here, so cancel it first.
-
-</Shot>
-
-### Schedules
-
-<Shot
-  name="schedules"
-  alt="The schedules page: recurring definitions with cadence, timezone, next and last run"
->
-
-Recurring definitions across every queue — cadence, timezone, next and last run — with per-schedule
-enable/disable and bulk unschedule. Disabling keeps the definition and stops it firing, which is
-the reversible half of "make this stop". Each (truncated) schedule id links to its own page, which
-lists the jobs that schedule produced; removing it there returns to this list, since the definition
-is gone.
-
-</Shot>
-
-### Instances
-
-<Shot
-  name="instances"
-  alt="The instances page: one row per registered instance with liveness, health metrics and pause controls"
+  shots={[
+    {
+      name: 'instances',
+      alt: 'The instances page: one row per registered instance with liveness, health metrics and pause controls',
+    },
+    {
+      name: 'instance-details',
+      alt: "An instance's detail page: CPU, memory and processed cards above the jobs it claimed",
+    },
+  ]}
 >
 
 One row per registered instance: liveness, the CPU and memory of that **Node process** at its last
-heartbeat, jobs processed, and pause/resume. CPU is a share of all the cores available to the
-process, memory a share of V8's heap limit — both 0–100%, and neither host-wide. Either turns
-**amber from 75% and red from 85%**. Only populated for servers that set an
+heartbeat, jobs processed, and pause/resume. Both percentages are process-local — CPU a share of
+the cores available to it, memory a share of V8's heap limit — and turn **amber from 75% and red
+from 85%**. Rows only appear for servers that set an
 [instance key](./scale-horizontally.md#give-each-server-an-identity-key).
 
-Each key links to its own page: health cards plus the jobs that instance claimed, with pause/resume
-and remove (available once it has been unseen for 30 minutes). A job's **Processed on instance**
-links here too.
+Each key opens its own page: the same health as cards, plus the jobs that instance claimed, with
+pause/resume and remove (available once it has been unseen for 30 minutes). A job's **Processed on
+instance** links here too.
+
+</Shot>
+
+### Schedules list & details
+
+<Shot
+  shots={[
+    {
+      name: 'schedules',
+      alt: 'The schedules page: recurring definitions with cadence, timezone, next and last run',
+    },
+    {
+      name: 'schedule-details',
+      alt: "A schedule's detail page: its definition above the jobs it has produced",
+    },
+  ]}
+>
+
+Recurring definitions across every queue — cadence, timezone, next and last run — with per-schedule
+enable/disable and bulk unschedule. Disabling keeps the definition and stops it firing, the
+reversible half of "make this stop".
+
+A schedule's page shows the full definition (including its idempotency key) above the jobs it has
+produced, and offers disable and remove. Removing returns to the list, since the definition is gone.
 
 </Shot>
 
