@@ -1,5 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
+import { CaretRightIcon } from '../icons';
 
 export interface CollapseItem {
   key: string;
@@ -51,7 +52,7 @@ const Header = styled.button`
   }
 `;
 
-const Indicator = styled.span<{ $open: boolean }>`
+const Indicator = styled(CaretRightIcon)<{ $open: boolean }>`
   display: inline-flex;
   font-size: 12px;
   color: ${(p) => p.theme.color.textMuted};
@@ -101,9 +102,7 @@ export function Collapse({
         return (
           <Panel key={item.key}>
             <Header type="button" aria-expanded={open} onClick={() => toggle(item.key)}>
-              <Indicator $open={open} aria-hidden>
-                ▸
-              </Indicator>
+              <Indicator $open={open} aria-hidden />
               <HeaderLabel>{item.header}</HeaderLabel>
               {item.extra !== undefined ? <Extra>{item.extra}</Extra> : null}
             </Header>

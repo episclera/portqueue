@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTheme } from 'styled-components';
 import { IconButton } from './IconButton';
+import { DarkModeIcon, LightModeIcon } from '../icons';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -25,7 +26,7 @@ export function ThemeSwitcher({ onChange }: ThemeSwitcherProps): React.ReactElem
       title={`Switch to ${next} theme`}
       aria-label={`Switch to ${next} theme`}
     >
-      <span aria-hidden>{dark ? '🌙' : '☀️'}</span>
+      {dark ? <DarkModeIcon aria-hidden /> : <LightModeIcon aria-hidden />}
     </IconButton>
   );
 }

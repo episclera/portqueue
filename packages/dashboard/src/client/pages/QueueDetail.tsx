@@ -4,7 +4,16 @@
  */
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Button, Content, Dropdown, Inline, PageHeader, Popconfirm, Stack } from '@portqueue/ui';
+import {
+  Button,
+  CaretDownIcon,
+  Content,
+  Dropdown,
+  Inline,
+  PageHeader,
+  Popconfirm,
+  Stack,
+} from '@portqueue/ui';
 import type { DropdownItem } from '@portqueue/ui';
 import { PauseMode } from '../queries/enums';
 import { ActionKind, type QueuePageDto, type StatsDto } from '../../shared/dto';
@@ -70,7 +79,7 @@ export function QueueDetailPage(): React.ReactElement {
       ) : (
         <Dropdown items={pauseItems} align="right">
           <Button icon={ACTIONS_CONFIG.pause.icon}>
-            {ACTIONS_CONFIG.pause.label} <span aria-hidden>▾</span>
+            {ACTIONS_CONFIG.pause.label} <CaretDownIcon aria-hidden />
           </Button>
         </Dropdown>
       )}

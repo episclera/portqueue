@@ -1,6 +1,7 @@
 import React from 'react';
 import styled, { keyframes } from 'styled-components';
 import { Portal } from '../overlay/Portal';
+import { CloseIcon } from '../icons';
 
 export interface ModalProps {
   open: boolean;
@@ -141,7 +142,7 @@ export const Modal = ({
           <Header>
             {title != null ? <Title>{title}</Title> : <span />}
             <CloseButton type="button" onClick={onClose} aria-label="Close">
-              ✕
+              <CloseIcon aria-hidden />
             </CloseButton>
           </Header>
           <Body>{children}</Body>

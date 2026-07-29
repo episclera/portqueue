@@ -23,12 +23,12 @@ export function countColumns<T extends CountedRow>(): TableColumn<T>[] {
 }
 
 /**
- * Floor for every column that renders a `<Time>`. The one timestamp format —
- * `12 Mar. 2026 13:23:01 UTC+2` — is a single unbreakable fact: wrapped onto two lines, or squeezed
- * until the offset drops off, it stops being readable at a glance. 220px fits the longest form, and
- * a table that outgrows its card scrolls sideways rather than shrinking these columns.
+ * Floor for every column that renders a `<Time>`. The instant — `12 Mar. 2026 13:23:01` — is a
+ * single unbreakable fact: wrapped onto two lines it stops being readable at a glance. 170px holds
+ * it on one line, with the timezone stacked beneath it, and a table that outgrows its card scrolls
+ * sideways rather than shrinking these columns.
  */
-export const DATE_COLUMN_MIN_WIDTH = 220;
+export const DATE_COLUMN_MIN_WIDTH = 170;
 
 /** A timestamp column — one format and one width, everywhere a date is tabulated. */
 export function dateColumn<T>(
@@ -40,6 +40,7 @@ export function dateColumn<T>(
     title,
     key,
     minWidth: DATE_COLUMN_MIN_WIDTH,
-    render: (row) => <Time value={value(row)} />,
+    // Stacked: the instant is what a reader scans down the column; the offset is context.
+    render: (row) => <Time value={value(row)} stacked />,
   };
 }

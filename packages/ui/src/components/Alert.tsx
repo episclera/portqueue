@@ -1,5 +1,7 @@
 import React from 'react';
-import styled, { css } from 'styled-components';
+import styled from 'styled-components';
+import type { DefaultTheme } from 'styled-components';
+import { ErrorIcon, InfoIcon, SuccessIcon, WarningIcon } from '../icons';
 
 export type AlertType = 'info' | 'success' | 'warning' | 'error';
 
@@ -12,32 +14,19 @@ export interface AlertProps {
   children?: React.ReactNode;
 }
 
-const ICONS: Record<AlertType, string> = {
-  info: 'ℹ️',
-  success: '✅',
-  warning: '⚠️',
-  error: '⛔',
+const ICONS: Record<AlertType, React.ComponentType> = {
+  info: InfoIcon,
+  success: SuccessIcon,
+  warning: WarningIcon,
+  error: ErrorIcon,
 };
 
-const typeStyles = (type: AlertType): ReturnType<typeof css> => {
-  switch (type) {
-    case 'success':
-      return css`
-        background: ${(p) => p.theme.color.success}1f;
-      `;
-    case 'warning':
-      return css`
-        background: ${(p) => p.theme.color.warning}1f;
-      `;
-    case 'error':
-      return css`
-        background: ${(p) => p.theme.color.danger}1f;
-      `;
-    default:
-      return css`
-        background: ${(p) => p.theme.color.info}1f;
-      `;
-  }
+/** The banner's tint and its icon are the same semantic colour, at different strengths. */
+const TONE: Record<AlertType, (t: DefaultTheme) => string> = {
+  info: (t) => t.color.info,
+  success: (t) => t.color.success,
+  warning: (t) => t.color.warning,
+  error: (t) => t.color.danger,
 };
 
 const Root = styled.div<{ $type: AlertType }>`
@@ -49,13 +38,17 @@ const Root = styled.div<{ $type: AlertType }>`
   color: ${(p) => p.theme.color.text};
   font-size: 14px;
   line-height: 1.5;
-  ${(p) => typeStyles(p.$type)}
+  /* The same semantic colour as the icon, at 12% — a hint of tint, never a fill. */
+  background: ${(p) => TONE[p.$type](p.theme)}1f;
 `;
 
-const Icon = styled.span`
+const Icon = styled.span<{ $type: AlertType }>`
   flex: 0 0 auto;
+  display: inline-flex;
   font-size: 16px;
   line-height: 1.4;
+  /* The glyph carries the semantic colour; the banner behind it only hints at it. */
+  color: ${(p) => TONE[p.$type](p.theme)};
 `;
 
 const Content = styled.div`
@@ -77,7 +70,7 @@ const Action = styled.div`
   margin-left: ${(p) => p.theme.space(2)};
 `;
 
-/** Tinted banner keyed by `type`, with an emoji icon, optional title/message and a right-side action. */
+/** Tinted banner keyed by `type`, with an icon, optional title/message and a right-side action. */
 export function Alert({
   type = 'info',
   title,
@@ -87,9 +80,14 @@ export function Alert({
   children,
 }: AlertProps): React.ReactElement {
   const body = children ?? message;
+  const TypeIcon = ICONS[type];
   return (
     <Root $type={type} role="alert">
-      {showIcon ? <Icon aria-hidden>{ICONS[type]}</Icon> : null}
+      {showIcon ? (
+        <Icon $type={type} aria-hidden>
+          <TypeIcon />
+        </Icon>
+      ) : null}
       <Content>
         {title !== undefined ? <Title>{title}</Title> : null}
         {body !== undefined && body !== null ? <Message>{body}</Message> : null}

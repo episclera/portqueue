@@ -14,6 +14,13 @@ export default {
     // styled-components is CJS with the styled() fn on `.default`; ts-jest's ESM mode doesn't
     // apply default-interop, so route it through a shim that unwraps it (see the shim's header).
     '^styled-components$': '<rootDir>/src/test-support/styled-components-shim.mjs',
+    // @ant-design/icons resolves to its untranspiled `es/` build, which Jest won't transform
+    // (node_modules is not in `transform`). Point it at the CJS build instead — Vite picks the
+    // ESM one for the real bundle, so this only affects tests. The second rule is needed because
+    // that CJS build still deep-requires one ESM path (`@ant-design/colors/es/generate`), so any
+    // `es/` reach into an @ant-design package is rewritten to its `lib/` twin.
+    '^@ant-design/icons$': '<rootDir>/../../node_modules/@ant-design/icons/lib/index.js',
+    '^@ant-design/([^/]+)/es/(.*)$': '<rootDir>/../../node_modules/@ant-design/$1/lib/$2',
     // Stub stylesheet imports (jsdom can't parse CSS and we don't assert on it).
     '\\.(css|less|scss)$': '<rootDir>/src/test-support/style-stub.js',
     // NodeNext ESM requires .js extensions on relative imports; strip them for ts-jest.

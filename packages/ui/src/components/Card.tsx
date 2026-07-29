@@ -61,7 +61,7 @@ export interface CardHeaderProps {
   subtitle?: React.ReactNode;
   /** Trailing content (actions, badges). */
   extra?: React.ReactNode;
-  /** Leading emoji icon. */
+  /** Leading icon. */
   icon?: React.ReactNode;
 }
 

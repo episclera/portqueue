@@ -17,6 +17,7 @@ import {
   Card,
   Col,
   Content,
+  CopyButton,
   Inline,
   Mono,
   PageHeader,
@@ -320,13 +321,7 @@ export function JobDetailPage(): React.ReactElement {
             <MonoTitle level={4} as="span">
               {truncate(j.id, 14, 8)}
             </MonoTitle>
-            <Button
-              size="sm"
-              variant="text"
-              icon={ACTIONS_CONFIG.copy.icon}
-              onClick={() => void navigator.clipboard?.writeText(j.id)}
-              aria-label="Copy job id"
-            />
+            <CopyButton value={j.id} label="job id" />
           </Inline>
         }
         subtitle={

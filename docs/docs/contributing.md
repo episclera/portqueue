@@ -76,4 +76,6 @@ Meet the people behind it on the [Team](./team.mdx) page.
 
 When implementing anything user-facing — the dashboard, docs, or shared `@portqueue/ui`
 components — consult the [Brandbook](./brandbook.mdx) first. It's the source of truth for the
-palette, typography, tone, and component style, so contributions stay visually consistent.
+palette, typography, iconography, tone, and component style, so contributions stay visually
+consistent. Icons come from `@portqueue/ui`'s curated `src/icons.ts` re-export of
+`@ant-design/icons` — never emoji, and never a direct import of the icon package.

@@ -7,7 +7,7 @@
  * the docs that show how.
  */
 import React from 'react';
-import { Alert, Button, Stack, Text } from '@portqueue/ui';
+import { Alert, Button, OpenIcon, Stack, Text } from '@portqueue/ui';
 
 /** Where the docs live, so an empty state can point at the page that fixes it. */
 const DOCS_BASE = 'https://episclera.github.io/portqueue/docs';
@@ -89,7 +89,7 @@ export function EmptyState({
           {hint}{' '}
           {docsHref ? (
             <a href={docsHref} target="_blank" rel="noreferrer noopener">
-              {docsLabel} ↗
+              {docsLabel} <OpenIcon aria-hidden />
             </a>
           ) : null}
         </Text>

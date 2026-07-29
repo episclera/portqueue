@@ -1,8 +1,7 @@
 /** Search box with the magnifier inside the field. Debounced so typing doesn't spam the URL. */
 import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { Input } from '@portqueue/ui';
-import { ACTIONS_CONFIG } from '../constants/labels';
+import { CloseIcon, Input, SearchIcon } from '@portqueue/ui';
 
 export interface SearchInputProps {
   value: string;
@@ -19,7 +18,7 @@ const Wrapper = styled.div`
   max-width: 100%;
 `;
 
-const Icon = styled.span`
+const Icon = styled(SearchIcon)`
   position: absolute;
   top: 50%;
   left: 10px;
@@ -76,7 +75,7 @@ export function SearchInput({
 
   return (
     <Wrapper>
-      <Icon aria-hidden>{ACTIONS_CONFIG.search.icon}</Icon>
+      <Icon aria-hidden />
       <Field
         inputSize="sm"
         value={draft}
@@ -93,7 +92,7 @@ export function SearchInput({
             onChange('');
           }}
         >
-          ✕
+          <CloseIcon aria-hidden />
         </Clear>
       ) : null}
     </Wrapper>

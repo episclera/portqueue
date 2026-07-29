@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useMemo, useRef, useStat
 import styled, { keyframes } from 'styled-components';
 import type { DefaultTheme } from 'styled-components';
 import { Portal } from '../overlay/Portal';
+import { ErrorIcon, InfoIcon, SuccessIcon, WarningIcon } from '../icons';
 
 export type ToastKind = 'success' | 'error' | 'info' | 'warning';
 
@@ -20,11 +21,11 @@ export interface ToastApi {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-const ICON: Record<ToastKind, string> = {
-  success: '✅',
-  error: '⛔',
-  info: 'ℹ️',
-  warning: '⚠️',
+const ICON: Record<ToastKind, React.ComponentType> = {
+  success: SuccessIcon,
+  error: ErrorIcon,
+  info: InfoIcon,
+  warning: WarningIcon,
 };
 
 const slideIn = keyframes`
@@ -69,6 +70,14 @@ const Item = styled.div<{ $kind: ToastKind }>`
   animation: ${slideIn} ${(p) => p.theme.motion.base};
 `;
 
+/** The icon and the left border share the toast's semantic colour. */
+const Glyph = styled.span<{ $kind: ToastKind }>`
+  display: inline-flex;
+  flex: none;
+  font-size: 15px;
+  color: ${(p) => ACCENT[p.$kind](p.theme)};
+`;
+
 /**
  * Lightweight toast host — the styled-components replacement for antd's `App` message API.
  * Wrap the app once, then call `useToast()` for `success`/`error`/`info`/`warning`.
@@ -107,12 +116,17 @@ export function ToastProvider({
       {children}
       <Portal>
         <Viewport role="status" aria-live="polite">
-          {toasts.map((t) => (
-            <Item key={t.id} $kind={t.kind}>
-              <span aria-hidden>{ICON[t.kind]}</span>
-              <span>{t.content}</span>
-            </Item>
-          ))}
+          {toasts.map((t) => {
+            const KindIcon = ICON[t.kind];
+            return (
+              <Item key={t.id} $kind={t.kind}>
+                <Glyph $kind={t.kind} aria-hidden>
+                  <KindIcon />
+                </Glyph>
+                <span>{t.content}</span>
+              </Item>
+            );
+          })}
         </Viewport>
       </Portal>
     </ToastContext.Provider>

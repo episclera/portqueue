@@ -1,13 +1,32 @@
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import CodeBlock from '@theme/CodeBlock';
 import styled from 'styled-components';
+import {
+  ArrowRightOutlined,
+  ClearOutlined,
+  ClockCircleOutlined,
+  DatabaseOutlined,
+  DashboardOutlined,
+  GlobalOutlined,
+  SafetyCertificateOutlined,
+} from '@ant-design/icons';
 
-const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta: string }[] = [
+/**
+ * The docs site has no dependency on `@portqueue/ui`, so it imports `@ant-design/icons`
+ * directly (the dashboard goes through that package's curated `icons.ts` re-export instead).
+ */
+const FEATURES: {
+  icon: ComponentType;
+  title: string;
+  body: ReactNode;
+  to: string;
+  cta: string;
+}[] = [
   {
-    icon: '🌐',
+    icon: GlobalOutlined,
     title: 'Scales to Many Servers',
     body: (
       <>
@@ -21,7 +40,7 @@ const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta:
     cta: 'How it scales',
   },
   {
-    icon: '🗄️',
+    icon: DatabaseOutlined,
     title: 'Database Agnostic',
     body: (
       <>
@@ -34,28 +53,28 @@ const FEATURES: { icon: string; title: string; body: ReactNode; to: string; cta:
     cta: 'Pick a driver',
   },
   {
-    icon: '🖥️',
+    icon: DashboardOutlined,
     title: 'A Powerful Dashboard & CLI',
     body: 'A mountable React dashboard (plus a full CLI) to monitor and control both queues and instances live — pause, resume, retry, and watch throughput, with no third-party service.',
     to: '/docs/dashboard',
     cta: 'See the dashboard',
   },
   {
-    icon: '⏰',
+    icon: ClockCircleOutlined,
     title: 'Scheduling & Cron',
     body: 'Delayed jobs, fixed intervals, and cron with timezones — all through one addJob method.',
     to: '/docs/guides/scheduling',
     cta: 'Schedule jobs',
   },
   {
-    icon: '🛡️',
+    icon: SafetyCertificateOutlined,
     title: 'Fault-Tolerant & Observable',
     body: 'Automatic retries with backoff, stalled-job reclaim, liveness-aware fallback, and at-least-once delivery — with rich events and hooks for metrics and tracing.',
     to: '/docs/events-hooks/events',
     cta: 'Events & hooks',
   },
   {
-    icon: '🧹',
+    icon: ClearOutlined,
     title: 'Retention & Auto-Cleaning',
     body: 'Your table never fills up on its own. Pick a retention mode per queue or per job — keep the history forever, or delete after a TTL — and PortQueue does the cleanup in the background.',
     to: '/docs/guides/retention',
@@ -212,6 +231,7 @@ const FeatureIcon = styled.span`
   font-size: 1.75rem;
   margin-bottom: 0.5rem;
   display: block;
+  color: var(--primary-dark);
 `;
 
 const FeatureTitle = styled.div`
@@ -272,10 +292,14 @@ export default function Home(): ReactNode {
           <FeatureGrid>
             {FEATURES.map((f) => (
               <Feature key={f.title}>
-                <FeatureIcon aria-hidden>{f.icon}</FeatureIcon>
+                <FeatureIcon aria-hidden>
+                  <f.icon />
+                </FeatureIcon>
                 <FeatureTitle>{f.title}</FeatureTitle>
                 <FeatureBody>{f.body}</FeatureBody>
-                <FeatureLink to={f.to}>{f.cta} →</FeatureLink>
+                <FeatureLink to={f.to}>
+                  {f.cta} <ArrowRightOutlined aria-hidden />
+                </FeatureLink>
               </Feature>
             ))}
           </FeatureGrid>

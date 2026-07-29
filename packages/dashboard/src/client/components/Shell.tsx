@@ -9,9 +9,15 @@ import styled from 'styled-components';
 import {
   AppShell,
   Button,
+  DocsIcon,
+  GithubIcon,
   Header,
   Inline,
+  InstancesIcon,
   Logo,
+  MenuIcon,
+  OverviewIcon,
+  SchedulesIcon,
   ThemeSwitcher,
   Tooltip,
   type ThemeMode,
@@ -28,23 +34,23 @@ export interface ShellProps {
 interface NavItem {
   to: string;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   exact?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Overview', icon: '📊', exact: true },
-  { to: '/instances', label: 'Instances', icon: '🖥️' },
-  { to: '/schedules', label: 'Schedules', icon: '🗓️' },
+  { to: '/', label: 'Overview', icon: <OverviewIcon />, exact: true },
+  { to: '/instances', label: 'Instances', icon: <InstancesIcon /> },
+  { to: '/schedules', label: 'Schedules', icon: <SchedulesIcon /> },
 ];
 
 const HEADER_HEIGHT = 60;
-const SIDEBAR_WIDTH = 232;
+const SIDEBAR_WIDTH = 182;
 
 /** Sidebar footer links — docs site and repository, side by side. */
-const EXTERNAL_LINKS: { href: string; label: string; icon: string }[] = [
-  { href: 'https://episclera.github.io/portqueue/', label: 'Docs', icon: '📖' },
-  { href: 'https://github.com/episclera/portqueue', label: 'GitHub', icon: '🐙' },
+const EXTERNAL_LINKS: { href: string; label: string; icon: React.ReactNode }[] = [
+  { href: 'https://episclera.github.io/portqueue/', label: 'Docs', icon: <DocsIcon /> },
+  { href: 'https://github.com/episclera/portqueue', label: 'GitHub', icon: <GithubIcon /> },
 ];
 
 const Body = styled.div`
@@ -296,7 +302,7 @@ export function Shell({ onThemeChange, children }: ShellProps): React.ReactEleme
               aria-controls="portqueue-nav"
               onClick={() => setDrawerOpen((open) => !open)}
             >
-              <span aria-hidden>☰</span>
+              <MenuIcon aria-hidden />
             </Burger>
             <Link to="/" aria-label="Home" style={{ display: 'inline-flex' }}>
               <Logo variant="full" size={30} />

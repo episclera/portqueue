@@ -3,12 +3,28 @@
  * raw enum value: it looks the label up here, so casing and wording stay consistent (Pascal
  * case, never SCREAMING_CASE) and there is a single place to change them.
  */
+import type { ReactNode } from 'react';
+import {
+  AddIcon,
+  BulkIcon,
+  CancelIcon,
+  CloneIcon,
+  CopyIcon,
+  FiltersIcon,
+  OpenIcon,
+  PauseIcon,
+  RefreshIcon,
+  RemoveIcon,
+  ResumeIcon,
+  RetryIcon,
+  SearchIcon,
+} from '@portqueue/ui';
 import { JobStatus, PauseMode } from '../queries/enums';
 
 export interface DisplayConfig {
   label: string;
-  /** Optional emoji, used where an icon reads better than text. */
-  icon?: string;
+  /** Optional icon element, used where an icon reads better than text. */
+  icon?: ReactNode;
 }
 
 /** The synthetic status a job takes on when its lock has lapsed (not a core JobStatus). */
@@ -98,31 +114,31 @@ export interface ToggleConfig extends DisplayConfig {
 export const LIVE_TOGGLE_CONFIG = {
   live: {
     label: 'Pause',
-    icon: '⏸️',
+    icon: <PauseIcon />,
     hint: 'Auto-updates are on (every 15s) — pause to freeze the data',
   },
   paused: {
     label: 'Resume',
-    icon: '▶️',
+    icon: <ResumeIcon />,
     hint: 'Auto-updates are paused — data is frozen until you resume',
   },
 } satisfies Record<string, ToggleConfig>;
 
 /** Row / bulk action icons, so every table spells an action the same way. */
 export const ACTIONS_CONFIG = {
-  retry: { label: 'Retry', icon: '🔄' },
-  cancel: { label: 'Cancel', icon: '🚫' },
-  remove: { label: 'Remove', icon: '🗑️' },
-  pause: { label: 'Pause', icon: '⏸️' },
-  resume: { label: 'Resume', icon: '▶️' },
-  open: { label: 'Open', icon: '↗️' },
-  add: { label: 'Add job', icon: '➕' },
-  filters: { label: 'Filters', icon: '⚙️' },
-  search: { label: 'Search', icon: '🔍' },
-  refresh: { label: 'Refresh', icon: '🔄' },
-  copy: { label: 'Copy', icon: '📋' },
-  clone: { label: 'Clone', icon: '📄' },
-  bulk: { label: 'Bulk actions', icon: '☰' },
+  retry: { label: 'Retry', icon: <RetryIcon /> },
+  cancel: { label: 'Cancel', icon: <CancelIcon /> },
+  remove: { label: 'Remove', icon: <RemoveIcon /> },
+  pause: { label: 'Pause', icon: <PauseIcon /> },
+  resume: { label: 'Resume', icon: <ResumeIcon /> },
+  open: { label: 'Open', icon: <OpenIcon /> },
+  add: { label: 'Add job', icon: <AddIcon /> },
+  filters: { label: 'Filters', icon: <FiltersIcon /> },
+  search: { label: 'Search', icon: <SearchIcon /> },
+  refresh: { label: 'Refresh', icon: <RefreshIcon /> },
+  copy: { label: 'Copy', icon: <CopyIcon /> },
+  clone: { label: 'Clone', icon: <CloneIcon /> },
+  bulk: { label: 'Bulk actions', icon: <BulkIcon /> },
 } satisfies Record<string, DisplayConfig>;
 
 /** Pause state of a queue-like row, as a single labelled state. */

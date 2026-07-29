@@ -2,8 +2,8 @@
 id: brandbook
 title: Brandbook
 sidebar_label: Brandbook
-description: The PortQueue brandbook — the shared color palette, design tokens, and usage rules that keep the dashboard and docs visually consistent.
-keywords: [portqueue, brandbook, design tokens, color palette, dashboard, contributing, ui]
+description: The PortQueue brandbook — the shared color palette, design tokens, iconography, and usage rules that keep the dashboard and docs visually consistent.
+keywords: [portqueue, brandbook, design tokens, color palette, icons, dashboard, contributing, ui]
 ---
 
 import { Swatch, SwatchRow } from '@site/src/components/Swatch';
@@ -71,6 +71,44 @@ with `--text` (dark) for on-colour text, never white.
     note="Optional neutral informational tone: tooltips, new-feature badges, neutral notices."
   />
 </SwatchRow>
+
+## Iconography
+
+Icons are real SVGs from [`@ant-design/icons`](https://ant.design/components/icon) (v6) —
+**never emoji**. Emoji render as a different picture on every platform, carry colours that
+aren't in the palette, and can't inherit the theme, so they are not used anywhere in the
+dashboard or these docs.
+
+- **One curated set.** `@portqueue/ui` re-exports the icons the design system uses from
+  `src/icons.ts` under intent-named aliases — `RetryIcon`, `PauseIcon`, `RemoveIcon`,
+  `SearchIcon` — and components import from there, never from `@ant-design/icons` directly.
+  Adding an icon means adding a line to that file, which keeps the bundle to what's actually
+  used and stops the same idea being drawn two ways. The docs site is the one exception: it
+  has no dependency on `@portqueue/ui` and imports the icon package directly.
+- **One icon per action.** The dashboard's action icons live in one map
+  (`constants/labels.tsx`), so Retry is the same glyph in a row, a bulk menu and a detail
+  header.
+- **Icons inherit.** Every icon is sized in `em` and filled with `currentColor`, so it takes
+  the size and colour of the text beside it. Colour an icon only where the colour carries the
+  same meaning the palette gives it — semantic tones on alerts and toasts, `--danger` on a
+  destructive action.
+- **Decorative by default.** An icon beside a text label is `aria-hidden`; an icon-only
+  control carries the name in `aria-label` (and usually a tooltip).
+
+## Feedback & affordances
+
+A control that changes nothing visible has not told the user anything. Two patterns cover most
+of it, and both live in `@portqueue/ui` so every surface behaves the same way.
+
+- **An action confirms itself.** `CopyButton` swaps its icon for a green tick for one second
+  after a successful copy, and says `Couldn't copy — press ⌘C` when the clipboard API is
+  missing (any insecure origin) or refuses. Never let a copy look identical before and after.
+- **The confirmation is announced, not just drawn.** The state also lands in a `role="status"`
+  region — a colour change is no feedback at all to a screen-reader user.
+- **Clipped content shows it's clipped.** A table wider than its card sits in `ScrollShadow`,
+  which fades whichever edge has more content behind it: right-only at the start, both
+  mid-scroll, left-only at the end, and neither when everything fits. A bare `overflow-x: auto`
+  reads as a truncated table rather than a scrollable one.
 
 ## Usage rules
 

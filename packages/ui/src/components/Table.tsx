@@ -1,6 +1,7 @@
 import React from 'react';
 import styled, { css } from 'styled-components';
 import { Checkbox } from './Checkbox';
+import { EmptyIcon } from '../icons';
 
 export type TableAlign = 'left' | 'right' | 'center';
 export type TableSize = 'sm' | 'md';
@@ -116,6 +117,17 @@ const EmptyCell = styled.td<{ $size: TableSize }>`
   border-bottom: 1px solid ${(p) => p.theme.color.border};
 `;
 
+/**
+ * The empty-state icon, sized up to read as a small illustration and centred on its own line.
+ * The wrapper does the block-level layout: the icon package injects `.anticon { display:
+ * inline-flex }` at first render, which would race a `display` set on the icon itself.
+ */
+const EmptyGlyph = styled.div`
+  margin-bottom: ${(p) => p.theme.space(2)};
+  font-size: 28px;
+  line-height: 1;
+`;
+
 const sizeToPx = (v: number | string | undefined): string | undefined =>
   v === undefined ? undefined : typeof v === 'number' ? `${v}px` : v;
 
@@ -196,7 +208,10 @@ export function Table<T>({
 }: TableProps<T>): React.ReactElement {
   const emptyNode = empty ?? (
     <>
-      <span aria-hidden>📭</span> No data
+      <EmptyGlyph aria-hidden>
+        <EmptyIcon />
+      </EmptyGlyph>
+      No data
     </>
   );
   const allColumns = rowSelection

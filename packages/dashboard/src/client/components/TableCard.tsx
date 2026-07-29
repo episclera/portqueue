@@ -11,7 +11,7 @@
  */
 import React, { useRef, useState } from 'react';
 import styled from 'styled-components';
-import { Button, Card, Pagination, SkeletonText } from '@portqueue/ui';
+import { Button, Card, CloseIcon, Pagination, ScrollShadow, SkeletonText } from '@portqueue/ui';
 import { ACTIONS_CONFIG } from '../constants/labels';
 import { PAGE_SIZE } from '../queries/use-table-params';
 import { SearchInput } from './SearchInput';
@@ -39,7 +39,7 @@ export interface TableCardProps {
     defs: FilterDef[];
     values: Record<string, string[] | undefined>;
     onChange: (values: Record<string, string[]>) => void;
-    /** Remove a single applied value — what a chip's ✕ does. */
+    /** Remove a single applied value — what a chip's close button does. */
     onClear: (key: string, value: string) => void;
   };
   /** Leading control on the toolbar's right side — e.g. the bulk-actions button. */
@@ -117,12 +117,6 @@ const ChipClear = styled.button`
     color: ${(p) => p.theme.color.text};
     background: ${(p) => p.theme.color.border};
   }
-`;
-
-/** Tables run edge to edge; only the horizontal overflow is scrollable. */
-const TableScroll = styled.div`
-  width: 100%;
-  overflow-x: auto;
 `;
 
 const Footer = styled.div`
@@ -215,7 +209,7 @@ export function TableCard({
                 aria-label={`Remove the ${chip.label} filter ${chip.valueLabel}`}
                 onClick={() => filters.onClear(chip.key, chip.value)}
               >
-                ✕
+                <CloseIcon aria-hidden />
               </ChipClear>
             </Chip>
           ))}
@@ -231,7 +225,8 @@ export function TableCard({
           <SkeletonText rows={6} />
         </Padded>
       ) : (
-        <TableScroll>{children}</TableScroll>
+        // Tables run edge to edge; the fades mark a table wider than the card as scrollable.
+        <ScrollShadow>{children}</ScrollShadow>
       )}
 
       <Footer>

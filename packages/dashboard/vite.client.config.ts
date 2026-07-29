@@ -6,7 +6,7 @@
  * and gets bundled here, never published).
  *
  * **One chunk, on purpose.** Route-level splitting is possible — the assets route serves whatever
- * Vite emits — but it buys little and costs something real here. The whole SPA is ~390kB / 125kB
+ * Vite emits — but it buys little and costs something real here. The whole SPA is ~436kB / 138kB
  * gzipped, served from the same origin as the API by a middleware that now marks content-hashed
  * assets `immutable`, so it is fetched once per deploy by an audience of operators who keep the
  * tab open. Splitting would trade that single request for a waterfall on every first navigation

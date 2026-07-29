@@ -37,6 +37,7 @@
     "@portqueue/core": "^0.1.0"
   },
   "devDependencies": {
+    "@ant-design/icons": "^6.3.2",
     "@portqueue/core": "*",
     "@portqueue/eslint-config": "*",
     "@portqueue/ui": "*",

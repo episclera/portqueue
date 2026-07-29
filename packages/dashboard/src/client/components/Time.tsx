@@ -20,20 +20,55 @@
  * The label names the viewer's UTC offset, so it survives being screenshotted into a chat. The
  * machine-readable UTC instant rides along on `<time dateTime>`, and the native `title` shows it
  * on hover for anyone comparing against a UTC log.
+ *
+ * `stacked` splits those two facts onto two lines — the instant, then the offset in a lighter
+ * grey. Table columns use it: the instant is what a reader scans down a column, and the offset is
+ * the same on every row, so giving it equal weight on one long line only makes the column wider
+ * and harder to read. Running text keeps the inline form.
  */
 import React from 'react';
-import { formatDateTime } from './format';
+import styled from 'styled-components';
+import { formatDateTime, formatDateTimeParts } from './format';
 
 export interface TimeProps {
   /** An ISO timestamp. `null`/`undefined` renders the em dash the rest of the UI uses. */
   value: string | null | undefined;
+  /**
+   * Put the timezone on its own line below the instant, de-emphasised. For table cells; leave it
+   * off for a timestamp inside a sentence, where a line break would read as a new thought.
+   */
+  stacked?: boolean;
 }
 
-export function Time({ value }: TimeProps): React.ReactElement {
+/** Two lines that stay tight together — they are one value, not two rows. */
+const Stack = styled.time`
+  display: inline-block;
+  line-height: 1.3;
+`;
+
+const Offset = styled.span`
+  display: block;
+  color: ${(p) => p.theme.color.textFaint};
+  font-size: 12px;
+`;
+
+export function Time({ value, stacked = false }: TimeProps): React.ReactElement {
   const ms = value ? new Date(value).getTime() : Number.NaN;
   if (Number.isNaN(ms)) return <>—</>;
 
   const iso = new Date(ms).toISOString();
+
+  if (stacked) {
+    // Non-null: `ms` is already known to parse.
+    const { instant, offset } = formatDateTimeParts(ms)!;
+    return (
+      <Stack dateTime={iso} title={iso}>
+        {instant}
+        <Offset>{offset}</Offset>
+      </Stack>
+    );
+  }
+
   return (
     <time dateTime={iso} title={iso}>
       {formatDateTime(ms)}

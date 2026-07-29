@@ -3,6 +3,7 @@ import styled, { css } from 'styled-components';
 import { Portal } from '../overlay/Portal';
 import { useAnchoredLayer } from '../overlay/useAnchoredLayer';
 import { useDismiss } from '../overlay/useDismiss';
+import { CaretDownIcon, CheckIcon } from '../icons';
 
 export type SelectSize = 'sm' | 'md' | 'lg';
 
@@ -75,9 +76,9 @@ const Trigger = styled.button<{ $size: SelectSize; $open: boolean; $placeholder:
   }
 `;
 
-const Caret = styled.span<{ $open: boolean }>`
+const Caret = styled(CaretDownIcon)<{ $open: boolean }>`
   flex: none;
-  font-size: 0.75em;
+  font-size: 11px;
   color: ${(p) => p.theme.color.textMuted};
   transition: transform ${(p) => p.theme.motion.fast};
   transform: rotate(${(p) => (p.$open ? '180deg' : '0deg')});
@@ -171,9 +172,7 @@ export function Select<T extends string | number>({
         onClick={() => setOpen((prev) => !prev)}
       >
         <Label>{selected ? selected.label : placeholder}</Label>
-        <Caret $open={open} aria-hidden>
-          ▾
-        </Caret>
+        <Caret $open={open} aria-hidden />
       </Trigger>
       {open && position ? (
         <Portal>
@@ -196,7 +195,7 @@ export function Select<T extends string | number>({
                   onClick={() => handleSelect(option.value)}
                 >
                   <span>{option.label}</span>
-                  {isSelected ? <span aria-hidden>✓</span> : null}
+                  {isSelected ? <CheckIcon aria-hidden /> : null}
                 </Item>
               );
             })}

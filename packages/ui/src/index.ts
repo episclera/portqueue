@@ -15,6 +15,8 @@ export type { ToastApi, ToastKind } from './providers/ToastProvider';
 // Primitives
 export { Button } from './components/Button';
 export type { ButtonProps, ButtonVariant, ButtonSize } from './components/Button';
+export { CopyButton } from './components/CopyButton';
+export type { CopyButtonProps } from './components/CopyButton';
 export { IconButton } from './components/IconButton';
 export { Checkbox } from './components/Checkbox';
 export { Card, CardHeader, CardBody, Panel } from './components/Card';
@@ -69,6 +71,8 @@ export { Statistic } from './components/Statistic';
 export type { StatisticProps, StatisticTone } from './components/Statistic';
 export { Skeleton, SkeletonText } from './components/Skeleton';
 export type { SkeletonProps, SkeletonTextProps } from './components/Skeleton';
+export { ScrollShadow } from './components/ScrollShadow';
+export type { ScrollShadowProps } from './components/ScrollShadow';
 export { Alert } from './components/Alert';
 export type { AlertProps, AlertType } from './components/Alert';
 
@@ -88,3 +92,6 @@ export type { HeaderProps, PageHeaderProps } from './layout/AppLayout';
 export { Logo, type LogoProps } from './components/Logo';
 export { StatusTag, type StatusTagProps } from './components/StatusTag';
 export { ThemeSwitcher, useThemeMode, type ThemeMode } from './components/ThemeSwitcher';
+
+// Icons — the allowlisted `@ant-design/icons` set every surface draws from.
+export * from './icons';

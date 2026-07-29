@@ -1,5 +1,6 @@
 import React from 'react';
 import styled, { css } from 'styled-components';
+import { LoadingIcon } from '../icons';
 
 export type ButtonVariant = 'primary' | 'default' | 'ghost' | 'danger' | 'text';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -12,7 +13,7 @@ export interface ButtonProps
   size?: ButtonSize;
   block?: boolean;
   loading?: boolean;
-  /** Leading content — typically an emoji icon. */
+  /** Leading content — an icon element from `@portqueue/ui`'s icon set. */
   icon?: React.ReactNode;
 }
 
@@ -106,7 +107,7 @@ const StyledButton = styled.button<{
   }
 `;
 
-/** Bespoke button — variants, sizes, optional emoji icon, and link mode via `href`. */
+/** Bespoke button — variants, sizes, optional leading icon, and link mode via `href`. */
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
     variant = 'default',
@@ -133,7 +134,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       aria-busy={loading || undefined}
       {...rest}
     >
-      {loading ? <span aria-hidden>⏳</span> : icon ? <span aria-hidden>{icon}</span> : null}
+      {loading ? (
+        // `spin` is the icon set's own animation, so a busy button needs no keyframes here.
+        <LoadingIcon spin aria-hidden />
+      ) : icon ? (
+        <span aria-hidden>{icon}</span>
+      ) : null}
       {children}
     </StyledButton>
   );

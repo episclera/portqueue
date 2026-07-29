@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { Portal } from '../overlay/Portal';
 import { useAnchoredLayer } from '../overlay/useAnchoredLayer';
 import { useDismiss } from '../overlay/useDismiss';
+import { ConfirmIcon } from '../icons';
 
 export interface PopconfirmProps {
   title: React.ReactNode;
@@ -54,6 +55,13 @@ const Title = styled.div`
   font-size: 14px;
   font-weight: 600;
   color: ${(p) => p.theme.color.text};
+`;
+
+/** The question mark leads the prompt in the caution colour, since every use is a confirm. */
+const TitleIcon = styled(ConfirmIcon)`
+  flex: none;
+  margin-top: 2px;
+  color: ${(p) => p.theme.color.warning};
 `;
 
 const Description = styled.div`
@@ -114,7 +122,7 @@ export const Popconfirm = ({
         <Portal>
           <Popover ref={layerRef} role="dialog" $top={position.top} $left={position.left}>
             <Title>
-              <span aria-hidden>❓</span>
+              <TitleIcon aria-hidden />
               <span>{title}</span>
             </Title>
             {description != null ? <Description>{description}</Description> : null}

@@ -42,20 +42,34 @@ export function utcOffsetLabel(minutesAheadOfUtc: number): string {
 }
 
 /**
- * The dashboard's only timestamp format: `12 Mar. 2026 13:23:01 UTC+2`, in the viewer's own
- * timezone, with that timezone's offset named.
+ * The dashboard's only timestamp format, split into the two things it says: the instant
+ * (`12 Mar. 2026 13:23:01`) and the timezone it is expressed in (`UTC+2`).
+ *
+ * Kept as parts because a table cell stacks them on two lines — the instant is what you read, the
+ * offset is context — while running text wants the one-line form. Both spellings come from here,
+ * so a stacked cell and an inline label can never drift apart.
  *
  * Day, hour, minute and second are zero-padded, so every timestamp is the same width and a column
  * of them lines up. Every field is read with the local `Date` getters — no locale, no `Intl`, and
  * nothing that varies between two people looking at the same row.
  */
-export function formatDateTime(ms: number): string {
+export function formatDateTimeParts(ms: number): { instant: string; offset: string } | null {
   const d = new Date(ms);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return null;
   const date = `${pad(d.getDate())} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
   const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   // `getTimezoneOffset()` counts minutes *behind* UTC, so east of Greenwich is negative.
-  return `${date} ${time} ${utcOffsetLabel(-d.getTimezoneOffset())}`;
+  return { instant: `${date} ${time}`, offset: utcOffsetLabel(-d.getTimezoneOffset()) };
+}
+
+/**
+ * The same timestamp on one line: `12 Mar. 2026 13:23:01 UTC+2`, in the viewer's own timezone,
+ * with that timezone's offset named.
+ */
+export function formatDateTime(ms: number): string {
+  const parts = formatDateTimeParts(ms);
+  if (!parts) return '—';
+  return `${parts.instant} ${parts.offset}`;
 }
 
 /** Human-readable duration between two ISO timestamps. */

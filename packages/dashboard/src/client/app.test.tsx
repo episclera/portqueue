@@ -10,6 +10,8 @@
 import '@testing-library/jest-dom';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { createHarness, page, type StubOptions } from '../test-support/render';
+import { DATE_COLUMN_MIN_WIDTH } from './components/table-columns';
+import { formatDateTimeParts } from './components/format';
 
 const QUEUES = page(
   [
@@ -102,6 +104,25 @@ describe('app shell', () => {
   it('never renders a read-only banner — the mode no longer exists', () => {
     harness().renderApp('#/');
     expect(screen.queryByText(/Read-only mode/)).not.toBeInTheDocument();
+  });
+
+  it('draws its icons as SVGs, never as emoji', () => {
+    // The chrome used to use emoji glyphs, which rendered as a different picture per platform
+    // and couldn't take the theme colour. Every icon is now an inline SVG inheriting
+    // currentColor, so a stray emoji anywhere in the shell is a regression.
+    harness().renderApp('#/');
+
+    const nav = screen.getByRole('navigation', { name: 'Main navigation' });
+    // One per nav item (Overview / Instances / Schedules) plus the two footer links.
+    expect(nav.querySelectorAll('svg[data-icon]').length).toBeGreaterThanOrEqual(5);
+    // Icon-only controls keep their name in aria-label, not in a glyph.
+    expect(
+      screen.getByLabelText('Toggle navigation').querySelector('svg[data-icon]'),
+    ).not.toBeNull();
+
+    expect(document.body.textContent ?? '').not.toMatch(
+      /[\u{1F300}-\u{1FAFF}]|[\u{2600}-\u{27BF}]|\u{FE0F}/u,
+    );
   });
 });
 
@@ -200,8 +221,23 @@ describe('queue detail page', () => {
     await screen.findByText('Results (42)');
     for (const title of ['Created At', 'Start After', 'Completed At', 'Failed At']) {
       const header = screen.getByText(title).closest('th');
-      expect(header).toHaveStyle({ minWidth: '220px' });
+      // Asserted against the constant, not a literal: what matters is that every date column
+      // shares one floor, not what this month's number happens to be.
+      expect(header).toHaveStyle({ minWidth: `${DATE_COLUMN_MIN_WIDTH}px` });
     }
+  });
+
+  it('stacks the timezone under the instant in every date cell', async () => {
+    harness().renderApp('#/queues/emails');
+
+    await screen.findByText('Results (42)');
+    const { instant, offset } = formatDateTimeParts(Date.parse(JOB.createdAt))!;
+
+    // The narrow date columns rely on this: the instant on one line, the offset below it. A cell
+    // rendering the one-line form would overflow 170px and wrap mid-timestamp.
+    const cell = screen.getAllByTitle(JOB.createdAt)[0]!;
+    expect(cell).toHaveTextContent(`${instant}${offset}`);
+    expect(within(cell).getByText(offset)).toBeInTheDocument();
   });
 
   it('reveals bulk actions only once a row is selected', async () => {

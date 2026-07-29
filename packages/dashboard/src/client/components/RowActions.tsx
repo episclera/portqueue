@@ -7,6 +7,7 @@ import React from 'react';
 import styled from 'styled-components';
 import {
   Button,
+  CaretDownIcon,
   Dropdown,
   IconButton,
   Inline,
@@ -100,7 +101,7 @@ export function BulkActionsButton({
   return (
     <Dropdown items={items}>
       <Button size="sm" icon={ACTIONS_CONFIG.bulk.icon}>
-        {ACTIONS_CONFIG.bulk.label} ({count}) <span aria-hidden>▾</span>
+        {ACTIONS_CONFIG.bulk.label} ({count}) <CaretDownIcon aria-hidden />
       </Button>
     </Dropdown>
   );
