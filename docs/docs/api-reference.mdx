@@ -287,17 +287,11 @@ The handle `pq.createQueue({ name, ...options })` returns. That call **declares*
 process — the `handler` that processes its jobs, the claim tuning around it, and the default job
 options, retention policy and hooks its jobs inherit.
 
-**It has no methods.** It is a registration, not a control surface; everything you
-_do_ with a queue is a method on `pq` that takes `queue` as a named argument. Two reasons:
-
-- **Nothing silently escapes its scope.** `queue.getJob({ jobId })` forwarded to an unscoped read, so
-  asking one queue's handle for another queue's job returned it — typed as _this_ queue's payload.
-  With one `pq.getJob({ jobId })` there is no scope to be wrong about.
-- **One import, one object.** Code that touches five queues passes five names to one `pq` rather than
-  threading five handles through its own plumbing.
-
-Keeping the handle is therefore optional — `pq.addJob({ queue: 'emails', … })` works from a name
-alone, and a process that only produces need not declare the queue at all.
+Claiming starts once `pq.init()` has run and the queue isn't paused, and stops on shutdown. Control
+it with `pq.pauseQueue` / `pq.resumeQueue`, observe it through `pq.on(...)`, and tune it with the
+`limiter` / `dontAutoretryFor` fields of [CreateQueueOptions](#createqueueoptions). One handler per
+queue per process: a second `createQueue` for the same name throws, so raise `limiter.concurrency` to
+process more at once, or run another instance.
 
 <ul className="api-tree">
   <li>
@@ -307,19 +301,6 @@ alone, and a process that only produces need not declare the queue at all.
     </span>
   </li>
 </ul>
-
----
-
-## There is no Worker
-
-Consuming is a property of the queue, not a second object: `pq.createQueue({ name, handler })`
-declares the queue **and** processes it. Claiming starts once `pq.init()` has run and the queue isn't
-paused, and stops on shutdown, so there was never a lifecycle method worth exposing. Control
-processing with `pq.pauseQueue` / `pq.resumeQueue`, observe it through `pq.on(...)`, and tune it with
-the `limiter` / `dontAutoretryFor` fields of [CreateQueueOptions](#createqueueoptions).
-
-A queue is consumed by **one handler per process**: a second `createQueue` for the same name throws.
-Raise `limiter.concurrency` to process more at once, or run another instance.
 
 ---
 
