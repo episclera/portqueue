@@ -62,7 +62,7 @@ const SCHEDULE = {
   enabled: true,
 };
 
-const STATS = { counts: { ACTIVE: 2, RETRY: 0, FAILED: 1, COMPLETED: 8, STALLED: 0 } };
+const STATS = { counts: { ACTIVE: 2, RETRY: 0, FAILED: 1, COMPLETED: 8 } };
 
 const RESPONSES: Record<string, unknown> = {
   '/queues': QUEUES,

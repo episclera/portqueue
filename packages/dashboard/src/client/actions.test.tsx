@@ -22,7 +22,7 @@ const QUEUES = page([
   },
 ]);
 
-const STATS = { counts: { ACTIVE: 0, RETRY: 0, FAILED: 1, COMPLETED: 8, STALLED: 0 } };
+const STATS = { counts: { ACTIVE: 0, RETRY: 0, FAILED: 1, COMPLETED: 8 } };
 
 /** PENDING so both Cancel and Retry are enabled on the row. */
 const JOB = {
