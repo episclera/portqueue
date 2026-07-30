@@ -26,8 +26,9 @@ async function main(): Promise<void> {
   await pq.init();
   console.log(`Connected to Postgres and migrated schema (${connectionString}).`);
 
-  // One call declares the queue and consumes it: the `handler` is what makes this process a
-  // consumer. Omit it and the declaration is producer-only.
+  // One call declares the queue and consumes it: `handler` is required, because declaring a queue is
+  // declaring that this process processes it. A process that only produces skips `createQueue`
+  // entirely and calls `addJob` with the queue's name.
   const done = new Promise<void>((resolve) => {
     pq.createQueue<{ user: string }>({
       name: 'welcome',

@@ -81,9 +81,11 @@ so there is nothing to thread through your code.
 one handler per process. To _only_ enqueue, don't declare anything: `pq.addJob({ queue, data })` works
 from the queue's name alone.
 
-**Produce here, process there.** An API tier can enqueue and never process, while a worker tier
-declares the same queue with a handler and never enqueues — same code, different processes. See
-[Multi-server](./scale-horizontally.md).
+**One process or many — both are first class.** Running everything in a single process (your app, its
+handlers, the scheduler, the dashboard) is a perfectly good production setup, and the one to start
+with. If you'd rather split the roles you can: a process that declares nothing can still `addJob`, so
+an API tier can produce while a worker tier declares the same queue with a handler — same code,
+different processes. See [Multi-server](./scale-horizontally.md).
 
 **Name your queues with an enum.** `new PortQueue<QueueName>({ … })` threads a string enum (or
 literal union) of your queue names through every queue argument, so a typo is a compile error rather

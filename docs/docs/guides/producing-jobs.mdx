@@ -24,9 +24,12 @@ All producing goes through `pq` itself. Every method takes **one options object*
 named in it — and returns a **result object**.
 
 You do **not** need to declare a queue to produce onto it: `addJob` addresses it by name and creates
-its row on first use, which is why an API tier, the dashboard and the CLI can all enqueue without
-knowing anything about how the queue is processed. Declaring a queue with `pq.createQueue({ … })` is
-how a process takes on _processing_ it — see [Consuming jobs](./consuming-jobs.md).
+its row on first use, which is why a process that only produces, the dashboard and the CLI can all
+enqueue without knowing anything about how the queue is processed. Declaring a queue with
+`pq.createQueue({ … })` is how a process takes on _processing_ it — see
+[Consuming jobs](./consuming-jobs.md). Most apps do both from the same process, and that is a fine
+place to stay; splitting producers from consumers is available when your deployment wants it, not a
+prerequisite.
 
 ## Add a job
 
@@ -45,7 +48,7 @@ emailJob.deduplicated; // false — no idempotency/singleton key matched
 ```
 
 The queue's row is created on first use, so the call above works whether or not this process declared
-`emails` — a producer-only tier just calls `addJob`.
+`emails` — a process that only produces just calls `addJob`.
 
 Need to enqueue several at once? `pq.addJobs({ queue, jobs })` inserts the whole batch in **one**
 statement and returns a result per entry, in order. Each entry still carries its own options
@@ -82,8 +85,7 @@ await pq.addJob({
 });
 ```
 
-- `schedule.startAfterSeconds` — delay a **one-off** job by N seconds from now; for a known instant,
-  pass `(at.getTime() - Date.now()) / 1000`.
+- `schedule.startAfterSeconds` — delay a **one-off** job by N seconds from now.
 - `schedule.startEverySeconds` — a **recurring** fixed interval, in seconds between runs.
 - `schedule.cron` — a **recurring** cron expression, a bare string (UTC) or `{ pattern, tz }`.
 

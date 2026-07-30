@@ -25,8 +25,9 @@ a robust queue, as pg-boss showed. PortQueue takes that insight and makes it
 ## What you get
 
 - **One API across every engine.** Swap the driver import; your app code is unchanged.
-- **Producer/consumer split.** One `pq` object produces and consumes — "produce here,
-  process there" is a first-class deployment.
+- **One process or many.** One `pq` object produces and consumes, so running everything on a
+  single server is a complete setup — and splitting producers from consumers is there when you
+  want it.
 - **Transactional enqueue.** A job exists only if your business transaction commits — the
   dual-write bug, gone.
 - **Operational maturity.** Retries with backoff, rate limiting, backpressure, cron with

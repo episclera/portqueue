@@ -28,14 +28,6 @@ The timing props are **mutually exclusive**: a one-off delay never combines with
 
 ```ts
 await pq.addJob({ queue: 'emails', data, schedule: { startAfterSeconds: 86_400 } }); // 24 hours, in seconds
-
-// For a known wall-clock instant, subtract:
-const at = new Date('2026-08-01T09:00:00Z');
-await pq.addJob({
-  queue: 'emails',
-  data,
-  schedule: { startAfterSeconds: Math.round((at.getTime() - Date.now()) / 1000) },
-});
 ```
 
 ## Recurring — cron with timezone
