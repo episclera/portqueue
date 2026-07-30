@@ -1,0 +1,40 @@
+/**
+ * Mirrors the stock toggle's geometry so the navbar spacing is unchanged; only the icon selection
+ * differs — two icons keyed off the *effective* theme (`data-theme`) instead of three keyed off the
+ * stored choice (`data-theme-choice`).
+ */
+
+.toggle {
+  width: 2rem;
+  height: 2rem;
+}
+
+.toggleButton {
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  font-size: 1.125rem;
+  transition: background var(--ifm-transition-fast);
+}
+
+.toggleButton:hover {
+  background: var(--ifm-color-emphasis-200);
+}
+
+.toggleIcon {
+  display: none;
+}
+
+/* Painted from the served HTML, before React hydrates. */
+[data-theme='light'] .lightToggleIcon,
+[data-theme='dark'] .darkToggleIcon {
+  display: initial;
+}
+
+.toggleButtonDisabled {
+  cursor: not-allowed;
+}
