@@ -147,7 +147,7 @@ handler's own run time.
 await pq.addJob({
   queue: 'emails',
   data,
-  retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 604_800 }, // 7 days, in seconds
+  retention: { ttlSeconds: 604_800 }, // delete 7 days after it finishes
 });
 ```
 

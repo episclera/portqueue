@@ -1,4 +1,4 @@
-import { BackoffStrategy, RetentionMode } from './enums';
+import { BackoffStrategy } from './enums';
 import type { JobOptions } from './job-options';
 import type { RetentionOptions } from './common';
 import type { JobStatus } from '../jobs/job-state.enum';
@@ -24,7 +24,7 @@ export interface ResolvedJobOptions {
   retryBackoffFactor: number | null;
   retryMaxDelaySeconds: number | null;
   retryJitter: boolean;
-  retentionMode: RetentionMode;
+  /** The TTL after finishing before this job is deleted, or null to keep it forever. */
   retentionTtlSeconds: number | null;
   /** The finished statuses retention may delete this job in, or null for every finished status. */
   retentionStatuses: JobStatus[] | null;
@@ -76,11 +76,8 @@ export class OptionResolver {
           ? wholeSeconds(backoff.maxDelaySeconds, 'retry.backoff.maxDelaySeconds')
           : null,
       retryJitter: backoff?.jitter ?? false,
-      retentionMode: retention?.mode ?? RetentionMode.KEEP_FOREVER,
       retentionTtlSeconds:
-        retention?.ttlSeconds != null
-          ? wholeSeconds(retention.ttlSeconds, 'retention.ttlSeconds')
-          : null,
+        retention != null ? wholeSeconds(retention.ttlSeconds, 'retention.ttlSeconds') : null,
       // Null, not a defaulted list: "the caller didn't scope this" is a distinct state from "the
       // caller asked for exactly these", and the column stores null for the common case.
       retentionStatuses: retention?.statuses?.length ? [...retention.statuses] : null,

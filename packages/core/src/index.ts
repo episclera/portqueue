@@ -12,7 +12,6 @@ export {
   BackoffStrategy,
   PauseMode,
   DeduplicationReason,
-  RetentionMode,
   MigrationMode,
   DatabaseEngine,
 } from './options/enums';

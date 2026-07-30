@@ -18,12 +18,6 @@ export enum DeduplicationReason {
   SINGLETON = 'SINGLETON',
 }
 
-/** Retention policy modes. */
-export enum RetentionMode {
-  KEEP_FOREVER = 'KEEP_FOREVER',
-  DELETE_AFTER = 'DELETE_AFTER',
-}
-
 /** Auto-migration behavior on init. */
 export enum MigrationMode {
   AUTO = 'AUTO',

@@ -1,5 +1,5 @@
 import { OptionResolver } from './option-resolver';
-import { BackoffStrategy, RetentionMode } from './enums';
+import { BackoffStrategy } from './enums';
 
 describe('OptionResolver precedence (queue < job)', () => {
   const now = 1_000_000;
@@ -44,12 +44,19 @@ describe('OptionResolver precedence (queue < job)', () => {
   it('resolves retention from job over queue', () => {
     const resolver = new OptionResolver();
     const r = resolver.resolve({
-      job: { retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 3 } },
-      queueRetention: { mode: RetentionMode.KEEP_FOREVER },
+      job: { retention: { ttlSeconds: 3 } },
+      queueRetention: { ttlSeconds: 600 },
       now,
     });
-    expect(r.retentionMode).toBe(RetentionMode.DELETE_AFTER);
     expect(r.retentionTtlSeconds).toBe(3);
+  });
+
+  it('leaves the TTL null when neither the job nor the queue asked for retention', () => {
+    // No retention at all is the only way to keep a job forever — there is no mode saying so.
+    const resolver = new OptionResolver();
+    const r = resolver.resolve({ job: {}, now });
+    expect(r.retentionTtlSeconds).toBeNull();
+    expect(r.retentionStatuses).toBeNull();
   });
 
   it('carries backoff strategy/factor/cap/jitter', () => {

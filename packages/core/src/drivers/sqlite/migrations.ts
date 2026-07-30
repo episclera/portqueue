@@ -1,7 +1,7 @@
 import { TableName } from '../table-names';
 import type { FlavourMigration, MigrationNames } from '../shared/migration';
 // NOTE: column names and enum values here are intentionally raw string literals, NOT the
-// `*Column`/`JobStatus`/`RetentionMode` enums the drivers use. A migration is a frozen record of a
+// `*Column`/`JobStatus` enums the drivers use. A migration is a frozen record of a
 // schema that has already been applied; renaming an enum member must never retroactively rewrite a
 // past migration's DDL.
 
@@ -63,7 +63,6 @@ function v1(names: MigrationNames): string[] {
       retry_max_delay_seconds INTEGER,
       retry_jitter INTEGER NOT NULL DEFAULT 0,
       failure_message TEXT,
-      retention_mode TEXT NOT NULL DEFAULT 'KEEP_FOREVER',
       retention_ttl_seconds INTEGER,
       retention_statuses TEXT,
       idempotency_key TEXT,
@@ -84,8 +83,6 @@ function v1(names: MigrationNames): string[] {
       next_run_at INTEGER,
       last_run_at INTEGER,
       enabled INTEGER NOT NULL DEFAULT 1,
-      start_at INTEGER,
-      end_at INTEGER,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       idempotency_key TEXT
@@ -116,7 +113,7 @@ function v1(names: MigrationNames): string[] {
     // The retention sweep.
     `CREATE INDEX IF NOT EXISTS ${idx(TableName.JOB, 'retention_idx')} ` +
       `ON ${t(TableName.JOB)} (status, retention_ttl_seconds) ` +
-      `WHERE retention_mode = 'DELETE_AFTER'`,
+      `WHERE retention_ttl_seconds IS NOT NULL`,
     // Idempotency dedup (not unique — dedup is enforced in driver code on every engine).
     `CREATE INDEX IF NOT EXISTS ${idx(TableName.JOB, 'idempotency_idx')} ` +
       `ON ${t(TableName.JOB)} (queue_name, idempotency_key) ` +

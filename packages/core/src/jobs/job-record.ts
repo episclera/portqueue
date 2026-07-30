@@ -1,5 +1,5 @@
 import type { JobStatus } from './job-state.enum';
-import { BackoffStrategy, DeduplicationReason, RetentionMode } from '../options/enums';
+import { BackoffStrategy, DeduplicationReason } from '../options/enums';
 
 /**
  * The normalized in-memory shape of a `job` row. Drivers own the
@@ -38,7 +38,7 @@ export interface JobRecord {
   retryMaxDelaySeconds: number | null;
   retryJitter: boolean;
   failureMessage: string | null;
-  retentionMode: RetentionMode;
+  /** The TTL after finishing before this job is deleted, or `null` to keep it forever. */
   retentionTtlSeconds: number | null;
   /**
    * The finished statuses this job's retention policy may delete it in, or `null` for every
@@ -66,7 +66,7 @@ export interface NewJobRecord {
   retryBackoffFactor: number | null;
   retryMaxDelaySeconds: number | null;
   retryJitter: boolean;
-  retentionMode: RetentionMode;
+  /** The TTL after finishing before this job is deleted, or null to keep it forever. */
   retentionTtlSeconds: number | null;
   /** Which finished statuses the retention policy applies to, or null for all of them. */
   retentionStatuses: JobStatus[] | null;
@@ -131,8 +131,6 @@ export interface ScheduleRow {
   nextRunAt: number | null;
   lastRunAt: number | null;
   enabled: boolean;
-  startAt: number | null;
-  endAt: number | null;
   /** Optional dedup token. When set, only one job/schedule with this key exists per queue. */
   idempotencyKey: string | null;
   /** The resolved per-run job template stamped onto every job this schedule spawns. */
@@ -154,7 +152,7 @@ export interface ScheduledJobOptions {
   retryBackoffFactor: number | null;
   retryMaxDelaySeconds: number | null;
   retryJitter: boolean;
-  retentionMode: RetentionMode;
+  /** The TTL after finishing before a spawned job is deleted, or null to keep it forever. */
   retentionTtlSeconds: number | null;
   /** Which finished statuses the retention policy applies to, or null for all of them. */
   retentionStatuses: JobStatus[] | null;
@@ -175,8 +173,6 @@ export interface NewScheduleRow {
   retryDelaySeconds: number | null;
   nextRunAt: number | null;
   enabled: boolean;
-  startAt: number | null;
-  endAt: number | null;
   /** Optional dedup token. When set, only one job/schedule with this key exists per queue. */
   idempotencyKey: string | null;
   /** The resolved per-run job template stamped onto every job this schedule spawns. */

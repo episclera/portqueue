@@ -2,8 +2,8 @@ import { RETENTION_BATCH_SIZE, RETENTION_MAX_BATCHES } from '../constants';
 import type { Runtime } from '../client/runtime';
 
 /**
- * Hard-deletes finished jobs per retention policy, in bounded batches. Default is keep-forever; only
- * jobs whose resolved retention is DELETE_AFTER and whose TTL has elapsed are removed.
+ * Hard-deletes finished jobs per retention policy, in bounded batches. A job with no retention
+ * policy is kept forever; only jobs that carry a TTL, and whose TTL has elapsed, are removed.
  * Cluster-coordinated by running on the same interval tick.
  *
  * **Which statuses a job may be deleted in is the job's own setting**, not this sweeper's. The

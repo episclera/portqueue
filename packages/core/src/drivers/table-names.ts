@@ -56,7 +56,11 @@ export enum JobColumn {
   RETRY_MAX_DELAY_SECONDS = 'retry_max_delay_seconds',
   RETRY_JITTER = 'retry_jitter',
   FAILURE_MESSAGE = 'failure_message',
-  RETENTION_MODE = 'retention_mode',
+  /**
+   * How long after finishing this job may be deleted, in whole seconds, or NULL to keep it forever.
+   * NULL is the whole of "no retention policy" — there is no separate mode column to disagree with
+   * it.
+   */
   RETENTION_TTL_SECONDS = 'retention_ttl_seconds',
   /**
    * The finished statuses this job's retention policy may delete, as a comma-separated token list,
@@ -82,8 +86,6 @@ export enum ScheduleColumn {
   NEXT_RUN_AT = 'next_run_at',
   LAST_RUN_AT = 'last_run_at',
   ENABLED = 'enabled',
-  START_AT = 'start_at',
-  END_AT = 'end_at',
   IDEMPOTENCY_KEY = 'idempotency_key',
   JOB_OPTIONS = 'job_options',
   CREATED_AT = 'created_at',

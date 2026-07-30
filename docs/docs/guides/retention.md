@@ -11,38 +11,31 @@ keywords: [portqueue, job queue, retention, cleanup, database queue, background 
 By default PortQueue **keeps jobs forever**. For any real workload you should turn on
 retention (or your own pruning) so the `job` table doesn't grow unbounded.
 
-Retention resolves per-job (queue → job precedence) and is frozen onto each
-`job` row when it finishes. Set it at the **queue** level (there is no client-wide default —
-nothing is silently inherited) and override per job when a specific job needs to live longer.
+Retention resolves per-job (queue → job precedence) and is frozen onto each `job` row when the job is
+added. Set it at the **queue** level (there is no client-wide default — nothing is silently
+inherited) and override per job when a specific job needs to live longer.
 
-## Retention modes
+## Turning retention on
 
-`RetentionMode` has exactly **two** values:
-
-| `RetentionMode` | Meaning |
-|---|---|
-| `KEEP_FOREVER` | **Default.** Finished jobs are never pruned. |
-| `DELETE_AFTER` | Finished jobs become eligible for deletion once their `ttlSeconds` has elapsed. |
+`RetentionOptions` is `{ ttlSeconds: number; statuses?: JobStatus[] }` — a TTL and, optionally, the
+finished statuses it covers. Setting `retention` *is* asking for deletion; omitting it is asking for
+nothing to be deleted. There is no mode to choose between the two.
 
 ```ts
-import { RetentionMode } from '@portqueue/core';
-
 // per-queue default
 pq.createQueue({
   name: 'emails',
-  retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 259_200 }, // 3 days, in seconds
+  retention: { ttlSeconds: 259_200 }, // delete 3 days after a job finishes
   handler: async (job) => send(job.data),
 });
 
 // per-job override (highest precedence) — keep this one longer
-await pq.addJob({ queue: 'emails', data, retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 2_592_000 } }); // 30 days
+await pq.addJob({ queue: 'emails', data, retention: { ttlSeconds: 2_592_000 } }); // 30 days
 ```
 
-`RetentionOptions` is `{ mode: RetentionMode; ttlSeconds?: number; statuses?: JobStatus[] }`:
-
-- **`ttlSeconds`** — how many **seconds** after a job **finishes** before it may be deleted. **Required** for
-  `DELETE_AFTER`; ignored for `KEEP_FOREVER`. Like every PortQueue duration it is a plain number of
-  seconds — `604_800` for a week — so there is no unit string to misread.
+- **`ttlSeconds`** — how many **seconds** after a job **finishes** before it is deleted. Like every
+  PortQueue duration it is a plain number of seconds — `604_800` for a week — so there is no unit
+  string to misread.
 - **`statuses`** — which finished statuses the policy applies to. **Omit it and every finished status
   is covered** (`COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED`). Name a subset to narrow it — with
   `statuses: [JobStatus.COMPLETED]`, failed and cancelled jobs are kept regardless of their TTL, which
@@ -52,7 +45,6 @@ await pq.addJob({ queue: 'emails', data, retention: { mode: RetentionMode.DELETE
   pq.createQueue({
     name: 'emails',
     retention: {
-      mode: RetentionMode.DELETE_AFTER,
       ttlSeconds: 259_200,
       statuses: [JobStatus.COMPLETED], // sweep the successes; keep the failures
     },
@@ -62,8 +54,8 @@ await pq.addJob({ queue: 'emails', data, retention: { mode: RetentionMode.DELETE
 
 Retention is settable at the **queue** level (`QueueOptions.retention`) and overridden per job
 (`JobOptions.retention`, highest precedence). A `retention` object **replaces** rather than merges: a
-per-job policy is the whole policy, so a job that names `mode` and `ttlSeconds` and no `statuses`
-covers every finished status even if its queue narrowed them.
+per-job policy is the whole policy, so a job that names `ttlSeconds` and no `statuses` covers every
+finished status even if its queue narrowed them.
 
 Like every other retention field, `statuses` is resolved **when the job is added** and frozen onto its
 row. Changing a queue's policy therefore governs the jobs added after it, never the ones already
@@ -71,9 +63,9 @@ queued — which is the same rule `ttlSeconds` follows, and the reason the sweep
 a queue's live options.
 
 Retention only ever acts on **finished** jobs — those with status `COMPLETED`, `FAILED`,
-`CANCELLED`, or `EXPIRED` (and only when their resolved retention is `DELETE_AFTER` and the
-TTL has elapsed). Jobs still in flight — `PENDING`, `ACTIVE` (including an `ACTIVE` row whose
-lock has lapsed, which reads as `stalled`) and `RETRY` — are **never touched** by retention.
+`CANCELLED`, or `EXPIRED` (and only when the job carries a TTL that has elapsed). Jobs still in
+flight — `PENDING`, `ACTIVE` (including an `ACTIVE` row whose lock has lapsed, which reads as
+`stalled`) and `RETRY` — are **never touched** by retention.
 
 :::info Keep failed jobs longer
 There is **no dead-letter queue** — failed jobs stay in `job` with status `FAILED` for

@@ -1,4 +1,4 @@
-import { BackoffStrategy, RetentionMode } from '../../options/enums';
+import { BackoffStrategy } from '../../options/enums';
 import { JobStatus } from '../../jobs/job-state.enum';
 import { DriverCapability, type DriverCapabilitySet } from '../driver-capabilities';
 import { DriverContext } from '../driver-context';
@@ -71,7 +71,6 @@ export const JOB_COLUMNS: readonly JobColumn[] = [
   JobColumn.RETRY_MAX_DELAY_SECONDS,
   JobColumn.RETRY_JITTER,
   JobColumn.FAILURE_MESSAGE,
-  JobColumn.RETENTION_MODE,
   JobColumn.RETENTION_TTL_SECONDS,
   JobColumn.RETENTION_STATUSES,
   JobColumn.IDEMPOTENCY_KEY,
@@ -93,8 +92,6 @@ export const SCHEDULE_INSERT_COLUMNS: readonly ScheduleColumn[] = [
   ScheduleColumn.RETRY_DELAY_SECONDS,
   ScheduleColumn.NEXT_RUN_AT,
   ScheduleColumn.ENABLED,
-  ScheduleColumn.START_AT,
-  ScheduleColumn.END_AT,
   ScheduleColumn.IDEMPOTENCY_KEY,
   ScheduleColumn.CREATED_AT,
   ScheduleColumn.UPDATED_AT,
@@ -343,7 +340,6 @@ export abstract class BaseDriver {
       retryMaxDelaySeconds: this.numOrNull(row[JobColumn.RETRY_MAX_DELAY_SECONDS]),
       retryJitter: this.boolOut(row[JobColumn.RETRY_JITTER]),
       failureMessage: this.strOrNull(row[JobColumn.FAILURE_MESSAGE]),
-      retentionMode: row[JobColumn.RETENTION_MODE] as RetentionMode,
       retentionTtlSeconds: this.numOrNull(row[JobColumn.RETENTION_TTL_SECONDS]),
       retentionStatuses: decodeRetentionStatuses(row[JobColumn.RETENTION_STATUSES]),
       idempotencyKey: this.strOrNull(row[JobColumn.IDEMPOTENCY_KEY]),
@@ -390,8 +386,6 @@ export abstract class BaseDriver {
       nextRunAt: this.numOrNull(row[ScheduleColumn.NEXT_RUN_AT]),
       lastRunAt: this.numOrNull(row[ScheduleColumn.LAST_RUN_AT]),
       enabled: this.boolOut(row[ScheduleColumn.ENABLED]),
-      startAt: this.numOrNull(row[ScheduleColumn.START_AT]),
-      endAt: this.numOrNull(row[ScheduleColumn.END_AT]),
       idempotencyKey: this.strOrNull(row[ScheduleColumn.IDEMPOTENCY_KEY]),
       createdAt: Number(row[ScheduleColumn.CREATED_AT]),
       updatedAt: Number(row[ScheduleColumn.UPDATED_AT]),
@@ -451,7 +445,6 @@ export abstract class BaseDriver {
         job.retryMaxDelaySeconds,
         this.boolIn(job.retryJitter),
         null, // failure_message
-        job.retentionMode,
         job.retentionTtlSeconds,
         encodeRetentionStatuses(job.retentionStatuses),
         job.idempotencyKey,
@@ -482,8 +475,6 @@ export abstract class BaseDriver {
         schedule.retryDelaySeconds,
         schedule.nextRunAt,
         this.boolIn(schedule.enabled),
-        schedule.startAt,
-        schedule.endAt,
         schedule.idempotencyKey,
         now,
         now,

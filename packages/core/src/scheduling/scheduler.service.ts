@@ -1,5 +1,5 @@
 import { JobStatus } from '../jobs/job-state.enum';
-import { BackoffStrategy, RetentionMode } from '../options/enums';
+import { BackoffStrategy } from '../options/enums';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { CronExpression } from './cron';
 import { secondsToMs } from '../util/seconds';
@@ -59,11 +59,9 @@ export class SchedulerService {
     const previous = schedule.nextRunAt;
     if (previous == null) return;
 
-    // Compute the next future slot (fire-once semantics; no backfill).
-    let nextRunAt: number | null = this.computeNext(schedule, now);
-    if (schedule.endAt != null && (nextRunAt == null || nextRunAt > schedule.endAt)) {
-      nextRunAt = null; // schedule has ended
-    }
+    // Compute the next future slot (fire-once semantics; no backfill). A null disarms the schedule:
+    // it fires this once and never again.
+    const nextRunAt = this.computeNext(schedule, now);
 
     // Claim this tick — only one instance wins the guarded advance.
     const won = await this.runtime.driver.advanceSchedule({
@@ -95,7 +93,6 @@ export class SchedulerService {
       retryBackoffFactor: t?.retryBackoffFactor ?? null,
       retryMaxDelaySeconds: t?.retryMaxDelaySeconds ?? null,
       retryJitter: t?.retryJitter ?? false,
-      retentionMode: t?.retentionMode ?? RetentionMode.KEEP_FOREVER,
       retentionTtlSeconds: t?.retentionTtlSeconds ?? null,
       retentionStatuses: t?.retentionStatuses ?? null,
       idempotencyKey: null,

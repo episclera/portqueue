@@ -770,11 +770,13 @@ Per-job settings (highest precedence). Also the base of [`AddJobOptions`](#addjo
 
 ### RetentionOptions
 
-| Option       | Type            | Default               | Description                                                                                                    |
-| ------------ | --------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `mode`       | `RetentionMode` | — **required**        | `KEEP_FOREVER` or `DELETE_AFTER`.                                                                              |
-| `ttlSeconds` | `number`        | —                     | How many seconds after finishing before deletion is allowed (required for `DELETE_AFTER`).                     |
-| `statuses`   | `JobStatus[]`   | every finished status | Which finished statuses the policy applies to (`COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED` unless narrowed). |
+Set `retention` and finished jobs are deleted once their TTL elapses; omit it and they are kept
+forever. There is no mode to pick.
+
+| Option       | Type          | Default               | Description                                                                                                    |
+| ------------ | ------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `ttlSeconds` | `number`      | — **required**        | How many seconds after finishing before the job is deleted.                                                    |
+| `statuses`   | `JobStatus[]` | every finished status | Which finished statuses the policy applies to (`COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED` unless narrowed). |
 
 ### ScheduleOptions
 
@@ -875,7 +877,7 @@ Reads return objects, never bare ids. The main shapes:
 
 `JobStatus` (`PENDING`, `ACTIVE`, `COMPLETED`, `FAILED`, `RETRY`, `CANCELLED`, `EXPIRED`) ·
 `PauseMode` (`PROCESSING`, `ALL`) ·
-`BackoffStrategy` (`FIXED`, `EXPONENTIAL`) · `RetentionMode` (`KEEP_FOREVER`, `DELETE_AFTER`) ·
+`BackoffStrategy` (`FIXED`, `EXPONENTIAL`) ·
 `MigrationMode` (`AUTO`, `MANUAL`, `VALIDATE_ONLY`) · `DeduplicationReason` (`IDEMPOTENCY`, `SINGLETON`) ·
 `LogLevel` (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`) ·
 `DatabaseEngine` · [`PortQueueEvent`](./events-hooks/events.md) · [`HookPhase`](./events-hooks/hooks.md) ·

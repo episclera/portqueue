@@ -5,7 +5,6 @@ import {
   type TestQueueHandle,
 } from '../test-utils/create-test-queue';
 import { JobStatus } from '../jobs/job-state.enum';
-import { RetentionMode } from '../options/enums';
 
 describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   let h: TestQueueHandle;
@@ -200,7 +199,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
       queue: 'ephemeral',
       data: {},
       retention: {
-        mode: RetentionMode.DELETE_AFTER,
         ttlSeconds: 1,
         statuses: [JobStatus.COMPLETED],
       },

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { DatabaseEngine, DeduplicationReason, RetentionMode } from '../../options/enums';
+import { DatabaseEngine, DeduplicationReason } from '../../options/enums';
 import { ACTIVE_STATUSES, FINISHED_STATUSES, JobStatus } from '../../jobs/job-state.enum';
 import { capabilities, DriverCapability, type DriverCapabilitySet } from '../driver-capabilities';
 import {
@@ -1323,8 +1323,9 @@ export class PostgresDriver extends BaseDriver implements Driver {
   }
 
   /**
-   * The retention predicate: a DELETE_AFTER row, in a status **its own policy** covers, whose TTL
-   * has elapsed since it finished.
+   * The retention predicate: a row that carries a TTL, in a status **its own policy** covers, whose
+   * TTL has elapsed since it finished. A NULL `retention_ttl_seconds` is a job with no retention
+   * policy at all and is never deleted — that is the whole of "keep forever".
    *
    * The per-status term is what makes `retention.statuses` real. A row with a NULL
    * `retention_statuses` is eligible in every finished status (the default); a row that named a
@@ -1332,8 +1333,6 @@ export class PostgresDriver extends BaseDriver implements Driver {
    * can never be matched by a search for a different token.
    */
   private retentionWhere(olderThan: number, params: unknown[]): string {
-    const modePh = this.ph(params.length);
-    params.push(RetentionMode.DELETE_AFTER);
     const statusPh = this.phList(FINISHED_STATUSES.length, params.length);
     params.push(...FINISHED_STATUSES);
     const scoped = FINISHED_STATUSES.map((status) => {
@@ -1346,7 +1345,7 @@ export class PostgresDriver extends BaseDriver implements Driver {
     const cutoffPh = this.ph(params.length);
     params.push(olderThan);
     return (
-      `${JobColumn.RETENTION_MODE} = ${modePh} AND ${JobColumn.RETENTION_TTL_SECONDS} IS NOT NULL ` +
+      `${JobColumn.RETENTION_TTL_SECONDS} IS NOT NULL ` +
       `AND ${JobColumn.STATUS} IN (${statusPh}) ` +
       `AND (${JobColumn.RETENTION_STATUSES} IS NULL OR ${scoped.join(' OR ')}) ` +
       `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ` +

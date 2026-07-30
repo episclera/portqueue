@@ -1,6 +1,6 @@
 import { DriverContext } from '../drivers/driver-context';
 import { JobStatus } from '../jobs/job-state.enum';
-import { BackoffStrategy, RetentionMode } from '../options/enums';
+import { BackoffStrategy } from '../options/enums';
 import { DriverCapability } from '../drivers/driver-capabilities';
 import type { Driver } from '../drivers/driver.interface';
 import type { NewJobRecord } from '../jobs/job-record';
@@ -51,7 +51,6 @@ function newJob(
     retryBackoffFactor: null,
     retryMaxDelaySeconds: null,
     retryJitter: false,
-    retentionMode: RetentionMode.KEEP_FOREVER,
     retentionTtlSeconds: null,
     retentionStatuses: null,
     idempotencyKey: null,
@@ -174,8 +173,6 @@ export function runConformance(options: ConformanceOptions): void {
         retryDelaySeconds: null,
         nextRunAt: now + 1000,
         enabled: true,
-        startAt: null,
-        endAt: null,
         idempotencyKey: null,
         jobOptions: null,
       };
@@ -464,17 +461,15 @@ export function runConformance(options: ConformanceOptions): void {
 
     it('deletes finished jobs whose TTL elapsed, and only those', async () => {
       const kept = await driver.insertJob({
-        job: newJob(queueName, now, { retentionMode: RetentionMode.KEEP_FOREVER }),
+        job: newJob(queueName, now, { retentionTtlSeconds: null }),
       });
       const swept = await driver.insertJob({
         job: newJob(queueName, now, {
-          retentionMode: RetentionMode.DELETE_AFTER,
           retentionTtlSeconds: 10,
         }),
       });
       const tooYoung = await driver.insertJob({
         job: newJob(queueName, now, {
-          retentionMode: RetentionMode.DELETE_AFTER,
           retentionTtlSeconds: 10_000,
         }),
       });
@@ -490,17 +485,15 @@ export function runConformance(options: ConformanceOptions): void {
     });
 
     it('scopes retention to the statuses the job itself named', async () => {
-      // Same TTL, same mode; one policy covers FAILED only, the other every finished status.
+      // Same TTL; one policy covers FAILED only, the other every finished status.
       const scoped = await driver.insertJob({
         job: newJob(queueName, now, {
-          retentionMode: RetentionMode.DELETE_AFTER,
           retentionTtlSeconds: 10,
           retentionStatuses: [JobStatus.FAILED],
         }),
       });
       const unscoped = await driver.insertJob({
         job: newJob(queueName, now, {
-          retentionMode: RetentionMode.DELETE_AFTER,
           retentionTtlSeconds: 10,
         }),
       });
@@ -530,8 +523,6 @@ export function runConformance(options: ConformanceOptions): void {
           retryDelaySeconds: null,
           nextRunAt: now,
           enabled: true,
-          startAt: null,
-          endAt: null,
           idempotencyKey: null,
           jobOptions: null,
         },
@@ -561,8 +552,6 @@ export function runConformance(options: ConformanceOptions): void {
         retryDelaySeconds: null,
         nextRunAt: now,
         enabled: true,
-        startAt: null,
-        endAt: null,
         idempotencyKey: null,
         jobOptions: null,
       };
@@ -597,8 +586,6 @@ export function runConformance(options: ConformanceOptions): void {
         retryDelaySeconds: null,
         nextRunAt: now,
         enabled: true,
-        startAt: null,
-        endAt: null,
         idempotencyKey: null,
         jobOptions: null,
       };

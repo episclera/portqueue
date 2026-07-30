@@ -40,8 +40,8 @@ for triage and manual `retryJob` — there is **no dead-letter queue**.
 
 ## Retention
 
-Default is keep-forever. Turn on `DELETE_AFTER` [retention](./guides/retention.md) (or
-your own pruning); keep failed jobs longer than completed.
+Nothing is deleted unless you ask. Set a [retention](./guides/retention.md) TTL (or do your own
+pruning); keep failed jobs longer than completed.
 
 ## Backpressure & rate limits
 

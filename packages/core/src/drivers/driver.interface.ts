@@ -393,7 +393,8 @@ export interface Driver {
 
   // Retention
   /**
-   * Delete up to `limit` finished job rows whose retention window has elapsed.
+   * Delete up to `limit` finished job rows whose retention window has elapsed. A row with no
+   * `retention_ttl_seconds` has no policy and is never deleted.
    *
    * Which statuses a row is eligible in is the **row's own** setting: `retention_statuses` holds
    * the encoded list the caller asked for, or NULL for "every finished status". The sweeper

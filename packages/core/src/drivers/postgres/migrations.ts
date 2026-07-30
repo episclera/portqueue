@@ -1,7 +1,7 @@
 import { TableName } from '../table-names';
 import type { FlavourMigration, MigrationNames } from '../shared/migration';
 // NOTE: column names, statuses and enum values here are intentionally raw string literals, NOT the
-// `*Column`/`JobStatus`/`RetentionMode` enums the drivers use. A migration is a frozen record of a
+// `*Column`/`JobStatus` enums the drivers use. A migration is a frozen record of a
 // schema that has already been applied; renaming an enum member must never retroactively rewrite a
 // past migration's DDL.
 
@@ -71,7 +71,6 @@ export function v1(names: MigrationNames): string[] {
       retry_max_delay_seconds BIGINT,
       retry_jitter SMALLINT NOT NULL DEFAULT 0,
       failure_message TEXT,
-      retention_mode TEXT NOT NULL DEFAULT 'KEEP_FOREVER',
       retention_ttl_seconds BIGINT,
       retention_statuses TEXT,
       idempotency_key TEXT,
@@ -92,8 +91,6 @@ export function v1(names: MigrationNames): string[] {
       next_run_at BIGINT,
       last_run_at BIGINT,
       enabled SMALLINT NOT NULL DEFAULT 1,
-      start_at BIGINT,
-      end_at BIGINT,
       created_at BIGINT NOT NULL,
       updated_at BIGINT NOT NULL,
       idempotency_key TEXT
@@ -127,10 +124,10 @@ export function v1(names: MigrationNames): string[] {
     // expireDueJobs: due-but-unstarted rows past their deadline.
     `CREATE INDEX IF NOT EXISTS ${idx(TableName.JOB, 'expiry_idx')} ` +
       `ON ${t(TableName.JOB)} (status, expire_at)`,
-    // The retention sweep, which only ever looks at DELETE_AFTER rows in a finished status.
+    // The retention sweep, which only ever looks at rows that carry a TTL and are finished.
     `CREATE INDEX IF NOT EXISTS ${idx(TableName.JOB, 'retention_idx')} ` +
       `ON ${t(TableName.JOB)} (status, retention_ttl_seconds) ` +
-      `WHERE retention_mode = 'DELETE_AFTER'`,
+      `WHERE retention_ttl_seconds IS NOT NULL`,
     // Idempotency dedup.
     `CREATE INDEX IF NOT EXISTS ${idx(TableName.JOB, 'idempotency_idx')} ` +
       `ON ${t(TableName.JOB)} (queue_name, idempotency_key) ` +

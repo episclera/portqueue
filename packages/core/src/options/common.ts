@@ -1,4 +1,4 @@
-import { BackoffStrategy, RetentionMode } from './enums';
+import { BackoffStrategy } from './enums';
 import type { JobStatus } from '../jobs/job-state.enum';
 
 /** Exponential/fixed backoff configuration. */
@@ -22,14 +22,14 @@ export interface RetryOptions {
   backoff?: BackoffOptions;
 }
 
-/** Retention policy. Default is keep-forever. */
+/**
+ * Deletes a finished job once its TTL has elapsed. There is no second policy and no mode to pick:
+ * set `retention` and the job is deleted `ttlSeconds` after it finished, omit it and the row is kept
+ * forever.
+ */
 export interface RetentionOptions {
-  mode: RetentionMode;
-  /**
-   * How long after finishing before deletion is allowed, in **whole seconds** (required for
-   * DELETE_AFTER).
-   */
-  ttlSeconds?: number;
+  /** How long after finishing before the job is deleted, in **whole seconds**. */
+  ttlSeconds: number;
   /** Which finished statuses the policy applies to (default: every finished status). */
   statuses?: JobStatus[];
 }

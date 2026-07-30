@@ -1,7 +1,7 @@
 import { TableName } from '../table-names';
 import type { FlavourMigration, MigrationNames } from '../shared/migration';
 // NOTE: column names and enum values here are intentionally raw string literals, NOT the
-// `*Column`/`JobStatus`/`RetentionMode` enums the drivers use. A migration is a frozen record of a
+// `*Column`/`JobStatus` enums the drivers use. A migration is a frozen record of a
 // schema that has already been applied; renaming an enum member must never retroactively rewrite a
 // past migration's DDL.
 
@@ -71,7 +71,6 @@ function v1(names: MigrationNames): string[] {
       retry_max_delay_seconds BIGINT,
       retry_jitter SMALLINT NOT NULL DEFAULT 0,
       failure_message TEXT,
-      retention_mode VARCHAR(32) NOT NULL DEFAULT 'KEEP_FOREVER',
       retention_ttl_seconds BIGINT,
       retention_statuses VARCHAR(255),
       idempotency_key VARCHAR(255),
@@ -81,7 +80,7 @@ function v1(names: MigrationNames): string[] {
       KEY ${idx(TableName.JOB, 'claim_idx')} (queue_name, status, priority DESC, start_after ASC),
       KEY ${idx(TableName.JOB, 'stalled_idx')} (status, locked_until),
       KEY ${idx(TableName.JOB, 'expiry_idx')} (status, expire_at),
-      KEY ${idx(TableName.JOB, 'retention_idx')} (retention_mode, status, retention_ttl_seconds),
+      KEY ${idx(TableName.JOB, 'retention_idx')} (status, retention_ttl_seconds),
       KEY ${idx(TableName.JOB, 'idempotency_idx')} (queue_name, idempotency_key),
       KEY ${idx(TableName.JOB, 'singleton_idx')} (queue_name, singleton_key, status),
       KEY ${idx(TableName.JOB, 'created_idx')} (created_at DESC),
@@ -102,8 +101,6 @@ function v1(names: MigrationNames): string[] {
       next_run_at BIGINT,
       last_run_at BIGINT,
       enabled SMALLINT NOT NULL DEFAULT 1,
-      start_at BIGINT,
-      end_at BIGINT,
       created_at BIGINT NOT NULL,
       updated_at BIGINT NOT NULL,
       idempotency_key VARCHAR(255),

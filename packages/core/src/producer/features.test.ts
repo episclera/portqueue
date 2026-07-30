@@ -7,7 +7,7 @@ import {
 import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { HookPhase } from '../events/hooks';
-import { BackoffStrategy, RetentionMode } from '../options/enums';
+import { BackoffStrategy } from '../options/enums';
 
 class NonRetryableError extends Error {
   constructor() {
@@ -244,7 +244,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     h.pq.createQueue({
       name: 'retained',
       retention: {
-        mode: RetentionMode.DELETE_AFTER,
         ttlSeconds: 1,
         statuses: [JobStatus.COMPLETED],
       },
