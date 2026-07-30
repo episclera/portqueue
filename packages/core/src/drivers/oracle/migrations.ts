@@ -141,7 +141,6 @@ function v1(names: MigrationNames): string[] {
     createIfAbsent(
       `CREATE TABLE ${t(TableName.MIGRATION)} (
         version NUMBER(10) NOT NULL,
-        applied_at NUMBER(19) NOT NULL,
         created_at NUMBER(19) NOT NULL,
         updated_at NUMBER(19) NOT NULL,
         CONSTRAINT ${idx(TableName.MIGRATION, 'pk')} PRIMARY KEY (version)

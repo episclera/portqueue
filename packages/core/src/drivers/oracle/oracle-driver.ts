@@ -314,9 +314,9 @@ export class OracleDriver extends BaseDriver implements Driver {
       `MERGE INTO ${this.t(TableName.MIGRATION)} t ` +
         `USING (SELECT ${this.ph(0)} AS ${MigrationColumn.VERSION} FROM dual) s ` +
         `ON (t.${MigrationColumn.VERSION} = s.${MigrationColumn.VERSION}) ` +
-        `WHEN NOT MATCHED THEN INSERT (${MigrationColumn.VERSION}, ${MigrationColumn.APPLIED_AT}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) ` +
-        `VALUES (s.${MigrationColumn.VERSION}, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)})`,
-      [options.migration.version, now, now, now],
+        `WHEN NOT MATCHED THEN INSERT (${MigrationColumn.VERSION}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) ` +
+        `VALUES (s.${MigrationColumn.VERSION}, ${this.ph(1)}, ${this.ph(2)})`,
+      [options.migration.version, now, now],
     );
   }
 

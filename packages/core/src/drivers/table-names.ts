@@ -102,7 +102,6 @@ export enum InstanceColumn {
 
 export enum MigrationColumn {
   VERSION = 'version',
-  APPLIED_AT = 'applied_at',
   CREATED_AT = 'created_at',
   UPDATED_AT = 'updated_at',
 }

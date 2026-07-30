@@ -240,7 +240,7 @@ it keeps raw strings as a historical record). All are exported from `@portqueue/
 - `ScheduleColumn` — e.g. `ID`, `QUEUE_NAME`, `CRON`, `EVERY_SECONDS`, `NEXT_RUN_AT`, `LAST_RUN_AT`,
   `ENABLED`, `IDEMPOTENCY_KEY`, …
 - `InstanceColumn` — `INSTANCE_KEY`, `PROCESSING_PAUSED`, `CREATED_AT`, `UPDATED_AT`, `LAST_SEEN_AT`.
-- `MigrationColumn` — `VERSION`, `APPLIED_AT`, `CREATED_AT`, `UPDATED_AT`.
+- `MigrationColumn` — `VERSION`, `CREATED_AT`, `UPDATED_AT`.
 
 The `validateIdentifier` helper (also exported) allowlist-checks any user-influenced identifier
 (`schema` / `tablePrefix`) before it reaches SQL.

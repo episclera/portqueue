@@ -109,7 +109,6 @@ export function v1(names: MigrationNames): string[] {
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.MIGRATION)} (
       version INTEGER NOT NULL PRIMARY KEY,
-      applied_at BIGINT NOT NULL,
       created_at BIGINT NOT NULL,
       updated_at BIGINT NOT NULL
     )`,

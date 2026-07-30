@@ -261,9 +261,9 @@ export class MysqlDriver extends BaseDriver implements Driver {
     for (const sql of statements) await this.execute(sql, []);
     const now = Date.now();
     await this.execute(
-      `INSERT IGNORE INTO ${this.t(TableName.MIGRATION)} (${MigrationColumn.VERSION}, ${MigrationColumn.APPLIED_AT}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) ` +
-        `VALUES (${this.phList(4)})`,
-      [options.migration.version, now, now, now],
+      `INSERT IGNORE INTO ${this.t(TableName.MIGRATION)} (${MigrationColumn.VERSION}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) ` +
+        `VALUES (${this.phList(3)})`,
+      [options.migration.version, now, now],
     );
   }
 

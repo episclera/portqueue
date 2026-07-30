@@ -125,7 +125,6 @@ function v1(names: MigrationNames): string[] {
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.MIGRATION)} (
       version INTEGER NOT NULL,
-      applied_at BIGINT NOT NULL,
       created_at BIGINT NOT NULL,
       updated_at BIGINT NOT NULL,
       PRIMARY KEY (version)

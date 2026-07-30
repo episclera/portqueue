@@ -72,8 +72,13 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     expect(job).not.toMatch(/\bmetadata\b/);
     // The schedule dedup token is part of the base schema — no follow-up ALTER version.
     expect(created.find((s) => s.includes('pq_schedule'))!).toContain('idempotency_key TEXT');
-    // The migration table records the version and when — nothing else.
-    expect(created.find((s) => s.includes('pq_migration'))!).not.toContain('checksum');
+    // The migration table records the version and when the row was written — nothing else. No
+    // checksum (nothing ever compared one) and no `applied_at` beside `created_at`, which already
+    // says when the version was applied.
+    const migration = created.find((s) => s.includes('pq_migration'))!;
+    expect(migration).not.toContain('checksum');
+    expect(migration).not.toContain('applied_at');
+    expect(migration).toContain('created_at');
   });
 
   it('Postgres v1 declares a primary key per table and an index per hot access path', () => {

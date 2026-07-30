@@ -267,9 +267,9 @@ export class PostgresDriver extends BaseDriver implements Driver {
       for (const sql of statements) await this.execute(sql, [], session);
       const now = Date.now();
       await this.execute(
-        `INSERT INTO ${this.t(TableName.MIGRATION)} (${MigrationColumn.VERSION}, ${MigrationColumn.APPLIED_AT}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) ` +
-          `VALUES (${this.phList(4)}) ON CONFLICT (${MigrationColumn.VERSION}) DO NOTHING`,
-        [migration.version, now, now, now],
+        `INSERT INTO ${this.t(TableName.MIGRATION)} (${MigrationColumn.VERSION}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) ` +
+          `VALUES (${this.phList(3)}) ON CONFLICT (${MigrationColumn.VERSION}) DO NOTHING`,
+        [migration.version, now, now],
         session,
       );
     });
