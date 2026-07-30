@@ -6,6 +6,7 @@
 import type { JobStatus } from '../jobs/job-state.enum';
 import type { Page } from '../options/common';
 import type { GetSchedulesQuery, InstanceInfo, QueueInfo, ScheduleInfo } from '../producer/results';
+import { DASHBOARD_MAX_PAGE_LIMIT } from '../constants';
 
 export type { Page };
 
@@ -17,7 +18,7 @@ export interface DashboardPageQuery {
 }
 
 /** Hard ceiling on a dashboard page, so a crafted `limit` can't ask for the whole table. */
-export const DASHBOARD_MAX_LIMIT = 200;
+export const DASHBOARD_MAX_LIMIT = DASHBOARD_MAX_PAGE_LIMIT;
 
 /** Pause-state narrowing shared by the queue and instance lists. */
 export interface PausedFilter {
@@ -27,23 +28,23 @@ export interface PausedFilter {
 
 /**
  * The dashboard's queue query: the public paging window plus the narrowing only the dashboard's
- * queues table offers. Named for the facade rather than reusing the public {@link GetQueuesQuery},
- * which carries paging and nothing else.
+ * queues table offers. Named for the facade rather than reusing the public `GetQueuesQuery`, which
+ * carries paging and nothing else.
+ *
+ * There is deliberately no `inUse` filter. `inUse` means "declared in the process that produced this
+ * info", and the dashboard now runs on its own headless client (`createDashboard({ driver })`) rather
+ * than riding on the application's — so it has no way to know which queues the workers declare, and a
+ * filter that always answered "none" would be worse than no filter.
  */
 export interface DashboardQueuesQuery extends DashboardPageQuery, PausedFilter {
   /** Case-insensitive substring of the queue name. */
   search?: string;
-  /**
-   * Narrow by whether the **host** process declares the queue (`createQueue`/`createWorker`).
-   * Resolved in memory against this process's registry, since it isn't a stored column.
-   */
-  inUse?: boolean;
 }
 
 /**
  * The dashboard's instance query: the public paging window plus the narrowing only the dashboard's
  * instances table offers. Named for the facade rather than reusing the public
- * {@link GetInstancesQuery}, which carries paging and nothing else.
+ * `GetInstancesQuery`, which carries paging and nothing else.
  */
 export interface DashboardInstancesQuery extends DashboardPageQuery, PausedFilter {
   /** Case-insensitive substring of the instance key. */
@@ -53,21 +54,12 @@ export interface DashboardInstancesQuery extends DashboardPageQuery, PausedFilte
 }
 
 /**
- * The dashboard's schedule query: the public {@link GetSchedulesQuery} (paging + `enabled`) plus
- * the two things only the dashboard's cross-queue schedules table needs. Named for the facade
- * rather than reusing `GetSchedulesQuery`, because the public read is scoped to one `Queue` handle
- * and this one deliberately spans every queue.
+ * The dashboard's schedule query: the public {@link GetSchedulesQuery} (paging, `queue`, `enabled`)
+ * plus the free-text filter only the dashboard's table offers.
  */
 export interface DashboardSchedulesQuery extends GetSchedulesQuery {
-  /** Narrow to one queue. Omitted, the page spans every queue. */
-  queue?: string;
   /** Case-insensitive substring matched against the schedule id, queue name and cron pattern. */
   search?: string;
-}
-
-/** A schedule plus the queue it belongs to — the schedules table shows both. */
-export interface ScheduleWithQueue extends ScheduleInfo {
-  queue: string;
 }
 
 /**
@@ -79,11 +71,12 @@ export interface DashboardStats {
   counts: Record<JobStatus, number>;
 }
 
-/** The fields a dashboard job search scans beyond the ones a filter already covers. */
+/** The free-text filter the dashboard's jobs table offers. */
 export interface JobSearchQuery {
   /**
    * Free-text term matched against the job id, status, idempotency key, failure message and the
-   * serialized payload. Case-insensitive substring.
+   * serialized payload. Case-insensitive substring, matched **in SQL** — so a search is a paged
+   * query like any other read, not a scan of the table through this process.
    */
   search?: string;
 }
@@ -106,7 +99,8 @@ export enum JobBatchAction {
 
 /**
  * The outcome of a batch. `affected` counts the rows the action actually changed — a job that
- * was already gone, or one the action refused (removing an ACTIVE row), is simply not counted.
+ * was already gone, or one the action refused (retrying or removing an ACTIVE row), is simply not
+ * counted.
  */
 export interface BatchResult {
   affected: number;

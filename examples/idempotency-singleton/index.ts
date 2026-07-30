@@ -24,14 +24,16 @@ async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
   await pq.init();
 
-  const emails = pq.createQueue<{ to: string }>({ name: 'emails' });
+  pq.createQueue<{ to: string }>({ name: 'emails' });
 
   // Idempotency: enqueue the "same" welcome email twice with one key.
-  const first = await emails.addJob({
+  const first = await pq.addJob({
+    queue: 'emails',
     data: { to: 'ada@example.com' },
     idempotencyKey: 'welcome:ada@example.com',
   });
-  const second = await emails.addJob({
+  const second = await pq.addJob({
+    queue: 'emails',
     data: { to: 'ada@example.com' },
     idempotencyKey: 'welcome:ada@example.com',
   });
@@ -44,11 +46,13 @@ async function main(): Promise<void> {
   console.log(`same job?  → ${first.jobId === second.jobId}\n`);
 
   // Singleton: at most one in-flight job per key. The second add dedups while the first is pending.
-  const a = await emails.addJob({
+  const a = await pq.addJob({
+    queue: 'emails',
     data: { to: 'grace@example.com' },
     singletonKey: 'digest:grace',
   });
-  const b = await emails.addJob({
+  const b = await pq.addJob({
+    queue: 'emails',
     data: { to: 'grace@example.com' },
     singletonKey: 'digest:grace',
   });

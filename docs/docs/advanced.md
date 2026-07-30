@@ -20,24 +20,16 @@ capabilities, so an honest capability set is all it needs — every correctness 
 so your driver only has to emit the best SQL its engine can.
 
 ```ts
-import type {
-  Driver,
-  DriverProbe,
-  Subscription,
-  MigrationStep,
-  DriverCapabilitySet,
-  DriverContext,
-} from '@portqueue/core';
-import { capabilities, DriverCapability, DatabaseEngine } from '@portqueue/core';
+import type { Driver, DriverCapabilitySet, MigrationStep } from '@portqueue/core';
+import { BaseDriver, capabilities, DriverCapability, DatabaseEngine } from '@portqueue/core';
 
-class MyDriver implements Driver {
+class MyDriver extends BaseDriver implements Driver {
   readonly engine = DatabaseEngine.POSTGRES; // your engine
   readonly capabilities: DriverCapabilitySet = capabilities({
-    [DriverCapability.SKIP_LOCKED]: false,   // no row-skip lock? core uses a safe fallback
+    [DriverCapability.SKIP_LOCKED]: false,   // no row-skip lock? claim atomically another way
     [DriverCapability.LISTEN_NOTIFY]: false, // no pub/sub? core polls
     [DriverCapability.RETURNING]: false,
   });
-  readonly context: DriverContext = /* built from your constructor options */;
   readonly migrations: MigrationStep[] = /* authored alongside this driver */;
 
   // …every method below, per the Driver interface
@@ -45,6 +37,23 @@ class MyDriver implements Driver {
 
 const pq = new PortQueue({ driver: new MyDriver() });
 ```
+
+### Extend `BaseDriver`
+
+`BaseDriver` (exported from `@portqueue/core`) carries everything that is **not** SQL, so a driver is
+only its statements:
+
+- **Row → record mapping** — `mapJob`, `mapQueue`, `mapSchedule`, `mapInstance`, and the `JOB_COLUMNS`
+  / `SCHEDULE_INSERT_COLUMNS` lists they pair with. A column added to the schema then appears in every
+  engine's insert, rather than needing to be remembered five times.
+- **Value conversion** — `toJson`/`fromJson`, `boolIn`/`boolOut`, `numOrNull`/`strOrNull`, `likePattern`,
+  `emptyStatusCounts`, id generation.
+- **Arithmetic and paging helpers** — `phList`, `chunkForBind` (so a batch insert never exceeds your
+  engine's bound-parameter limit), the multi-instance affinity scan plan, and the claim sort order.
+
+You supply the four things that genuinely are per-engine: `execute(sql, params, session?)`,
+`transaction(fn)`, `ph(index)` (your placeholder style) and `window(page, params)` (your paging tail).
+Every statement string stays in your file — `BaseDriver` contains none.
 
 ### The `Driver` interface
 
@@ -67,9 +76,13 @@ caller's transaction. The interface groups its methods by concern:
 
 **Schema & migration**
 
-- `getSchemaVersion(): Promise<number | null>`
-- `applyMigration({ migration: MigrationStep }): Promise<void>`
-- `ensureBaseObjects(): Promise<void>`
+- `getSchemaVersion(): Promise<number | null>` — the highest applied version, or `null` when the
+  migration table does not exist yet. **Only that condition may read as `null`**: a dropped connection
+  or a permissions error has to surface, because reading it as "never migrated" would start a full
+  migration run against a database that may already be migrated.
+- `applyMigration({ migration: MigrationStep }): Promise<void>` — run the step's statements **and**
+  record its version in one transaction, so a crash between the two can't leave an applied-but-
+  unrecorded migration.
 
 **Producing**
 
@@ -78,8 +91,14 @@ caller's transaction. The interface groups its methods by concern:
 - `insertSchedule({ schedule, tx? }): Promise<ScheduleRow>`
 - `findJobByIdempotencyKey({ queueName, idempotencyKey, tx? }): Promise<InsertedJobRow | null>`
 - `findScheduleByIdempotencyKey({ queueName, idempotencyKey, tx? }): Promise<ScheduleRow | null>`
-- `deleteSchedule({ scheduleId, tx? }): Promise<boolean>`
-- `setScheduleEnabled({ scheduleId, enabled, now, tx? }): Promise<boolean>` — arm/disarm without deleting.
+- `deleteSchedule({ scheduleId, tx? }): Promise<ScheduleRef | null>`
+- `deleteSchedules({ scheduleIds, tx? }): Promise<ScheduleRef[]>` — one statement for the whole set.
+- `setScheduleEnabled({ scheduleId, enabled, now, tx? }): Promise<ScheduleRef | null>` — arm/disarm without deleting.
+
+Every mutating method returns a **ref** (`{ jobId, queueName }` / `{ scheduleId, queueName }`) rather
+than a bare boolean, because the caller needs the queue name to emit its event and wake the right
+worker — and reading it back afterwards would be a second round trip (or, on a single-connection
+engine, a deadlock).
 
 **Claiming & completing (hot path)**
 
@@ -88,17 +107,26 @@ caller's transaction. The interface groups its methods by concern:
 - `completeJob({ jobId, returnValue?, now, tx? }): Promise<void>`
 - `retryJob({ jobId, nextRunAt, retryAttempt, lastError, now }): Promise<void>`
 - `failJob({ jobId, lastError, now }): Promise<void>`
-- `reclaimStalledJobs({ queueName?, now }): Promise<JobRecord[]>`
-- `expireDueJobs({ queueName?, now }): Promise<JobRecord[]>`
-- `requeueJob({ jobId, now, tx? }): Promise<InsertedJobRow>` — re-arm a job's own row (manual retry).
+- `reclaimStalledJobs({ queueName?, limit, now }): Promise<StalledJobRef[]>` — bounded, and returns
+  refs rather than whole rows: the caller needs the id, the queue to wake, and who was holding the job.
+- `expireDueJobs({ queueName?, limit, now }): Promise<JobRef[]>` — bounded the same way; the caller
+  loops until a batch comes back short.
+- `requeueJob({ jobId, now, tx? }): Promise<RequeuedJobRef | null>` — re-arm a job's own row (manual
+  retry). Must **refuse an `ACTIVE` row** and return `null`: clearing a running job's lock would let a
+  second worker claim it, so the same job would run twice concurrently. An unknown id is also `null`,
+  never an error, so one stale id can't fail a batch.
+- `requeueJobs({ jobIds, now, tx? }): Promise<RequeuedJobRef[]>` — the same guard, in one statement.
 
 **Reading**
 
 - `getJob({ jobId }): Promise<JobRecord | null>`
-- `getJobs({ queueName?, statuses?, scheduleId?, processedOnInstanceKey?, limit, offset, order }): Promise<JobRecord[]>`
+- `getJobs({ queueName?, statuses?, scheduleId?, processedOnInstanceKey?, search?, limit, offset }): Promise<JobRecord[]>` —
+  always newest-first. `search` is a case-insensitive substring matched **in SQL** across the id,
+  status, idempotency key, failure message and serialized payload, so a text query pages in the
+  database rather than being filtered in the process.
 - `countJobsByStatus({ queueName?, processedOnInstanceKey? }): Promise<Record<JobStatus, number>>`
 - `countJobsByStatusPerQueue({ queueNames }): Promise<Record<string, Record<JobStatus, number>>>` — the same breakdown for many queues in **one** grouped query, so a list page costs one count query rather than one per row. `countJobsByStatusPerInstance({ instanceKeys })` is its per-instance twin.
-- `countJobs({ queueName?, statuses?, scheduleId?, processedOnInstanceKey? }): Promise<number>` — total rows behind a `getJobs` filter, ignoring paging.
+- `countJobs(filter): Promise<number>` — total rows behind a `getJobs` filter (`search` included), ignoring paging.
 - `listQueues({ search?, processingPaused?, limit?, offset? }?): Promise<QueueRow[]>` — called with no options it returns every queue, which is what core's own reads want; the paging fields exist for list UIs. `countQueues(filter?)` gives the matching total.
 - `listSchedules({ queueName?, enabled?, search?, limit?, offset? }): Promise<ScheduleRow[]>`, with `countSchedules(filter)`.
 - `getSchedule({ scheduleId }): Promise<ScheduleRow | null>`
@@ -107,21 +135,25 @@ caller's transaction. The interface groups its methods by concern:
 
 **Job control**
 
-- `cancelJob({ jobId, now, tx? }): Promise<boolean>`
-- `removeJob({ jobId, tx? }): Promise<boolean>`
-- `removeJobsByIds({ jobIds, queueName, tx? }): Promise<number>`
+- `cancelJob({ jobId, now, tx? }): Promise<JobRef | null>` — only a `PENDING`/`RETRY` row is cancellable.
+- `cancelJobs({ jobIds, now, tx? }): Promise<JobRef[]>`
+- `removeJob({ jobId, tx? }): Promise<JobRef | null>` — never removes an `ACTIVE` row.
+- `removeJobs({ jobIds, tx? }): Promise<JobRef[]>` — same guard, one statement.
 - `removeJobsByStatus({ queueName, statuses, tx? }): Promise<number>`
 
 **Queue control**
 
-- `setQueuePaused({ queueName, processingPaused?, acceptingPaused?, now, tx? }): Promise<void>`
+- `setQueuePaused({ queueName, processingPaused?, acceptingPaused?, now, tx? }): Promise<QueueRow | null>` —
+  returns the updated row so the caller refreshes its cached pause flags without a second read.
 - `ensureQueue({ name, options?, now, tx? }): Promise<QueueRow>`
 - `getQueueByName({ name }): Promise<QueueRow | null>`
 - `deleteQueue({ name, tx? }): Promise<boolean>`
 
 **Instance liveness & per-instance pause**
 
-- `upsertInstance({ instanceKey, now }): Promise<InstanceRow>`
+- `upsertInstance({ instanceKey, now, metrics? }): Promise<InstanceRow>` — must never touch the
+  independently-controlled pause flag, and must return the resulting row: the caller reads
+  `processingPaused` from it rather than issuing a follow-up read.
 - `listInstances({ search?, processingPaused?, alive?, seenSince?, limit?, offset? }?): Promise<InstanceRow[]>` — `alive` compares `last_seen_at` against the `seenSince` cutoff the caller computed, so the driver never needs to know the liveness window. `countInstances(filter?)` gives the matching total.
 - `getInstance({ instanceKey }): Promise<InstanceRow | null>`
 - `setInstancePaused({ instanceKey, processingPaused, now }): Promise<void>`
@@ -129,7 +161,9 @@ caller's transaction. The interface groups its methods by concern:
 
 **Retention**
 
-- `deleteFinishedJobs({ olderThan, statuses, limit, now }): Promise<number>`
+- `deleteFinishedJobs({ olderThan, limit }): Promise<number>` — no status list: which statuses a row
+  may be deleted in is the **row's own** `retention_statuses`, resolved when the job was added, or
+  `NULL` for every finished status.
 
 **Pub/sub** (only meaningful with `LISTEN_NOTIFY`)
 
@@ -145,9 +179,11 @@ caller's transaction. The interface groups its methods by concern:
 - `tryAdvisoryLock?({ key }): Promise<boolean>`
 - `releaseAdvisoryLock?({ key }): Promise<void>`
 
-`MigrationStep` is `{ version: number; checksum: string; up(driver, context): Promise<void> }`;
+`MigrationStep` is `{ version: number; statements(context): string[] }` — identified by its version
+alone; there is deliberately no checksum, because nothing ever compared one.
 `DriverProbe` is `{ serverVersion: string; verifiedCapabilities: DriverCapability[] }`;
-`Subscription` is `{ unsubscribe(): Promise<void> }`. All are exported from `@portqueue/core`.
+`Subscription` is `{ unsubscribe(): Promise<void> }`. All are exported from `@portqueue/core`, along
+with `JobRef`, `StalledJobRef`, `RequeuedJobRef` and `ScheduleRef`.
 
 ### Own your dialect and migrations
 
@@ -177,16 +213,16 @@ Core branches on `DriverCapability`, never on driver identity. Build the set wit
   of waking on `notify`.
 - `SKIP_LOCKED` — claim rows without blocking on ones another worker already locked. If `false`,
   core uses a polling/locking fallback for `claimJobs`.
-- `RETURNING` — `INSERT`/`UPDATE` can return the affected row in one round-trip. If `false`, the
+- `RETURNING` — `INSERT`/`UPDATE` can return the affected rows in one round-trip. If `false`, the
   driver mutates then reads the rows back in the same transaction.
-- `DB_GENERATED_UUID` — the engine can generate job/schedule ids itself; otherwise core supplies them.
 - `TRANSACTIONS` — the engine supports real transactions. If `false`, the transaction wrapper
   is a no-op (statements still run, just not atomically).
 - `ADVISORY_LOCK` — the engine offers advisory locks, enabling the optional
   `tryAdvisoryLock`/`releaseAdvisoryLock` methods for leader-only tasks.
-- `JSON_NATIVE` — the engine has a native JSON column type for payloads; otherwise core serializes
-  to text.
-- `BATCHED_READ` — the engine can efficiently read many rows in one round-trip.
+
+Every flag is one core branches on. A flag nothing reads is a promise the library doesn't keep, so
+there is no `JSON_NATIVE`, `BATCHED_READ` or `DB_GENERATED_UUID`: payloads are always serialized to
+text and ids are always supplied by the tool.
 
 Where a feature genuinely can't exist, the corresponding method still exists and throws a
 typed `UnsupportedCapabilityError` telling the developer the right path.
@@ -201,13 +237,19 @@ it keeps raw strings as a historical record). All are exported from `@portqueue/
 - `QueueColumn` — e.g. `NAME`, `PROCESSING_PAUSED`, `ACCEPTING_PAUSED`, `CREATED_AT`, `UPDATED_AT`.
 - `JobColumn` — every job column, e.g. `ID`, `QUEUE_NAME`, `STATUS`, `PRIORITY`, `DATA`,
   `START_AFTER`, `LOCKED_UNTIL`, `IDEMPOTENCY_KEY`, `SINGLETON_KEY`, `SCHEDULE_ID`, …
-- `ScheduleColumn` — e.g. `ID`, `QUEUE_NAME`, `CRON`, `EVERY_MS`, `NEXT_RUN_AT`, `LAST_RUN_AT`,
+- `ScheduleColumn` — e.g. `ID`, `QUEUE_NAME`, `CRON`, `EVERY_SECONDS`, `NEXT_RUN_AT`, `LAST_RUN_AT`,
   `ENABLED`, `IDEMPOTENCY_KEY`, …
 - `InstanceColumn` — `INSTANCE_KEY`, `PROCESSING_PAUSED`, `CREATED_AT`, `UPDATED_AT`, `LAST_SEEN_AT`.
-- `MigrationColumn` — `VERSION`, `APPLIED_AT`, `CHECKSUM`, `CREATED_AT`, `UPDATED_AT`.
+- `MigrationColumn` — `VERSION`, `APPLIED_AT`, `CREATED_AT`, `UPDATED_AT`.
 
 The `validateIdentifier` helper (also exported) allowlist-checks any user-influenced identifier
 (`schema` / `tablePrefix`) before it reaches SQL.
+
+`DriverContext.tableNames` gives you three name forms, and they are not interchangeable:
+`qualified(table)` is what every query must use (`jobs.pq_job` when a `schema` was configured),
+`bare(table)` is the unqualified `pq_job`, and `derived(table, suffix)` names an object the engine
+files *inside* the table's own schema — an index or a constraint — which must therefore stay
+unqualified.
 
 ### Validate with the conformance kit
 
@@ -217,8 +259,14 @@ contract as the first-party ones.
 ```ts
 import { runConformance } from '@portqueue/core/conformance';
 
-await runConformance({ makeDriver: () => new MyDriver() });
+runConformance({ name: 'my-engine', createDriver: () => new MyDriver() });
 ```
 
-The same kit validates the built-in drivers, so passing it means your engine behaves
-identically to Postgres/SQLite from app code's perspective.
+Beyond the happy path it pins the guards core actually depends on, which are the ones a custom driver
+is most likely to get subtly wrong: `requeueJob`/`removeJob`/`cancelJob` refusing an `ACTIVE` row,
+`expireDueJobs` and `deleteFinishedJobs` (including per-row `retention_statuses`), `advanceSchedule`'s
+guarded claim, the `search` filter, and agreement between every list page and its `count*`.
+
+The same kit validates the built-in drivers, so passing it means your engine behaves identically to
+Postgres/SQLite from app code's perspective. PGLite and SQLite run it in CI; MySQL and Oracle are
+validated with it by hand against a real server.

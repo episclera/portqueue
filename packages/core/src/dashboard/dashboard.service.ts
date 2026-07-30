@@ -5,22 +5,27 @@
  *
  * Three things this class is careful about, each a bug the dashboard used to have:
  *
- * - **It never calls `createQueue`.** `createQueue` registers a queue in the host process, which
- *   flips `QueueInfo.inUse` to true forever and makes `removeQueue` throw. Every read and write
- *   here goes to the driver directly, or through a `Queue` handle the *developer* already created.
- * - **Lists are paged and counted in the database**, not fetched whole and sliced in the browser.
- * - **Batches share one transaction**, so a bulk action is all-or-nothing rather than N
- *   independent round-trips that can half-apply.
+ * - **Every filter runs in the database.** A free-text job search is a `LIKE` in SQL, not a chunked
+ *   scan of the table through this process; a list page is `LIMIT`/`OFFSET`, never a whole-table read
+ *   sliced in memory.
+ * - **A batch is one statement.** `retry`, `cancel` and `remove` each hand the whole id set to one
+ *   driver call, so the cost is constant in the number of ids and a single stale id cannot roll back
+ *   the rest of the batch.
+ * - **It never declares a queue.** Reads and writes address a queue by name; the client this runs on
+ *   is headless (see `PortQueueOptions._headless`), so it registers nothing and owns nothing.
  */
-import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { InvalidOptionsError } from '../errors/errors';
-import { toSnapshot } from '../jobs/snapshot';
+import {
+  instanceStaleAfterMs,
+  pageWindow,
+  toInstanceInfo,
+  toQueueInfo,
+} from '../monitoring/stats.service';
 import {
   DASHBOARD_MAX_LIMIT,
   JobBatchAction,
   type BatchResult,
-  type DashboardPageQuery,
   type DashboardStats,
   type DashboardInstancesQuery,
   type DashboardQueuesQuery,
@@ -28,37 +33,26 @@ import {
   type JobInstanceFilter,
   type JobSearchQuery,
   type Page,
-  type ScheduleWithQueue,
 } from './dashboard-results';
 import type { Runtime } from '../client/runtime';
-import type { Driver } from '../drivers/driver.interface';
-import type { GetJobsQuery, InstanceInfo, JobSnapshot, QueueInfo } from '../producer/results';
+import type { Driver, JobRef } from '../drivers/driver.interface';
+import type {
+  GetJobsQuery,
+  InstanceInfo,
+  JobSnapshot,
+  QueueInfo,
+  ScheduleInfo,
+} from '../producer/results';
 import type { JobRecord } from '../jobs/job-record';
 import type { ReadService } from '../monitoring/stats.service';
+import type { ProducerService } from '../producer/producer.service';
 import type { TransactionHandle } from '../tx/transaction-handle';
-
-/** The default liveness window when the host set no explicit heartbeat interval. */
-const DEFAULT_HEARTBEAT_SECONDS = 15;
-
-/**
- * Rows a free-text job search reads per round trip. A search scans the whole matching set (see
- * {@link DashboardService.getJobs}); this only decides how many rows travel at a time — big enough
- * that a large table doesn't turn into thousands of queries, small enough that one chunk is never a
- * memory problem.
- */
-const SEARCH_CHUNK_SIZE = 1000;
-
-/** Clamp a caller-supplied page window to something the database is happy to serve. */
-function pageWindow(query: DashboardPageQuery): { limit: number; offset: number } {
-  const limit = Math.min(Math.max(Math.trunc(query.limit ?? 50), 1), DASHBOARD_MAX_LIMIT);
-  const offset = Math.max(Math.trunc(query.offset ?? 0), 0);
-  return { limit, offset };
-}
 
 export class DashboardService {
   constructor(
     private readonly runtime: Runtime,
     private readonly reads: ReadService,
+    private readonly producer: ProducerService,
   ) {}
 
   /**
@@ -71,8 +65,9 @@ export class DashboardService {
   }
 
   /**
-   * Run `fn` inside one driver transaction. The dashboard's batch endpoints use this so a bulk
-   * retry/cancel/remove either applies to every selected row or to none of them.
+   * Run `fn` inside one driver transaction. Left on the facade for a caller that needs to compose
+   * several driver calls atomically; the batch actions below no longer need it, because each is a
+   * single statement.
    */
   runInTransaction<T>(options: { fn: (tx: TransactionHandle) => Promise<T> }): Promise<T> {
     return this.runtime.driver.runInTransaction(options);
@@ -81,65 +76,38 @@ export class DashboardService {
   // --- Paged lists -------------------------------------------------------------------------
 
   /**
-   * A page of queues with their per-status counts. The counts come from a single grouped query
-   * over just this page's queue names, so the cost is two queries per page rather than one per
-   * queue.
+   * A page of queues with their per-status counts. Filtering and paging both happen in SQL; the
+   * counts come from a single grouped query over just this page's queue names, so the cost is three
+   * queries per page rather than one per queue.
    */
   async getQueues(query: DashboardQueuesQuery = {}): Promise<Page<QueueInfo>> {
-    const { limit, offset } = pageWindow(query);
+    const { limit, offset } = pageWindow(query, DASHBOARD_MAX_LIMIT);
     const filter = {
       ...(query.search ? { search: query.search } : {}),
       ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
     };
-
-    // `inUse` is this process's own registry state, not a column, so it can't be pushed into SQL.
-    // When it's filtered on, page in memory over the (already name-filtered) rows instead.
-    if (query.inUse !== undefined) {
-      const all = await this.runtime.driver.listQueues(filter);
-      const matching = all.filter((row) => this.isInUse(row.name) === query.inUse);
-      const rows = matching.slice(offset, offset + limit);
-      return {
-        items: await this.withQueueCounts(rows),
-        total: matching.length,
-      };
-    }
-
     const [rows, total] = await Promise.all([
       this.runtime.driver.listQueues({ ...filter, limit, offset }),
       this.runtime.driver.countQueues(filter),
     ]);
+    if (!rows.length) return { items: [], total };
+    const counts = await this.runtime.driver.countJobsByStatusPerQueue({
+      queueNames: rows.map((r) => r.name),
+    });
     return {
-      items: await this.withQueueCounts(rows),
+      items: rows.map((row) =>
+        // `inUse` is this client's own registry state and a headless client declares nothing, so it
+        // is always false here. The dashboard does not surface it — see DashboardQueuesQuery.
+        toQueueInfo(row, counts[row.name], this.runtime.registry.isRegistered(row.name)),
+      ),
       total,
     };
   }
 
-  /** Attach the per-status count breakdown to a page of queue rows in one grouped query. */
-  private async withQueueCounts(
-    rows: { name: string; processingPaused: boolean; acceptingPaused: boolean }[],
-  ): Promise<QueueInfo[]> {
-    if (!rows.length) return [];
-    const counts = await this.runtime.driver.countJobsByStatusPerQueue({
-      queueNames: rows.map((r) => r.name),
-    });
-    return rows.map((row) => ({
-      name: row.name,
-      processingPaused: row.processingPaused,
-      acceptingPaused: row.acceptingPaused,
-      counts: counts[row.name] ?? emptyCounts(),
-      inUse: this.isInUse(row.name),
-    }));
-  }
-
-  private isInUse(name: string): boolean {
-    return this.runtime.registry.isRegistered(name);
-  }
-
   /** A page of instances with liveness and per-instance job attribution. */
   async getInstances(query: DashboardInstancesQuery = {}): Promise<Page<InstanceInfo>> {
-    const { limit, offset } = pageWindow(query);
-    const now = this.runtime.clock.now();
-    const seenSince = now - this.instanceStaleAfterMs();
+    const { limit, offset } = pageWindow(query, DASHBOARD_MAX_LIMIT);
+    const seenSince = this.runtime.clock.now() - instanceStaleAfterMs(this.runtime.options);
     const filter = {
       ...(query.search ? { search: query.search } : {}),
       ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
@@ -150,73 +118,43 @@ export class DashboardService {
       this.runtime.driver.listInstances({ ...filter, limit, offset }),
       this.runtime.driver.countInstances(filter),
     ]);
-    const counts = rows.length
-      ? await this.runtime.driver.countJobsByStatusPerInstance({
-          instanceKeys: rows.map((r) => r.instanceKey),
-        })
-      : {};
+    if (!rows.length) return { items: [], total };
+    const counts = await this.runtime.driver.countJobsByStatusPerInstance({
+      instanceKeys: rows.map((r) => r.instanceKey),
+    });
     return {
-      items: rows.map((row) => ({
-        instanceKey: row.instanceKey,
-        processingPaused: row.processingPaused,
-        alive: row.lastSeenAt >= seenSince,
-        createdAt: new Date(row.createdAt),
-        updatedAt: new Date(row.updatedAt),
-        lastSeenAt: new Date(row.lastSeenAt),
-        cpuPercent: row.cpuPercent,
-        memoryPercent: row.memoryPercent,
-        counts: counts[row.instanceKey] ?? emptyCounts(),
-      })),
+      items: rows.map((row) => toInstanceInfo(row, counts[row.instanceKey], seenSince)),
       total,
     };
   }
 
   /**
    * One instance by key, with the same liveness, health and attribution the list carries — for the
-   * instance detail page. `PortQueue.getInstances()` returns every instance and has no by-key read,
-   * so fetching one would otherwise mean listing all of them and filtering client-side.
+   * instance detail page. `PortQueue.getInstance` covers this, but the facade keeps its own entry
+   * point so the dashboard's routes read uniformly.
    */
-  async getInstance(options: { instanceKey: string }): Promise<InstanceInfo | null> {
-    const row = await this.runtime.driver.getInstance({ instanceKey: options.instanceKey });
-    if (!row) return null;
-    const seenSince = this.runtime.clock.now() - this.instanceStaleAfterMs();
-    const counts = await this.runtime.driver.countJobsByStatusPerInstance({
-      instanceKeys: [row.instanceKey],
-    });
-    return {
-      instanceKey: row.instanceKey,
-      processingPaused: row.processingPaused,
-      alive: row.lastSeenAt >= seenSince,
-      createdAt: new Date(row.createdAt),
-      updatedAt: new Date(row.updatedAt),
-      lastSeenAt: new Date(row.lastSeenAt),
-      cpuPercent: row.cpuPercent,
-      memoryPercent: row.memoryPercent,
-      counts: counts[row.instanceKey] ?? emptyCounts(),
-    };
+  getInstance(options: { instanceKey: string }): Promise<InstanceInfo | null> {
+    return this.reads.getInstance(options.instanceKey);
   }
 
   /**
-   * How long an instance may go unheard-from before it counts as stale: three heartbeats, so a
-   * single missed beat (a slow query, a GC pause) doesn't flip a healthy instance to "stale".
+   * A page of schedules across every queue, in one query. Delegates to the same producer read
+   * `pq.getSchedules` uses, plus the free-text filter only this table offers.
    */
-  private instanceStaleAfterMs(): number {
-    const beatSeconds =
-      this.runtime.options.instance?.heartbeatIntervalSeconds ?? DEFAULT_HEARTBEAT_SECONDS;
-    return beatSeconds * 3 * 1000;
-  }
-
-  /**
-   * A page of schedules across every queue, in one query. The public `queue.getSchedules()` reads
-   * a single queue and requires a `Queue` handle — building one per queue is both an N+1 and the
-   * registry-pollution bug described in this class's header.
-   */
-  async getSchedules(query: DashboardSchedulesQuery = {}): Promise<Page<ScheduleWithQueue>> {
-    const { limit, offset } = pageWindow(query);
+  async getSchedules(query: DashboardSchedulesQuery = {}): Promise<Page<ScheduleInfo>> {
+    const { limit, offset } = pageWindow(query, DASHBOARD_MAX_LIMIT);
+    if (!query.search) {
+      return this.producer.getSchedules({
+        ...(query.queue ? { queue: query.queue } : {}),
+        ...(query.enabled !== undefined ? { enabled: query.enabled } : {}),
+        limit,
+        offset,
+      });
+    }
     const filter = {
       ...(query.queue ? { queueName: query.queue } : {}),
       ...(query.enabled !== undefined ? { enabled: query.enabled } : {}),
-      ...(query.search ? { search: query.search } : {}),
+      search: query.search,
     };
     const [rows, total] = await Promise.all([
       this.runtime.driver.listSchedules({ ...filter, limit, offset }),
@@ -239,20 +177,8 @@ export class DashboardService {
   }
 
   /** One schedule by id, with its queue — backs the schedule detail page. */
-  async getSchedule(options: { scheduleId: string }): Promise<ScheduleWithQueue | null> {
-    const s = await this.runtime.driver.getSchedule({ scheduleId: options.scheduleId });
-    if (!s) return null;
-    return {
-      scheduleId: s.id,
-      queue: s.queueName,
-      cron: s.cron,
-      everySeconds: s.everySeconds,
-      timezone: s.timezone,
-      nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
-      lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,
-      enabled: s.enabled,
-      idempotencyKey: s.idempotencyKey,
-    };
+  getSchedule(options: { scheduleId: string }): Promise<ScheduleInfo | null> {
+    return this.producer.getSchedule(options.scheduleId);
   }
 
   /** Counts only — the activity cards. No throughput or failure-rate derivation. */
@@ -266,75 +192,40 @@ export class DashboardService {
   // --- Jobs --------------------------------------------------------------------------------
 
   /**
-   * A page of jobs, optionally narrowed by a free-text search. Without a search this is the public
-   * paged read.
+   * A page of jobs, optionally narrowed by a free-text search.
    *
-   * With one, the whole matching set is searched — every job the other filters allow, oldest
-   * included. The engine carries no text index on ids, payloads or failure messages, so the term is
-   * matched in JS; that is done over a **chunked scan** ({@link SEARCH_CHUNK_SIZE} rows a round
-   * trip) rather than by loading the table into memory. Only the rows that fall inside the
-   * requested page are kept — everything else is counted and dropped — so memory is bounded by the
-   * page size, not by the table.
-   *
-   * A search therefore costs O(rows / chunk) queries and reports a `total` that is the true number
-   * of matches. The alternative, a bounded window, silently answered a different question: "the
-   * most recent N jobs matched nothing" reads exactly like "nothing matched".
+   * The search is a SQL `LIKE` across the five fields an operator triages by — id, status,
+   * idempotency key, failure message and the serialized payload — so it pages in the database and
+   * `total` is a `COUNT`. The previous implementation read the whole matching set through this
+   * process in 1000-row chunks and filtered in JS: bounded in memory, but O(rows / 1000) queries and
+   * a `JSON.parse` of every payload in the table for one keystroke.
    */
-  async getJobs<TData = unknown>(
+  getJobs<TData = unknown>(
     query: GetJobsQuery & JobSearchQuery & JobInstanceFilter = {},
   ): Promise<Page<JobSnapshot<TData>>> {
-    const term = query.search?.trim().toLowerCase();
+    const term = query.search?.trim();
     const { search: _search, ...base } = query;
-    if (!term) return this.reads.getJobs<TData>(base);
-
-    const limit = Math.min(Math.max(Math.trunc(base.limit ?? 50), 1), DASHBOARD_MAX_LIMIT);
-    const offset = Math.max(Math.trunc(base.offset ?? 0), 0);
-    const filter = {
-      ...(base.queue ? { queueName: base.queue } : {}),
-      ...(base.statuses ? { statuses: base.statuses } : {}),
-      ...(base.scheduleId ? { scheduleId: base.scheduleId } : {}),
-      ...(base.instanceKey ? { processedOnInstanceKey: base.instanceKey } : {}),
-    };
-
-    const now = this.runtime.clock.now();
-    const items: JobSnapshot<TData>[] = [];
-    let matches = 0;
-
-    for (let scanned = 0; ; scanned += SEARCH_CHUNK_SIZE) {
-      const records = await this.runtime.driver.getJobs({
-        ...filter,
-        limit: SEARCH_CHUNK_SIZE,
-        offset: scanned,
-      });
-      for (const record of records) {
-        const job = toSnapshot<TData>(record, record.queueName, now);
-        if (!matchesJobSearch(job, term)) continue;
-        // Keep only the slice the caller asked for; the rest of the matches just move `total`.
-        if (matches >= offset && items.length < limit) items.push(job);
-        matches += 1;
-      }
-      // A short chunk is the end of the table — the only place this loop stops.
-      if (records.length < SEARCH_CHUNK_SIZE) break;
-    }
-
-    return {
-      items,
-      total: matches,
-    };
+    return this.reads.getJobs<TData>({
+      ...base,
+      ...(term ? { search: term } : {}),
+      limit: Math.min(Math.max(Math.trunc(base.limit ?? 50), 1), DASHBOARD_MAX_LIMIT),
+    });
   }
 
   // --- Batch actions -----------------------------------------------------------------------
 
   /**
-   * Apply one action to many jobs inside a **single transaction**: if any one of them throws, the
-   * whole batch rolls back and nothing is half-applied. Ids that simply didn't match (already
-   * gone, or an ACTIVE row a remove refuses) don't fail the batch — they just don't count toward
-   * `affected`.
+   * Apply one action to many jobs in a **single** driver call.
    *
-   * Cancellation is the one action with a non-transactional side effect: a job running *in this
-   * process* is cancelled by firing its handler's `AbortSignal`, which no transaction can undo.
-   * Those are fired only after the transaction commits, so a rollback can't leave a handler
-   * aborted for a batch that never applied.
+   * Each action maps to one guarded statement over the whole id set, so the cost is constant in the
+   * number of ids and the guard is uniform: an id that didn't match (already gone, or an `ACTIVE` row
+   * that a retry or a remove refuses) is simply absent from the result rather than failing the batch.
+   * The previous implementation looped `requeueJob` per id inside one transaction, where the first
+   * stale id threw and rolled back every retry beside it.
+   *
+   * Cancellation keeps its one non-transactional side effect: a job running *in this process* is
+   * cancelled by firing its handler's `AbortSignal`, which no statement can undo, so those fire only
+   * after the write has landed.
    */
   async runJobBatch(options: {
     queue: string;
@@ -347,116 +238,93 @@ export class DashboardService {
     const now = this.runtime.clock.now();
     const driver = this.runtime.driver;
 
-    // Cancel first checks which ids are running here; those settle via their own signal below.
-    const locallyRunning =
-      action === JobBatchAction.CANCEL
-        ? jobIds.filter((id) => this.runtime.cancelRunning !== undefined && this.isRunningHere(id))
-        : [];
-
-    const affected = await driver.runInTransaction({
-      fn: async (tx) => {
-        let n = 0;
-        switch (action) {
-          case JobBatchAction.REMOVE:
-            // The driver removes by id set in one statement and reports the row count.
-            n = await driver.removeJobsByIds({ jobIds, queueName: queue, tx });
-            break;
-          case JobBatchAction.RETRY:
-            for (const jobId of jobIds) {
-              await driver.requeueJob({ jobId, now, tx });
-              n += 1;
-            }
-            break;
-          case JobBatchAction.CANCEL:
-            for (const jobId of jobIds) {
-              if (locallyRunning.includes(jobId)) {
-                // Settled by its own handler after commit; still counts as acted on.
-                n += 1;
-                continue;
-              }
-              if (await driver.cancelJob({ jobId, now, tx })) n += 1;
-            }
-            break;
-          default:
-            throw new InvalidOptionsError(`Unknown job batch action '${String(action)}'.`);
+    switch (action) {
+      case JobBatchAction.REMOVE: {
+        const removed = await driver.removeJobs({ jobIds });
+        this.emitPerJob(PortQueueEvent.JOB_REMOVED, removed, queue);
+        return { affected: removed.length, requested: jobIds.length };
+      }
+      case JobBatchAction.RETRY: {
+        const requeued = await driver.requeueJobs({ jobIds, now });
+        // One wakeup per distinct queue, not per job.
+        for (const q of new Set(requeued.map((r) => r.queueName))) this.runtime.wakeup.signal(q);
+        for (const ref of requeued) {
+          this.runtime.events.emit(PortQueueEvent.JOB_ADDED, {
+            jobId: ref.jobId,
+            queue: ref.queueName,
+            deduplicated: false,
+          });
         }
-        return n;
-      },
-    });
-
-    // Post-commit effects: waking workers and firing events must not happen for a rolled-back
-    // batch, so they all live here rather than inside the transaction above.
-    if (action === JobBatchAction.RETRY) {
-      this.runtime.wakeup.signal(queue);
-      for (const jobId of jobIds) {
-        this.runtime.events.emit(PortQueueEvent.JOB_ADDED, { jobId, queue, deduplicated: false });
+        return { affected: requeued.length, requested: jobIds.length };
       }
-    } else if (action === JobBatchAction.CANCEL) {
-      for (const jobId of locallyRunning) this.runtime.cancelRunning?.(jobId);
-      for (const jobId of jobIds) {
-        this.runtime.events.emit(PortQueueEvent.JOB_CANCELLED, { jobId, queue });
+      case JobBatchAction.CANCEL: {
+        // Jobs running here settle via their own signal; the rest are cancelled in one statement.
+        const locallyRunning = jobIds.filter((id) => this.isRunningHere(id));
+        const remaining = jobIds.filter((id) => !locallyRunning.includes(id));
+        const cancelled = remaining.length
+          ? await driver.cancelJobs({ jobIds: remaining, now })
+          : [];
+        for (const jobId of locallyRunning) this.runtime.cancelRunning?.(jobId);
+        this.emitPerJob(PortQueueEvent.JOB_CANCELLED, cancelled, queue);
+        for (const jobId of locallyRunning) {
+          this.runtime.events.emit(PortQueueEvent.JOB_CANCELLED, { jobId, queue });
+        }
+        return {
+          affected: cancelled.length + locallyRunning.length,
+          requested: jobIds.length,
+        };
       }
-    } else {
-      for (const jobId of jobIds) {
-        this.runtime.events.emit(PortQueueEvent.JOB_REMOVED, { jobId, queue });
-      }
+      default:
+        throw new InvalidOptionsError(`Unknown job batch action '${String(action)}'.`);
     }
+  }
 
-    return { affected, requested: jobIds.length };
+  /** Emit one event per affected job, naming the queue the row actually belongs to. */
+  private emitPerJob(
+    event: PortQueueEvent.JOB_REMOVED | PortQueueEvent.JOB_CANCELLED,
+    refs: JobRef[],
+    fallbackQueue: string,
+  ): void {
+    for (const ref of refs) {
+      this.runtime.events.emit(event, {
+        jobId: ref.jobId,
+        queue: ref.queueName || fallbackQueue,
+      });
+    }
   }
 
   /**
-   * Remove many schedules in one transaction. Core's public API only removes them one at a time
-   * (and only through a `Queue` handle), which this facade deliberately avoids constructing.
+   * Remove many schedules in **one** statement, which also returns each removed row's queue — so the
+   * `SCHEDULE_REMOVED` events cost nothing beyond the delete. This used to read every schedule
+   * individually just to learn its queue name, then delete them one at a time: 2N queries for N ids.
    */
   async removeSchedules(options: { scheduleIds: string[] }): Promise<BatchResult> {
     const { scheduleIds } = options;
     if (!scheduleIds.length) return { affected: 0, requested: 0 };
-    const driver = this.runtime.driver;
-    // Read the rows first: the SCHEDULE_REMOVED event names the queue, which the id alone doesn't.
-    const rows = await Promise.all(
-      scheduleIds.map((scheduleId) => driver.getSchedule({ scheduleId })),
-    );
-    const affected = await driver.runInTransaction({
-      fn: async (tx) => {
-        let n = 0;
-        for (const scheduleId of scheduleIds) {
-          if (await driver.deleteSchedule({ scheduleId, tx })) n += 1;
-        }
-        return n;
-      },
-    });
-    for (const row of rows) {
-      if (row) {
-        this.runtime.events.emit(PortQueueEvent.SCHEDULE_REMOVED, {
-          scheduleId: row.id,
-          queue: row.queueName,
-        });
-      }
+    const removed = await this.runtime.driver.deleteSchedules({ scheduleIds });
+    for (const ref of removed) {
+      this.runtime.events.emit(PortQueueEvent.SCHEDULE_REMOVED, {
+        scheduleId: ref.scheduleId,
+        queue: ref.queueName,
+      });
     }
-    return { affected, requested: scheduleIds.length };
+    return { affected: removed.length, requested: scheduleIds.length };
   }
 
   /** Arm or disarm a schedule. Core exposes the flag as read-only; the dashboard can toggle it. */
   async setScheduleEnabled(options: { scheduleId: string; enabled: boolean }): Promise<boolean> {
-    const row = await this.runtime.driver.getSchedule({ scheduleId: options.scheduleId });
-    if (!row) return false;
-    const ok = await this.runtime.driver.runInTransaction({
-      fn: (tx) =>
-        this.runtime.driver.setScheduleEnabled({
-          scheduleId: options.scheduleId,
-          enabled: options.enabled,
-          now: this.runtime.clock.now(),
-          tx,
-        }),
+    // One statement: the driver returns the affected row's ref, so the event needs no extra read.
+    const updated = await this.runtime.driver.setScheduleEnabled({
+      scheduleId: options.scheduleId,
+      enabled: options.enabled,
+      now: this.runtime.clock.now(),
     });
-    if (ok) {
-      this.runtime.events.emit(PortQueueEvent.SCHEDULE_UPDATED, {
-        scheduleId: options.scheduleId,
-        queue: row.queueName,
-      });
-    }
-    return ok;
+    if (!updated) return false;
+    this.runtime.events.emit(PortQueueEvent.SCHEDULE_UPDATED, {
+      scheduleId: updated.scheduleId,
+      queue: updated.queueName,
+    });
+    return true;
   }
 
   /** Whether this process is currently running the job (so a cancel fires its signal). */
@@ -464,44 +332,6 @@ export class DashboardService {
     // `cancelRunning` both tests and acts, so it can't be used as a probe here without
     // cancelling. `isJobRunningHere` is the read-only half.
     return this.runtime.isJobRunningHere?.(jobId) ?? false;
-  }
-}
-
-/** A zeroed status breakdown, for a key the grouped count query returned nothing for. */
-function emptyCounts(): Record<JobStatus, number> {
-  return {
-    [JobStatus.PENDING]: 0,
-    [JobStatus.ACTIVE]: 0,
-    [JobStatus.COMPLETED]: 0,
-    [JobStatus.FAILED]: 0,
-    [JobStatus.RETRY]: 0,
-    [JobStatus.CANCELLED]: 0,
-    [JobStatus.EXPIRED]: 0,
-  };
-}
-
-/**
- * The dashboard's free-text job match. Covers what the table shows (id, status) plus the three
- * fields operators actually search by during triage: the idempotency key, the failure message,
- * and the payload.
- */
-function matchesJobSearch(job: JobSnapshot<unknown>, term: string): boolean {
-  if (job.id.toLowerCase().includes(term)) return true;
-  if (job.status.toLowerCase().includes(term)) return true;
-  if (job.idempotencyKey?.toLowerCase().includes(term)) return true;
-  if (job.failureMessage?.toLowerCase().includes(term)) return true;
-  return serializePayload(job.data).includes(term);
-}
-
-/** Lower-cased text form of a payload, for substring search. Cyclic data degrades to no match. */
-function serializePayload(data: unknown): string {
-  if (data == null) return '';
-  if (typeof data === 'string') return data.toLowerCase();
-  if (typeof data === 'number' || typeof data === 'boolean') return String(data).toLowerCase();
-  try {
-    return JSON.stringify(data)?.toLowerCase() ?? '';
-  } catch {
-    return '';
   }
 }
 

@@ -23,7 +23,7 @@ import { PostgresDriver, type RawResult, type Session } from '../postgres/postgr
 export interface PGliteDriverOptions {
   /** Data directory for a file-backed DB; omit for in-memory. */
   dataDir?: string;
-  /** DB schema for all objects. */
+  /** DB schema for all objects. Created by the migration and used to qualify every table name. */
   schema?: string;
   /** Prefix for all created tables (default 'pq_'). */
   tablePrefix?: string;
@@ -52,9 +52,10 @@ export interface PGliteInstance extends PGliteQueryable {
  *
  * Because PGLite is byte-for-byte PG-wire compatible, this class **extends `PostgresDriver`** and
  * inherits its entire SQL surface: `$1`-style placeholders, SKIP LOCKED claiming, RETURNING
- * everywhere, no relational JOIN (relationships resolve by name/key lookups), and the in-code
- * enforcement of name-uniqueness and idempotency/singleton dedup. A change to a query in
- * `PostgresDriver` therefore changes PGLite too; anything that must differ is overridden here.
+ * everywhere, the keys and indexes its migration creates, no relational JOIN (relationships resolve
+ * by name/key lookups), and the in-code enforcement of idempotency/singleton dedup. A change to a
+ * query in `PostgresDriver` therefore changes PGLite too; anything that must differ is overridden
+ * here.
  *
  * What is custom to PGLite and overridden below:
  * - `engine`/`capabilities`/`migrations` — its own identity, capability set and migration array.

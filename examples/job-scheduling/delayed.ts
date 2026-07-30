@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
   await pq.init();
 
-  const reminders = pq.createQueue<{ message: string }>({ name: 'reminders' });
+  pq.createQueue<{ message: string }>({ name: 'reminders' });
 
   pq.createWorker<{ message: string }>({
     queue: 'reminders',
@@ -33,10 +33,11 @@ async function main(): Promise<void> {
   });
 
   // Runs immediately.
-  await reminders.addJob({ data: { message: 'this one runs now' } });
+  await pq.addJob({ queue: 'reminders', data: { message: 'this one runs now' } });
 
   // Runs ~3 seconds from now. Durations are always whole seconds — no unit strings to get wrong.
-  await reminders.addJob({
+  await pq.addJob({
+    queue: 'reminders',
     data: { message: 'this one runs in 3s' },
     schedule: { startAfterSeconds: 3 },
   });
@@ -44,7 +45,8 @@ async function main(): Promise<void> {
   // There is no absolute-Date option: `startAfterSeconds` is the only way to delay a job, so for a
   // known wall-clock instant you subtract now and pass the difference in seconds.
   const at = new Date(Date.now() + 5_000);
-  await reminders.addJob({
+  await pq.addJob({
+    queue: 'reminders',
     data: { message: `this one runs at ${at.toISOString()}` },
     schedule: { startAfterSeconds: Math.round((at.getTime() - Date.now()) / 1000) },
   });

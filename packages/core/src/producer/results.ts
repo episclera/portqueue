@@ -62,6 +62,8 @@ export interface JobSnapshot<TData = unknown> {
 /** Info about a recurring schedule. */
 export interface ScheduleInfo {
   scheduleId: string;
+  /** The queue this schedule produces onto. */
+  queue: string;
   cron?: string | null;
   /** For an interval schedule: the seconds between runs. */
   everySeconds?: number | null;
@@ -120,8 +122,10 @@ export interface GetJobsQuery extends PageQuery {
   scheduleId?: string;
 }
 
-/** Query for a queue's paged schedule reads. Same `limit`/`offset` window as {@link GetJobsQuery}. */
+/** Query for a paged schedule read. Same `limit`/`offset` window as {@link GetJobsQuery}. */
 export interface GetSchedulesQuery extends PageQuery {
+  /** Narrow to one queue's schedules; omit for every queue's. */
+  queue?: string;
   /** `true` → only armed schedules, `false` → only disarmed ones, absent → both. */
   enabled?: boolean;
 }

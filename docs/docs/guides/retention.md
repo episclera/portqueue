@@ -28,13 +28,13 @@ nothing is silently inherited) and override per job when a specific job needs to
 import { RetentionMode } from '@portqueue/core';
 
 // per-queue default
-const emailsQueue = pq.createQueue({
+pq.createQueue({
   name: 'emails',
   retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 259_200 }, // 3 days, in seconds
 });
 
 // per-job override (highest precedence) — keep this one longer
-await emailsQueue.addJob({ data, retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 2_592_000 } }); // 30 days
+await pq.addJob({ queue: 'emails', data, retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 2_592_000 } }); // 30 days
 ```
 
 `RetentionOptions` is `{ mode: RetentionMode; ttlSeconds?: number; statuses?: JobStatus[] }`:
@@ -42,11 +42,31 @@ await emailsQueue.addJob({ data, retention: { mode: RetentionMode.DELETE_AFTER, 
 - **`ttlSeconds`** — how many **seconds** after a job **finishes** before it may be deleted. **Required** for
   `DELETE_AFTER`; ignored for `KEEP_FOREVER`. Like every PortQueue duration it is a plain number of
   seconds — `604_800` for a week — so there is no unit string to misread.
-- **`statuses`** — which finished statuses the policy applies to. **Defaults to `[COMPLETED]`**,
-  so failed/cancelled/expired jobs are kept unless you list them explicitly.
+- **`statuses`** — which finished statuses the policy applies to. **Omit it and every finished status
+  is covered** (`COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED`). Name a subset to narrow it — with
+  `statuses: [JobStatus.COMPLETED]`, failed and cancelled jobs are kept regardless of their TTL, which
+  is the usual shape when you want a failure to stay around for triage:
+
+  ```ts
+  pq.createQueue({
+    name: 'emails',
+    retention: {
+      mode: RetentionMode.DELETE_AFTER,
+      ttlSeconds: 259_200,
+      statuses: [JobStatus.COMPLETED], // sweep the successes; keep the failures
+    },
+  });
+  ```
 
 Retention is settable at the **queue** level (`QueueOptions.retention`) and overridden per job
-(`JobOptions.retention`, highest precedence).
+(`JobOptions.retention`, highest precedence). A `retention` object **replaces** rather than merges: a
+per-job policy is the whole policy, so a job that names `mode` and `ttlSeconds` and no `statuses`
+covers every finished status even if its queue narrowed them.
+
+Like every other retention field, `statuses` is resolved **when the job is added** and frozen onto its
+row. Changing a queue's policy therefore governs the jobs added after it, never the ones already
+queued — which is the same rule `ttlSeconds` follows, and the reason the sweeper never has to re-read
+a queue's live options.
 
 :::info No count-based retention
 PortQueue only supports **TTL-based** deletion via `DELETE_AFTER`. There is **no** count-based
@@ -80,6 +100,6 @@ Manual pruning is always available:
 ```ts
 import { JobStatus } from '@portqueue/core';
 
-const emailsQueue = pq.createQueue({ name: 'emails' });
-await emailsQueue.removeJobs({ statuses: [JobStatus.COMPLETED] });
+pq.createQueue({ name: 'emails' });
+await pq.removeJobs({ queue: 'emails', statuses: [JobStatus.COMPLETED] });
 ```

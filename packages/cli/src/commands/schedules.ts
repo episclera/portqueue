@@ -10,14 +10,16 @@ export const schedulesCommand: Command = {
   usage: '[--queue <name>]',
   async run({ pq, flags }) {
     const queue = flagString(flags, 'queue');
-    // Read through the CLI facade: `createQueue` would register the queue in this admin process,
-    // which listing schedules has no business doing. Dropping `--queue` now lists every queue's.
-    const list = await pq._cli.getSchedules(queue ? { queue } : {});
-    if (flagBool(flags, 'json')) return printJson(list);
-    heading(`Schedules${queue ? ` — ${queue}` : ' (all queues)'}`);
+    // A page, not the whole table: this used to read every schedule row in the database into the
+    // terminal. Dropping `--queue` lists every queue's.
+    const page = await pq._cli.getSchedules(queue ? { queue } : {});
+    if (flagBool(flags, 'json')) return printJson(page);
+    heading(
+      `Schedules${queue ? ` — ${queue}` : ' (all queues)'} — showing ${page.items.length} of ${page.total}`,
+    );
     table(
       ['Schedule ID', 'Queue', 'Cron/Every', 'Next Run', 'Enabled'],
-      list.map((s) => [
+      page.items.map((s) => [
         s.scheduleId,
         s.queue,
         s.cron ?? `every ${s.everySeconds}s`,

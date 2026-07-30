@@ -40,6 +40,11 @@ export interface JobRecord {
   failureMessage: string | null;
   retentionMode: RetentionMode;
   retentionTtlSeconds: number | null;
+  /**
+   * The finished statuses this job's retention policy may delete it in, or `null` for every
+   * finished status. Frozen onto the row like the rest of the policy.
+   */
+  retentionStatuses: JobStatus[] | null;
   idempotencyKey: string | null;
   scheduleId: string | null;
   singletonKey: string | null;
@@ -63,6 +68,8 @@ export interface NewJobRecord {
   retryJitter: boolean;
   retentionMode: RetentionMode;
   retentionTtlSeconds: number | null;
+  /** Which finished statuses the retention policy applies to, or null for all of them. */
+  retentionStatuses: JobStatus[] | null;
   idempotencyKey: string | null;
   scheduleId: string | null;
   singletonKey: string | null;
@@ -149,6 +156,8 @@ export interface ScheduledJobOptions {
   retryJitter: boolean;
   retentionMode: RetentionMode;
   retentionTtlSeconds: number | null;
+  /** Which finished statuses the retention policy applies to, or null for all of them. */
+  retentionStatuses: JobStatus[] | null;
   singletonKey: string | null;
   preferredInstanceKeyPattern: string | null;
 }

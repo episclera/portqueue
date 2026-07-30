@@ -140,8 +140,23 @@ The dashboard reads through a `@portqueue/core` driver, so its client (`pg`, `be
 `@electric-sql/pglite`, …) must be installed too — otherwise PortQueue throws `MissingPeerDependencyError`.
 :::
 
-Create the dashboard once from your running PortQueue, then mount it with the adapter for your
-framework — Express, Koa, Fastify, NestJS and raw Node all ship in the box.
+Create the dashboard once from a **driver** — not from your running `PortQueue` — then mount it with
+the adapter for your framework. Express, Koa, Fastify, NestJS and raw Node all ship in the box.
+
+:::info It builds its own client
+`createDashboard({ driver })` constructs and owns a small **headless** PortQueue behind the scenes.
+That is what lets the dashboard run wherever you like: in almost every real deployment it is a
+different process from the workers, so riding on their client only ever worked in the one case where
+the two happened to share a process.
+
+Headless means it observes without joining: it declares no queues, registers no instance row, runs no
+workers or scheduler, and never migrates your schema. Nothing connects at mount either — the first
+request opens the connection, and `dash.close()` releases it.
+
+One consequence worth knowing: the queues table has no "in use" column. That flag means "declared in
+_this_ process", which a separate dashboard cannot know. `pq.getQueues()` still reports it for your
+own application code.
+:::
 
 <Tabs groupId="http-framework">
   <TabItem value="express" label="Express" default>
@@ -149,7 +164,7 @@ framework — Express, Koa, Fastify, NestJS and raw Node all ship in the box.
 ```ts
 import { createDashboard } from '@portqueue/dashboard';
 
-const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
+const dash = createDashboard({ driver, basePath: '/portqueue' });
 
 // `basePath` is the mount point, so the middleware goes on at the root.
 app.use(dash.express());
@@ -161,7 +176,7 @@ app.use(dash.express());
 ```ts
 import { createDashboard } from '@portqueue/dashboard';
 
-const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
+const dash = createDashboard({ driver, basePath: '/portqueue' });
 
 app.use(dash.koa());
 ```
@@ -172,7 +187,7 @@ app.use(dash.koa());
 ```ts
 import { createDashboard } from '@portqueue/dashboard';
 
-const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
+const dash = createDashboard({ driver, basePath: '/portqueue' });
 
 await app.register(dash.fastify());
 ```
@@ -183,7 +198,7 @@ await app.register(dash.fastify());
 ```ts
 import { createDashboard } from '@portqueue/dashboard';
 
-const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
+const dash = createDashboard({ driver, basePath: '/portqueue' });
 
 // Nest's default platform is Express, so mount it as functional middleware.
 // No @nestjs/* dependency is required — but keep forRoutes in sync with basePath.
@@ -201,14 +216,21 @@ export class DashboardModule implements NestModule {
 import { createServer } from 'node:http';
 import { createDashboard } from '@portqueue/dashboard';
 
-const dash = createDashboard({ portQueue: pq, basePath: '/portqueue' });
+const dash = createDashboard({ driver, basePath: '/portqueue' });
 
 const handler = dash.node();
 createServer((req, res) => {
   if (handler(req, res)) return; // the dashboard served this request
   // …fall through to your own routing
 }).listen(3000);
+
+// On the way out, release the dashboard's own connection.
+process.on('SIGTERM', () => void dash.close());
 ```
+
+`driver` is whichever driver instance points at your PortQueue database. If the dashboard shares a
+process with your workers, reuse the same instance you passed to `new PortQueue({ driver })`; if it
+runs on its own, construct one from the same connection details.
 
   </TabItem>
 </Tabs>

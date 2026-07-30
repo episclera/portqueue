@@ -1,33 +1,51 @@
 import { TableName } from '../table-names';
-import type { FlavourMigration, PhysicalName } from '../shared/migration';
-// NOTE: column names here are intentionally raw string literals, NOT the `*Column` enums used
-// by the drivers. A migration is a frozen record of a schema that has already been applied;
-// renaming an enum member must never retroactively rewrite a past migration's DDL.
+import type { FlavourMigration, MigrationNames } from '../shared/migration';
+// NOTE: column names and enum values here are intentionally raw string literals, NOT the
+// `*Column`/`JobStatus`/`RetentionMode` enums the drivers use. A migration is a frozen record of a
+// schema that has already been applied; renaming an enum member must never retroactively rewrite a
+// past migration's DDL.
 
 /**
- * Predefined MySQL DDL, authored in full for this engine. It differs from the Postgres flavour in
- * two engine-specific ways: MySQL forbids a `DEFAULT` on `TEXT`/`BLOB` columns, so the two
- * defaulted text columns (`retry_backoff`, `retention_mode`) are `VARCHAR`. `REAL` is MySQL's
- * synonym for `DOUBLE`; `BIGINT`/`INTEGER`/`SMALLINT`/`TEXT` are native. Authored by hand for this engine; not generated at runtime.
- * There is a single version so far — the base schema — but the array is the extension point: a
- * future change appends `{ version: 2, ... }` with its own statement builder rather than editing
- * `v1`, which is a frozen record of what has already been applied.
+ * Predefined MySQL DDL, authored in full for this engine. Four engine-specific facts shape it:
+ *
+ * - **MySQL cannot index a `TEXT` column** without a prefix length, and forbids a `DEFAULT` on one.
+ *   Every column that is indexed, keyed or defaulted is therefore `VARCHAR(n)`; only the free-form
+ *   payloads (`data`, `return_value`, `failure_message`, `job_options`,
+ *   `preferred_instance_key_pattern`) stay `TEXT`.
+ * - **There is no `CREATE INDEX IF NOT EXISTS`.** Indexes are declared inline as `KEY` clauses
+ *   inside `CREATE TABLE IF NOT EXISTS`, which makes re-running the migration a no-op without any
+ *   existence probing.
+ * - **There are no partial indexes**, so the Postgres flavour's `WHERE … IS NOT NULL` predicates are
+ *   dropped; the index simply covers the NULL rows too.
+ * - **A schema is a database**, so `CREATE SCHEMA IF NOT EXISTS` creates one.
+ *
+ * `REAL` is MySQL's synonym for `DOUBLE`; `BIGINT`/`INTEGER`/`SMALLINT` are native. Authored by hand;
+ * not generated at runtime. There is a single version so far — the base schema — but the array is
+ * the extension point: a future change appends `{ version: 2, ... }` with its own statement builder
+ * rather than editing `v1`, which is a frozen record of what has already been applied.
  */
 
-/** Version 1 — the full base schema. */
-function v1(t: PhysicalName): string[] {
-  return [
+/** Version 1 — the full base schema, its keys and its indexes. */
+function v1(names: MigrationNames): string[] {
+  const t = names.name;
+  const idx = names.derived;
+  const statements: string[] = [];
+
+  if (names.schema) statements.push(`CREATE SCHEMA IF NOT EXISTS ${names.schema}`);
+
+  statements.push(
     `CREATE TABLE IF NOT EXISTS ${t(TableName.QUEUE)} (
-      name TEXT NOT NULL,
+      name VARCHAR(255) NOT NULL,
       processing_paused SMALLINT NOT NULL DEFAULT 0,
       accepting_paused SMALLINT NOT NULL DEFAULT 0,
       created_at BIGINT NOT NULL,
-      updated_at BIGINT NOT NULL
+      updated_at BIGINT NOT NULL,
+      PRIMARY KEY (name)
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.JOB)} (
-      id TEXT NOT NULL,
-      queue_name TEXT NOT NULL,
-      status TEXT NOT NULL,
+      id VARCHAR(255) NOT NULL,
+      queue_name VARCHAR(255) NOT NULL,
+      status VARCHAR(32) NOT NULL,
       priority INTEGER NOT NULL DEFAULT 0,
       data TEXT,
       return_value TEXT,
@@ -44,7 +62,7 @@ function v1(t: PhysicalName): string[] {
       expired_at BIGINT,
       locked_until BIGINT,
       preferred_instance_key_pattern TEXT,
-      processed_on_instance_key TEXT,
+      processed_on_instance_key VARCHAR(255),
       retry_attempt INTEGER NOT NULL DEFAULT 0,
       retry_max_attempts INTEGER NOT NULL DEFAULT 1,
       retry_delay_seconds BIGINT NOT NULL DEFAULT 0,
@@ -55,16 +73,27 @@ function v1(t: PhysicalName): string[] {
       failure_message TEXT,
       retention_mode VARCHAR(32) NOT NULL DEFAULT 'KEEP_FOREVER',
       retention_ttl_seconds BIGINT,
-      idempotency_key TEXT,
-      schedule_id TEXT,
-      singleton_key TEXT
+      retention_statuses VARCHAR(255),
+      idempotency_key VARCHAR(255),
+      schedule_id VARCHAR(255),
+      singleton_key VARCHAR(255),
+      PRIMARY KEY (id),
+      KEY ${idx(TableName.JOB, 'claim_idx')} (queue_name, status, priority DESC, start_after ASC),
+      KEY ${idx(TableName.JOB, 'stalled_idx')} (status, locked_until),
+      KEY ${idx(TableName.JOB, 'expiry_idx')} (status, expire_at),
+      KEY ${idx(TableName.JOB, 'retention_idx')} (retention_mode, status, retention_ttl_seconds),
+      KEY ${idx(TableName.JOB, 'idempotency_idx')} (queue_name, idempotency_key),
+      KEY ${idx(TableName.JOB, 'singleton_idx')} (queue_name, singleton_key, status),
+      KEY ${idx(TableName.JOB, 'created_idx')} (created_at DESC),
+      KEY ${idx(TableName.JOB, 'schedule_idx')} (schedule_id),
+      KEY ${idx(TableName.JOB, 'instance_idx')} (processed_on_instance_key, status)
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.SCHEDULE)} (
-      id TEXT NOT NULL,
-      queue_name TEXT NOT NULL,
-      cron TEXT,
+      id VARCHAR(255) NOT NULL,
+      queue_name VARCHAR(255) NOT NULL,
+      cron VARCHAR(255),
       every_seconds BIGINT,
-      timezone TEXT,
+      timezone VARCHAR(255),
       data TEXT,
       job_options TEXT,
       priority INTEGER,
@@ -77,27 +106,33 @@ function v1(t: PhysicalName): string[] {
       end_at BIGINT,
       created_at BIGINT NOT NULL,
       updated_at BIGINT NOT NULL,
-      idempotency_key TEXT
+      idempotency_key VARCHAR(255),
+      PRIMARY KEY (id),
+      KEY ${idx(TableName.SCHEDULE, 'due_idx')} (enabled, next_run_at),
+      KEY ${idx(TableName.SCHEDULE, 'queue_idx')} (queue_name, created_at),
+      KEY ${idx(TableName.SCHEDULE, 'idempotency_idx')} (queue_name, idempotency_key)
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.INSTANCE)} (
-      instance_key TEXT NOT NULL,
+      instance_key VARCHAR(255) NOT NULL,
       processing_paused SMALLINT NOT NULL DEFAULT 0,
       created_at BIGINT NOT NULL,
       updated_at BIGINT NOT NULL,
       last_seen_at BIGINT NOT NULL,
       cpu_percent DOUBLE,
-      memory_percent DOUBLE
+      memory_percent DOUBLE,
+      PRIMARY KEY (instance_key),
+      KEY ${idx(TableName.INSTANCE, 'seen_idx')} (last_seen_at)
     )`,
     `CREATE TABLE IF NOT EXISTS ${t(TableName.MIGRATION)} (
       version INTEGER NOT NULL,
       applied_at BIGINT NOT NULL,
-      checksum TEXT NOT NULL,
       created_at BIGINT NOT NULL,
-      updated_at BIGINT NOT NULL
+      updated_at BIGINT NOT NULL,
+      PRIMARY KEY (version)
     )`,
-  ];
+  );
+
+  return statements;
 }
 
-export const MYSQL_MIGRATIONS: FlavourMigration[] = [
-  { version: 1, checksum: 'v1-base-schema', statements: v1 },
-];
+export const MYSQL_MIGRATIONS: FlavourMigration[] = [{ version: 1, statements: v1 }];

@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   });
   await pq.init();
 
-  const confirmations = pq.createQueue<{ orderId: string }>({ name: 'order-confirmations' });
+  pq.createQueue<{ orderId: string }>({ name: 'order-confirmations' });
 
   const done = new Promise<void>((resolve) => {
     pq.createWorker<{ orderId: string }>({
@@ -56,7 +56,11 @@ async function main(): Promise<void> {
     // 1. business write
     await client.query('INSERT INTO orders (id, total_cents) VALUES ($1, $2)', ['ord_1', 4200]);
     // 2. enqueue the follow-up job on the SAME transaction
-    await confirmations.addJob({ data: { orderId: 'ord_1' }, tx: fromPg(client) });
+    await pq.addJob({
+      queue: 'order-confirmations',
+      data: { orderId: 'ord_1' },
+      tx: fromPg(client),
+    });
     // 3. commit — order + job become durable together
     await client.query('COMMIT');
     console.log('Committed: order ord_1 and its confirmation job are now both durable.');

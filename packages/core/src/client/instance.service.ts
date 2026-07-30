@@ -1,3 +1,4 @@
+import { secondsToMs } from '../util/seconds';
 import type { Runtime } from './runtime';
 import type { SystemMetrics } from '../monitoring/system-monitor.service';
 
@@ -34,7 +35,7 @@ export class InstanceService {
     await this.beat();
     this.timer = setInterval(
       () => this.runtime.background.run(() => this.beat()),
-      this.intervalSeconds * 1000,
+      secondsToMs(this.intervalSeconds, 'instance.heartbeatIntervalSeconds'),
     );
     this.timer.unref?.();
   }
@@ -46,12 +47,18 @@ export class InstanceService {
     }
   }
 
-  /** One heartbeat: bump last_seen_at + metrics, then refresh the cached pause flag. Never throws. */
+  /**
+   * One heartbeat: bump last_seen_at + metrics and refresh the cached pause flag. Never throws.
+   *
+   * **One round trip.** `upsertInstance` returns the resulting row, so the flag comes from the write
+   * itself; the follow-up `getInstance` this used to issue read back exactly what had just been
+   * returned, doubling the query count of a beat that runs every 15 s per instance.
+   */
   async beat(): Promise<void> {
     try {
       const now = this.runtime.clock.now();
       const metrics = this.readMetrics();
-      await this.runtime.driver.upsertInstance({
+      const row = await this.runtime.driver.upsertInstance({
         instanceKey: this.instanceKey,
         now,
         ...(metrics
@@ -63,8 +70,7 @@ export class InstanceService {
             }
           : {}),
       });
-      const self = await this.runtime.driver.getInstance({ instanceKey: this.instanceKey });
-      this._processingPaused = self?.processingPaused ?? false;
+      this._processingPaused = row.processingPaused;
     } catch (err) {
       this.runtime.logger.debug('Instance heartbeat failed; keeping cached pause state.', { err });
     }

@@ -26,8 +26,11 @@ const PORT = 4322;
 type QueueName = 'emails' | 'reports';
 
 async function main(): Promise<void> {
+  // One driver, shared by the app's client and the dashboard's own. The dashboard builds its own
+  // headless client from it (see `createDashboard` below) rather than riding on this one.
+  const driver = new PgliteDriver({ dataDir });
   const pq = new PortQueue<QueueName>({
-    driver: new PgliteDriver({ dataDir }),
+    driver,
     // Naming this process registers it as an instance, so the dashboard's Instances page has a
     // row to show — with its liveness, its own job counts, and per-instance pause/resume. Run a
     // second copy with PORTQUEUE_INSTANCE_KEY set to a different name to see two servers.
@@ -36,7 +39,7 @@ async function main(): Promise<void> {
   await pq.init();
 
   // A worker + seed jobs so the dashboard shows live data.
-  const emails = pq.createQueue<{ to: string; template: string }>({ name: 'emails' });
+  pq.createQueue<{ to: string; template: string }>({ name: 'emails' });
   pq.createWorker<{ to: string; template: string }>({
     queue: 'emails',
     limiter: { concurrency: 5 },
@@ -44,22 +47,24 @@ async function main(): Promise<void> {
       console.log(`📧 sending "${job.data.template}" to ${job.data.to}`);
     },
   });
-  await emails.addJob({ data: { to: 'ada@example.com', template: 'welcome' } });
-  await emails.addJob({
+  await pq.addJob({ queue: 'emails', data: { to: 'ada@example.com', template: 'welcome' } });
+  await pq.addJob({
+    queue: 'emails',
     data: { to: 'alan@example.com', template: 'digest' },
     schedule: { startAfterSeconds: 30 }, // a delay, in seconds
   });
 
   // Every queue with jobs needs a worker, or its jobs just sit there as PENDING — including the
   // runs a recurring schedule keeps producing.
-  const reports = pq.createQueue<{ kind: string }>({ name: 'reports' });
+  pq.createQueue<{ kind: string }>({ name: 'reports' });
   pq.createWorker<{ kind: string }>({
     queue: 'reports',
     handler: async (job) => {
       console.log(`📊 building the ${job.data.kind} report`);
     },
   });
-  await reports.addJob({
+  await pq.addJob({
+    queue: 'reports',
     data: { kind: 'sales' },
     // Deliberately unhurried: a schedule that fires every few seconds fills the dashboard with
     // near-identical rows faster than you can read one. Five minutes is enough to watch a run
@@ -78,7 +83,9 @@ async function main(): Promise<void> {
 
   // Mount the dashboard. `dashboard.express()` is standard `(req, res, next)` middleware and
   // owns only its own base path, falling through to your routes otherwise.
-  const dashboard = createDashboard({ portQueue: pq });
+  // It takes the **driver**, not this client: the dashboard opens its own headless connection on the
+  // first request, which is what lets it run in a separate process from the workers in production.
+  const dashboard = createDashboard({ driver });
   app.use(dashboard.express());
 
   const server = app.listen(PORT, HOST, () => {
@@ -89,6 +96,7 @@ async function main(): Promise<void> {
   const shutdown = async (): Promise<void> => {
     console.log('\nShutting down…');
     server.close();
+    await dashboard.close();
     await pq.shutdown();
     process.exit(0);
   };

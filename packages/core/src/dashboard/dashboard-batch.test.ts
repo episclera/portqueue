@@ -1,15 +1,13 @@
 /**
  * `pq._dashboard.runJobBatch` on a real engine — the dashboard's retry / cancel / remove buttons.
  *
- * The retry case is the reason this suite exists. Every batch runs inside one transaction, and the
- * driver's `requeueJob` reads the row before re-arming it. That read used to be issued *outside*
- * the transaction, which on a single-connection engine (both test engines, and PGLite is what the
- * examples run) queues behind the very transaction that is waiting for it: the request never
- * answers, and because the connection stays wedged, no later request answers either. A regression
- * here shows up as a timed-out test rather than a wrong assertion.
+ * Each action is now **one statement** over the whole id set, which is what these tests pin: a
+ * single stale or ACTIVE id must not fail the rest of the batch, and the connection must still be
+ * usable afterwards. The previous implementation looped a per-id `requeueJob` inside one
+ * transaction, where a read issued outside that transaction wedged a single-connection engine
+ * (both test engines) and a missing id rolled back every retry beside it.
  *
- * Both engines are covered because the deadlock is a property of how the driver serialises access,
- * which each driver owns for itself.
+ * Both engines are covered because how a driver serialises access is its own business.
  */
 import {
   createTestQueue,
@@ -17,6 +15,7 @@ import {
   type TestQueueHandle,
 } from '../test-utils/create-test-queue';
 import { JobStatus } from '../jobs/job-state.enum';
+import { PortQueueEvent } from '../events/event-name.enum';
 import { JobBatchAction } from './dashboard-results';
 
 describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
@@ -30,10 +29,12 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
 
   /** `count` pending jobs on one queue, returning their ids. */
   async function seed(queue: string, count: number): Promise<string[]> {
-    const q = h.pq.createQueue({ name: queue });
-    const ids: string[] = [];
-    for (let i = 0; i < count; i += 1) ids.push((await q.addJob({ data: { i } })).jobId!);
-    return ids;
+    h.pq.createQueue({ name: queue });
+    const added = await h.pq.addJobs({
+      queue,
+      jobs: Array.from({ length: count }, (_, i) => ({ data: { i } })),
+    });
+    return added.map((r) => r.jobId!);
   }
 
   it('retries a batch, and keeps answering afterwards', async () => {
@@ -53,7 +54,7 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
   });
 
   it('re-arms a failed job rather than adding a new one', async () => {
-    const q = h.pq.createQueue<{ v: number }>({ name: 'batched' });
+    h.pq.createQueue<{ v: number }>({ name: 'batched' });
     let attempts = 0;
     h.pq.createWorker({
       queue: 'batched',
@@ -63,8 +64,13 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
         throw new Error('nope');
       },
     });
-    const jobId = (await q.addJob({ data: { v: 1 }, retry: { maxAttempts: 1, delaySeconds: 0 } }))
-      .jobId!;
+    const jobId = (
+      await h.pq.addJob({
+        queue: 'batched',
+        data: { v: 1 },
+        retry: { maxAttempts: 1, delaySeconds: 0 },
+      })
+    ).jobId!;
     await waitForStatus(h, jobId, JobStatus.FAILED);
 
     await h.pq._dashboard.runJobBatch({
@@ -82,7 +88,7 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
     expect(attempts).toBeGreaterThan(1);
   });
 
-  it('removes a batch in one transaction', async () => {
+  it('removes a batch in one statement', async () => {
     const ids = await seed('batched', 3);
     const result = await h.pq._dashboard.runJobBatch({
       queue: 'batched',
@@ -103,6 +109,74 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
     expect(result).toEqual({ affected: 2, requested: 2 });
     const page = await h.pq._dashboard.getJobs({ queue: 'batched' });
     expect(page.items.every((j) => j.status === JobStatus.CANCELLED)).toBe(true);
+  });
+
+  it('does not let one stale id fail the rest of a retry batch', async () => {
+    // The old per-id loop threw `DriverQueryError` on a missing id and rolled back the whole
+    // transaction, so one already-removed job undid every other retry in the batch.
+    const ids = await seed('batched', 3);
+    const result = await h.pq._dashboard.runJobBatch({
+      queue: 'batched',
+      jobIds: [...ids, 'no-such-job'],
+      action: JobBatchAction.RETRY,
+    });
+    expect(result).toEqual({ affected: 3, requested: 4 });
+    const page = await h.pq._dashboard.getJobs({ queue: 'batched' });
+    expect(page.items.every((j) => j.status === JobStatus.PENDING)).toBe(true);
+  });
+
+  it('leaves an ACTIVE job out of a retry or remove batch', async () => {
+    const ids = await seed('batched', 2);
+    // Claim one so it is ACTIVE, exactly as a running worker would hold it.
+    await h.driver.claimJobs({
+      queueName: 'batched',
+      limit: 1,
+      lockDurationSeconds: 60,
+      now: h.clock.now(),
+    });
+    const active = (await h.pq.getJobs({ queue: 'batched', statuses: [JobStatus.ACTIVE] }))
+      .items[0]!;
+    const idle = ids.find((id) => id !== active.id)!;
+
+    const retried = await h.pq._dashboard.runJobBatch({
+      queue: 'batched',
+      jobIds: ids,
+      action: JobBatchAction.RETRY,
+    });
+    expect(retried).toEqual({ affected: 1, requested: 2 });
+    expect((await h.pq.getJob({ jobId: active.id }))!.status).toBe(JobStatus.ACTIVE);
+
+    const removed = await h.pq._dashboard.runJobBatch({
+      queue: 'batched',
+      jobIds: ids,
+      action: JobBatchAction.REMOVE,
+    });
+    expect(removed).toEqual({ affected: 1, requested: 2 });
+    expect(await h.pq.getJob({ jobId: idle })).toBeNull();
+    expect(await h.pq.getJob({ jobId: active.id })).not.toBeNull();
+  });
+
+  it('removes many schedules in one call, reporting each one’s queue', async () => {
+    h.pq.createQueue({ name: 'sched-batch' });
+    const a = await h.pq.addJob({
+      queue: 'sched-batch',
+      data: {},
+      schedule: { cron: '0 1 * * *' },
+    });
+    const b = await h.pq.addJob({
+      queue: 'sched-batch',
+      data: {},
+      schedule: { cron: '0 2 * * *' },
+    });
+    const removedQueues: string[] = [];
+    h.pq.on(PortQueueEvent.SCHEDULE_REMOVED, (p) => removedQueues.push(p.queue));
+
+    const result = await h.pq._dashboard.removeSchedules({
+      scheduleIds: [a.scheduleId!, b.scheduleId!, 'missing'],
+    });
+    expect(result).toEqual({ affected: 2, requested: 3 });
+    expect(removedQueues).toEqual(['sched-batch', 'sched-batch']);
+    expect((await h.pq.getSchedules({ queue: 'sched-batch' })).total).toBe(0);
   });
 });
 

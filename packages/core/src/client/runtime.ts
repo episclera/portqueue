@@ -32,6 +32,11 @@ export interface Runtime {
   instanceKey: string | null;
   /** The heartbeat/liveness service — present only when an `instanceKey` is set. Set during init. */
   instances: InstanceService | null;
+  /**
+   * True for an admin client (the dashboard or CLI). See `PortQueueOptions._headless`: such a client
+   * declares no queues, registers no instance row, and runs no workers or maintenance ticks.
+   */
+  headless: boolean;
   isRunning(): boolean;
   /** Signal cooperative cancellation of an active job on this instance. */
   cancelRunning?(jobId: string): boolean;

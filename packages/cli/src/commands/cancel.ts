@@ -13,7 +13,7 @@ export const cancelCommand: Command = {
   async run({ pq, flags }) {
     const snap = await pq.getJob({ jobId: requireFlag(flags, 'id') });
     if (!snap) throw new CliError(`Job '${flagString(flags, 'id')}' not found.`);
-    const ok = await pq.createQueue({ name: snap.queue }).cancelJob({ jobId: snap.id });
+    const ok = await pq.cancelJob({ jobId: snap.id });
     if (ok) success(`Cancelled job ${snap.id}.`);
     else warn(`Job ${snap.id} could not be cancelled (already running or finished).`);
   },

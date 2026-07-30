@@ -99,6 +99,24 @@ only; no I/O until `init()`.
     </ul>
   </li>
   <li>
+    <span className="api-badge">addJob&lt;TData&gt;(&#123; queue, ...options &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;AddJobResult&gt;</code> — one job, or a recurring schedule
+    </span>
+    <ul>
+      <li>
+        <a href="#addjoboptions">AddJobOptions&lt;TData&gt;</a> — plus <code>queue</code>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge">addJobs&lt;TData&gt;(&#123; queue, jobs &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;AddJobResult[]&gt;</code> — the whole batch in <strong>one</strong> insert,
+      results in order. One-off jobs only; a recurring entry is rejected.
+    </span>
+  </li>
+  <li>
     <span className="api-badge">getQueues(query?)</span>{' '}
     <span className="api-note">
       → <code>Promise&lt;Page&lt;QueueInfo&gt;&gt;</code>
@@ -143,6 +161,61 @@ only; no I/O until `init()`.
         <a href="#getjobsquery">GetJobsQuery</a>
       </li>
     </ul>
+  </li>
+  <li>
+    <span className="api-badge">getSchedules(query?)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;Page&lt;ScheduleInfo&gt;&gt;</code> — one queue's with <code>queue</code>,
+      every queue's without it
+    </span>
+    <ul>
+      <li>
+        <a href="#getschedulesquery">GetSchedulesQuery</a>
+      </li>
+    </ul>
+  </li>
+  <li>
+    <span className="api-badge">getSchedule(&#123; scheduleId &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;ScheduleInfo | null&gt;</code> — by id alone; the result names its queue
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">retryJob(&#123; jobId, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;AddJobResult | null&gt;</code> — re-arms the job's own row.{' '}
+      <code>null</code> when the id is unknown <strong>or the job is ACTIVE</strong>: re-arming a
+      running job would let a second worker claim it. Add a new job for a fresh run.
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">cancelJob(&#123; jobId, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort
+      signal
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">removeJob(&#123; jobId, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;boolean&gt;</code> — deletes the row; skips an <code>ACTIVE</code> job and
+      returns <code>false</code> (cancel it first)
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">
+      removeJobs((&#123; jobIds &#125; | &#123; queue, statuses &#125;) &amp; &#123; tx? &#125;)
+    </span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;number&gt;</code> — count deleted; skips <code>ACTIVE</code> ids, and
+      throws if <code>statuses</code> includes <code>ACTIVE</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">removeSchedule(&#123; scheduleId, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;boolean&gt;</code>
+    </span>
   </li>
   <li>
     <span className="api-badge">on(event, listener, filter?)</span>{' '}
@@ -228,104 +301,20 @@ only; no I/O until `init()`.
 
 ## Queue
 
-A producer handle for one queue, from `pq.createQueue({ name, ...options })`. All producing methods
-accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides/transactions.mdx).
+The handle `pq.createQueue({ name, ...options })` returns. Creating it **declares** the queue in this
+process — its default job options, its retention policy and its queue-scoped hooks — and that is all
+it does.
+
+**It has no methods.** Like `Worker`, it is a registration, not a control surface; everything you
+_do_ with a queue is a method on `pq` that takes `queue` as a named argument. Two reasons:
+
+- **Nothing silently escapes its scope.** `queue.getJob({ jobId })` forwarded to an unscoped read, so
+  asking one queue's handle for another queue's job returned it — typed as _this_ queue's payload.
+  With one `pq.getJob({ jobId })` there is no scope to be wrong about.
+- **One import, one object.** Code that touches five queues passes five names to one `pq` rather than
+  threading five handles through its own plumbing.
 
 <ul className="api-tree">
-  <li>
-    <span className="api-badge">addJob(options)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;AddJobResult&gt;</code>
-    </span>
-    <ul>
-      <li>
-        <a href="#addjoboptions">AddJobOptions&lt;TData&gt;</a>
-      </li>
-    </ul>
-  </li>
-  <li>
-    <span className="api-badge">getSchedules(query?)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;Page&lt;ScheduleInfo&gt;&gt;</code>
-    </span>
-    <ul>
-      <li>
-        <a href="#getschedulesquery">GetSchedulesQuery</a>
-      </li>
-    </ul>
-  </li>
-  <li>
-    <span className="api-badge">getSchedule(&#123; scheduleId &#125;)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;ScheduleInfo | null&gt;</code> — scoped to this queue
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">getJob(&#123; jobId &#125;)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;JobSnapshot | null&gt;</code>
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">getJobs(query?)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;Page&lt;JobSnapshot&gt;&gt;</code>, scoped to this queue
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">getQueueStats()</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;QueueStats&gt;</code>
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">retryJob(&#123; jobId, tx? &#125;)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;AddJobResult&gt;</code> — re-arms the job's own row; add a new job for a
-      fresh run
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">cancelJob(&#123; jobId, tx? &#125;)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort
-      signal
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">removeJob(&#123; jobId, tx? &#125;)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;boolean&gt;</code> — deletes the row; skips an <code>ACTIVE</code> job and
-      returns <code>false</code> (cancel it first)
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">removeSchedule(&#123; scheduleId, tx? &#125;)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;boolean&gt;</code>
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">
-      removeJobs((&#123; jobIds &#125; | &#123; statuses &#125;) &amp; &#123; tx? &#125;)
-    </span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;number&gt;</code> — count deleted; skips <code>ACTIVE</code> ids, and
-      throws if <code>statuses</code> includes <code>ACTIVE</code>
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">pause(&#123; mode? &#125;)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;void&gt;</code>
-    </span>
-  </li>
-  <li>
-    <span className="api-badge">resume()</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;void&gt;</code>
-    </span>
-  </li>
   <li>
     <span className="api-badge">get name</span>{' '}
     <span className="api-note">
@@ -339,8 +328,8 @@ accept an optional `tx?: TransactionHandle` for [transactional enqueue](./guides
 ## Worker
 
 A consumer registration from `pq.createWorker(options)`. It starts claiming automatically after
-`pq.init()` and stops on shutdown — **there are no lifecycle methods**. Control processing through
-the `Queue` (`pause`/`resume`) and observe it through `pq.on(...)`. All consumer settings live on
+`pq.init()` and stops on shutdown — **there are no lifecycle methods**. Control processing with
+`pq.pauseQueue` / `pq.resumeQueue` and observe it through `pq.on(...)`. All consumer settings live on
 [WorkerOptions](#workeroptions).
 
 <ul className="api-tree">
@@ -684,14 +673,36 @@ and thresholds are meaningful there.
 
 The single argument to `new PortQueue(...)`.
 
-| Option                | Type                                            | Default        | Description                                                                                                 |
-| --------------------- | ----------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------- |
-| `driver`              | `Driver`                                        | — **required** | A driver instance (see [Drivers](#drivers)).                                                                |
-| `logger`              | `Logger \| LoggerOptions`                       | console logger | A logger you supply, or `{ level?, pretty? }` for the built-in one.                                         |
-| `migration`           | `MigrationMode`                                 | `AUTO`         | `AUTO` (apply pending on init), `MANUAL` (call `migrate()` yourself), or `VALIDATE_ONLY` (fail if pending). |
-| `instance`            | [`InstanceOptions`](#instanceoptions)           | —              | This process's identity & heartbeat.                                                                        |
-| `systemLimiter`       | [`SystemLimiterOptions`](#systemlimiteroptions) | —              | Pressure thresholds that pause claiming. Omitted by default, so nothing throttles.                          |
-| `tickIntervalSeconds` | `number`                                        | `5`            | Scheduler / retention / monitor tick interval, in seconds.                                                  |
+| Option                | Type                                            | Default        | Description                                                                                                                     |
+| --------------------- | ----------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `driver`              | `Driver`                                        | — **required** | A driver instance (see [Drivers](#drivers)).                                                                                    |
+| `logger`              | `Logger \| LoggerOptions`                       | console logger | A logger you supply, or `{ level?, pretty? }` for the built-in one.                                                             |
+| `migration`           | `MigrationMode`                                 | `AUTO`         | `AUTO` (apply pending on init), `MANUAL` (call `migrate()` yourself), or `VALIDATE_ONLY` (fail if pending).                     |
+| `instance`            | [`InstanceOptions`](#instanceoptions)           | —              | This process's identity & heartbeat.                                                                                            |
+| `systemLimiter`       | [`SystemLimiterOptions`](#systemlimiteroptions) | —              | Pressure thresholds that pause claiming. Omitted by default, so nothing throttles.                                              |
+| `tickIntervalSeconds` | `number`                                        | `5`            | Scheduler / retention / monitor tick interval, in seconds.                                                                      |
+| `_headless`           | `boolean`                                       | `false`        | **Internal.** Marks an _admin_ client — set by `@portqueue/dashboard` and `@portqueue/cli`, never by an application. See below. |
+
+#### `_headless`
+
+`@portqueue/dashboard`'s `createDashboard({ driver })` and `@portqueue/cli` build their own client
+with this flag. It is documented here for completeness only: an application never sets it, and it is
+not part of the surface those two packages promise.
+
+A headless client observes and administers a deployment without joining it:
+
+- `createQueue` **declares nothing and writes nothing** — it hands back a typed name. Producing onto a
+  queue that has no row throws `QueueNotFoundError` instead of inventing the queue.
+- It registers **no instance row** and rejects an `instance.instanceKey`, so an admin process never
+  appears in the instances list or claims affinity-targeted work.
+- It runs **no workers, scheduler, retention sweep or health monitor** — the application's processes
+  own that work, and an admin tool quietly firing the cluster's schedules would be a second producer
+  nobody asked for.
+- `migration` defaults to `MANUAL`, so pointing a dashboard at a database never migrates it as a side
+  effect. (The CLI opts back into `AUTO`: bringing a schema up to date is squarely its remit.)
+
+Because `inUse` means "declared in the process that produced this info", it is always `false` on a
+headless client — which is why the dashboard does not surface it.
 
 ### ShutdownOptions
 
@@ -699,6 +710,11 @@ The single argument to `new PortQueue(...)`.
 | ---------------- | --------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `graceful`       | `boolean` | `true`  | Let in-flight handlers finish before disconnecting.                                                                                                        |
 | `timeoutSeconds` | `number`  | `30`    | Max time, in seconds, to wait for a graceful drain, and for background work (maintenance tick, heartbeat, notify) to finish before the driver disconnects. |
+
+`shutdown()` rejects with `ShutdownTimeoutError` when that window elapses with work still in flight —
+but only _after_ the shutdown has otherwise completed, so the client always ends up stopped and the
+driver disconnected. Ignoring the rejection still shuts down cleanly; logging it tells you handlers
+were aborted mid-run.
 
 ### InstanceOptions
 
@@ -728,12 +744,12 @@ real ceiling is well below the host's. Event-loop delay is the exception on meas
 `maxEventLoopDelaySeconds` gives it a purpose. See
 [Rate limiting & backpressure](./guides/rate-limiting.md#every-systemlimiter-option).
 
-| Option                     | Type     | Default   | Description                                                                                                                                              |
-| -------------------------- | -------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sampleIntervalSeconds`    | `number` | `2`       | How often to sample system metrics, in seconds.                                                                                                          |
-| `maxEventLoopDelaySeconds` | `number` | unset     | Mean event-loop delay above this, in seconds, counts as pressure (`0.2` = 200 ms). Not measured at all until you set it.                                 |
-| `maxCpuPercent`            | `number` | unset     | This process's CPU above this share (0–100) of the cores available to it counts as pressure — core-count independent, so `85` means the same on any box. |
-| `maxMemoryPercent`         | `number` | unset     | This process's used heap above this share (0–100) of V8's heap limit counts as pressure.                                                                 |
+| Option                     | Type     | Default | Description                                                                                                                                              |
+| -------------------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sampleIntervalSeconds`    | `number` | `2`     | How often to sample system metrics, in seconds.                                                                                                          |
+| `maxEventLoopDelaySeconds` | `number` | unset   | Mean event-loop delay above this, in seconds, counts as pressure (`0.2` = 200 ms). Not measured at all until you set it.                                 |
+| `maxCpuPercent`            | `number` | unset   | This process's CPU above this share (0–100) of the cores available to it counts as pressure — core-count independent, so `85` means the same on any box. |
+| `maxMemoryPercent`         | `number` | unset   | This process's used heap above this share (0–100) of V8's heap limit counts as pressure.                                                                 |
 
 ### QueueOptions
 
@@ -798,10 +814,10 @@ Per-job settings (highest precedence). Also the base of [`AddJobOptions`](#addjo
 
 Exactly one timing mode may be set.
 
-| Option              | Type       | Default          | Description                                     |
-| ------------------- | ---------- | ---------------- | ----------------------------------------------- |
-| `startAfterSeconds` | `number`   | — (runs now)     | One-off: delay this many seconds from now.      |
-| `startEverySeconds` | `number`   | — (not recurring) | Recurring: seconds between runs, e.g. `30`.    |
+| Option              | Type       | Default           | Description                                     |
+| ------------------- | ---------- | ----------------- | ----------------------------------------------- |
+| `startAfterSeconds` | `number`   | — (runs now)      | One-off: delay this many seconds from now.      |
+| `startEverySeconds` | `number`   | — (not recurring) | Recurring: seconds between runs, e.g. `30`.     |
 | `cron`              | `CronSpec` | — (not recurring) | Recurring: a cron string, or `{ pattern, tz }`. |
 
 ### WorkerOptions
@@ -843,23 +859,24 @@ it, so `limit`/`offset` mean the same thing wherever they appear, and each retur
 
 `PageQuery` plus the job filters. Jobs always come back newest first; there is no sort option.
 
-| Option       | Type          | Default   | Description                                        |
-| ------------ | ------------- | --------- | -------------------------------------------------- |
-| `queue`      | `string`      | all queues | Filter to one queue (implicit on `Queue.getJobs`). |
-| `statuses`   | `JobStatus[]` | all statuses | Filter by status.                                |
-| `scheduleId` | `string`      | —         | Jobs minted by one schedule.                       |
-| `limit`      | `number`      | `50`      | Page size, capped at `500`.                        |
-| `offset`     | `number`      | `0`       | Row offset, for numbered pagination.               |
+| Option       | Type          | Default      | Description                          |
+| ------------ | ------------- | ------------ | ------------------------------------ |
+| `queue`      | `string`      | all queues   | Filter to one queue.                 |
+| `statuses`   | `JobStatus[]` | all statuses | Filter by status.                    |
+| `scheduleId` | `string`      | —            | Jobs minted by one schedule.         |
+| `limit`      | `number`      | `50`         | Page size, capped at `500`.          |
+| `offset`     | `number`      | `0`          | Row offset, for numbered pagination. |
 
 ### GetSchedulesQuery
 
-`PageQuery` plus one filter, for `Queue.getSchedules`. Returns a `Page<ScheduleInfo>`.
+`PageQuery` plus two filters, for `pq.getSchedules`. Returns a `Page<ScheduleInfo>`.
 
-| Option    | Type      | Default | Description                                                             |
-| --------- | --------- | ------- | ----------------------------------------------------------------------- |
-| `enabled` | `boolean` | both    | `true` → only armed schedules, `false` → only disarmed, omitted → both. |
-| `limit`   | `number`  | `50`    | Page size, capped at `500`.                                             |
-| `offset`  | `number`  | `0`     | Row offset, for numbered pagination.                                    |
+| Option    | Type      | Default    | Description                                                             |
+| --------- | --------- | ---------- | ----------------------------------------------------------------------- |
+| `queue`   | `string`  | all queues | Narrow to one queue's schedules.                                        |
+| `enabled` | `boolean` | both       | `true` → only armed schedules, `false` → only disarmed, omitted → both. |
+| `limit`   | `number`  | `50`       | Page size, capped at `500`.                                             |
+| `offset`  | `number`  | `0`        | Row offset, for numbered pagination.                                    |
 
 ### GetInstancesQuery
 
@@ -888,8 +905,9 @@ Reads return objects, never bare ids. The main shapes:
 
 - **AddJobResult** — `jobId?`, `scheduleId?`, `nextRunAt?`, `queue`, `status?`, `deduplicated`, `deduplicationReason?`, `startAfter?`.
 - **JobSnapshot** — the full read-side view of a job (all timestamps as `Date`, plus a derived `stalled` flag).
-- **ScheduleInfo** — `scheduleId`, `cron?`, `everySeconds?`, `timezone?`, `nextRunAt?`, `lastRunAt?`, `enabled`, `idempotencyKey?`.
-- **QueueInfo** — `name`, `processingPaused`, `acceptingPaused`, `counts`, `inUse`.
+- **ScheduleInfo** — `scheduleId`, `queue`, `cron?`, `everySeconds?`, `timezone?`, `nextRunAt?`, `lastRunAt?`, `enabled`, `idempotencyKey?`.
+- **QueueInfo** — `name`, `processingPaused`, `acceptingPaused`, `counts`, `inUse` (`inUse` is
+  process-local: true when _this_ client declared the queue).
 - **InstanceInfo** — `instanceKey`, `processingPaused`, `alive`, `createdAt`, `updatedAt`, `lastSeenAt`, `counts`, plus `cpuPercent`/`memoryPercent` — that **process's** CPU (share of the cores available to it) and heap (share of V8's limit), both 0–100, at its last heartbeat, `null` before the first beat.
 - **QueueStats** — `queue?`, `counts` (a `JobStatus` → count map).
 - **Page&lt;T&gt;** — `items` and `total` (rows matching the query, ignoring paging). There is no
@@ -916,7 +934,7 @@ importable from `@portqueue/core`, so you can branch with `instanceof`:
 
 `PortQueueError` (base) · `NotStartedError` · `InvalidOptionsError` · `UnsupportedCapabilityError` ·
 `SchemaVersionMismatchError` · `MigrationFailedError` · `DriverConnectionError` · `DriverQueryError` ·
-`JobNotFoundError` · `QueuePausedError` · `QueueInUseError` · `InstanceActiveError` ·
+`QueueNotFoundError` · `QueuePausedError` · `QueueInUseError` · `InstanceActiveError` ·
 `ShutdownTimeoutError` · `MissingPeerDependencyError`.
 
 The full error table — codes, causes, and remedies — lives in [Troubleshooting](./troubleshooting.md).

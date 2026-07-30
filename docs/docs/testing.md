@@ -61,7 +61,7 @@ afterEach(async () => {
 });
 
 it('processes a job', async () => {
-  const queue = pq.createQueue<{ to: string }>({ name: 'emails' });
+  pq.createQueue<{ to: string }>({ name: 'emails' });
   const seen: string[] = [];
   pq.createWorker<{ to: string }>({
     queue: 'emails',
@@ -69,7 +69,7 @@ it('processes a job', async () => {
       seen.push(job.data.to);
     },
   });
-  const { id } = await queue.addJob({ data: { to: 'a@b.com' } });
+  const { id } = await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
   await waitForStatus(queue, id, JobStatus.COMPLETED);
   expect(seen).toEqual(['a@b.com']);
 });
@@ -91,7 +91,7 @@ import { JobStatus } from '@portqueue/core';
 async function waitForStatus(queue, jobId, status, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const job = await queue.getJob({ jobId });
+    const job = await pq.getJob({ jobId });
     if (job?.status === status) return job;
     await new Promise((r) => setTimeout(r, 25));
   }
@@ -99,7 +99,7 @@ async function waitForStatus(queue, jobId, status, timeoutMs = 5000) {
 }
 ```
 
-Use `queue.getJob({ jobId })` (or `pq.getJob({ jobId })`) as the source of truth — it reads
+Use `pq.getJob({ jobId })` (or `pq.getJob({ jobId })`) as the source of truth — it reads
 the real row through the driver, exactly as production code would. Poll for `JobStatus.FAILED`
 when you're testing the failure path.
 

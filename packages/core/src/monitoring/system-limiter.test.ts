@@ -30,31 +30,31 @@ describe('systemLimiter', () => {
     });
 
     const ran: string[] = [];
-    const queue = h.pq.createQueue({ name: 'pressured' });
+    h.pq.createQueue({ name: 'pressured' });
     h.pq.createWorker({
       queue: 'pressured',
       limiter: { pollIntervalSeconds: 0.02 },
       handler: async (job) => void ran.push(job.id),
     });
-    const added = await queue.addJob({ data: {} });
+    const added = await h.pq.addJob({ queue: 'pressured', data: {} });
     await new Promise((r) => setTimeout(r, 200));
 
     // The worker polled several times over that window and claimed nothing, and the job is still
     // waiting rather than having been consumed and dropped.
     expect(ran).toHaveLength(0);
-    expect((await queue.getJob({ jobId: added.jobId! }))?.status).toBe('PENDING');
+    expect((await h.pq.getJob({ jobId: added.jobId! }))?.status).toBe('PENDING');
   });
 
   it('claims normally when no systemLimiter is configured', async () => {
     h = await createTestQueue('sqlite');
     const ran: string[] = [];
-    const queue = h.pq.createQueue({ name: 'unpressured' });
+    h.pq.createQueue({ name: 'unpressured' });
     h.pq.createWorker({
       queue: 'unpressured',
       limiter: { pollIntervalSeconds: 0.02 },
       handler: async (job) => void ran.push(job.id),
     });
-    await queue.addJob({ data: {} });
+    await h.pq.addJob({ queue: 'unpressured', data: {} });
     await waitFor(() => ran.length === 1);
   });
 

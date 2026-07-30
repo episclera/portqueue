@@ -13,7 +13,7 @@ or executing right now. It never deletes rows (that's
 [`removeJob`](./producing-jobs.mdx#remove-jobs)). One method covers every case:
 
 ```ts
-await emailsQueue.cancelJob({ jobId });
+await pq.cancelJob({ jobId });
 ```
 
 - **Pending** — the job is marked `CANCELLED` and will never be claimed.

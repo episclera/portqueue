@@ -45,7 +45,7 @@ async function main(): Promise<void> {
     };
   });
 
-  const healthchecks = pq.createQueue<Record<string, never>>({ name: 'healthchecks' });
+  pq.createQueue<Record<string, never>>({ name: 'healthchecks' });
   pq.createWorker<Record<string, never>>({
     queue: 'healthchecks',
     handler: async () => {
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     },
   });
 
-  const reports = pq.createQueue<{ kind: string }>({ name: 'reports' });
+  pq.createQueue<{ kind: string }>({ name: 'reports' });
   pq.createWorker<{ kind: string }>({
     queue: 'reports',
     handler: async (job) => {
@@ -67,7 +67,8 @@ async function main(): Promise<void> {
 
   // Fixed interval: every 3 seconds. An `idempotencyKey` keeps exactly one schedule even if this
   // script is run repeatedly against the same (persisted) database.
-  const healthcheckSchedule = await healthchecks.addJob({
+  const healthcheckSchedule = await pq.addJob({
+    queue: 'healthchecks',
     data: {},
     schedule: { startEverySeconds: 3 }, // interval in seconds
     idempotencyKey: 'healthcheck-every-3s',
@@ -76,7 +77,8 @@ async function main(): Promise<void> {
   // Cron: the 6-field form with a leading seconds field, here every 5 seconds so the example
   // finishes quickly. Standard 5-field expressions work too ('* * * * *' = top of every minute).
   // Cron fields are evaluated in UTC.
-  const reportSchedule = await reports.addJob({
+  const reportSchedule = await pq.addJob({
+    queue: 'reports',
     data: { kind: 'sales' },
     schedule: { cron: '*/5 * * * * *' },
     idempotencyKey: 'sales-report-every-5s',
@@ -85,7 +87,7 @@ async function main(): Promise<void> {
   // A recurring add returns a `scheduleId` (`AddJobResult` is one shape for both modes, so the
   // field is optional in the type — it's always set for a recurring add). Persist it somewhere
   // durable (your own DB, config, etc.) if you might ever want to stop new runs being spawned for
-  // this interval/cron later — that's the id you pass to `queue.removeSchedule({ scheduleId })`.
+  // this interval/cron later — that's the id you pass to `pq.removeSchedule({ scheduleId })`.
   const healthcheckScheduleId = healthcheckSchedule.scheduleId;
   const reportScheduleId = reportSchedule.scheduleId;
   if (!healthcheckScheduleId || !reportScheduleId) {
@@ -134,8 +136,9 @@ async function main(): Promise<void> {
 
   // Stop new runs being spawned — this is what the saved `scheduleId` is for. Removing them also
   // leaves the persisted database clean for the next run of this example.
-  await healthchecks.removeSchedule({ scheduleId: healthcheckScheduleId });
-  await reports.removeSchedule({ scheduleId: reportScheduleId });
+  // Removal is by id alone — the schedule row carries its own queue.
+  await pq.removeSchedule({ scheduleId: healthcheckScheduleId });
+  await pq.removeSchedule({ scheduleId: reportScheduleId });
   console.log('Unscheduled both recurrences.');
 
   await shutdown();

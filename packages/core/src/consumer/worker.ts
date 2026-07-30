@@ -1,6 +1,8 @@
 import { PortQueueEvent } from '../events/event-name.enum';
 import { RateLimiterService } from '../monitoring/rate-limiter.service';
 import { ExecutionService, type ExecutionConfig } from './execution.service';
+import { secondsToMs } from '../util/seconds';
+import { DRAIN_POLL_SECONDS } from '../constants';
 import type { CompletionService } from './completion.service';
 import type { JobHandler } from '../jobs/job';
 import type { ErrorClass } from '../options/worker-options';
@@ -36,6 +38,8 @@ export class Worker {
   private pumping = false;
   private unsubscribeWakeup: (() => void) | null = null;
   private pollTimer: NodeJS.Timeout | null = null;
+  /** A one-shot timer scheduled for the moment the rate limiter will have a token again. */
+  private tokenTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly runtime: Runtime,
@@ -66,7 +70,7 @@ export class Worker {
     );
     this.pollTimer = setInterval(
       () => this.runtime.background.run(() => this.pump()),
-      this.config.pollIntervalSeconds * 1000,
+      secondsToMs(this.config.pollIntervalSeconds, 'limiter.pollIntervalSeconds'),
     );
     this.pollTimer.unref?.();
     this.runtime.events.emit(PortQueueEvent.WORKER_STARTED, { queue: this.config.queue });
@@ -94,16 +98,22 @@ export class Worker {
         // reads false forever, which is why there is no per-worker opt-in to carry.
         if (this.isPressureHigh()) break;
 
-        // Observe cluster-wide pause state.
-        const row = await this.runtime.registry.refresh(this.config.queue);
-        if (row?.processingPaused) break;
-        // Observe this instance's own pause state (multi-instance mode).
+        // Cluster-wide pause state, from the registry's cache — no query on the hot path. The
+        // maintenance tick refreshes it, and a pause made in this process updates it immediately.
+        if (this.runtime.registry.pauseState(this.config.queue)?.processingPaused) break;
+        // This instance's own pause state (multi-instance mode).
         if (this.runtime.instances?.processingPaused) break;
 
         let want = Math.min(capacity, this.config.batchSize);
         if (this.limiter) {
           const granted = this.limiter.take(want);
-          if (granted <= 0) break;
+          if (granted <= 0) {
+            // Out of tokens. Come back when the bucket refills rather than waiting for the poll
+            // timer — otherwise a rate-limited worker idles for a whole `pollIntervalSeconds` after
+            // a shortfall that may clear in milliseconds.
+            this.scheduleTokenWakeup(this.limiter.msUntilAvailable());
+            break;
+          }
           want = granted;
         }
 
@@ -138,17 +148,35 @@ export class Worker {
     }
   }
 
+  /** Re-pump once the rate limiter has a token. At most one such timer is ever outstanding. */
+  private scheduleTokenWakeup(delayMs: number): void {
+    if (this.tokenTimer || this.stopping) return;
+    this.tokenTimer = setTimeout(
+      () => {
+        this.tokenTimer = null;
+        if (!this.stopping) this.runtime.background.run(() => this.pump());
+      },
+      Math.max(delayMs, 0),
+    );
+    this.tokenTimer.unref?.();
+  }
+
   /** @internal Stop claiming; drain in-flight up to timeout, then abort + release locks. */
   async stop(options: { timeoutSeconds: number; graceful: boolean }): Promise<void> {
     this.stopping = true;
     if (this.unsubscribeWakeup) this.unsubscribeWakeup();
     if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this.tokenTimer) clearTimeout(this.tokenTimer);
+    this.tokenTimer = null;
 
-    const deadline = this.runtime.clock.now() + options.timeoutSeconds * 1000;
-    if (options.graceful) {
-      while (this.activeCount > 0 && this.runtime.clock.now() < deadline) {
-        await sleep(25);
-      }
+    if (options.graceful && this.activeCount > 0) {
+      // Raced against a real timer rather than measured with the injected clock. The drain waits on
+      // wall-clock time — the handlers really are running — so a deadline taken from a clock a test
+      // controls would never arrive and this would spin for as long as the handlers took.
+      await Promise.race([
+        this.awaitIdle(),
+        elapses(secondsToMs(options.timeoutSeconds, 'shutdown timeoutSeconds')),
+      ]);
     }
     // Abort any still-running handlers and release their locks for fast reclaim.
     for (const [jobId, controller] of this.execution.active) {
@@ -165,6 +193,12 @@ export class Worker {
     this.runtime.events.emit(PortQueueEvent.WORKER_STOPPED, { queue: this.config.queue });
   }
 
+  /** Resolve once the last in-flight handler has settled. */
+  private async awaitIdle(): Promise<void> {
+    const pollMs = secondsToMs(DRAIN_POLL_SECONDS, 'drain poll');
+    while (this.activeCount > 0) await elapses(pollMs);
+  }
+
   /** @internal Try to cooperatively cancel an active job on this instance. */
   cancelRunning(jobId: string): boolean {
     const controller = this.execution.active.get(jobId);
@@ -174,6 +208,10 @@ export class Worker {
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** A promise that resolves once `ms` has passed, on a timer that never holds the loop open. */
+function elapses(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, Math.max(ms, 0));
+    timer.unref?.();
+  });
 }

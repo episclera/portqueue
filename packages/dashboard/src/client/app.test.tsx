@@ -19,14 +19,12 @@ const QUEUES = page(
       name: 'emails',
       processingPaused: false,
       acceptingPaused: false,
-      inUse: true,
       counts: { PENDING: 1, ACTIVE: 2, COMPLETED: 3, FAILED: 0, RETRY: 0 },
     },
     {
       name: 'reports',
       processingPaused: true,
       acceptingPaused: false,
-      inUse: false,
       counts: { PENDING: 0, ACTIVE: 0, COMPLETED: 5, FAILED: 1, RETRY: 0 },
     },
   ],
@@ -154,13 +152,15 @@ describe('overview page', () => {
     expect(queueRequest?.params).toMatchObject({ limit: 20, offset: 0 });
   });
 
-  it('opens the filters dialog with the state and usage pickers', async () => {
+  it('opens the filters dialog with the state picker', async () => {
     harness().renderApp('#/');
 
     fireEvent.click(await screen.findByRole('button', { name: /Filters/ }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('State')).toBeInTheDocument();
-    expect(within(dialog).getByText('Usage')).toBeInTheDocument();
+    // There is no "Usage" filter: `inUse` is process-local, and the dashboard runs on its own
+    // client rather than the application's, so it cannot know what the workers declare.
+    expect(within(dialog).queryByText('Usage')).not.toBeInTheDocument();
   });
 
   it('shows an error with a retry when the queues query fails, not an empty table', async () => {

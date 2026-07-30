@@ -11,12 +11,7 @@ import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
-import {
-  ACTIONS_CONFIG,
-  PAUSE_STATE_FILTER_OPTIONS,
-  QUEUE_USAGE_CONFIG,
-  pauseStateLabel,
-} from '../constants/labels';
+import { ACTIONS_CONFIG, PAUSE_STATE_FILTER_OPTIONS, pauseStateLabel } from '../constants/labels';
 import { KpiCards } from '../components/KpiCards';
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
@@ -24,18 +19,13 @@ import { countColumns } from '../components/table-columns';
 import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
 
-const FILTER_KEYS = ['state', 'usage'] as const;
+const FILTER_KEYS = ['state'] as const;
 
+// No "usage" filter: `inUse` means "declared in the process that produced this row", and the
+// dashboard runs on its own client rather than the application's — so it has no way to know which
+// queues the workers declare.
 const FILTER_DEFS: FilterDef[] = [
   { key: 'state', label: 'State', options: PAUSE_STATE_FILTER_OPTIONS },
-  {
-    key: 'usage',
-    label: 'Usage',
-    options: [
-      { label: QUEUE_USAGE_CONFIG.inUse.label, value: 'inUse' },
-      { label: QUEUE_USAGE_CONFIG.unused.label, value: 'unused' },
-    ],
-  },
 ];
 
 export function OverviewPage(): React.ReactElement {
@@ -43,15 +33,13 @@ export function OverviewPage(): React.ReactElement {
   const params = useTableParams('queues', FILTER_KEYS);
 
   const state = params.filters.state?.[0];
-  const usage = params.filters.usage?.[0];
 
-  // Both filters are tri-state on the wire: an absent key means "don't narrow".
+  // The state filter is tri-state on the wire: an absent key means "don't narrow".
   const queueParams = {
     limit: PAGE_SIZE,
     offset: params.offset,
     ...(params.search ? { search: params.search } : {}),
     ...(state ? { processingPaused: state === 'paused' } : {}),
-    ...(usage ? { inUse: usage === 'inUse' } : {}),
   };
 
   const stats = usePolledQuery<StatsDto>(queryKeys.stats(), () => api.getStats());
@@ -73,15 +61,6 @@ export function OverviewPage(): React.ReactElement {
       key: 'state',
       render: (r) => (
         <Tag tone={r.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(r)}</Tag>
-      ),
-    },
-    {
-      title: 'Usage',
-      key: 'usage',
-      render: (r) => (
-        <Tag tone={r.inUse ? 'info' : 'neutral'}>
-          {r.inUse ? QUEUE_USAGE_CONFIG.inUse.label : QUEUE_USAGE_CONFIG.unused.label}
-        </Tag>
       ),
     },
     ...countColumns<QueueDto>(),

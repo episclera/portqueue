@@ -35,10 +35,18 @@ export class PortQueueError extends Error {
   }
 }
 
+/**
+ * Thrown when a method that needs a live connection is called before `init()`.
+ *
+ * Every public producing, consuming and reading method guards on this, so "I forgot to await
+ * `init()`" surfaces as this message rather than as whatever the driver says about not being
+ * connected.
+ */
 export class NotStartedError extends PortQueueError {
-  constructor(context?: ErrorContext) {
+  constructor(method: string, context?: ErrorContext) {
     super(
-      'PortQueue has not been started. Call `await pq.init()` before producing or consuming jobs.',
+      `Cannot call \`${method}\` before PortQueue has started. Call \`await pq.init()\` first — ` +
+        `it connects the driver, applies migrations and starts the workers.`,
       { code: PortQueueErrorCode.NOT_STARTED, ...(context ? { context } : {}) },
     );
   }
@@ -107,12 +115,20 @@ export class DriverQueryError extends PortQueueError {
   }
 }
 
-export class JobNotFoundError extends PortQueueError {
-  constructor(jobId: string) {
-    super(`No job found with id '${jobId}'.`, {
-      code: PortQueueErrorCode.JOB_NOT_FOUND,
-      context: { jobId },
-    });
+/**
+ * Thrown when an **admin** client (the dashboard or the CLI, constructed with `_headless`) is asked
+ * to produce onto a queue that has no row yet. A headless client never writes a queue row: creating
+ * one is the application's declaration of intent, made with `createQueue`, and an admin tool
+ * inventing queues would put rows in the database for names that no code consumes.
+ */
+export class QueueNotFoundError extends PortQueueError {
+  constructor(queue: string) {
+    super(
+      `Queue '${queue}' does not exist. This client is headless (the dashboard or CLI), and a ` +
+        `headless client never creates queues — declare it in your application with ` +
+        `\`pq.createQueue({ name: '${queue}' })\` first.`,
+      { code: PortQueueErrorCode.QUEUE_NOT_FOUND, context: { queue } },
+    );
   }
 }
 
@@ -120,7 +136,7 @@ export class QueuePausedError extends PortQueueError {
   constructor(queue: string) {
     super(
       `Queue '${queue}' is paused with PauseMode.ALL and is refusing new jobs. ` +
-        `Resume it with queue.resume() (or dashboard/CLI) to accept jobs again.`,
+        `Resume it with pq.resumeQueue({ queue }) (or the dashboard/CLI) to accept jobs again.`,
       { code: PortQueueErrorCode.QUEUE_PAUSED, context: { queue } },
     );
   }

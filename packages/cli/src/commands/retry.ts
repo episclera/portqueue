@@ -4,7 +4,7 @@ import { requireFlag } from './helpers';
 import { flagString } from '../args';
 import { CommandGroup, type Command } from './types';
 
-/** `portqueue retry --id <jobId>` — re-arm a failed/completed job so it runs again. */
+/** `portqueue retry --id <jobId>` — re-arm a settled job so it runs again. */
 export const retryCommand: Command = {
   name: 'retry',
   group: CommandGroup.Actions,
@@ -13,7 +13,14 @@ export const retryCommand: Command = {
   async run({ pq, flags }) {
     const snap = await pq.getJob({ jobId: requireFlag(flags, 'id') });
     if (!snap) throw new CliError(`Job '${flagString(flags, 'id')}' not found.`);
-    const res = await pq.createQueue({ name: snap.queue }).retryJob({ jobId: snap.id });
-    success(`Requeued job ${snap.id} → ${res.jobId}.`);
+    const res = await pq.retryJob({ jobId: snap.id });
+    // A running job is never re-armed: clearing its lock would let a second worker claim it.
+    if (!res) {
+      throw new CliError(
+        `Job ${snap.id} is ${snap.status} and cannot be requeued. Cancel it first, then retry once ` +
+          `it has settled.`,
+      );
+    }
+    success(`Requeued job ${res.jobId} on queue ${res.queue}.`);
   },
 };

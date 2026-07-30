@@ -13,14 +13,19 @@ export interface PageDto<T> {
   total: number;
 }
 
-/** Queue overview (mirrors core `QueueInfo`). */
+/**
+ * Queue overview (core `QueueInfo`, minus `inUse`).
+ *
+ * `inUse` means "declared in the process that produced this info", and the dashboard now runs on its
+ * own client rather than the application's — so it cannot know which queues the workers declare. A
+ * field that always answered "no" would be worse than no field. `pq.getQueues()` still carries it for
+ * application code, where it is meaningful.
+ */
 export interface QueueDto {
   name: string;
   processingPaused: boolean;
   acceptingPaused: boolean;
   counts: CountsDto;
-  /** True when the host process still declares this queue (createQueue/createWorker). */
-  inUse: boolean;
 }
 
 export type QueuePageDto = PageDto<QueueDto>;

@@ -23,6 +23,6 @@ The key wiring is one line — `dashboard.express()` is ordinary `(req, res, nex
 owns only its base path and falls through to your routes otherwise:
 
 ```ts
-const dashboard = createDashboard({ portQueue: pq });
+const dashboard = createDashboard({ driver });
 app.use(dashboard.express());
 ```

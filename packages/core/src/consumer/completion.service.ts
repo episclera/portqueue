@@ -1,6 +1,8 @@
 import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { computeBackoffSeconds } from '../util/backoff';
+import { msToSeconds, secondsToMs } from '../util/seconds';
+import { FAILURE_MESSAGE_MAX_CHARS, FAILURE_MESSAGE_TRUNCATION_SUFFIX } from '../constants';
 import type { ErrorClass } from '../options/worker-options';
 import type { JobRecord } from '../jobs/job-record';
 import type { Runtime } from '../client/runtime';
@@ -22,7 +24,7 @@ export class CompletionService {
       jobId: record.id,
       queue: queueName,
       returnValue,
-      durationSeconds: (now - startTs) / 1000,
+      durationSeconds: msToSeconds(now - startTs),
     });
     return { kind: 'completed', returnValue };
   }
@@ -49,7 +51,7 @@ export class CompletionService {
         maxDelaySeconds: record.retryMaxDelaySeconds,
         jitter: record.retryJitter,
       });
-      const nextRunAt = now + Math.round(delaySeconds * 1000);
+      const nextRunAt = now + Math.round(secondsToMs(delaySeconds, 'retry delay'));
       await this.runtime.driver.retryJob({
         jobId: record.id,
         nextRunAt,
@@ -79,15 +81,31 @@ export class CompletionService {
   }
 }
 
-/** Normalize any thrown value to a message that includes the stack where available. */
+/**
+ * Normalize any thrown value to a message that includes the stack where available, **truncated**.
+ *
+ * Every failed job stores this in an unbounded text column, and a stack from a deep async chain can
+ * run to tens of kilobytes — so a burst of failures used to be able to grow the table faster than
+ * the jobs themselves. The cap keeps the throw site and the frames immediately around it (which is
+ * the part anyone reads) and says plainly that the rest was dropped.
+ */
 export function errorToMessage(error: unknown): string {
+  return truncate(rawErrorMessage(error));
+}
+
+function rawErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.stack ?? `${error.name}: ${error.message}`;
   if (typeof error === 'string') return error;
   try {
-    return JSON.stringify(error);
+    return JSON.stringify(error) ?? String(error);
   } catch {
     return String(error);
   }
+}
+
+function truncate(message: string): string {
+  if (message.length <= FAILURE_MESSAGE_MAX_CHARS) return message;
+  return message.slice(0, FAILURE_MESSAGE_MAX_CHARS) + FAILURE_MESSAGE_TRUNCATION_SUFFIX;
 }
 
 function matchesNonRetryable(error: unknown, list: Array<ErrorClass | string>): boolean {

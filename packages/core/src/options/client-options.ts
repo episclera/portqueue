@@ -35,14 +35,36 @@ export interface PortQueueOptions {
   systemLimiter?: SystemLimiterOptions;
   /** Interval for scheduler/retention/monitor ticks, **in seconds**. Default 5. */
   tickIntervalSeconds?: number;
+  /**
+   * Mark this client as an **admin client** rather than an application one. Set by
+   * `@portqueue/dashboard`'s `createDashboard({ driver })` and by `@portqueue/cli`; an application
+   * never sets it.
+   *
+   * A headless client observes and administers a PortQueue deployment without joining it:
+   *
+   * - `createQueue` declares nothing and creates no row — it only hands back a typed name. Producing
+   *   onto a queue that has no row throws `QueueNotFoundError` rather than inventing the queue.
+   * - It registers **no instance row** and rejects an `instance.instanceKey`, so an admin process
+   *   never appears in the instances list or claims affinity-targeted work.
+   * - It runs no workers, no scheduler, no retention sweep and no health monitor — an admin tool must
+   *   not quietly become a second producer of the cluster's scheduled work.
+   * - `migration` defaults to `MANUAL`, so pointing a dashboard at a database never migrates it as a
+   *   side effect. (The CLI's `migrate` command applies them explicitly.)
+   *
+   * @internal Documented in the API reference for completeness; not part of the application surface.
+   */
+  _headless?: boolean;
   /** @internal Inject a clock for deterministic tests. */
   clock?: import('../util/clock').Clock;
 }
 
 /** Options for `pq.shutdown`. */
 export interface ShutdownOptions {
+  /**
+   * Wait for in-flight handlers to finish before aborting them (default true). With `false` every
+   * running handler is aborted immediately and its lock released for fast reclaim.
+   */
   graceful?: boolean;
   /** How long to wait for in-flight handlers and background work, **in seconds**. Default 30. */
   timeoutSeconds?: number;
-  drain?: boolean;
 }

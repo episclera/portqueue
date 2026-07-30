@@ -22,7 +22,7 @@ async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
   await pq.init();
 
-  const charges = pq.createQueue<{ id: string }>({ name: 'charges' });
+  pq.createQueue<{ id: string }>({ name: 'charges' });
 
   let attempts = 0;
   pq.createWorker<{ id: string }>({
@@ -36,7 +36,8 @@ async function main(): Promise<void> {
     },
   });
 
-  await charges.addJob({
+  await pq.addJob({
+    queue: 'charges',
     data: { id: 'ch_123' },
     retry: {
       maxAttempts: 3, // total attempts including the first

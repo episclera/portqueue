@@ -18,14 +18,14 @@ import { PostgresDriver } from '@portqueue/core/drivers/postgres';
 const pq = new PortQueue({ driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }) });
 await pq.init();
 
-const emails = pq.createQueue({ name: 'emails' });
-pq.createWorker({ queue: 'emails', concurrency: 10, handler: async (job) => send(job.data) });
-await emails.addJob({ data: { to: 'a@b.com' } });
+pq.createQueue({ name: 'emails' });
+pq.createWorker({ queue: 'emails', limiter: { concurrency: 10 }, handler: (job) => send(job.data) });
+await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
 ```
 
 **Free and open source. Commercial use permitted. No license fee, no obligations.** (MIT)
 
-- Subpath driver imports: `@portqueue/core/drivers/{postgres,oracle,pglite,sqlite}`
+- Subpath driver imports: `@portqueue/core/drivers/{postgres,mysql,oracle,pglite,sqlite}`
 - Transaction adapters: `@portqueue/core/tx` (`fromKnex`, `fromPg`, …)
 - Custom-driver conformance kit: `@portqueue/core/conformance`
 

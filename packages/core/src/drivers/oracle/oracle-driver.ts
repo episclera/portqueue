@@ -1,10 +1,5 @@
-import {
-  DatabaseEngine,
-  DeduplicationReason,
-  RetentionMode,
-  BackoffStrategy,
-} from '../../options/enums';
-import { JobStatus } from '../../jobs/job-state.enum';
+import { DatabaseEngine, DeduplicationReason, RetentionMode } from '../../options/enums';
+import { ACTIVE_STATUSES, FINISHED_STATUSES, JobStatus } from '../../jobs/job-state.enum';
 import { capabilities, DriverCapability, type DriverCapabilitySet } from '../driver-capabilities';
 import {
   DriverConnectionError,
@@ -20,21 +15,32 @@ import {
   InstanceColumn,
   MigrationColumn,
 } from '../table-names';
-import { matchesInstance } from '../../jobs/instance-affinity';
-import { uuid } from '../../util/uuid';
+import {
+  BaseDriver,
+  JOB_COLUMNS,
+  SCHEDULE_INSERT_COLUMNS,
+  type RawResult,
+  type Row,
+  type Session,
+} from '../shared/base-driver';
+import { retentionStatusPattern } from '../shared/retention-statuses';
 import { toMigrationSteps } from '../shared/migration';
 import { ORACLE_MIGRATIONS } from './migrations';
 import type {
   Driver,
   DriverProbe,
   InstanceListFilter,
+  JobListFilter,
+  JobRef,
   MigrationStep,
   PageWindow,
   QueueListFilter,
+  RequeuedJobRef,
   ScheduleListFilter,
+  ScheduleRef,
+  StalledJobRef,
   Subscription,
 } from '../driver.interface';
-import { DriverContext } from '../driver-context';
 import type {
   InsertedJobRow,
   InstanceMetrics,
@@ -44,10 +50,9 @@ import type {
   NewScheduleRow,
   QueueRow,
   ScheduleRow,
-  ScheduledJobOptions,
 } from '../../jobs/job-record';
 import type { QueueOptions } from '../../options/queue-options';
-import type { TransactionHandle, TxQueryResult } from '../../tx/transaction-handle';
+import type { TransactionHandle } from '../../tx/transaction-handle';
 
 export interface OracleDriverOptions {
   user?: string;
@@ -55,7 +60,11 @@ export interface OracleDriverOptions {
   connectString?: string;
   /** Oracle identifiers are limited to 30 bytes (128 on 12.2+); prefix+table must fit. */
   maxIdentifierLen?: number;
-  /** DB schema for all objects (Oracle). */
+  /**
+   * DB schema for all objects. On Oracle a schema **is a user**, so this one is not created by the
+   * migration — it must already exist with rights to create tables. Every object name is qualified
+   * with it.
+   */
   schema?: string;
   /** Prefix for all created tables (default 'pq_'). */
   tablePrefix?: string;
@@ -78,77 +87,58 @@ interface OraclePool {
   close(drainTime?: number): Promise<void>;
 }
 
-/** A raw query result. */
-interface RawResult {
-  rows: Array<Record<string, unknown>>;
-  rowCount: number;
-}
-/** An opaque per-connection session used inside a transaction. */
-type Session = unknown;
-type Row = Record<string, unknown>;
-
-const JOB_COLUMNS = [
-  JobColumn.ID,
-  JobColumn.QUEUE_NAME,
-  JobColumn.STATUS,
-  JobColumn.PRIORITY,
-  JobColumn.DATA,
-  JobColumn.RETURN_VALUE,
-  JobColumn.CREATED_AT,
-  JobColumn.UPDATED_AT,
-  JobColumn.START_AFTER,
-  JobColumn.EXPIRE_AT,
-  JobColumn.STARTED_AT,
-  JobColumn.COMPLETED_AT,
-  JobColumn.FAILED_AT,
-  JobColumn.RETRIED_AT,
-  JobColumn.STALLED_AT,
-  JobColumn.CANCELLED_AT,
-  JobColumn.EXPIRED_AT,
-  JobColumn.LOCKED_UNTIL,
-  JobColumn.PREFERRED_INSTANCE_KEY_PATTERN,
-  JobColumn.PROCESSED_ON_INSTANCE_KEY,
-  JobColumn.RETRY_ATTEMPT,
-  JobColumn.RETRY_MAX_ATTEMPTS,
-  JobColumn.RETRY_DELAY_SECONDS,
-  JobColumn.RETRY_BACKOFF,
-  JobColumn.RETRY_BACKOFF_FACTOR,
-  JobColumn.RETRY_MAX_DELAY_SECONDS,
-  JobColumn.RETRY_JITTER,
-  JobColumn.FAILURE_MESSAGE,
-  JobColumn.RETENTION_MODE,
-  JobColumn.RETENTION_TTL_SECONDS,
-  JobColumn.IDEMPOTENCY_KEY,
-  JobColumn.SCHEDULE_ID,
-  JobColumn.SINGLETON_KEY,
-] as const;
+/** ORA-00942 "table or view does not exist" — the only code that means "not migrated yet". */
+const ORA_MISSING_TABLE = 942;
 
 /**
- * Oracle driver — standalone (no shared base class) so an Oracle-specific change never touches
- * another engine. Uses the `oracledb` package as an optional peer, `:N`-style colon placeholders,
- * SKIP LOCKED claiming and RETURNING. GUID/UUID identifiers are stored as strings. No method emits
- * a relational JOIN — relationships resolve by name/key lookups, and the schema carries no unique
- * index, so name-uniqueness and idempotency/singleton dedup are enforced here in code. Oracle has
- * no LISTEN/NOTIFY or advisory locks; pub/sub falls back to interval polling. Oracle is validated
- * by the conformance kit against a real server rather than in CI.
+ * Oracle driver — it owns its entire SQL surface, so an Oracle-specific change never touches another
+ * engine. `:1`-style colon placeholders, `FOR UPDATE SKIP LOCKED` claiming, real primary keys and
+ * indexes. No LISTEN/NOTIFY and no advisory locks; the polling backstop drives wakeups. No method
+ * emits a relational JOIN — relationships resolve by name/key lookups — and idempotency/singleton
+ * dedup is enforced here in code rather than by a constraint, so behaviour matches every other
+ * engine. `oracledb` is an optional peer dependency.
+ *
+ * **Four Oracle facts shape every statement below**, and each one is a place the previous version of
+ * this driver emitted SQL Oracle cannot parse:
+ *
+ * 1. **No `LIMIT`/`OFFSET`.** Paging is `OFFSET n ROWS FETCH NEXT m ROWS ONLY` (12c+), and a bounded
+ *    subquery is `FETCH FIRST n ROWS ONLY`. See {@link window}.
+ * 2. **`RETURNING` binds into OUT variables and cannot produce a row set from a multi-row DML.**
+ *    Every "mutate and read back" is therefore an explicit two-step in one transaction: select the
+ *    affected ids (with `FOR UPDATE SKIP LOCKED` where they are contended), then mutate exactly
+ *    those. There is no `RETURNING *` and no `INSERT … RETURNING`, so this driver does not declare
+ *    the `RETURNING` capability.
+ * 3. **No multi-row `VALUES` and no `ON CONFLICT`.** A batch insert is `INSERT ALL … SELECT 1 FROM
+ *    dual`; a get-or-create is `MERGE … WHEN NOT MATCHED THEN INSERT`, whose conflict target is the
+ *    primary key.
+ * 4. **`CLOB` columns come back as LOB streams, not strings,** unless the client is told otherwise.
+ *    `connect()` sets `fetchAsString = [CLOB]` so `data`, `return_value`, `failure_message` and
+ *    `job_options` arrive as the strings `mapJob`/`mapSchedule` expect to `JSON.parse`.
+ *
+ * Row mapping, value conversion and insert value lists come from {@link BaseDriver} — mechanism, not
+ * SQL. Oracle is validated with the conformance kit against a real server rather than in CI; see the
+ * testing note in CLAUDE.md.
  */
-export class OracleDriver implements Driver {
+export class OracleDriver extends BaseDriver implements Driver {
   readonly engine = DatabaseEngine.ORACLE;
   readonly capabilities: DriverCapabilitySet = capabilities({
     [DriverCapability.SKIP_LOCKED]: true,
-    [DriverCapability.RETURNING]: true,
     [DriverCapability.TRANSACTIONS]: true,
-    [DriverCapability.DB_GENERATED_UUID]: false,
+    // No row-set RETURNING (it binds OUT variables), no LISTEN/NOTIFY, no advisory lock.
   });
-  readonly migrations = toMigrationSteps(ORACLE_MIGRATIONS);
+  readonly migrations: MigrationStep[] = toMigrationSteps(ORACLE_MIGRATIONS);
 
-  readonly context: DriverContext;
+  /**
+   * Oracle's `INSERT ALL` repeats the whole column list once per row, so a batch grows the statement
+   * text as fast as it grows the bind list. Held well under the shared floor to keep the SQL sane.
+   */
+  protected override readonly maxBindParams = 4_000;
+
   private pool: OraclePool | null = null;
   private readonly options: OracleDriverOptions;
 
   constructor(options: OracleDriverOptions = {}) {
-    this.options = options;
-    this.context = new DriverContext({
+    super({
       ...(options.tablePrefix !== undefined ? { tablePrefix: options.tablePrefix } : {}),
       ...(options.schema !== undefined ? { schema: options.schema } : {}),
       ...(options.namespace !== undefined ? { namespace: options.namespace } : {}),
@@ -156,6 +146,7 @@ export class OracleDriver implements Driver {
         ? { maxIdentifierLen: options.maxIdentifierLen }
         : {}),
     });
+    this.options = options;
   }
 
   // --- Connection management ---
@@ -163,7 +154,9 @@ export class OracleDriver implements Driver {
     let oracledb: {
       createPool(config: Record<string, unknown>): Promise<OraclePool>;
       OUT_FORMAT_OBJECT: number;
+      CLOB: number;
       outFormat: number;
+      fetchAsString: number[];
     };
     try {
       const mod = (await import('oracledb' as string)) as { default?: unknown };
@@ -173,6 +166,11 @@ export class OracleDriver implements Driver {
     }
     try {
       oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
+      // Without this, a CLOB column arrives as a Lob stream and every `JSON.parse` of a payload
+      // fails. Declared once for the process, as `oracledb` intends.
+      if (!oracledb.fetchAsString?.includes(oracledb.CLOB)) {
+        oracledb.fetchAsString = [...(oracledb.fetchAsString ?? []), oracledb.CLOB];
+      }
       this.pool = await oracledb.createPool({
         user: this.options.user,
         password: this.options.password,
@@ -188,7 +186,7 @@ export class OracleDriver implements Driver {
     this.pool = null;
   }
 
-  private async execute(
+  protected async execute(
     sql: string,
     params: readonly unknown[],
     session?: Session,
@@ -222,7 +220,7 @@ export class OracleDriver implements Driver {
     return { rows: normalized, rowCount: res.rowsAffected ?? normalized.length };
   }
 
-  private async transaction<T>(fn: (session: Session) => Promise<T>): Promise<T> {
+  protected async transaction<T>(fn: (session: Session) => Promise<T>): Promise<T> {
     if (!this.pool) throw new DriverConnectionError('Oracle driver is not connected.');
     const conn = await this.pool.getConnection();
     try {
@@ -237,31 +235,34 @@ export class OracleDriver implements Driver {
     }
   }
 
-  // --- Naming helpers ---
-  private t(table: TableName): string {
-    return this.context.tableNames.bare(table);
-  }
-  /** Oracle uses `:N`-style colon placeholders. */
-  private ph(index0: number): string {
+  /** Oracle uses `:N`-style colon placeholders, bound positionally from an array. */
+  protected ph(index0: number): string {
     return `:${index0 + 1}`;
   }
 
   /**
-   * The trailing `LIMIT`/`OFFSET` for a list read, appending each bound value to `params`.
-   * Returns an empty string when the caller asked for no window, so core's unpaged reads emit
-   * exactly the SQL they always did.
+   * Oracle's paging tail: `OFFSET n ROWS FETCH NEXT m ROWS ONLY` (12c+). `OFFSET` must precede
+   * `FETCH`, so the offset bind is pushed first — the params array has to match the order the
+   * placeholders appear in.
    */
-  private window(page: PageWindow, params: unknown[]): string {
+  protected window(page: PageWindow, params: unknown[]): string {
     let sql = '';
-    if (page.limit !== undefined) {
-      sql += ` LIMIT ${this.ph(params.length)}`;
-      params.push(Math.max(Math.trunc(page.limit), 0));
-    }
     if (page.offset !== undefined) {
-      sql += ` OFFSET ${this.ph(params.length)}`;
+      sql += ` OFFSET ${this.ph(params.length)} ROWS`;
       params.push(Math.max(Math.trunc(page.offset), 0));
     }
+    if (page.limit !== undefined) {
+      sql += ` FETCH NEXT ${this.ph(params.length)} ROWS ONLY`;
+      params.push(Math.max(Math.trunc(page.limit), 0));
+    }
     return sql;
+  }
+
+  /** A bounded subquery tail: Oracle's `FETCH FIRST n ROWS ONLY`, not `LIMIT n`. */
+  private fetchFirst(limit: number, params: unknown[]): string {
+    const clause = ` FETCH FIRST ${this.ph(params.length)} ROWS ONLY`;
+    params.push(Math.max(Math.trunc(limit), 0));
+    return clause;
   }
 
   // --- Probe / migration ---
@@ -269,7 +270,7 @@ export class OracleDriver implements Driver {
     let serverVersion = 'unknown';
     if (this.pool) {
       const res = await this.execute(
-        'SELECT version FROM product_component_version WHERE ROWNUM = 1',
+        `SELECT version FROM product_component_version WHERE ROWNUM = 1`,
         [],
       );
       serverVersion = String(res.rows[0]?.version ?? 'unknown');
@@ -277,12 +278,11 @@ export class OracleDriver implements Driver {
     return { serverVersion, verifiedCapabilities: this.enabledCapabilities() };
   }
 
-  private enabledCapabilities(): DriverCapability[] {
-    return (Object.keys(this.capabilities) as DriverCapability[]).filter(
-      (c) => this.capabilities[c],
-    );
-  }
-
+  /**
+   * The applied schema version, or null when the migration table does not exist yet (ORA-00942).
+   * Every other failure surfaces: reading a permissions error as "not migrated" would start a full
+   * migration run against a database that may already be migrated.
+   */
   async getSchemaVersion(): Promise<number | null> {
     try {
       const res = await this.execute(
@@ -291,262 +291,173 @@ export class OracleDriver implements Driver {
       );
       const v = res.rows[0]?.v;
       return v == null ? null : Number(v);
-    } catch {
-      // Table doesn't exist yet.
-      return null;
+    } catch (err) {
+      const errorNum = (err as { errorNum?: unknown } | null)?.errorNum;
+      if (errorNum === ORA_MISSING_TABLE) return null;
+      throw new DriverQueryError('Failed to read the applied schema version.', err);
     }
   }
 
+  /**
+   * Apply one migration's DDL, then record its version.
+   *
+   * Oracle commits DDL implicitly, so — like MySQL — these cannot share one transaction. That is
+   * safe because every statement in the migration swallows its "already exists" code: a crash
+   * between the DDL and the version row leaves a schema the next run re-applies as a no-op and then
+   * records. The version insert is guarded on its own absence for the same reason.
+   */
   async applyMigration(options: { migration: MigrationStep }): Promise<void> {
-    const { migration } = options;
-    await migration.up(this, this.context);
+    const statements = options.migration.statements(this.context);
+    for (const sql of statements) await this.execute(sql, []);
     const now = Date.now();
     await this.execute(
-      `INSERT INTO ${this.t(TableName.MIGRATION)} (${MigrationColumn.VERSION}, ${MigrationColumn.APPLIED_AT}, ${MigrationColumn.CHECKSUM}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) VALUES (${this.ph(0)}, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)})`,
-      [migration.version, now, migration.checksum, now, now],
+      `MERGE INTO ${this.t(TableName.MIGRATION)} t ` +
+        `USING (SELECT ${this.ph(0)} AS ${MigrationColumn.VERSION} FROM dual) s ` +
+        `ON (t.${MigrationColumn.VERSION} = s.${MigrationColumn.VERSION}) ` +
+        `WHEN NOT MATCHED THEN INSERT (${MigrationColumn.VERSION}, ${MigrationColumn.APPLIED_AT}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) ` +
+        `VALUES (s.${MigrationColumn.VERSION}, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)})`,
+      [options.migration.version, now, now, now],
     );
   }
 
-  async ensureBaseObjects(): Promise<void> {}
-
-  // --- Value conversion ---
-  private toJson(value: unknown): string | null {
-    if (value === undefined || value === null) return null;
-    return JSON.stringify(value);
+  // --- Producing ---
+  async insertJob(options: { job: NewJobRecord; tx?: TransactionHandle }): Promise<InsertedJobRow> {
+    const [result] = await this.insertJobs({
+      jobs: [options.job],
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return result!;
   }
-  private fromJson(value: unknown): unknown {
-    if (value === null || value === undefined) return null;
-    if (typeof value === 'string') {
-      try {
-        return JSON.parse(value);
-      } catch {
-        return value;
+
+  /**
+   * A real batch insert: one grouped dedup lookup per distinct queue, then a single `INSERT ALL`,
+   * both in one transaction. Oracle has no multi-row `VALUES`, so the batch is expressed as
+   * `INSERT ALL INTO … VALUES (…) INTO … VALUES (…) SELECT 1 FROM dual`. Nothing is read back — the
+   * id, status and `start_after` of a fresh row are exactly what was written.
+   */
+  async insertJobs(options: {
+    jobs: NewJobRecord[];
+    tx?: TransactionHandle;
+  }): Promise<InsertedJobRow[]> {
+    const { jobs, tx } = options;
+    if (!jobs.length) return [];
+    return this.inTx(tx, async (run) => {
+      const deduped = await this.findDeduplicated(jobs, run);
+      const results = new Array<InsertedJobRow | undefined>(jobs.length);
+      const fresh: Array<{ index: number; id: string; values: unknown[] }> = [];
+
+      for (const [index, job] of jobs.entries()) {
+        const hit = deduped.get(job);
+        if (hit) {
+          results[index] = hit;
+          continue;
+        }
+        const { id, values } = this.jobInsertValues(job);
+        fresh.push({ index, id, values });
       }
-    }
-    return value;
-  }
-  private boolIn(value: boolean): number {
-    return value ? 1 : 0;
-  }
-  private boolOut(value: unknown): boolean {
-    return value === 1 || value === true || value === '1' || value === 't';
-  }
-  private numOrNull(value: unknown): number | null {
-    return value == null ? null : Number(value);
-  }
-  private strOrNull(value: unknown): string | null {
-    return value == null ? null : String(value);
+
+      // Chunked so one statement never exceeds Oracle's bind limit; each chunk is still one
+      // `INSERT ALL`.
+      for (const chunk of this.chunkForBind(fresh, JOB_COLUMNS.length)) {
+        if (!chunk.length) continue;
+        const params: unknown[] = [];
+        const clauses = chunk.map(({ values }) => {
+          const placeholders = this.phList(values.length, params.length);
+          params.push(...values);
+          return `INTO ${this.t(TableName.JOB)} (${JOB_COLUMNS.join(', ')}) VALUES (${placeholders})`;
+        });
+        try {
+          await run(`INSERT ALL ${clauses.join(' ')} SELECT 1 FROM dual`, params);
+        } catch (err) {
+          throw new DriverQueryError(
+            `Failed to insert ${chunk.length} job(s) on queue '${jobs[chunk[0]!.index]!.queueName}'.`,
+            err,
+          );
+        }
+        for (const { index, id } of chunk) {
+          const job = jobs[index]!;
+          results[index] = {
+            id,
+            status: job.status,
+            startAfter: job.startAfter,
+            deduplicated: false,
+          };
+        }
+      }
+      return results as InsertedJobRow[];
+    });
   }
 
-  /** Map + dedupe rows by a key, keeping the first occurrence (no unique index exists). */
-  private mapUnique<T>(rows: Row[], map: (row: Row) => T, key: (item: T) => string): T[] {
-    const seen = new Set<string>();
-    const out: T[] = [];
-    for (const row of rows) {
-      const item = map(row);
-      const k = key(item);
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push(item);
+  /**
+   * Locate the existing jobs that dedup this batch, in one lookup per distinct queue and key kind
+   * rather than two per job. No unique index enforces either key — dedup lives in code so every
+   * engine behaves identically and a duplicate returns the existing job instead of raising.
+   */
+  private async findDeduplicated(
+    jobs: NewJobRecord[],
+    run: (sql: string, params: readonly unknown[]) => Promise<RawResult>,
+  ): Promise<Map<NewJobRecord, InsertedJobRow>> {
+    const out = new Map<NewJobRecord, InsertedJobRow>();
+    const cols = `${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}`;
+
+    const byQueue = new Map<string, NewJobRecord[]>();
+    for (const job of jobs) {
+      if (job.idempotencyKey == null && job.singletonKey == null) continue;
+      const list = byQueue.get(job.queueName);
+      if (list) list.push(job);
+      else byQueue.set(job.queueName, [job]);
+    }
+
+    for (const [queueName, queueJobs] of byQueue) {
+      const idemKeys = [
+        ...new Set(queueJobs.flatMap((j) => (j.idempotencyKey ? [j.idempotencyKey] : []))),
+      ];
+      if (idemKeys.length) {
+        const res = await run(
+          `SELECT ${cols}, ${JobColumn.IDEMPOTENCY_KEY} FROM ${this.t(TableName.JOB)} ` +
+            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} IN (${this.phList(idemKeys.length, 1)})`,
+          [queueName, ...idemKeys],
+        );
+        const found = new Map(res.rows.map((r) => [String(r[JobColumn.IDEMPOTENCY_KEY]), r]));
+        for (const job of queueJobs) {
+          if (job.idempotencyKey == null) continue;
+          const row = found.get(job.idempotencyKey);
+          if (row) out.set(job, this.dedupResult(row, DeduplicationReason.IDEMPOTENCY));
+        }
+      }
+
+      const singletonKeys = [
+        ...new Set(
+          queueJobs.flatMap((j) => (!out.has(j) && j.singletonKey ? [j.singletonKey] : [])),
+        ),
+      ];
+      if (singletonKeys.length) {
+        const res = await run(
+          `SELECT ${cols}, ${JobColumn.SINGLETON_KEY} FROM ${this.t(TableName.JOB)} ` +
+            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} IN (${this.phList(singletonKeys.length, 1)}) ` +
+            `AND ${JobColumn.STATUS} IN (${this.phList(ACTIVE_STATUSES.length, 1 + singletonKeys.length)})`,
+          [queueName, ...singletonKeys, ...ACTIVE_STATUSES],
+        );
+        const found = new Map(res.rows.map((r) => [String(r[JobColumn.SINGLETON_KEY]), r]));
+        for (const job of queueJobs) {
+          if (out.has(job) || job.singletonKey == null) continue;
+          const row = found.get(job.singletonKey);
+          if (row) out.set(job, this.dedupResult(row, DeduplicationReason.SINGLETON));
+        }
+      }
     }
     return out;
   }
 
-  private mapJob(row: Row): JobRecord {
+  /** Shape a dedup hit the way `insertJob`'s caller reports it. */
+  private dedupResult(row: Row, reason: DeduplicationReason): InsertedJobRow {
     return {
       id: String(row[JobColumn.ID]),
-      queueName: String(row[JobColumn.QUEUE_NAME]),
       status: row[JobColumn.STATUS] as JobStatus,
-      priority: Number(row[JobColumn.PRIORITY]),
-      data: this.fromJson(row[JobColumn.DATA]),
-      returnValue: this.fromJson(row[JobColumn.RETURN_VALUE]),
-      createdAt: Number(row[JobColumn.CREATED_AT]),
-      updatedAt: Number(row[JobColumn.UPDATED_AT]),
       startAfter: Number(row[JobColumn.START_AFTER]),
-      expireAt: this.numOrNull(row[JobColumn.EXPIRE_AT]),
-      startedAt: this.numOrNull(row[JobColumn.STARTED_AT]),
-      completedAt: this.numOrNull(row[JobColumn.COMPLETED_AT]),
-      failedAt: this.numOrNull(row[JobColumn.FAILED_AT]),
-      retriedAt: this.numOrNull(row[JobColumn.RETRIED_AT]),
-      stalledAt: this.numOrNull(row[JobColumn.STALLED_AT]),
-      cancelledAt: this.numOrNull(row[JobColumn.CANCELLED_AT]),
-      expiredAt: this.numOrNull(row[JobColumn.EXPIRED_AT]),
-      lockedUntil: this.numOrNull(row[JobColumn.LOCKED_UNTIL]),
-      preferredInstanceKeyPattern: this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]),
-      processedOnInstanceKey: this.strOrNull(row[JobColumn.PROCESSED_ON_INSTANCE_KEY]),
-      retryAttempt: Number(row[JobColumn.RETRY_ATTEMPT]),
-      retryMaxAttempts: Number(row[JobColumn.RETRY_MAX_ATTEMPTS]),
-      retryDelaySeconds: Number(row[JobColumn.RETRY_DELAY_SECONDS]),
-      retryBackoff: row[JobColumn.RETRY_BACKOFF] as BackoffStrategy,
-      retryBackoffFactor: this.numOrNull(row[JobColumn.RETRY_BACKOFF_FACTOR]),
-      retryMaxDelaySeconds: this.numOrNull(row[JobColumn.RETRY_MAX_DELAY_SECONDS]),
-      retryJitter: this.boolOut(row[JobColumn.RETRY_JITTER]),
-      failureMessage: this.strOrNull(row[JobColumn.FAILURE_MESSAGE]),
-      retentionMode: row[JobColumn.RETENTION_MODE] as RetentionMode,
-      retentionTtlSeconds: this.numOrNull(row[JobColumn.RETENTION_TTL_SECONDS]),
-      idempotencyKey: this.strOrNull(row[JobColumn.IDEMPOTENCY_KEY]),
-      scheduleId: this.strOrNull(row[JobColumn.SCHEDULE_ID]),
-      singletonKey: this.strOrNull(row[JobColumn.SINGLETON_KEY]),
+      deduplicated: true,
+      deduplicationReason: reason,
     };
-  }
-
-  private mapQueue(row: Row): QueueRow {
-    return {
-      name: String(row[QueueColumn.NAME]),
-      processingPaused: this.boolOut(row[QueueColumn.PROCESSING_PAUSED]),
-      acceptingPaused: this.boolOut(row[QueueColumn.ACCEPTING_PAUSED]),
-      createdAt: Number(row[QueueColumn.CREATED_AT]),
-      updatedAt: Number(row[QueueColumn.UPDATED_AT]),
-    };
-  }
-
-  private mapInstance(row: Row): InstanceRow {
-    return {
-      instanceKey: String(row[InstanceColumn.INSTANCE_KEY]),
-      processingPaused: this.boolOut(row[InstanceColumn.PROCESSING_PAUSED]),
-      createdAt: Number(row[InstanceColumn.CREATED_AT]),
-      updatedAt: Number(row[InstanceColumn.UPDATED_AT]),
-      lastSeenAt: Number(row[InstanceColumn.LAST_SEEN_AT]),
-      cpuPercent: this.numOrNull(row[InstanceColumn.CPU_PERCENT]),
-      memoryPercent: this.numOrNull(row[InstanceColumn.MEMORY_PERCENT]),
-    };
-  }
-
-  private mapSchedule(row: Row): ScheduleRow {
-    return {
-      id: String(row[ScheduleColumn.ID]),
-      queueName: String(row[ScheduleColumn.QUEUE_NAME]),
-      cron: this.strOrNull(row[ScheduleColumn.CRON]),
-      everySeconds: this.numOrNull(row[ScheduleColumn.EVERY_SECONDS]),
-      timezone: this.strOrNull(row[ScheduleColumn.TIMEZONE]),
-      data: this.fromJson(row[ScheduleColumn.DATA]),
-      jobOptions:
-        (this.fromJson(row[ScheduleColumn.JOB_OPTIONS]) as ScheduledJobOptions | null) ?? null,
-      priority: this.numOrNull(row[ScheduleColumn.PRIORITY]),
-      retryMaxAttempts: this.numOrNull(row[ScheduleColumn.RETRY_MAX_ATTEMPTS]),
-      retryDelaySeconds: this.numOrNull(row[ScheduleColumn.RETRY_DELAY_SECONDS]),
-      nextRunAt: this.numOrNull(row[ScheduleColumn.NEXT_RUN_AT]),
-      lastRunAt: this.numOrNull(row[ScheduleColumn.LAST_RUN_AT]),
-      enabled: this.boolOut(row[ScheduleColumn.ENABLED]),
-      startAt: this.numOrNull(row[ScheduleColumn.START_AT]),
-      endAt: this.numOrNull(row[ScheduleColumn.END_AT]),
-      idempotencyKey: this.strOrNull(row[ScheduleColumn.IDEMPOTENCY_KEY]),
-      createdAt: Number(row[ScheduleColumn.CREATED_AT]),
-      updatedAt: Number(row[ScheduleColumn.UPDATED_AT]),
-    };
-  }
-
-  // --- Producing ---
-  private jobInsertValues(job: NewJobRecord): { columns: string[]; values: unknown[] } {
-    const id = job.id ?? uuid();
-    const now = job.createdAt;
-    const columns = [...JOB_COLUMNS];
-    const values: unknown[] = [
-      id,
-      job.queueName,
-      job.status,
-      job.priority,
-      this.toJson(job.data),
-      null, // return_value
-      now,
-      now,
-      job.startAfter,
-      job.expireAt,
-      null, // started_at
-      null, // completed_at
-      null, // failed_at
-      null, // retried_at
-      null, // stalled_at
-      null, // cancelled_at
-      null, // expired_at
-      null, // locked_until
-      job.preferredInstanceKeyPattern,
-      null, // processed_on_instance_key (set at claim time)
-      job.retryAttempt,
-      job.retryMaxAttempts,
-      job.retryDelaySeconds,
-      job.retryBackoff,
-      job.retryBackoffFactor,
-      job.retryMaxDelaySeconds,
-      this.boolIn(job.retryJitter),
-      null, // failure_message
-      job.retentionMode,
-      job.retentionTtlSeconds,
-      job.idempotencyKey,
-      job.scheduleId,
-      job.singletonKey,
-    ];
-    return { columns, values };
-  }
-
-  private async runMaybeTx(
-    sql: string,
-    params: unknown[],
-    tx?: TransactionHandle,
-  ): Promise<RawResult> {
-    if (tx) {
-      const res: TxQueryResult = await tx.execute(sql, params);
-      return { rows: res.rows, rowCount: res.rowCount };
-    }
-    return this.execute(sql, params);
-  }
-
-  async insertJob(options: { job: NewJobRecord; tx?: TransactionHandle }): Promise<InsertedJobRow> {
-    const { job, tx } = options;
-    // No unique indexes exist (sharded-friendly schema): dedup is enforced here with a
-    // pre-insert lookup. Best-effort across instances — accepted trade-off.
-    if (job.idempotencyKey != null || job.singletonKey != null) {
-      const existing = await this.findDeduplicated(job, tx);
-      if (existing) return existing;
-    }
-    const { columns, values } = this.jobInsertValues(job);
-    const placeholders = values.map((_, i) => this.ph(i)).join(', ');
-    const sql = `INSERT INTO ${this.t(TableName.JOB)} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}`;
-    try {
-      const res = await this.runMaybeTx(sql, values, tx);
-      const row = res.rows[0]!;
-      return {
-        id: String(row[JobColumn.ID]),
-        status: row[JobColumn.STATUS] as JobStatus,
-        startAfter: Number(row[JobColumn.START_AFTER]),
-        deduplicated: false,
-      };
-    } catch (err) {
-      throw new DriverQueryError(`Failed to insert job on queue '${job.queueName}'.`, err);
-    }
-  }
-
-  /** Locate an existing job that dedups this insert on idempotency/singleton. */
-  private async findDeduplicated(
-    job: NewJobRecord,
-    tx?: TransactionHandle,
-  ): Promise<InsertedJobRow | null> {
-    if (job.idempotencyKey != null) {
-      const existing = await this.findJobByIdempotencyKey({
-        queueName: job.queueName,
-        idempotencyKey: job.idempotencyKey,
-        ...(tx ? { tx } : {}),
-      });
-      if (existing) return existing;
-    }
-    if (job.singletonKey != null) {
-      const res = await this.runMaybeTx(
-        `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} = ${this.ph(1)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.ACTIVE}','${JobStatus.RETRY}')`,
-        [job.queueName, job.singletonKey],
-        tx,
-      );
-      if (res.rows[0]) {
-        const row = res.rows[0];
-        return {
-          id: String(row[JobColumn.ID]),
-          status: row[JobColumn.STATUS] as JobStatus,
-          startAfter: Number(row[JobColumn.START_AFTER]),
-          deduplicated: true,
-          deduplicationReason: DeduplicationReason.SINGLETON,
-        };
-      }
-    }
-    return null;
   }
 
   async findJobByIdempotencyKey(options: {
@@ -555,19 +466,12 @@ export class OracleDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<InsertedJobRow | null> {
     const res = await this.runMaybeTx(
-      `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} = ${this.ph(1)}`,
+      `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER} FROM ${this.t(TableName.JOB)} ` +
+        `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} = ${this.ph(1)}`,
       [options.queueName, options.idempotencyKey],
       options.tx,
     );
-    if (!res.rows[0]) return null;
-    const row = res.rows[0];
-    return {
-      id: String(row[JobColumn.ID]),
-      status: row[JobColumn.STATUS] as JobStatus,
-      startAfter: Number(row[JobColumn.START_AFTER]),
-      deduplicated: true,
-      deduplicationReason: DeduplicationReason.IDEMPOTENCY,
-    };
+    return res.rows[0] ? this.dedupResult(res.rows[0], DeduplicationReason.IDEMPOTENCY) : null;
   }
 
   async findScheduleByIdempotencyKey(options: {
@@ -583,81 +487,60 @@ export class OracleDriver implements Driver {
     return res.rows[0] ? this.mapSchedule(res.rows[0]) : null;
   }
 
-  async insertJobs(options: {
-    jobs: NewJobRecord[];
-    tx?: TransactionHandle;
-  }): Promise<InsertedJobRow[]> {
-    const results: InsertedJobRow[] = [];
-    for (const job of options.jobs) {
-      results.push(await this.insertJob({ job, ...(options.tx ? { tx: options.tx } : {}) }));
-    }
-    return results;
-  }
-
   async insertSchedule(options: {
     schedule: NewScheduleRow;
     tx?: TransactionHandle;
   }): Promise<ScheduleRow> {
-    const { schedule, tx } = options;
-    const now = Date.now();
-    // Plain INSERT — NOT an UPSERT and no pattern-based dedup. Identical recurrences on a queue are
-    // allowed to coexist by design; the caller enforces idempotency-key dedup ahead of this call
-    // (see ProducerService), so nothing here needs a conflict target that sharded engines reject.
-    const id = schedule.id ?? uuid();
-    const cols = [
-      ScheduleColumn.ID,
-      ScheduleColumn.QUEUE_NAME,
-      ScheduleColumn.CRON,
-      ScheduleColumn.EVERY_SECONDS,
-      ScheduleColumn.TIMEZONE,
-      ScheduleColumn.DATA,
-      ScheduleColumn.JOB_OPTIONS,
-      ScheduleColumn.PRIORITY,
-      ScheduleColumn.RETRY_MAX_ATTEMPTS,
-      ScheduleColumn.RETRY_DELAY_SECONDS,
-      ScheduleColumn.NEXT_RUN_AT,
-      ScheduleColumn.ENABLED,
-      ScheduleColumn.START_AT,
-      ScheduleColumn.END_AT,
-      ScheduleColumn.IDEMPOTENCY_KEY,
-      ScheduleColumn.CREATED_AT,
-      ScheduleColumn.UPDATED_AT,
-    ];
-    const vals: unknown[] = [
-      id,
-      schedule.queueName,
-      schedule.cron,
-      schedule.everySeconds,
-      schedule.timezone,
-      this.toJson(schedule.data),
-      this.toJson(schedule.jobOptions),
-      schedule.priority,
-      schedule.retryMaxAttempts,
-      schedule.retryDelaySeconds,
-      schedule.nextRunAt,
-      this.boolIn(schedule.enabled),
-      schedule.startAt,
-      schedule.endAt,
-      schedule.idempotencyKey,
-      now,
-      now,
-    ];
-    const placeholders = vals.map((_, i) => this.ph(i)).join(', ');
-    const res = await this.runMaybeTx(
-      `INSERT INTO ${this.t(TableName.SCHEDULE)} (${cols.join(', ')}) VALUES (${placeholders}) RETURNING *`,
-      vals,
-      tx,
-    );
-    return this.mapSchedule(res.rows[0]!);
+    // Plain INSERT — NOT an UPSERT and no pattern-based dedup. Oracle cannot return the inserted
+    // row as a result set, so insert then read it back by its known id, in one transaction.
+    const { id, values } = this.scheduleInsertValues(options.schedule, Date.now());
+    return this.inTx(options.tx, async (run) => {
+      await run(
+        `INSERT INTO ${this.t(TableName.SCHEDULE)} (${SCHEDULE_INSERT_COLUMNS.join(', ')}) ` +
+          `VALUES (${this.phList(values.length)})`,
+        values,
+      );
+      const res = await run(
+        `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
+        [id],
+      );
+      if (!res.rows[0]) throw new DriverQueryError(`Failed to insert schedule '${id}'.`);
+      return this.mapSchedule(res.rows[0]);
+    });
   }
 
-  async deleteSchedule(options: { scheduleId: string; tx?: TransactionHandle }): Promise<boolean> {
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
-      [options.scheduleId],
-      options.tx,
-    );
-    return res.rowCount > 0;
+  async deleteSchedule(options: {
+    scheduleId: string;
+    tx?: TransactionHandle;
+  }): Promise<ScheduleRef | null> {
+    const [ref] = await this.deleteSchedules({
+      scheduleIds: [options.scheduleId],
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return ref ?? null;
+  }
+
+  async deleteSchedules(options: {
+    scheduleIds: string[];
+    tx?: TransactionHandle;
+  }): Promise<ScheduleRef[]> {
+    if (!options.scheduleIds.length) return [];
+    // No row-set RETURNING: lock and read the rows, then delete exactly those ids.
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${ScheduleColumn.ID}, ${ScheduleColumn.QUEUE_NAME} FROM ${this.t(TableName.SCHEDULE)} ` +
+          `WHERE ${ScheduleColumn.ID} IN (${this.phList(options.scheduleIds.length)}) FOR UPDATE`,
+        options.scheduleIds,
+      );
+      const refs = sel.rows.map((r) => this.mapScheduleRef(r));
+      if (!refs.length) return [];
+      const ids = refs.map((r) => r.scheduleId);
+      await run(
+        `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} IN (${this.phList(ids.length)})`,
+        ids,
+      );
+      return refs;
+    });
   }
 
   async setScheduleEnabled(options: {
@@ -665,13 +548,21 @@ export class OracleDriver implements Driver {
     enabled: boolean;
     now: number;
     tx?: TransactionHandle;
-  }): Promise<boolean> {
-    const res = await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.ENABLED} = ${this.ph(0)}, ${ScheduleColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${ScheduleColumn.ID} = ${this.ph(2)}`,
-      [this.boolIn(options.enabled), options.now, options.scheduleId],
-      options.tx,
-    );
-    return res.rowCount > 0;
+  }): Promise<ScheduleRef | null> {
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${ScheduleColumn.ID}, ${ScheduleColumn.QUEUE_NAME} FROM ${this.t(TableName.SCHEDULE)} ` +
+          `WHERE ${ScheduleColumn.ID} = ${this.ph(0)} FOR UPDATE`,
+        [options.scheduleId],
+      );
+      if (!sel.rows[0]) return null;
+      await run(
+        `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.ENABLED} = ${this.ph(0)}, ` +
+          `${ScheduleColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${ScheduleColumn.ID} = ${this.ph(2)}`,
+        [this.boolIn(options.enabled), options.now, options.scheduleId],
+      );
+      return this.mapScheduleRef(sel.rows[0]);
+    });
   }
 
   // --- Claiming (hot path) ---
@@ -683,81 +574,66 @@ export class OracleDriver implements Driver {
     instanceKey?: string | null;
   }): Promise<JobRecord[]> {
     const { queueName, limit, lockDurationSeconds, now, instanceKey } = options;
-    const lockedUntil = now + lockDurationSeconds * 1000;
-    const cols = JOB_COLUMNS.join(', ');
-    const skipLocked = this.capabilities[DriverCapability.SKIP_LOCKED]
-      ? ' FOR UPDATE SKIP LOCKED'
-      : '';
+    const lockedUntil = this.lockDeadline(now, lockDurationSeconds);
 
-    // Single-instance mode: one guarded UPDATE ... RETURNING — atomic on both strategies.
-    if (!instanceKey) {
-      const build = (session?: Session) =>
-        this.execute(
-          `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.ACTIVE}', ${JobColumn.STARTED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = ${this.ph(1)}, ` +
-            `${JobColumn.UPDATED_AT} = ${this.ph(2)} ` +
-            `WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(3)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') ` +
-            `AND ${JobColumn.START_AFTER} <= ${this.ph(4)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(5)}) ` +
-            `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(6)}${skipLocked}) RETURNING ${cols}`,
-          [now, lockedUntil, now, queueName, now, now, limit],
-          session,
-        );
-      const res = this.capabilities[DriverCapability.SKIP_LOCKED]
-        ? await this.transaction((session) => build(session))
-        : await build();
-      return res.rows
-        .map((r) => this.mapJob(r))
-        .sort((a, b) => b.priority - a.priority || a.startAfter - b.startAfter);
-    }
-
-    // Multi-instance mode: affinity (a preferred key pattern) can't be expressed in portable SQL,
-    // so page through candidates highest-priority-first, keep only those this instance's key
-    // matches, and stop as soon as the batch is full or a page comes back short (no more work).
-    // Paging — rather than one capped window — prevents starvation: when the top rows all target
-    // other instances, the jobs this instance *can* run may sit past the first page. Scanning
-    // holds no locks (candidates are PENDING/RETRY, never locked), so a shifting result set only
-    // costs a missed row this tick (the poll/NOTIFY retries); the guarded UPDATE below is the
-    // atomic claim, and a lost race just returns fewer rows.
-    const pageSize = Math.min(Math.max(limit * 5, limit + 20), 500);
-    // Bound the scan so a backlog of exclusively-non-matching jobs can't turn one tick into a
-    // full-table sweep; the next tick resumes from the top.
-    const maxScan = Math.max(pageSize * 20, 2000);
-    const idSet = new Set<string>();
-    for (let offset = 0; idSet.size < limit && offset < maxScan; offset += pageSize) {
-      const sel = await this.execute(
-        `SELECT ${JobColumn.ID}, ${JobColumn.PREFERRED_INSTANCE_KEY_PATTERN} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') ` +
-          `AND ${JobColumn.START_AFTER} <= ${this.ph(1)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(2)}) ` +
-          `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(3)} OFFSET ${this.ph(4)}`,
-        [queueName, now, now, pageSize, offset],
-      );
-      if (sel.rows.length === 0) break; // exhausted — nothing more to scan
-      for (const row of sel.rows) {
-        if (
-          matchesInstance(
-            this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]),
-            instanceKey,
-          )
-        ) {
-          idSet.add(String(row[JobColumn.ID]));
-          if (idSet.size >= limit) break;
-        }
-      }
-      if (sel.rows.length < pageSize) break; // last (partial) page
-    }
-    if (idSet.size === 0) return [];
-    const ids = [...idSet];
+    // Select claimable ids highest-priority-first, locking them for the transaction with SKIP
+    // LOCKED so concurrent claimers never contend, then update exactly those and read them back —
+    // the three steps Oracle's OUT-variable-only RETURNING forces. Affinity is a regex, which SQL
+    // cannot evaluate, so a named instance pages and filters in the tool.
     return this.transaction(async (session) => {
-      const setParams = [now, lockedUntil, instanceKey, now];
-      const idPh = ids.map((_, i) => this.ph(setParams.length + i)).join(', ');
-      const upd = await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.ACTIVE}', ${JobColumn.STARTED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = ${this.ph(1)}, ` +
-          `${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)} ` +
-          `WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') RETURNING ${cols}`,
-        [...setParams, ...ids],
+      const ids: string[] = [];
+      if (!instanceKey) {
+        const params: unknown[] = [queueName, JobStatus.PENDING, JobStatus.RETRY, now, now];
+        const sql =
+          `SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.STATUS} IN (${this.ph(1)}, ${this.ph(2)}) ` +
+          `AND ${JobColumn.START_AFTER} <= ${this.ph(3)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(4)}) ` +
+          `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC` +
+          this.fetchFirst(limit, params) +
+          ` FOR UPDATE SKIP LOCKED`;
+        const sel = await this.execute(sql, params, session);
+        for (const row of sel.rows) ids.push(String(row[JobColumn.ID]));
+      } else {
+        const { pageSize, maxScan } = this.affinityPlan(limit);
+        const matched = new Set<string>();
+        for (let offset = 0; matched.size < limit && offset < maxScan; offset += pageSize) {
+          const params: unknown[] = [queueName, JobStatus.PENDING, JobStatus.RETRY, now, now];
+          const sql =
+            `SELECT ${JobColumn.ID}, ${JobColumn.PREFERRED_INSTANCE_KEY_PATTERN} FROM ${this.t(TableName.JOB)} ` +
+            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.STATUS} IN (${this.ph(1)}, ${this.ph(2)}) ` +
+            `AND ${JobColumn.START_AFTER} <= ${this.ph(3)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(4)}) ` +
+            `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC` +
+            this.window({ limit: pageSize, offset }, params) +
+            ` FOR UPDATE SKIP LOCKED`;
+          const sel = await this.execute(sql, params, session);
+          if (sel.rows.length === 0) break;
+          this.collectAffinityMatches(sel.rows, instanceKey, limit, matched);
+          if (sel.rows.length < pageSize) break;
+        }
+        ids.push(...matched);
+      }
+      if (ids.length === 0) return [];
+
+      const head = [JobStatus.ACTIVE, now, lockedUntil, instanceKey ?? null, now];
+      await this.execute(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STARTED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(3)}, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(4)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, head.length)}) ` +
+          `AND ${JobColumn.STATUS} IN (${this.ph(head.length + ids.length)}, ${this.ph(head.length + ids.length + 1)})`,
+        [...head, ...ids, JobStatus.PENDING, JobStatus.RETRY],
         session,
       );
-      return upd.rows
-        .map((r) => this.mapJob(r))
-        .sort((a, b) => b.priority - a.priority || a.startAfter - b.startAfter);
+      // Read back only the rows this call actually claimed: same ids, ACTIVE, and holding *our*
+      // lock deadline — so a row another claimer took first is excluded.
+      const res = await this.execute(
+        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length)}) AND ${JobColumn.STATUS} = ${this.ph(ids.length)} ` +
+          `AND ${JobColumn.LOCKED_UNTIL} = ${this.ph(ids.length + 1)}`,
+        [...ids, JobStatus.ACTIVE, lockedUntil],
+        session,
+      );
+      return this.sortClaimed(res.rows.map((r) => this.mapJob(r)));
     });
   }
 
@@ -766,9 +642,15 @@ export class OracleDriver implements Driver {
     lockDurationSeconds: number;
     now: number;
   }): Promise<boolean> {
-    const res = await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.LOCKED_UNTIL} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} = '${JobStatus.ACTIVE}'`,
-      [options.now + options.lockDurationSeconds * 1000, options.now, options.jobId],
+    const res = await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.LOCKED_UNTIL} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} = ${this.ph(3)}`,
+      [
+        this.lockDeadline(options.now, options.lockDurationSeconds),
+        options.now,
+        options.jobId,
+        JobStatus.ACTIVE,
+      ],
     );
     return res.rowCount > 0;
   }
@@ -780,8 +662,16 @@ export class OracleDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<void> {
     await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.COMPLETED}', ${JobColumn.RETURN_VALUE} = ${this.ph(0)}, ${JobColumn.COMPLETED_AT} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(3)}`,
-      [this.toJson(options.returnValue), options.now, options.now, options.jobId],
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETURN_VALUE} = ${this.ph(1)}, ` +
+        `${JobColumn.COMPLETED_AT} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(4)}`,
+      [
+        JobStatus.COMPLETED,
+        this.toJson(options.returnValue),
+        options.now,
+        options.now,
+        options.jobId,
+      ],
       options.tx,
     );
   }
@@ -793,9 +683,12 @@ export class OracleDriver implements Driver {
     lastError: string;
     now: number;
   }): Promise<void> {
-    await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.RETRY}', ${JobColumn.RETRY_ATTEMPT} = ${this.ph(0)}, ${JobColumn.START_AFTER} = ${this.ph(1)}, ${JobColumn.RETRIED_AT} = ${this.ph(2)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(3)}, ${JobColumn.UPDATED_AT} = ${this.ph(4)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(5)}`,
+    await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = ${this.ph(1)}, ` +
+        `${JobColumn.START_AFTER} = ${this.ph(2)}, ${JobColumn.RETRIED_AT} = ${this.ph(3)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(4)}, ` +
+        `${JobColumn.UPDATED_AT} = ${this.ph(5)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(6)}`,
       [
+        JobStatus.RETRY,
         options.retryAttempt,
         options.nextRunAt,
         options.now,
@@ -807,69 +700,130 @@ export class OracleDriver implements Driver {
   }
 
   async failJob(options: { jobId: string; lastError: string; now: number }): Promise<void> {
-    await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.FAILED}', ${JobColumn.FAILED_AT} = ${this.ph(0)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(3)}`,
-      [options.now, options.lastError, options.now, options.jobId],
+    await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.FAILED_AT} = ${this.ph(1)}, ` +
+        `${JobColumn.FAILURE_MESSAGE} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(4)}`,
+      [JobStatus.FAILED, options.now, options.lastError, options.now, options.jobId],
     );
   }
 
-  async reclaimStalledJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]> {
-    const cols = JOB_COLUMNS.join(', ');
-    const params: unknown[] = [options.now, options.now];
-    let where = `${JobColumn.STATUS} = '${JobStatus.ACTIVE}' AND ${JobColumn.LOCKED_UNTIL} IS NOT NULL AND ${JobColumn.LOCKED_UNTIL} < ${this.ph(1)}`;
+  async reclaimStalledJobs(options: {
+    queueName?: string;
+    limit: number;
+    now: number;
+  }): Promise<StalledJobRef[]> {
+    // Bounded, and only three columns: the caller needs the id, the queue to wake, and who held it.
+    const params: unknown[] = [JobStatus.ACTIVE, options.now];
+    let where =
+      `${JobColumn.STATUS} = ${this.ph(0)} AND ${JobColumn.LOCKED_UNTIL} IS NOT NULL ` +
+      `AND ${JobColumn.LOCKED_UNTIL} < ${this.ph(1)}`;
     if (options.queueName) {
-      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(2)}`;
+      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`;
       params.push(options.queueName);
     }
-    // Return stalled jobs to PENDING (RETRY handling happens in the completion path on next fail).
-    const res = await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.STALLED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${where} RETURNING ${cols}`,
-      params,
-    );
-    return res.rows.map((r) => this.mapJob(r));
+    const fetch = this.fetchFirst(options.limit, params);
+    return this.transaction(async (session) => {
+      const sel = await this.execute(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}, ${JobColumn.PROCESSED_ON_INSTANCE_KEY} ` +
+          `FROM ${this.t(TableName.JOB)} WHERE ${where}${fetch} FOR UPDATE SKIP LOCKED`,
+        params,
+        session,
+      );
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => ({
+        ...this.mapJobRef(r),
+        previousInstanceKey: this.strOrNull(r[JobColumn.PROCESSED_ON_INSTANCE_KEY]),
+      }));
+      const ids = refs.map((r) => r.jobId);
+      await this.execute(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STALLED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 2)})`,
+        [JobStatus.PENDING, options.now, ...ids],
+        session,
+      );
+      return refs;
+    });
   }
 
-  async expireDueJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]> {
-    const cols = JOB_COLUMNS.join(', ');
-    const params: unknown[] = [options.now, options.now, options.now];
-    let where = `${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') AND ${JobColumn.EXPIRE_AT} IS NOT NULL AND ${JobColumn.EXPIRE_AT} <= ${this.ph(2)}`;
+  async expireDueJobs(options: {
+    queueName?: string;
+    limit: number;
+    now: number;
+  }): Promise<JobRef[]> {
+    const params: unknown[] = [JobStatus.PENDING, JobStatus.RETRY, options.now];
+    let where =
+      `${JobColumn.STATUS} IN (${this.ph(0)}, ${this.ph(1)}) AND ${JobColumn.EXPIRE_AT} IS NOT NULL ` +
+      `AND ${JobColumn.EXPIRE_AT} <= ${this.ph(2)}`;
     if (options.queueName) {
-      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(3)}`;
+      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`;
       params.push(options.queueName);
     }
-    const res = await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.EXPIRED}', ${JobColumn.EXPIRED_AT} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${where} RETURNING ${cols}`,
-      params,
-    );
-    return res.rows.map((r) => this.mapJob(r));
+    const fetch = this.fetchFirst(options.limit, params);
+    return this.transaction(async (session) => {
+      const sel = await this.execute(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${where}${fetch} FOR UPDATE SKIP LOCKED`,
+        params,
+        session,
+      );
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => this.mapJobRef(r));
+      const ids = refs.map((r) => r.jobId);
+      await this.execute(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.EXPIRED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 3)})`,
+        [JobStatus.EXPIRED, options.now, options.now, ...ids],
+        session,
+      );
+      return refs;
+    });
   }
 
   async requeueJob(options: {
     jobId: string;
     now: number;
     tx?: TransactionHandle;
-  }): Promise<InsertedJobRow> {
-    // On the caller's transaction when there is one. A read issued outside an in-flight
-    // transaction blocks behind it on a single-connection engine — a deadlock, not a slow query.
-    const job = await this.getJob({
-      jobId: options.jobId,
+  }): Promise<RequeuedJobRef | null> {
+    const [ref] = await this.requeueJobs({
+      jobIds: [options.jobId],
+      now: options.now,
       ...(options.tx ? { tx: options.tx } : {}),
     });
-    if (!job) throw new DriverQueryError(`Cannot requeue: job '${options.jobId}' not found.`);
-    // Re-arm this job's own row: back to PENDING, reset retry counters/lock/timestamps.
-    await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.RETRY_ATTEMPT} = 0, ${JobColumn.START_AFTER} = ${this.ph(0)}, ` +
-        `${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ${JobColumn.EXPIRED_AT} = NULL, ` +
-        `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)}`,
-      [options.now, options.now, options.jobId],
-      options.tx,
-    );
-    return {
-      id: job.id,
-      status: JobStatus.PENDING,
-      startAfter: options.now,
-      deduplicated: false,
-    };
+    return ref ?? null;
+  }
+
+  async requeueJobs(options: {
+    jobIds: string[];
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<RequeuedJobRef[]> {
+    if (!options.jobIds.length) return [];
+    // Guarded on `status != ACTIVE`. Re-arming a running job would clear its lock and let a second
+    // worker claim it while the first handler is still going. An ACTIVE or missing id is simply not
+    // re-armed, so a batch never fails on one stale id.
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
+          `AND ${JobColumn.STATUS} <> ${this.ph(options.jobIds.length)} FOR UPDATE`,
+        [...options.jobIds, JobStatus.ACTIVE],
+      );
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => this.mapJobRef(r));
+      const ids = refs.map((r) => r.jobId);
+      const head: unknown[] = [JobStatus.PENDING, options.now, options.now];
+      await run(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = 0, ` +
+          `${JobColumn.START_AFTER} = ${this.ph(1)}, ${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ` +
+          `${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ` +
+          `${JobColumn.EXPIRED_AT} = NULL, ${JobColumn.RETURN_VALUE} = NULL, ${JobColumn.LOCKED_UNTIL} = NULL, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(2)} WHERE ${JobColumn.ID} IN (${this.phList(ids.length, head.length)})`,
+        [...head, ...ids],
+      );
+      return refs.map((ref) => ({ ...ref, status: JobStatus.PENDING, startAfter: options.now }));
+    });
   }
 
   // --- Reading ---
@@ -884,25 +838,20 @@ export class OracleDriver implements Driver {
 
   /**
    * WHERE clauses for a job filter, appending each value to `params`. Shared by `getJobs` and
-   * `countJobs` so a page and its total can never disagree about what they select.
+   * `countJobs` so a page and its total can never disagree about what they select. `search` is
+   * matched in SQL across the five fields an operator triages by — including the CLOB payload,
+   * which Oracle's `LIKE` handles directly.
    */
-  private jobFilterClauses(
-    options: {
-      queueName?: string;
-      statuses?: JobStatus[];
-      scheduleId?: string;
-      processedOnInstanceKey?: string;
-    },
-    params: unknown[],
-  ): string {
+  private jobFilterClauses(options: JobListFilter, params: unknown[]): string {
     const clauses: string[] = [];
     if (options.queueName) {
       clauses.push(`${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`);
       params.push(options.queueName);
     }
     if (options.statuses && options.statuses.length) {
-      const ph = options.statuses.map((_, i) => this.ph(params.length + i)).join(', ');
-      clauses.push(`${JobColumn.STATUS} IN (${ph})`);
+      clauses.push(
+        `${JobColumn.STATUS} IN (${this.phList(options.statuses.length, params.length)})`,
+      );
       params.push(...options.statuses);
     }
     if (options.scheduleId) {
@@ -913,39 +862,41 @@ export class OracleDriver implements Driver {
       clauses.push(`${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(params.length)}`);
       params.push(options.processedOnInstanceKey);
     }
+    if (options.search) {
+      const pattern = this.likePattern(options.search);
+      const cols = [
+        JobColumn.ID,
+        JobColumn.STATUS,
+        JobColumn.IDEMPOTENCY_KEY,
+        JobColumn.FAILURE_MESSAGE,
+        JobColumn.DATA,
+      ];
+      const ors = cols.map((col) => {
+        const clause = `LOWER(${col}) LIKE ${this.ph(params.length)} ESCAPE '!'`;
+        params.push(pattern);
+        return clause;
+      });
+      clauses.push(`(${ors.join(' OR ')})`);
+    }
     return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   }
 
-  async getJobs(options: {
-    queueName?: string;
-    statuses?: JobStatus[];
-    scheduleId?: string;
-    processedOnInstanceKey?: string;
-    limit: number;
-    offset: number;
-  }): Promise<JobRecord[]> {
+  async getJobs(options: JobListFilter & { limit: number; offset: number }): Promise<JobRecord[]> {
     const params: unknown[] = [];
     const where = this.jobFilterClauses(options, params);
-    const limitPh = this.ph(params.length);
-    params.push(options.limit);
-    const offsetPh = this.ph(params.length);
-    params.push(options.offset);
-    const res = await this.execute(
-      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ${where} ORDER BY ${JobColumn.CREATED_AT} DESC LIMIT ${limitPh} OFFSET ${offsetPh}`,
+    const res = await this.runMaybeTx(
+      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ${where} ` +
+        `ORDER BY ${JobColumn.CREATED_AT} DESC` +
+        this.window(options, params),
       params,
     );
     return res.rows.map((r) => this.mapJob(r));
   }
 
-  async countJobs(options: {
-    queueName?: string;
-    statuses?: JobStatus[];
-    scheduleId?: string;
-    processedOnInstanceKey?: string;
-  }): Promise<number> {
+  async countJobs(options: JobListFilter): Promise<number> {
     const params: unknown[] = [];
     const where = this.jobFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT COUNT(*) AS c FROM ${this.t(TableName.JOB)} ${where}`,
       params,
     );
@@ -956,32 +907,17 @@ export class OracleDriver implements Driver {
     queueName?: string;
     processedOnInstanceKey?: string;
   }): Promise<Record<JobStatus, number>> {
-    const clauses: string[] = [];
     const params: unknown[] = [];
-    if (options.queueName) {
-      clauses.push(`${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`);
-      params.push(options.queueName);
-    }
-    if (options.processedOnInstanceKey) {
-      clauses.push(`${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(params.length)}`);
-      params.push(options.processedOnInstanceKey);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-    const res = await this.execute(
+    const where = this.jobFilterClauses(options, params);
+    const res = await this.runMaybeTx(
       `SELECT ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ${where} GROUP BY ${JobColumn.STATUS}`,
       params,
     );
-    const counts = emptyStatusCounts();
-    for (const row of res.rows) {
-      counts[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
-    }
+    const counts = this.emptyStatusCounts();
+    for (const row of res.rows) counts[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
     return counts;
   }
 
-  /**
-   * Per-status counts for many queues in one grouped pass. One query replaces the
-   * `countJobsByStatus`-per-row storm a queue list page would otherwise issue.
-   */
   async countJobsByStatusPerQueue(options: {
     queueNames: string[];
   }): Promise<Record<string, Record<JobStatus, number>>> {
@@ -1000,12 +936,11 @@ export class OracleDriver implements Driver {
     keys: string[],
   ): Promise<Record<string, Record<JobStatus, number>>> {
     const out: Record<string, Record<JobStatus, number>> = {};
-    for (const key of keys) out[key] = emptyStatusCounts();
+    for (const key of keys) out[key] = this.emptyStatusCounts();
     if (!keys.length) return out;
-    const placeholders = keys.map((_, i) => this.ph(i)).join(', ');
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT ${keyColumn}, ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ` +
-        `WHERE ${keyColumn} IN (${placeholders}) GROUP BY ${keyColumn}, ${JobColumn.STATUS}`,
+        `WHERE ${keyColumn} IN (${this.phList(keys.length)}) GROUP BY ${keyColumn}, ${JobColumn.STATUS}`,
       keys,
     );
     for (const row of res.rows) {
@@ -1020,7 +955,7 @@ export class OracleDriver implements Driver {
     const clauses: string[] = [];
     if (options.search) {
       clauses.push(`LOWER(${QueueColumn.NAME}) LIKE ${this.ph(params.length)} ESCAPE '!'`);
-      params.push(likePattern(options.search));
+      params.push(this.likePattern(options.search));
     }
     if (options.processingPaused !== undefined) {
       clauses.push(`${QueueColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
@@ -1032,23 +967,19 @@ export class OracleDriver implements Driver {
   async listQueues(options: QueueListFilter & PageWindow = {}): Promise<QueueRow[]> {
     const params: unknown[] = [];
     const where = this.queueFilterClauses(options, params);
-    const res = await this.execute(
+    // `name` is the primary key, so a page can no longer contain the same queue twice.
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.QUEUE)} ${where} ORDER BY ${QueueColumn.NAME} ASC` +
         this.window(options, params),
       params,
     );
-    // No unique index on name: dedupe defensively so a creation race can't surface twice.
-    return this.mapUnique(
-      res.rows,
-      (r) => this.mapQueue(r),
-      (q) => q.name,
-    );
+    return res.rows.map((r) => this.mapQueue(r));
   }
 
   async countQueues(options: QueueListFilter = {}): Promise<number> {
     const params: unknown[] = [];
     const where = this.queueFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT COUNT(*) AS c FROM ${this.t(TableName.QUEUE)} ${where}`,
       params,
     );
@@ -1067,8 +998,7 @@ export class OracleDriver implements Driver {
       params.push(this.boolIn(options.enabled));
     }
     if (options.search) {
-      // A schedule is searchable by any of the three things the table actually shows.
-      const pattern = likePattern(options.search);
+      const pattern = this.likePattern(options.search);
       const cols = [ScheduleColumn.ID, ScheduleColumn.QUEUE_NAME, ScheduleColumn.CRON];
       const ors = cols.map((col) => {
         const clause = `LOWER(${col}) LIKE ${this.ph(params.length)} ESCAPE '!'`;
@@ -1083,7 +1013,7 @@ export class OracleDriver implements Driver {
   async listSchedules(options: ScheduleListFilter & PageWindow = {}): Promise<ScheduleRow[]> {
     const params: unknown[] = [];
     const where = this.scheduleFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.SCHEDULE)} ${where} ` +
         `ORDER BY ${ScheduleColumn.CREATED_AT} ASC, ${ScheduleColumn.ID} ASC` +
         this.window(options, params),
@@ -1095,14 +1025,15 @@ export class OracleDriver implements Driver {
   async countSchedules(options: ScheduleListFilter = {}): Promise<number> {
     const params: unknown[] = [];
     const where = this.scheduleFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT COUNT(*) AS c FROM ${this.t(TableName.SCHEDULE)} ${where}`,
       params,
     );
     return Number(res.rows[0]?.c ?? 0);
   }
+
   async getSchedule(options: { scheduleId: string }): Promise<ScheduleRow | null> {
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
       [options.scheduleId],
     );
@@ -1110,10 +1041,13 @@ export class OracleDriver implements Driver {
   }
 
   async getDueSchedules(options: { now: number; limit: number }): Promise<ScheduleRow[]> {
-    const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ENABLED} = 1 AND ${ScheduleColumn.NEXT_RUN_AT} IS NOT NULL AND ${ScheduleColumn.NEXT_RUN_AT} <= ${this.ph(0)} ORDER BY ${ScheduleColumn.NEXT_RUN_AT} ASC LIMIT ${this.ph(1)}`,
-      [options.now, options.limit],
-    );
+    const params: unknown[] = [this.boolIn(true), options.now];
+    const sql =
+      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ENABLED} = ${this.ph(0)} ` +
+      `AND ${ScheduleColumn.NEXT_RUN_AT} IS NOT NULL AND ${ScheduleColumn.NEXT_RUN_AT} <= ${this.ph(1)} ` +
+      `ORDER BY ${ScheduleColumn.NEXT_RUN_AT} ASC` +
+      this.fetchFirst(options.limit, params);
+    const res = await this.runMaybeTx(sql, params);
     return res.rows.map((r) => this.mapSchedule(r));
   }
 
@@ -1124,8 +1058,10 @@ export class OracleDriver implements Driver {
     fromNextRunAt: number;
   }): Promise<boolean> {
     // Guarded on the previous next_run_at: only one instance claims each tick.
-    const res = await this.execute(
-      `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(0)}, ${ScheduleColumn.LAST_RUN_AT} = ${this.ph(1)}, ${ScheduleColumn.UPDATED_AT} = ${this.ph(2)} WHERE ${ScheduleColumn.ID} = ${this.ph(3)} AND ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(4)}`,
+    const res = await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(0)}, ` +
+        `${ScheduleColumn.LAST_RUN_AT} = ${this.ph(1)}, ${ScheduleColumn.UPDATED_AT} = ${this.ph(2)} ` +
+        `WHERE ${ScheduleColumn.ID} = ${this.ph(3)} AND ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(4)}`,
       [
         options.nextRunAt,
         options.lastRunAt,
@@ -1142,41 +1078,69 @@ export class OracleDriver implements Driver {
     jobId: string;
     now: number;
     tx?: TransactionHandle;
-  }): Promise<boolean> {
-    const res = await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.CANCELLED}', ${JobColumn.CANCELLED_AT} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}')`,
-      [options.now, options.now, options.jobId],
-      options.tx,
-    );
-    return res.rowCount > 0;
+  }): Promise<JobRef | null> {
+    const [ref] = await this.cancelJobs({
+      jobIds: [options.jobId],
+      now: options.now,
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return ref ?? null;
   }
 
-  async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
-    // Never delete a running job — an ACTIVE row is skipped and this returns false; cancel it first.
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} = ${this.ph(0)} AND ${JobColumn.STATUS} != ${this.ph(1)}`,
-      [options.jobId, JobStatus.ACTIVE],
-      options.tx,
-    );
-    return res.rowCount > 0;
-  }
-
-  async removeJobsByIds(options: {
+  async cancelJobs(options: {
     jobIds: string[];
-    queueName: string;
+    now: number;
     tx?: TransactionHandle;
-  }): Promise<number> {
-    if (!options.jobIds.length) return 0;
-    const idPh = options.jobIds.map((_, i) => this.ph(i)).join(', ');
-    // Placeholder appearance order (IN list, then queue_name, then status) must match the params
-    // array so positional-bind engines (SQLite '?') and indexed engines ('$n') both work.
-    // ACTIVE (running) jobs are never removed — they're skipped and left out of the returned count.
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.jobIds.length)} AND ${JobColumn.STATUS} != ${this.ph(options.jobIds.length + 1)}`,
-      [...options.jobIds, options.queueName, JobStatus.ACTIVE],
-      options.tx,
-    );
-    return res.rowCount;
+  }): Promise<JobRef[]> {
+    if (!options.jobIds.length) return [];
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
+          `AND ${JobColumn.STATUS} IN (${this.phList(2, options.jobIds.length)}) FOR UPDATE`,
+        [...options.jobIds, JobStatus.PENDING, JobStatus.RETRY],
+      );
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => this.mapJobRef(r));
+      const ids = refs.map((r) => r.jobId);
+      await run(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.CANCELLED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 3)})`,
+        [JobStatus.CANCELLED, options.now, options.now, ...ids],
+      );
+      return refs;
+    });
+  }
+
+  async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<JobRef | null> {
+    const [ref] = await this.removeJobs({
+      jobIds: [options.jobId],
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return ref ?? null;
+  }
+
+  async removeJobs(options: { jobIds: string[]; tx?: TransactionHandle }): Promise<JobRef[]> {
+    if (!options.jobIds.length) return [];
+    // Never delete a running job — an ACTIVE row belongs to a live handler, so it is skipped and
+    // simply absent from the result; cancel it first.
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
+          `AND ${JobColumn.STATUS} <> ${this.ph(options.jobIds.length)} FOR UPDATE`,
+        [...options.jobIds, JobStatus.ACTIVE],
+      );
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => this.mapJobRef(r));
+      const ids = refs.map((r) => r.jobId);
+      await run(
+        `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${this.phList(ids.length)})`,
+        ids,
+      );
+      return refs;
+    });
   }
 
   async removeJobsByStatus(options: {
@@ -1185,9 +1149,9 @@ export class OracleDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<number> {
     if (!options.statuses.length) return 0;
-    const statusPh = options.statuses.map((_, i) => this.ph(i)).join(', ');
     const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${statusPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.statuses.length)}`,
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${this.phList(options.statuses.length)}) ` +
+        `AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.statuses.length)}`,
       [...options.statuses, options.queueName],
       options.tx,
     );
@@ -1201,7 +1165,7 @@ export class OracleDriver implements Driver {
     acceptingPaused?: boolean;
     now: number;
     tx?: TransactionHandle;
-  }): Promise<void> {
+  }): Promise<QueueRow | null> {
     const sets: string[] = [];
     const params: unknown[] = [];
     if (options.processingPaused !== undefined) {
@@ -1214,12 +1178,20 @@ export class OracleDriver implements Driver {
     }
     sets.push(`${QueueColumn.UPDATED_AT} = ${this.ph(params.length)}`);
     params.push(options.now);
+    const namePh = this.ph(params.length);
     params.push(options.queueName);
-    await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE ${QueueColumn.NAME} = ${this.ph(params.length - 1)}`,
-      params,
-      options.tx,
-    );
+    // No row-set RETURNING: update, then read the row back in the same transaction.
+    return this.inTx(options.tx, async (run) => {
+      await run(
+        `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE ${QueueColumn.NAME} = ${namePh}`,
+        params,
+      );
+      const res = await run(
+        `SELECT * FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
+        [options.queueName],
+      );
+      return res.rows[0] ? this.mapQueue(res.rows[0]) : null;
+    });
   }
 
   async ensureQueue(options: {
@@ -1228,28 +1200,27 @@ export class OracleDriver implements Driver {
     now: number;
     tx?: TransactionHandle;
   }): Promise<QueueRow> {
-    // Both reads run on the caller's transaction: outside it they would deadlock a
-    // single-connection engine, and the read-back below would not see the row just inserted.
-    const existing = await this.getQueueByName({
-      name: options.name,
-      ...(options.tx ? { tx: options.tx } : {}),
+    // Get-or-create with Oracle's own conflict-free form: `MERGE … WHEN NOT MATCHED THEN INSERT`,
+    // whose target is the primary key, so a concurrent create is a no-op rather than an error.
+    // Queue options are process-local; only the pause flags are ever persisted, so an existing row
+    // is never rewritten from here (there is deliberately no `WHEN MATCHED` branch).
+    return this.inTx(options.tx, async (run) => {
+      await run(
+        `MERGE INTO ${this.t(TableName.QUEUE)} t ` +
+          `USING (SELECT ${this.ph(0)} AS ${QueueColumn.NAME} FROM dual) s ` +
+          `ON (t.${QueueColumn.NAME} = s.${QueueColumn.NAME}) ` +
+          `WHEN NOT MATCHED THEN INSERT (${QueueColumn.NAME}, ${QueueColumn.PROCESSING_PAUSED}, ` +
+          `${QueueColumn.ACCEPTING_PAUSED}, ${QueueColumn.CREATED_AT}, ${QueueColumn.UPDATED_AT}) ` +
+          `VALUES (s.${QueueColumn.NAME}, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)})`,
+        [options.name, this.boolIn(false), this.boolIn(false), options.now, options.now],
+      );
+      const res = await run(
+        `SELECT * FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
+        [options.name],
+      );
+      if (!res.rows[0]) throw new DriverQueryError(`Failed to ensure queue '${options.name}'.`);
+      return this.mapQueue(res.rows[0]);
     });
-    if (existing) return existing;
-    // Get-or-create, not an UPSERT: a queue is created once then only read, so a plain
-    // SELECT-then-INSERT is enough and avoids `ON CONFLICT`/`MERGE` (which sharded engines reject
-    // without the shard key). No unique index on name; a rare creation race can leave two rows,
-    // and listQueues/getQueueByName dedupe by name so callers never see both.
-    await this.runMaybeTx(
-      `INSERT INTO ${this.t(TableName.QUEUE)} (${QueueColumn.NAME}, ${QueueColumn.PROCESSING_PAUSED}, ${QueueColumn.ACCEPTING_PAUSED}, ${QueueColumn.CREATED_AT}, ${QueueColumn.UPDATED_AT}) VALUES (${this.ph(0)}, 0, 0, ${this.ph(1)}, ${this.ph(2)})`,
-      [options.name, options.now, options.now],
-      options.tx,
-    );
-    const row = await this.getQueueByName({
-      name: options.name,
-      ...(options.tx ? { tx: options.tx } : {}),
-    });
-    if (!row) throw new DriverQueryError(`Failed to ensure queue '${options.name}'.`);
-    return row;
   }
 
   async getQueueByName(options: {
@@ -1265,8 +1236,7 @@ export class OracleDriver implements Driver {
   }
 
   async deleteQueue(options: { name: string; tx?: TransactionHandle }): Promise<boolean> {
-    // Only removes the queue row. Jobs link by queue_name (no FK/PK), so this never cascades —
-    // any leftover job rows keep their name and are unaffected; the caller guards "not in use".
+    // Only removes the queue row. Jobs link by queue_name (no FK), so this never cascades.
     const res = await this.runMaybeTx(
       `DELETE FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
       [options.name],
@@ -1281,35 +1251,54 @@ export class OracleDriver implements Driver {
     now: number;
     metrics?: InstanceMetrics;
   }): Promise<InstanceRow> {
-    // Update-first, then insert if absent — NOT a database UPSERT (`ON CONFLICT`/`MERGE`), which
-    // sharded engines reject unless the conflict target is the shard key. The heartbeat's common
-    // case is "row exists", so the guarded UPDATE ... RETURNING resolves it in one round-trip and
-    // never touches the (independently controlled) pause flag; only the first beat falls through
-    // to INSERT. A rare create race can leave two rows; listInstances dedupes by key.
+    // Update-first, then MERGE the row in if it was absent, then read it back. The read-back is
+    // what the caller takes `processingPaused` from, so there is no query after this transaction.
+    // The pause flag is never written here — it is controlled independently.
     const m = options.metrics;
-    const updated = await this.execute(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.LAST_SEEN_AT} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}, ${InstanceColumn.CPU_PERCENT} = COALESCE(${this.ph(2)}, ${InstanceColumn.CPU_PERCENT}), ${InstanceColumn.MEMORY_PERCENT} = COALESCE(${this.ph(3)}, ${InstanceColumn.MEMORY_PERCENT}) WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(4)} RETURNING *`,
-      [
-        options.now,
-        options.now,
-        m?.cpuPercent ?? null,
-        m?.memoryPercent ?? null,
-        options.instanceKey,
-      ],
-    );
-    if (updated.rows[0]) return this.mapInstance(updated.rows[0]);
-    const inserted = await this.execute(
-      `INSERT INTO ${this.t(TableName.INSTANCE)} (${InstanceColumn.INSTANCE_KEY}, ${InstanceColumn.PROCESSING_PAUSED}, ${InstanceColumn.CREATED_AT}, ${InstanceColumn.UPDATED_AT}, ${InstanceColumn.LAST_SEEN_AT}, ${InstanceColumn.CPU_PERCENT}, ${InstanceColumn.MEMORY_PERCENT}) VALUES (${this.ph(0)}, 0, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)}, ${this.ph(5)}) RETURNING *`,
-      [
-        options.instanceKey,
-        options.now,
-        options.now,
-        options.now,
-        m?.cpuPercent ?? null,
-        m?.memoryPercent ?? null,
-      ],
-    );
-    return this.mapInstance(inserted.rows[0]!);
+    return this.inTx(undefined, async (run) => {
+      const updated = await run(
+        `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.LAST_SEEN_AT} = ${this.ph(0)}, ` +
+          `${InstanceColumn.UPDATED_AT} = ${this.ph(1)}, ` +
+          `${InstanceColumn.CPU_PERCENT} = COALESCE(${this.ph(2)}, ${InstanceColumn.CPU_PERCENT}), ` +
+          `${InstanceColumn.MEMORY_PERCENT} = COALESCE(${this.ph(3)}, ${InstanceColumn.MEMORY_PERCENT}) ` +
+          `WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(4)}`,
+        [
+          options.now,
+          options.now,
+          m?.cpuPercent ?? null,
+          m?.memoryPercent ?? null,
+          options.instanceKey,
+        ],
+      );
+      if (updated.rowCount === 0) {
+        await run(
+          `MERGE INTO ${this.t(TableName.INSTANCE)} t ` +
+            `USING (SELECT ${this.ph(0)} AS ${InstanceColumn.INSTANCE_KEY} FROM dual) s ` +
+            `ON (t.${InstanceColumn.INSTANCE_KEY} = s.${InstanceColumn.INSTANCE_KEY}) ` +
+            `WHEN NOT MATCHED THEN INSERT (${InstanceColumn.INSTANCE_KEY}, ${InstanceColumn.PROCESSING_PAUSED}, ` +
+            `${InstanceColumn.CREATED_AT}, ${InstanceColumn.UPDATED_AT}, ${InstanceColumn.LAST_SEEN_AT}, ` +
+            `${InstanceColumn.CPU_PERCENT}, ${InstanceColumn.MEMORY_PERCENT}) ` +
+            `VALUES (s.${InstanceColumn.INSTANCE_KEY}, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)}, ${this.ph(5)}, ${this.ph(6)})`,
+          [
+            options.instanceKey,
+            this.boolIn(false),
+            options.now,
+            options.now,
+            options.now,
+            m?.cpuPercent ?? null,
+            m?.memoryPercent ?? null,
+          ],
+        );
+      }
+      const read = await run(
+        `SELECT * FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
+        [options.instanceKey],
+      );
+      if (!read.rows[0]) {
+        throw new DriverQueryError(`Failed to register instance '${options.instanceKey}'.`);
+      }
+      return this.mapInstance(read.rows[0]);
+    });
   }
 
   /** WHERE clauses for an instance-list filter, appending each value to `params`. */
@@ -1319,7 +1308,7 @@ export class OracleDriver implements Driver {
       clauses.push(
         `LOWER(${InstanceColumn.INSTANCE_KEY}) LIKE ${this.ph(params.length)} ESCAPE '!'`,
       );
-      params.push(likePattern(options.search));
+      params.push(this.likePattern(options.search));
     }
     if (options.processingPaused !== undefined) {
       clauses.push(`${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
@@ -1338,29 +1327,26 @@ export class OracleDriver implements Driver {
   async listInstances(options: InstanceListFilter & PageWindow = {}): Promise<InstanceRow[]> {
     const params: unknown[] = [];
     const where = this.instanceFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.INSTANCE)} ${where} ORDER BY ${InstanceColumn.INSTANCE_KEY} ASC` +
         this.window(options, params),
       params,
     );
-    return this.mapUnique(
-      res.rows,
-      (r) => this.mapInstance(r),
-      (i) => i.instanceKey,
-    );
+    return res.rows.map((r) => this.mapInstance(r));
   }
 
   async countInstances(options: InstanceListFilter = {}): Promise<number> {
     const params: unknown[] = [];
     const where = this.instanceFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT COUNT(*) AS c FROM ${this.t(TableName.INSTANCE)} ${where}`,
       params,
     );
     return Number(res.rows[0]?.c ?? 0);
   }
+
   async getInstance(options: { instanceKey: string }): Promise<InstanceRow | null> {
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
       [options.instanceKey],
     );
@@ -1372,15 +1358,14 @@ export class OracleDriver implements Driver {
     processingPaused: boolean;
     now: number;
   }): Promise<void> {
-    await this.execute(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(2)}`,
+    await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ` +
+        `${InstanceColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(2)}`,
       [this.boolIn(options.processingPaused), options.now, options.instanceKey],
     );
   }
 
   async deleteInstance(options: { instanceKey: string; tx?: TransactionHandle }): Promise<boolean> {
-    // Only removes the instance (monitoring) row. Jobs record processed_on_instance_key as a plain
-    // string (no FK/PK), so removing an instance never touches or orphans any job rows.
     const res = await this.runMaybeTx(
       `DELETE FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
       [options.instanceKey],
@@ -1390,29 +1375,51 @@ export class OracleDriver implements Driver {
   }
 
   // --- Retention ---
-  async deleteFinishedJobs(options: {
-    olderThan: number;
-    statuses: JobStatus[];
-    limit: number;
-    now: number;
-  }): Promise<number> {
-    if (!options.statuses.length) return 0;
-    const statusPh = options.statuses.map((_, i) => this.ph(i)).join(', ');
-    const cutoffPh = this.ph(options.statuses.length);
-    const limitPh = this.ph(options.statuses.length + 1);
-    // Bounded batch: delete finished rows whose retention window has elapsed.
-    const res = await this.execute(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${statusPh}) ` +
-        `AND ${JobColumn.RETENTION_MODE} = 'DELETE_AFTER' AND ${JobColumn.RETENTION_TTL_SECONDS} IS NOT NULL ` +
-        `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_SECONDS} * 1000) <= ${cutoffPh} LIMIT ${limitPh})`,
-      [...options.statuses, options.olderThan, options.limit],
+  async deleteFinishedJobs(options: { olderThan: number; limit: number }): Promise<number> {
+    const params: unknown[] = [];
+    const where = this.retentionWhere(options.olderThan, params);
+    const fetch = this.fetchFirst(options.limit, params);
+    // Bounded batch. Oracle has no `LIMIT`, so the bound is `FETCH FIRST n ROWS ONLY` on the
+    // subquery that picks the ids.
+    const res = await this.runMaybeTx(
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN ` +
+        `(SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${where}${fetch})`,
+      params,
     );
     return res.rowCount;
   }
 
-  // --- Pub/sub (Oracle has no LISTEN/NOTIFY; the manager falls back to interval polling) ---
+  /**
+   * The retention predicate: a DELETE_AFTER row, in a status **its own policy** covers, whose TTL
+   * has elapsed since it finished. A row with a NULL `retention_statuses` is eligible in every
+   * finished status (the default); a row that named a subset is eligible only in one of those.
+   */
+  private retentionWhere(olderThan: number, params: unknown[]): string {
+    const modePh = this.ph(params.length);
+    params.push(RetentionMode.DELETE_AFTER);
+    const statusPh = this.phList(FINISHED_STATUSES.length, params.length);
+    params.push(...FINISHED_STATUSES);
+    const scoped = FINISHED_STATUSES.map((status) => {
+      const clause =
+        `(${JobColumn.STATUS} = ${this.ph(params.length)} AND ` +
+        `${JobColumn.RETENTION_STATUSES} LIKE ${this.ph(params.length + 1)})`;
+      params.push(status, retentionStatusPattern(status));
+      return clause;
+    });
+    const cutoffPh = this.ph(params.length);
+    params.push(olderThan);
+    return (
+      `${JobColumn.RETENTION_MODE} = ${modePh} AND ${JobColumn.RETENTION_TTL_SECONDS} IS NOT NULL ` +
+      `AND ${JobColumn.STATUS} IN (${statusPh}) ` +
+      `AND (${JobColumn.RETENTION_STATUSES} IS NULL OR ${scoped.join(' OR ')}) ` +
+      `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ` +
+      `${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_SECONDS} * 1000) <= ${cutoffPh}`
+    );
+  }
+
+  // --- Pub/sub (interval polling instead of LISTEN/NOTIFY) ---
   async notify(_options: { channel: string; payload: string }): Promise<void> {
-    // No-op: Oracle has no LISTEN/NOTIFY. Subscribers poll on an interval instead.
+    // No-op: this driver does not use Oracle AQ; subscribers rely on interval polling.
   }
 
   async subscribe(_options: {
@@ -1421,7 +1428,7 @@ export class OracleDriver implements Driver {
   }): Promise<Subscription> {
     throw new UnsupportedCapabilityError(
       DriverCapability.LISTEN_NOTIFY,
-      'Oracle has no LISTEN/NOTIFY; use interval polling instead.',
+      'The Oracle driver does not use AQ; rely on interval polling instead.',
     );
   }
 
@@ -1439,27 +1446,4 @@ export class OracleDriver implements Driver {
       return options.fn(handle);
     });
   }
-}
-
-function emptyStatusCounts(): Record<JobStatus, number> {
-  return {
-    [JobStatus.PENDING]: 0,
-    [JobStatus.ACTIVE]: 0,
-    [JobStatus.COMPLETED]: 0,
-    [JobStatus.FAILED]: 0,
-    [JobStatus.RETRY]: 0,
-    [JobStatus.CANCELLED]: 0,
-    [JobStatus.EXPIRED]: 0,
-  };
-}
-
-/**
- * A bound `LIKE` pattern for a case-insensitive substring search. The term is lower-cased (the
- * column is too, at the query site) and `%`/`_`/`!` are escaped with `!` — declared by the
- * query's own `ESCAPE '!'` — so a user typing `100%` searches for that text rather than matching
- * everything. Still a bound parameter: nothing here is interpolated into SQL.
- */
-function likePattern(term: string): string {
-  const escaped = term.toLowerCase().replace(/[!%_]/g, (ch) => `!${ch}`);
-  return `%${escaped}%`;
 }

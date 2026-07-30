@@ -1,10 +1,5 @@
-import {
-  DatabaseEngine,
-  DeduplicationReason,
-  RetentionMode,
-  BackoffStrategy,
-} from '../../options/enums';
-import { JobStatus } from '../../jobs/job-state.enum';
+import { DatabaseEngine, DeduplicationReason, RetentionMode } from '../../options/enums';
+import { ACTIVE_STATUSES, FINISHED_STATUSES, JobStatus } from '../../jobs/job-state.enum';
 import { capabilities, DriverCapability, type DriverCapabilitySet } from '../driver-capabilities';
 import {
   DriverConnectionError,
@@ -20,21 +15,32 @@ import {
   InstanceColumn,
   MigrationColumn,
 } from '../table-names';
-import { matchesInstance } from '../../jobs/instance-affinity';
-import { uuid } from '../../util/uuid';
+import {
+  BaseDriver,
+  JOB_COLUMNS,
+  SCHEDULE_INSERT_COLUMNS,
+  type RawResult,
+  type Row,
+  type Session,
+} from '../shared/base-driver';
+import { retentionStatusPattern } from '../shared/retention-statuses';
 import { toMigrationSteps } from '../shared/migration';
 import { MYSQL_MIGRATIONS } from './migrations';
 import type {
   Driver,
   DriverProbe,
   InstanceListFilter,
+  JobListFilter,
+  JobRef,
   MigrationStep,
   PageWindow,
   QueueListFilter,
+  RequeuedJobRef,
   ScheduleListFilter,
+  ScheduleRef,
+  StalledJobRef,
   Subscription,
 } from '../driver.interface';
-import { DriverContext } from '../driver-context';
 import type {
   InsertedJobRow,
   InstanceMetrics,
@@ -43,11 +49,10 @@ import type {
   NewJobRecord,
   NewScheduleRow,
   QueueRow,
-  ScheduledJobOptions,
   ScheduleRow,
 } from '../../jobs/job-record';
 import type { QueueOptions } from '../../options/queue-options';
-import type { TransactionHandle, TxQueryResult } from '../../tx/transaction-handle';
+import type { TransactionHandle } from '../../tx/transaction-handle';
 
 export interface MysqlDriverOptions {
   /** A `mysql://…` connection URI. */
@@ -56,7 +61,10 @@ export interface MysqlDriverOptions {
   pool?: unknown;
   /** Any `mysql2` pool config (host/user/password/database/…). */
   config?: Record<string, unknown>;
-  /** DB schema/database for all objects. */
+  /**
+   * DB schema/database for all objects. Every table name is qualified with it and the migration
+   * creates it (`CREATE SCHEMA IF NOT EXISTS`), so this is honoured rather than merely accepted.
+   */
   schema?: string;
   /** Prefix for all created tables (default 'pq_'). */
   tablePrefix?: string;
@@ -81,81 +89,44 @@ interface MysqlPool {
   end(): Promise<void>;
 }
 
-/** A raw query result. */
-interface RawResult {
-  rows: Array<Record<string, unknown>>;
-  rowCount: number;
-}
-/** An opaque per-connection session used inside a transaction. */
-type Session = MysqlConnection | undefined;
-type Row = Record<string, unknown>;
-
-const JOB_COLUMNS = [
-  JobColumn.ID,
-  JobColumn.QUEUE_NAME,
-  JobColumn.STATUS,
-  JobColumn.PRIORITY,
-  JobColumn.DATA,
-  JobColumn.RETURN_VALUE,
-  JobColumn.CREATED_AT,
-  JobColumn.UPDATED_AT,
-  JobColumn.START_AFTER,
-  JobColumn.EXPIRE_AT,
-  JobColumn.STARTED_AT,
-  JobColumn.COMPLETED_AT,
-  JobColumn.FAILED_AT,
-  JobColumn.RETRIED_AT,
-  JobColumn.STALLED_AT,
-  JobColumn.CANCELLED_AT,
-  JobColumn.EXPIRED_AT,
-  JobColumn.LOCKED_UNTIL,
-  JobColumn.PREFERRED_INSTANCE_KEY_PATTERN,
-  JobColumn.PROCESSED_ON_INSTANCE_KEY,
-  JobColumn.RETRY_ATTEMPT,
-  JobColumn.RETRY_MAX_ATTEMPTS,
-  JobColumn.RETRY_DELAY_SECONDS,
-  JobColumn.RETRY_BACKOFF,
-  JobColumn.RETRY_BACKOFF_FACTOR,
-  JobColumn.RETRY_MAX_DELAY_SECONDS,
-  JobColumn.RETRY_JITTER,
-  JobColumn.FAILURE_MESSAGE,
-  JobColumn.RETENTION_MODE,
-  JobColumn.RETENTION_TTL_SECONDS,
-  JobColumn.IDEMPOTENCY_KEY,
-  JobColumn.SCHEDULE_ID,
-  JobColumn.SINGLETON_KEY,
-] as const;
+/** `ER_NO_SUCH_TABLE` / `ER_BAD_DB_ERROR` — the only codes that mean "not migrated yet". */
+const MYSQL_MISSING_OBJECT = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_DB_ERROR']);
 
 /**
- * MySQL driver — standalone, owning its entire SQL surface (no shared base). MySQL speaks `?`
- * positional placeholders and supports SKIP LOCKED (8.0+) and transactions, but — unlike every
- * other engine here — it has NO `RETURNING`. So every "mutate and read back" operation is written
- * as an explicit two-step: the app supplies the id (or the guarded UPDATE targets known ids), then
- * a follow-up `SELECT` reads the affected rows. No LISTEN/NOTIFY and no advisory lock; the polling
- * backstop drives wakeups. No method emits a relational JOIN — relationships resolve by name/key
- * lookups, and the schema carries no unique index, so name-uniqueness and idempotency/singleton
- * dedup are enforced here in code. `mysql2` is an optional peer dependency.
+ * MySQL driver — it owns its entire SQL surface, so a MySQL-specific change never touches another
+ * engine. `?` positional placeholders, SKIP LOCKED and transactions (8.0+), real primary keys and
+ * inline `KEY` indexes. No LISTEN/NOTIFY and no advisory lock; the polling backstop drives wakeups.
+ * No method emits a relational JOIN — relationships resolve by name/key lookups — and
+ * idempotency/singleton dedup is enforced here in code rather than by a constraint, so behaviour
+ * matches every other engine.
+ *
+ * **The dialect fact that shapes this file: MySQL has no `RETURNING`.** Every "mutate and read back"
+ * operation is therefore an explicit two-step inside one transaction — select the affected ids (with
+ * `FOR UPDATE SKIP LOCKED` where the rows are contended), then mutate exactly those ids. That is why
+ * several methods here open a transaction where the Postgres driver runs a single statement.
+ *
+ * Row mapping, value conversion and insert value lists come from {@link BaseDriver} — mechanism,
+ * not SQL. `mysql2` is an optional peer dependency.
  */
-export class MysqlDriver implements Driver {
+export class MysqlDriver extends BaseDriver implements Driver {
   readonly engine = DatabaseEngine.MYSQL;
   readonly capabilities: DriverCapabilitySet = capabilities({
     [DriverCapability.SKIP_LOCKED]: true,
     [DriverCapability.TRANSACTIONS]: true,
     // No RETURNING, no LISTEN/NOTIFY, no advisory lock.
   });
-  readonly migrations = toMigrationSteps(MYSQL_MIGRATIONS);
+  readonly migrations: MigrationStep[] = toMigrationSteps(MYSQL_MIGRATIONS);
 
-  readonly context: DriverContext;
   private pool: MysqlPool | null = null;
   private readonly options: MysqlDriverOptions;
 
   constructor(options: MysqlDriverOptions = {}) {
-    this.options = options;
-    this.context = new DriverContext({
+    super({
       ...(options.tablePrefix !== undefined ? { tablePrefix: options.tablePrefix } : {}),
       ...(options.schema !== undefined ? { schema: options.schema } : {}),
       ...(options.namespace !== undefined ? { namespace: options.namespace } : {}),
     });
+    this.options = options;
   }
 
   // --- Connection management ---
@@ -198,18 +169,18 @@ export class MysqlDriver implements Driver {
     return { rows: [], rowCount: ok.affectedRows ?? 0 };
   }
 
-  private async execute(
+  protected async execute(
     sql: string,
     params: readonly unknown[],
     session?: Session,
   ): Promise<RawResult> {
-    const target = session ?? this.pool;
+    const target = (session as MysqlConnection | undefined) ?? this.pool;
     if (!target) throw new DriverConnectionError('MySQL driver is not connected.');
     const [result] = await target.query(sql, params);
     return this.toRaw(result);
   }
 
-  private async transaction<T>(fn: (session: Session) => Promise<T>): Promise<T> {
+  protected async transaction<T>(fn: (session: Session) => Promise<T>): Promise<T> {
     if (!this.pool) throw new DriverConnectionError('MySQL driver is not connected.');
     const conn = await this.pool.getConnection();
     try {
@@ -225,21 +196,16 @@ export class MysqlDriver implements Driver {
     }
   }
 
-  // --- Naming helpers ---
-  private t(table: TableName): string {
-    return this.context.tableNames.bare(table);
-  }
   /** MySQL uses `?` positional placeholders. */
-  private ph(_index0: number): string {
+  protected ph(_index0: number): string {
     return '?';
   }
 
   /**
    * The trailing `LIMIT`/`OFFSET` for a list read, appending each bound value to `params`.
-   * Returns an empty string when the caller asked for no window, so core's unpaged reads emit
-   * exactly the SQL they always did.
+   * Returns an empty string when the caller asked for no window.
    */
-  private window(page: PageWindow, params: unknown[]): string {
+  protected window(page: PageWindow, params: unknown[]): string {
     let sql = '';
     if (page.limit !== undefined) {
       sql += ` LIMIT ${this.ph(params.length)}`;
@@ -262,12 +228,11 @@ export class MysqlDriver implements Driver {
     return { serverVersion, verifiedCapabilities: this.enabledCapabilities() };
   }
 
-  private enabledCapabilities(): DriverCapability[] {
-    return (Object.keys(this.capabilities) as DriverCapability[]).filter(
-      (c) => this.capabilities[c],
-    );
-  }
-
+  /**
+   * The applied schema version, or null when the migration table (or its database) does not exist
+   * yet. Only those two conditions read as "not migrated": a dropped connection or a permissions
+   * error has to surface rather than trigger a migration run against a migrated database.
+   */
   async getSchemaVersion(): Promise<number | null> {
     try {
       const res = await this.execute(
@@ -276,262 +241,172 @@ export class MysqlDriver implements Driver {
       );
       const v = res.rows[0]?.v;
       return v == null ? null : Number(v);
-    } catch {
-      // Table doesn't exist yet.
-      return null;
+    } catch (err) {
+      const code = (err as { code?: unknown } | null)?.code;
+      if (typeof code === 'string' && MYSQL_MISSING_OBJECT.has(code)) return null;
+      throw new DriverQueryError('Failed to read the applied schema version.', err);
     }
   }
 
+  /**
+   * Apply one migration's DDL, then record its version.
+   *
+   * MySQL commits DDL implicitly, so — unlike every other engine here — these cannot share one
+   * transaction. That is safe because every statement in the migration is `IF NOT EXISTS`: a crash
+   * between the DDL and the version row leaves a schema the next run re-applies as a no-op and then
+   * records. The version insert is `INSERT IGNORE` for the same reason.
+   */
   async applyMigration(options: { migration: MigrationStep }): Promise<void> {
-    const { migration } = options;
-    await migration.up(this, this.context);
+    const statements = options.migration.statements(this.context);
+    for (const sql of statements) await this.execute(sql, []);
     const now = Date.now();
     await this.execute(
-      `INSERT INTO ${this.t(TableName.MIGRATION)} (${MigrationColumn.VERSION}, ${MigrationColumn.APPLIED_AT}, ${MigrationColumn.CHECKSUM}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) VALUES (${this.ph(0)}, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)})`,
-      [migration.version, now, migration.checksum, now, now],
+      `INSERT IGNORE INTO ${this.t(TableName.MIGRATION)} (${MigrationColumn.VERSION}, ${MigrationColumn.APPLIED_AT}, ${MigrationColumn.CREATED_AT}, ${MigrationColumn.UPDATED_AT}) ` +
+        `VALUES (${this.phList(4)})`,
+      [options.migration.version, now, now, now],
     );
   }
 
-  async ensureBaseObjects(): Promise<void> {}
-
-  // --- Value conversion ---
-  private toJson(value: unknown): string | null {
-    if (value === undefined || value === null) return null;
-    return JSON.stringify(value);
+  // --- Producing ---
+  async insertJob(options: { job: NewJobRecord; tx?: TransactionHandle }): Promise<InsertedJobRow> {
+    const [result] = await this.insertJobs({
+      jobs: [options.job],
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return result!;
   }
-  private fromJson(value: unknown): unknown {
-    if (value === null || value === undefined) return null;
-    if (typeof value === 'string') {
-      try {
-        return JSON.parse(value);
-      } catch {
-        return value;
+
+  /**
+   * A real batch insert: one grouped dedup lookup per distinct queue, then a single multi-row
+   * `INSERT`, both in one transaction. Nothing is read back — with no `RETURNING`, the id, status
+   * and `start_after` of a fresh row are exactly what was written.
+   */
+  async insertJobs(options: {
+    jobs: NewJobRecord[];
+    tx?: TransactionHandle;
+  }): Promise<InsertedJobRow[]> {
+    const { jobs, tx } = options;
+    if (!jobs.length) return [];
+    return this.inTx(tx, async (run) => {
+      const deduped = await this.findDeduplicated(jobs, run);
+      const results = new Array<InsertedJobRow | undefined>(jobs.length);
+      const fresh: Array<{ index: number; id: string; values: unknown[] }> = [];
+
+      for (const [index, job] of jobs.entries()) {
+        const hit = deduped.get(job);
+        if (hit) {
+          results[index] = hit;
+          continue;
+        }
+        const { id, values } = this.jobInsertValues(job);
+        fresh.push({ index, id, values });
       }
-    }
-    return value;
-  }
-  private boolIn(value: boolean): number {
-    return value ? 1 : 0;
-  }
-  private boolOut(value: unknown): boolean {
-    return value === 1 || value === true || value === '1' || value === 't';
-  }
-  private numOrNull(value: unknown): number | null {
-    return value == null ? null : Number(value);
-  }
-  private strOrNull(value: unknown): string | null {
-    return value == null ? null : String(value);
+
+      // Chunked so one statement never exceeds the engine's bound-parameter limit; each chunk is
+      // still a single multi-row insert.
+      for (const chunk of this.chunkForBind(fresh, JOB_COLUMNS.length)) {
+        if (!chunk.length) continue;
+        const params: unknown[] = [];
+        const tuples = chunk.map(({ values }) => {
+          const placeholders = this.phList(values.length, params.length);
+          params.push(...values);
+          return `(${placeholders})`;
+        });
+        try {
+          await run(
+            `INSERT INTO ${this.t(TableName.JOB)} (${JOB_COLUMNS.join(', ')}) VALUES ${tuples.join(', ')}`,
+            params,
+          );
+        } catch (err) {
+          throw new DriverQueryError(
+            `Failed to insert ${chunk.length} job(s) on queue '${jobs[chunk[0]!.index]!.queueName}'.`,
+            err,
+          );
+        }
+        for (const { index, id } of chunk) {
+          const job = jobs[index]!;
+          results[index] = {
+            id,
+            status: job.status,
+            startAfter: job.startAfter,
+            deduplicated: false,
+          };
+        }
+      }
+      return results as InsertedJobRow[];
+    });
   }
 
-  /** Map + dedupe rows by a key, keeping the first occurrence (no unique index exists). */
-  private mapUnique<T>(rows: Row[], map: (row: Row) => T, key: (item: T) => string): T[] {
-    const seen = new Set<string>();
-    const out: T[] = [];
-    for (const row of rows) {
-      const item = map(row);
-      const k = key(item);
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push(item);
+  /**
+   * Locate the existing jobs that dedup this batch, in one lookup per distinct queue and key kind
+   * rather than two per job. No unique index enforces either key — dedup lives in code so every
+   * engine behaves identically and a duplicate returns the existing job instead of raising.
+   */
+  private async findDeduplicated(
+    jobs: NewJobRecord[],
+    run: (sql: string, params: readonly unknown[]) => Promise<RawResult>,
+  ): Promise<Map<NewJobRecord, InsertedJobRow>> {
+    const out = new Map<NewJobRecord, InsertedJobRow>();
+    const cols = `${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}`;
+
+    const byQueue = new Map<string, NewJobRecord[]>();
+    for (const job of jobs) {
+      if (job.idempotencyKey == null && job.singletonKey == null) continue;
+      const list = byQueue.get(job.queueName);
+      if (list) list.push(job);
+      else byQueue.set(job.queueName, [job]);
+    }
+
+    for (const [queueName, queueJobs] of byQueue) {
+      const idemKeys = [
+        ...new Set(queueJobs.flatMap((j) => (j.idempotencyKey ? [j.idempotencyKey] : []))),
+      ];
+      if (idemKeys.length) {
+        const res = await run(
+          `SELECT ${cols}, ${JobColumn.IDEMPOTENCY_KEY} FROM ${this.t(TableName.JOB)} ` +
+            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} IN (${this.phList(idemKeys.length, 1)})`,
+          [queueName, ...idemKeys],
+        );
+        const found = new Map(res.rows.map((r) => [String(r[JobColumn.IDEMPOTENCY_KEY]), r]));
+        for (const job of queueJobs) {
+          if (job.idempotencyKey == null) continue;
+          const row = found.get(job.idempotencyKey);
+          if (row) out.set(job, this.dedupResult(row, DeduplicationReason.IDEMPOTENCY));
+        }
+      }
+
+      const singletonKeys = [
+        ...new Set(
+          queueJobs.flatMap((j) => (!out.has(j) && j.singletonKey ? [j.singletonKey] : [])),
+        ),
+      ];
+      if (singletonKeys.length) {
+        const res = await run(
+          `SELECT ${cols}, ${JobColumn.SINGLETON_KEY} FROM ${this.t(TableName.JOB)} ` +
+            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} IN (${this.phList(singletonKeys.length, 1)}) ` +
+            `AND ${JobColumn.STATUS} IN (${this.phList(ACTIVE_STATUSES.length, 1 + singletonKeys.length)})`,
+          [queueName, ...singletonKeys, ...ACTIVE_STATUSES],
+        );
+        const found = new Map(res.rows.map((r) => [String(r[JobColumn.SINGLETON_KEY]), r]));
+        for (const job of queueJobs) {
+          if (out.has(job) || job.singletonKey == null) continue;
+          const row = found.get(job.singletonKey);
+          if (row) out.set(job, this.dedupResult(row, DeduplicationReason.SINGLETON));
+        }
+      }
     }
     return out;
   }
 
-  private mapJob(row: Row): JobRecord {
+  /** Shape a dedup hit the way `insertJob`'s caller reports it. */
+  private dedupResult(row: Row, reason: DeduplicationReason): InsertedJobRow {
     return {
       id: String(row[JobColumn.ID]),
-      queueName: String(row[JobColumn.QUEUE_NAME]),
       status: row[JobColumn.STATUS] as JobStatus,
-      priority: Number(row[JobColumn.PRIORITY]),
-      data: this.fromJson(row[JobColumn.DATA]),
-      returnValue: this.fromJson(row[JobColumn.RETURN_VALUE]),
-      createdAt: Number(row[JobColumn.CREATED_AT]),
-      updatedAt: Number(row[JobColumn.UPDATED_AT]),
       startAfter: Number(row[JobColumn.START_AFTER]),
-      expireAt: this.numOrNull(row[JobColumn.EXPIRE_AT]),
-      startedAt: this.numOrNull(row[JobColumn.STARTED_AT]),
-      completedAt: this.numOrNull(row[JobColumn.COMPLETED_AT]),
-      failedAt: this.numOrNull(row[JobColumn.FAILED_AT]),
-      retriedAt: this.numOrNull(row[JobColumn.RETRIED_AT]),
-      stalledAt: this.numOrNull(row[JobColumn.STALLED_AT]),
-      cancelledAt: this.numOrNull(row[JobColumn.CANCELLED_AT]),
-      expiredAt: this.numOrNull(row[JobColumn.EXPIRED_AT]),
-      lockedUntil: this.numOrNull(row[JobColumn.LOCKED_UNTIL]),
-      preferredInstanceKeyPattern: this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]),
-      processedOnInstanceKey: this.strOrNull(row[JobColumn.PROCESSED_ON_INSTANCE_KEY]),
-      retryAttempt: Number(row[JobColumn.RETRY_ATTEMPT]),
-      retryMaxAttempts: Number(row[JobColumn.RETRY_MAX_ATTEMPTS]),
-      retryDelaySeconds: Number(row[JobColumn.RETRY_DELAY_SECONDS]),
-      retryBackoff: row[JobColumn.RETRY_BACKOFF] as BackoffStrategy,
-      retryBackoffFactor: this.numOrNull(row[JobColumn.RETRY_BACKOFF_FACTOR]),
-      retryMaxDelaySeconds: this.numOrNull(row[JobColumn.RETRY_MAX_DELAY_SECONDS]),
-      retryJitter: this.boolOut(row[JobColumn.RETRY_JITTER]),
-      failureMessage: this.strOrNull(row[JobColumn.FAILURE_MESSAGE]),
-      retentionMode: row[JobColumn.RETENTION_MODE] as RetentionMode,
-      retentionTtlSeconds: this.numOrNull(row[JobColumn.RETENTION_TTL_SECONDS]),
-      idempotencyKey: this.strOrNull(row[JobColumn.IDEMPOTENCY_KEY]),
-      scheduleId: this.strOrNull(row[JobColumn.SCHEDULE_ID]),
-      singletonKey: this.strOrNull(row[JobColumn.SINGLETON_KEY]),
+      deduplicated: true,
+      deduplicationReason: reason,
     };
-  }
-
-  private mapQueue(row: Row): QueueRow {
-    return {
-      name: String(row[QueueColumn.NAME]),
-      processingPaused: this.boolOut(row[QueueColumn.PROCESSING_PAUSED]),
-      acceptingPaused: this.boolOut(row[QueueColumn.ACCEPTING_PAUSED]),
-      createdAt: Number(row[QueueColumn.CREATED_AT]),
-      updatedAt: Number(row[QueueColumn.UPDATED_AT]),
-    };
-  }
-
-  private mapInstance(row: Row): InstanceRow {
-    return {
-      instanceKey: String(row[InstanceColumn.INSTANCE_KEY]),
-      processingPaused: this.boolOut(row[InstanceColumn.PROCESSING_PAUSED]),
-      createdAt: Number(row[InstanceColumn.CREATED_AT]),
-      updatedAt: Number(row[InstanceColumn.UPDATED_AT]),
-      lastSeenAt: Number(row[InstanceColumn.LAST_SEEN_AT]),
-      cpuPercent: this.numOrNull(row[InstanceColumn.CPU_PERCENT]),
-      memoryPercent: this.numOrNull(row[InstanceColumn.MEMORY_PERCENT]),
-    };
-  }
-
-  private mapSchedule(row: Row): ScheduleRow {
-    return {
-      id: String(row[ScheduleColumn.ID]),
-      queueName: String(row[ScheduleColumn.QUEUE_NAME]),
-      cron: this.strOrNull(row[ScheduleColumn.CRON]),
-      everySeconds: this.numOrNull(row[ScheduleColumn.EVERY_SECONDS]),
-      timezone: this.strOrNull(row[ScheduleColumn.TIMEZONE]),
-      data: this.fromJson(row[ScheduleColumn.DATA]),
-      jobOptions:
-        (this.fromJson(row[ScheduleColumn.JOB_OPTIONS]) as ScheduledJobOptions | null) ?? null,
-      priority: this.numOrNull(row[ScheduleColumn.PRIORITY]),
-      retryMaxAttempts: this.numOrNull(row[ScheduleColumn.RETRY_MAX_ATTEMPTS]),
-      retryDelaySeconds: this.numOrNull(row[ScheduleColumn.RETRY_DELAY_SECONDS]),
-      nextRunAt: this.numOrNull(row[ScheduleColumn.NEXT_RUN_AT]),
-      lastRunAt: this.numOrNull(row[ScheduleColumn.LAST_RUN_AT]),
-      enabled: this.boolOut(row[ScheduleColumn.ENABLED]),
-      startAt: this.numOrNull(row[ScheduleColumn.START_AT]),
-      endAt: this.numOrNull(row[ScheduleColumn.END_AT]),
-      idempotencyKey: this.strOrNull(row[ScheduleColumn.IDEMPOTENCY_KEY]),
-      createdAt: Number(row[ScheduleColumn.CREATED_AT]),
-      updatedAt: Number(row[ScheduleColumn.UPDATED_AT]),
-    };
-  }
-
-  // --- Producing ---
-  private jobInsertValues(job: NewJobRecord): { id: string; columns: string[]; values: unknown[] } {
-    const id = job.id ?? uuid();
-    const now = job.createdAt;
-    const columns = [...JOB_COLUMNS];
-    const values: unknown[] = [
-      id,
-      job.queueName,
-      job.status,
-      job.priority,
-      this.toJson(job.data),
-      null, // return_value
-      now,
-      now,
-      job.startAfter,
-      job.expireAt,
-      null, // started_at
-      null, // completed_at
-      null, // failed_at
-      null, // retried_at
-      null, // stalled_at
-      null, // cancelled_at
-      null, // expired_at
-      null, // locked_until
-      job.preferredInstanceKeyPattern,
-      null, // processed_on_instance_key (set at claim time)
-      job.retryAttempt,
-      job.retryMaxAttempts,
-      job.retryDelaySeconds,
-      job.retryBackoff,
-      job.retryBackoffFactor,
-      job.retryMaxDelaySeconds,
-      this.boolIn(job.retryJitter),
-      null, // failure_message
-      job.retentionMode,
-      job.retentionTtlSeconds,
-      job.idempotencyKey,
-      job.scheduleId,
-      job.singletonKey,
-    ];
-    return { id, columns, values };
-  }
-
-  private async runMaybeTx(
-    sql: string,
-    params: unknown[],
-    tx?: TransactionHandle,
-  ): Promise<RawResult> {
-    if (tx) {
-      const res: TxQueryResult = await tx.execute(sql, params);
-      return { rows: res.rows, rowCount: res.rowCount };
-    }
-    return this.execute(sql, params);
-  }
-
-  async insertJob(options: { job: NewJobRecord; tx?: TransactionHandle }): Promise<InsertedJobRow> {
-    const { job, tx } = options;
-    // No unique indexes exist (sharded-friendly schema): dedup is enforced here with a
-    // pre-insert lookup. Best-effort across instances — accepted trade-off.
-    if (job.idempotencyKey != null || job.singletonKey != null) {
-      const existing = await this.findDeduplicated(job, tx);
-      if (existing) return existing;
-    }
-    const { id, columns, values } = this.jobInsertValues(job);
-    const placeholders = values.map((_, i) => this.ph(i)).join(', ');
-    // No RETURNING on MySQL — the id/status/start_after are all known from the input.
-    const sql = `INSERT INTO ${this.t(TableName.JOB)} (${columns.join(', ')}) VALUES (${placeholders})`;
-    try {
-      await this.runMaybeTx(sql, values, tx);
-      return {
-        id,
-        status: job.status,
-        startAfter: job.startAfter,
-        deduplicated: false,
-      };
-    } catch (err) {
-      throw new DriverQueryError(`Failed to insert job on queue '${job.queueName}'.`, err);
-    }
-  }
-
-  /** Locate an existing job that dedups this insert on idempotency/singleton. */
-  private async findDeduplicated(
-    job: NewJobRecord,
-    tx?: TransactionHandle,
-  ): Promise<InsertedJobRow | null> {
-    if (job.idempotencyKey != null) {
-      const existing = await this.findJobByIdempotencyKey({
-        queueName: job.queueName,
-        idempotencyKey: job.idempotencyKey,
-        ...(tx ? { tx } : {}),
-      });
-      if (existing) return existing;
-    }
-    if (job.singletonKey != null) {
-      const res = await this.runMaybeTx(
-        `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} = ${this.ph(1)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.ACTIVE}','${JobStatus.RETRY}')`,
-        [job.queueName, job.singletonKey],
-        tx,
-      );
-      if (res.rows[0]) {
-        const row = res.rows[0];
-        return {
-          id: String(row[JobColumn.ID]),
-          status: row[JobColumn.STATUS] as JobStatus,
-          startAfter: Number(row[JobColumn.START_AFTER]),
-          deduplicated: true,
-          deduplicationReason: DeduplicationReason.SINGLETON,
-        };
-      }
-    }
-    return null;
   }
 
   async findJobByIdempotencyKey(options: {
@@ -540,19 +415,12 @@ export class MysqlDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<InsertedJobRow | null> {
     const res = await this.runMaybeTx(
-      `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} = ${this.ph(1)}`,
+      `SELECT ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER} FROM ${this.t(TableName.JOB)} ` +
+        `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} = ${this.ph(1)}`,
       [options.queueName, options.idempotencyKey],
       options.tx,
     );
-    if (!res.rows[0]) return null;
-    const row = res.rows[0];
-    return {
-      id: String(row[JobColumn.ID]),
-      status: row[JobColumn.STATUS] as JobStatus,
-      startAfter: Number(row[JobColumn.START_AFTER]),
-      deduplicated: true,
-      deduplicationReason: DeduplicationReason.IDEMPOTENCY,
-    };
+    return res.rows[0] ? this.dedupResult(res.rows[0], DeduplicationReason.IDEMPOTENCY) : null;
   }
 
   async findScheduleByIdempotencyKey(options: {
@@ -568,86 +436,60 @@ export class MysqlDriver implements Driver {
     return res.rows[0] ? this.mapSchedule(res.rows[0]) : null;
   }
 
-  async insertJobs(options: {
-    jobs: NewJobRecord[];
-    tx?: TransactionHandle;
-  }): Promise<InsertedJobRow[]> {
-    const results: InsertedJobRow[] = [];
-    for (const job of options.jobs) {
-      results.push(await this.insertJob({ job, ...(options.tx ? { tx: options.tx } : {}) }));
-    }
-    return results;
-  }
-
   async insertSchedule(options: {
     schedule: NewScheduleRow;
     tx?: TransactionHandle;
   }): Promise<ScheduleRow> {
-    const { schedule, tx } = options;
-    const now = Date.now();
-    // Plain INSERT — NOT an UPSERT and no pattern-based dedup. Identical recurrences on a queue are
-    // allowed to coexist by design; the caller enforces idempotency-key dedup ahead of this call.
-    const id = schedule.id ?? uuid();
-    const cols = [
-      ScheduleColumn.ID,
-      ScheduleColumn.QUEUE_NAME,
-      ScheduleColumn.CRON,
-      ScheduleColumn.EVERY_SECONDS,
-      ScheduleColumn.TIMEZONE,
-      ScheduleColumn.DATA,
-      ScheduleColumn.JOB_OPTIONS,
-      ScheduleColumn.PRIORITY,
-      ScheduleColumn.RETRY_MAX_ATTEMPTS,
-      ScheduleColumn.RETRY_DELAY_SECONDS,
-      ScheduleColumn.NEXT_RUN_AT,
-      ScheduleColumn.ENABLED,
-      ScheduleColumn.START_AT,
-      ScheduleColumn.END_AT,
-      ScheduleColumn.IDEMPOTENCY_KEY,
-      ScheduleColumn.CREATED_AT,
-      ScheduleColumn.UPDATED_AT,
-    ];
-    const vals: unknown[] = [
-      id,
-      schedule.queueName,
-      schedule.cron,
-      schedule.everySeconds,
-      schedule.timezone,
-      this.toJson(schedule.data),
-      this.toJson(schedule.jobOptions),
-      schedule.priority,
-      schedule.retryMaxAttempts,
-      schedule.retryDelaySeconds,
-      schedule.nextRunAt,
-      this.boolIn(schedule.enabled),
-      schedule.startAt,
-      schedule.endAt,
-      schedule.idempotencyKey,
-      now,
-      now,
-    ];
-    const placeholders = vals.map((_, i) => this.ph(i)).join(', ');
-    // No RETURNING on MySQL — insert, then read the row back by its known id.
-    await this.runMaybeTx(
-      `INSERT INTO ${this.t(TableName.SCHEDULE)} (${cols.join(', ')}) VALUES (${placeholders})`,
-      vals,
-      tx,
-    );
-    const res = await this.runMaybeTx(
-      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
-      [id],
-      tx,
-    );
-    return this.mapSchedule(res.rows[0]!);
+    // Plain INSERT — NOT an UPSERT and no pattern-based dedup. No RETURNING on MySQL, so insert then
+    // read the row back by its known id, in one transaction.
+    const { id, values } = this.scheduleInsertValues(options.schedule, Date.now());
+    return this.inTx(options.tx, async (run) => {
+      await run(
+        `INSERT INTO ${this.t(TableName.SCHEDULE)} (${SCHEDULE_INSERT_COLUMNS.join(', ')}) ` +
+          `VALUES (${this.phList(values.length)})`,
+        values,
+      );
+      const res = await run(
+        `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
+        [id],
+      );
+      if (!res.rows[0]) throw new DriverQueryError(`Failed to insert schedule '${id}'.`);
+      return this.mapSchedule(res.rows[0]);
+    });
   }
 
-  async deleteSchedule(options: { scheduleId: string; tx?: TransactionHandle }): Promise<boolean> {
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
-      [options.scheduleId],
-      options.tx,
-    );
-    return res.rowCount > 0;
+  async deleteSchedule(options: {
+    scheduleId: string;
+    tx?: TransactionHandle;
+  }): Promise<ScheduleRef | null> {
+    const [ref] = await this.deleteSchedules({
+      scheduleIds: [options.scheduleId],
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return ref ?? null;
+  }
+
+  async deleteSchedules(options: {
+    scheduleIds: string[];
+    tx?: TransactionHandle;
+  }): Promise<ScheduleRef[]> {
+    if (!options.scheduleIds.length) return [];
+    // No RETURNING: lock and read the rows, then delete exactly those ids in one statement.
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${ScheduleColumn.ID}, ${ScheduleColumn.QUEUE_NAME} FROM ${this.t(TableName.SCHEDULE)} ` +
+          `WHERE ${ScheduleColumn.ID} IN (${this.phList(options.scheduleIds.length)}) FOR UPDATE`,
+        options.scheduleIds,
+      );
+      const refs = sel.rows.map((r) => this.mapScheduleRef(r));
+      if (!refs.length) return [];
+      const ids = refs.map((r) => r.scheduleId);
+      await run(
+        `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} IN (${this.phList(ids.length)})`,
+        ids,
+      );
+      return refs;
+    });
   }
 
   async setScheduleEnabled(options: {
@@ -655,13 +497,21 @@ export class MysqlDriver implements Driver {
     enabled: boolean;
     now: number;
     tx?: TransactionHandle;
-  }): Promise<boolean> {
-    const res = await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.ENABLED} = ${this.ph(0)}, ${ScheduleColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${ScheduleColumn.ID} = ${this.ph(2)}`,
-      [this.boolIn(options.enabled), options.now, options.scheduleId],
-      options.tx,
-    );
-    return res.rowCount > 0;
+  }): Promise<ScheduleRef | null> {
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${ScheduleColumn.ID}, ${ScheduleColumn.QUEUE_NAME} FROM ${this.t(TableName.SCHEDULE)} ` +
+          `WHERE ${ScheduleColumn.ID} = ${this.ph(0)} FOR UPDATE`,
+        [options.scheduleId],
+      );
+      if (!sel.rows[0]) return null;
+      await run(
+        `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.ENABLED} = ${this.ph(0)}, ` +
+          `${ScheduleColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${ScheduleColumn.ID} = ${this.ph(2)}`,
+        [this.boolIn(options.enabled), options.now, options.scheduleId],
+      );
+      return this.mapScheduleRef(sel.rows[0]);
+    });
   }
 
   // --- Claiming (hot path) ---
@@ -673,72 +523,65 @@ export class MysqlDriver implements Driver {
     instanceKey?: string | null;
   }): Promise<JobRecord[]> {
     const { queueName, limit, lockDurationSeconds, now, instanceKey } = options;
-    const lockedUntil = now + lockDurationSeconds * 1000;
+    const lockedUntil = this.lockDeadline(now, lockDurationSeconds);
 
     // Select claimable ids highest-priority-first, locking them for the transaction with SKIP
-    // LOCKED so concurrent claimers never contend. Affinity (a preferred key pattern) can't be
-    // expressed in portable SQL, so in multi-instance mode we page and filter in code.
+    // LOCKED so concurrent claimers never contend, then update exactly those and read them back —
+    // the three steps MySQL's lack of RETURNING forces. Affinity is a regex, which SQL cannot
+    // evaluate, so a named instance pages and filters in the tool.
     return this.transaction(async (session) => {
       const ids: string[] = [];
       if (!instanceKey) {
         const sel = await this.execute(
-          `SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') ` +
-            `AND ${JobColumn.START_AFTER} <= ${this.ph(1)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(2)}) ` +
-            `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(3)} FOR UPDATE SKIP LOCKED`,
-          [queueName, now, now, limit],
+          `SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} ` +
+            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.STATUS} IN (${this.ph(1)}, ${this.ph(2)}) ` +
+            `AND ${JobColumn.START_AFTER} <= ${this.ph(3)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(4)}) ` +
+            `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(5)} FOR UPDATE SKIP LOCKED`,
+          [queueName, JobStatus.PENDING, JobStatus.RETRY, now, now, limit],
           session,
         );
         for (const row of sel.rows) ids.push(String(row[JobColumn.ID]));
       } else {
-        // Page through candidates, keeping only those this instance's key matches (see the
-        // Postgres driver for the rationale behind paging rather than one capped window).
-        const pageSize = Math.min(Math.max(limit * 5, limit + 20), 500);
-        const maxScan = Math.max(pageSize * 20, 2000);
-        const idSet = new Set<string>();
-        for (let offset = 0; idSet.size < limit && offset < maxScan; offset += pageSize) {
+        const { pageSize, maxScan } = this.affinityPlan(limit);
+        const matched = new Set<string>();
+        for (let offset = 0; matched.size < limit && offset < maxScan; offset += pageSize) {
           const sel = await this.execute(
-            `SELECT ${JobColumn.ID}, ${JobColumn.PREFERRED_INSTANCE_KEY_PATTERN} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') ` +
-              `AND ${JobColumn.START_AFTER} <= ${this.ph(1)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(2)}) ` +
-              `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(3)} OFFSET ${this.ph(4)} FOR UPDATE SKIP LOCKED`,
-            [queueName, now, now, pageSize, offset],
+            `SELECT ${JobColumn.ID}, ${JobColumn.PREFERRED_INSTANCE_KEY_PATTERN} FROM ${this.t(TableName.JOB)} ` +
+              `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.STATUS} IN (${this.ph(1)}, ${this.ph(2)}) ` +
+              `AND ${JobColumn.START_AFTER} <= ${this.ph(3)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(4)}) ` +
+              `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC ` +
+              `LIMIT ${this.ph(5)} OFFSET ${this.ph(6)} FOR UPDATE SKIP LOCKED`,
+            [queueName, JobStatus.PENDING, JobStatus.RETRY, now, now, pageSize, offset],
             session,
           );
           if (sel.rows.length === 0) break;
-          for (const row of sel.rows) {
-            if (
-              matchesInstance(
-                this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]),
-                instanceKey,
-              )
-            ) {
-              idSet.add(String(row[JobColumn.ID]));
-              if (idSet.size >= limit) break;
-            }
-          }
+          this.collectAffinityMatches(sel.rows, instanceKey, limit, matched);
           if (sel.rows.length < pageSize) break;
         }
-        ids.push(...idSet);
+        ids.push(...matched);
       }
       if (ids.length === 0) return [];
 
-      // Guarded UPDATE of exactly the locked ids, then read them back (no RETURNING on MySQL).
-      const idPh = ids.map((_, i) => this.ph(4 + i)).join(', ');
+      const head = [JobStatus.ACTIVE, now, lockedUntil, instanceKey ?? null, now];
       await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.ACTIVE}', ${JobColumn.STARTED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = ${this.ph(1)}, ` +
-          `${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)} ` +
-          `WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}')`,
-        [now, lockedUntil, instanceKey ?? null, now, ...ids],
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STARTED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(3)}, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(4)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, head.length)}) ` +
+          `AND ${JobColumn.STATUS} IN (${this.ph(head.length + ids.length)}, ${this.ph(head.length + ids.length + 1)})`,
+        [...head, ...ids, JobStatus.PENDING, JobStatus.RETRY],
         session,
       );
-      const readPh = ids.map((_, i) => this.ph(i)).join(', ');
+      // Read back only the rows this call actually claimed: same ids, ACTIVE, and holding *our*
+      // lock deadline — so a row another claimer took first is excluded.
       const res = await this.execute(
-        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${readPh}) AND ${JobColumn.STATUS} = '${JobStatus.ACTIVE}' AND ${JobColumn.LOCKED_UNTIL} = ${this.ph(ids.length)}`,
-        [...ids, lockedUntil],
+        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length)}) AND ${JobColumn.STATUS} = ${this.ph(ids.length)} ` +
+          `AND ${JobColumn.LOCKED_UNTIL} = ${this.ph(ids.length + 1)}`,
+        [...ids, JobStatus.ACTIVE, lockedUntil],
         session,
       );
-      return res.rows
-        .map((r) => this.mapJob(r))
-        .sort((a, b) => b.priority - a.priority || a.startAfter - b.startAfter);
+      return this.sortClaimed(res.rows.map((r) => this.mapJob(r)));
     });
   }
 
@@ -747,9 +590,15 @@ export class MysqlDriver implements Driver {
     lockDurationSeconds: number;
     now: number;
   }): Promise<boolean> {
-    const res = await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.LOCKED_UNTIL} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} = '${JobStatus.ACTIVE}'`,
-      [options.now + options.lockDurationSeconds * 1000, options.now, options.jobId],
+    const res = await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.LOCKED_UNTIL} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} = ${this.ph(3)}`,
+      [
+        this.lockDeadline(options.now, options.lockDurationSeconds),
+        options.now,
+        options.jobId,
+        JobStatus.ACTIVE,
+      ],
     );
     return res.rowCount > 0;
   }
@@ -761,8 +610,16 @@ export class MysqlDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<void> {
     await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.COMPLETED}', ${JobColumn.RETURN_VALUE} = ${this.ph(0)}, ${JobColumn.COMPLETED_AT} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(3)}`,
-      [this.toJson(options.returnValue), options.now, options.now, options.jobId],
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETURN_VALUE} = ${this.ph(1)}, ` +
+        `${JobColumn.COMPLETED_AT} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(4)}`,
+      [
+        JobStatus.COMPLETED,
+        this.toJson(options.returnValue),
+        options.now,
+        options.now,
+        options.jobId,
+      ],
       options.tx,
     );
   }
@@ -774,9 +631,12 @@ export class MysqlDriver implements Driver {
     lastError: string;
     now: number;
   }): Promise<void> {
-    await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.RETRY}', ${JobColumn.RETRY_ATTEMPT} = ${this.ph(0)}, ${JobColumn.START_AFTER} = ${this.ph(1)}, ${JobColumn.RETRIED_AT} = ${this.ph(2)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(3)}, ${JobColumn.UPDATED_AT} = ${this.ph(4)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(5)}`,
+    await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = ${this.ph(1)}, ` +
+        `${JobColumn.START_AFTER} = ${this.ph(2)}, ${JobColumn.RETRIED_AT} = ${this.ph(3)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(4)}, ` +
+        `${JobColumn.UPDATED_AT} = ${this.ph(5)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(6)}`,
       [
+        JobStatus.RETRY,
         options.retryAttempt,
         options.nextRunAt,
         options.now,
@@ -788,72 +648,86 @@ export class MysqlDriver implements Driver {
   }
 
   async failJob(options: { jobId: string; lastError: string; now: number }): Promise<void> {
-    await this.execute(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.FAILED}', ${JobColumn.FAILED_AT} = ${this.ph(0)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(3)}`,
-      [options.now, options.lastError, options.now, options.jobId],
+    await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.FAILED_AT} = ${this.ph(1)}, ` +
+        `${JobColumn.FAILURE_MESSAGE} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(4)}`,
+      [JobStatus.FAILED, options.now, options.lastError, options.now, options.jobId],
     );
   }
 
-  async reclaimStalledJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]> {
+  async reclaimStalledJobs(options: {
+    queueName?: string;
+    limit: number;
+    now: number;
+  }): Promise<StalledJobRef[]> {
+    // Bounded, and only three columns: the caller needs the id, the queue to wake, and who held it.
+    const params: unknown[] = [JobStatus.ACTIVE, options.now];
+    let where =
+      `${JobColumn.STATUS} = ${this.ph(0)} AND ${JobColumn.LOCKED_UNTIL} IS NOT NULL ` +
+      `AND ${JobColumn.LOCKED_UNTIL} < ${this.ph(1)}`;
+    if (options.queueName) {
+      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`;
+      params.push(options.queueName);
+    }
+    const limitPh = this.ph(params.length);
+    params.push(options.limit);
     return this.transaction(async (session) => {
-      const params: unknown[] = [options.now];
-      let where = `${JobColumn.STATUS} = '${JobStatus.ACTIVE}' AND ${JobColumn.LOCKED_UNTIL} IS NOT NULL AND ${JobColumn.LOCKED_UNTIL} < ${this.ph(0)}`;
-      if (options.queueName) {
-        where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(1)}`;
-        params.push(options.queueName);
-      }
-      // Read the affected ids first (no RETURNING), flip them to PENDING, then read the rows back.
       const sel = await this.execute(
-        `SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${where}`,
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}, ${JobColumn.PROCESSED_ON_INSTANCE_KEY} ` +
+          `FROM ${this.t(TableName.JOB)} WHERE ${where} LIMIT ${limitPh} FOR UPDATE SKIP LOCKED`,
         params,
         session,
       );
-      const ids = sel.rows.map((r) => String(r[JobColumn.ID]));
-      if (ids.length === 0) return [];
-      const idPh = ids.map((_, i) => this.ph(1 + i)).join(', ');
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => ({
+        ...this.mapJobRef(r),
+        previousInstanceKey: this.strOrNull(r[JobColumn.PROCESSED_ON_INSTANCE_KEY]),
+      }));
+      const ids = refs.map((r) => r.jobId);
       await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.STALLED_AT} = ${this.ph(0)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} IN (${idPh})`,
-        [options.now, ...ids],
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STALLED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 2)})`,
+        [JobStatus.PENDING, options.now, ...ids],
         session,
       );
-      const readPh = ids.map((_, i) => this.ph(i)).join(', ');
-      const res = await this.execute(
-        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${readPh})`,
-        ids,
-        session,
-      );
-      return res.rows.map((r) => this.mapJob(r));
+      return refs;
     });
   }
 
-  async expireDueJobs(options: { queueName?: string; now: number }): Promise<JobRecord[]> {
+  async expireDueJobs(options: {
+    queueName?: string;
+    limit: number;
+    now: number;
+  }): Promise<JobRef[]> {
+    const params: unknown[] = [JobStatus.PENDING, JobStatus.RETRY, options.now];
+    let where =
+      `${JobColumn.STATUS} IN (${this.ph(0)}, ${this.ph(1)}) AND ${JobColumn.EXPIRE_AT} IS NOT NULL ` +
+      `AND ${JobColumn.EXPIRE_AT} <= ${this.ph(2)}`;
+    if (options.queueName) {
+      where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`;
+      params.push(options.queueName);
+    }
+    const limitPh = this.ph(params.length);
+    params.push(options.limit);
     return this.transaction(async (session) => {
-      const params: unknown[] = [options.now];
-      let where = `${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}') AND ${JobColumn.EXPIRE_AT} IS NOT NULL AND ${JobColumn.EXPIRE_AT} <= ${this.ph(0)}`;
-      if (options.queueName) {
-        where += ` AND ${JobColumn.QUEUE_NAME} = ${this.ph(1)}`;
-        params.push(options.queueName);
-      }
       const sel = await this.execute(
-        `SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${where}`,
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${where} LIMIT ${limitPh} FOR UPDATE SKIP LOCKED`,
         params,
         session,
       );
-      const ids = sel.rows.map((r) => String(r[JobColumn.ID]));
-      if (ids.length === 0) return [];
-      const idPh = ids.map((_, i) => this.ph(2 + i)).join(', ');
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => this.mapJobRef(r));
+      const ids = refs.map((r) => r.jobId);
       await this.execute(
-        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.EXPIRED}', ${JobColumn.EXPIRED_AT} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} IN (${idPh})`,
-        [options.now, options.now, ...ids],
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.EXPIRED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 3)})`,
+        [JobStatus.EXPIRED, options.now, options.now, ...ids],
         session,
       );
-      const readPh = ids.map((_, i) => this.ph(i)).join(', ');
-      const res = await this.execute(
-        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${readPh})`,
-        ids,
-        session,
-      );
-      return res.rows.map((r) => this.mapJob(r));
+      return refs;
     });
   }
 
@@ -861,28 +735,45 @@ export class MysqlDriver implements Driver {
     jobId: string;
     now: number;
     tx?: TransactionHandle;
-  }): Promise<InsertedJobRow> {
-    // On the caller's transaction when there is one. A read issued outside an in-flight
-    // transaction blocks behind it on a single-connection engine — a deadlock, not a slow query.
-    const job = await this.getJob({
-      jobId: options.jobId,
+  }): Promise<RequeuedJobRef | null> {
+    const [ref] = await this.requeueJobs({
+      jobIds: [options.jobId],
+      now: options.now,
       ...(options.tx ? { tx: options.tx } : {}),
     });
-    if (!job) throw new DriverQueryError(`Cannot requeue: job '${options.jobId}' not found.`);
-    // Re-arm this job's own row: back to PENDING, reset retry counters/lock/timestamps.
-    await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.PENDING}', ${JobColumn.RETRY_ATTEMPT} = 0, ${JobColumn.START_AFTER} = ${this.ph(0)}, ` +
-        `${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ${JobColumn.EXPIRED_AT} = NULL, ` +
-        `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)}`,
-      [options.now, options.now, options.jobId],
-      options.tx,
-    );
-    return {
-      id: job.id,
-      status: JobStatus.PENDING,
-      startAfter: options.now,
-      deduplicated: false,
-    };
+    return ref ?? null;
+  }
+
+  async requeueJobs(options: {
+    jobIds: string[];
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<RequeuedJobRef[]> {
+    if (!options.jobIds.length) return [];
+    // Guarded on `status != ACTIVE`. Re-arming a running job would clear its lock and let a second
+    // worker claim it while the first handler is still going. An ACTIVE or missing id is simply not
+    // re-armed, so a batch never fails on one stale id.
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
+          `AND ${JobColumn.STATUS} <> ${this.ph(options.jobIds.length)} FOR UPDATE`,
+        [...options.jobIds, JobStatus.ACTIVE],
+      );
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => this.mapJobRef(r));
+      const ids = refs.map((r) => r.jobId);
+      const head: unknown[] = [JobStatus.PENDING, options.now, options.now];
+      await run(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = 0, ` +
+          `${JobColumn.START_AFTER} = ${this.ph(1)}, ${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ` +
+          `${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ` +
+          `${JobColumn.EXPIRED_AT} = NULL, ${JobColumn.RETURN_VALUE} = NULL, ${JobColumn.LOCKED_UNTIL} = NULL, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(2)} WHERE ${JobColumn.ID} IN (${this.phList(ids.length, head.length)})`,
+        [...head, ...ids],
+      );
+      return refs.map((ref) => ({ ...ref, status: JobStatus.PENDING, startAfter: options.now }));
+    });
   }
 
   // --- Reading ---
@@ -897,25 +788,20 @@ export class MysqlDriver implements Driver {
 
   /**
    * WHERE clauses for a job filter, appending each value to `params`. Shared by `getJobs` and
-   * `countJobs` so a page and its total can never disagree about what they select.
+   * `countJobs` so a page and its total can never disagree about what they select. `search` is
+   * matched in SQL across the five fields an operator triages by, so a text query pages in the
+   * database instead of streaming the table into the process.
    */
-  private jobFilterClauses(
-    options: {
-      queueName?: string;
-      statuses?: JobStatus[];
-      scheduleId?: string;
-      processedOnInstanceKey?: string;
-    },
-    params: unknown[],
-  ): string {
+  private jobFilterClauses(options: JobListFilter, params: unknown[]): string {
     const clauses: string[] = [];
     if (options.queueName) {
       clauses.push(`${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`);
       params.push(options.queueName);
     }
     if (options.statuses && options.statuses.length) {
-      const ph = options.statuses.map((_, i) => this.ph(params.length + i)).join(', ');
-      clauses.push(`${JobColumn.STATUS} IN (${ph})`);
+      clauses.push(
+        `${JobColumn.STATUS} IN (${this.phList(options.statuses.length, params.length)})`,
+      );
       params.push(...options.statuses);
     }
     if (options.scheduleId) {
@@ -926,39 +812,41 @@ export class MysqlDriver implements Driver {
       clauses.push(`${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(params.length)}`);
       params.push(options.processedOnInstanceKey);
     }
+    if (options.search) {
+      const pattern = this.likePattern(options.search);
+      const cols = [
+        JobColumn.ID,
+        JobColumn.STATUS,
+        JobColumn.IDEMPOTENCY_KEY,
+        JobColumn.FAILURE_MESSAGE,
+        JobColumn.DATA,
+      ];
+      const ors = cols.map((col) => {
+        const clause = `LOWER(${col}) LIKE ${this.ph(params.length)} ESCAPE '!'`;
+        params.push(pattern);
+        return clause;
+      });
+      clauses.push(`(${ors.join(' OR ')})`);
+    }
     return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   }
 
-  async getJobs(options: {
-    queueName?: string;
-    statuses?: JobStatus[];
-    scheduleId?: string;
-    processedOnInstanceKey?: string;
-    limit: number;
-    offset: number;
-  }): Promise<JobRecord[]> {
+  async getJobs(options: JobListFilter & { limit: number; offset: number }): Promise<JobRecord[]> {
     const params: unknown[] = [];
     const where = this.jobFilterClauses(options, params);
-    const limitPh = this.ph(params.length);
-    params.push(options.limit);
-    const offsetPh = this.ph(params.length);
-    params.push(options.offset);
-    const res = await this.execute(
-      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ${where} ORDER BY ${JobColumn.CREATED_AT} DESC LIMIT ${limitPh} OFFSET ${offsetPh}`,
+    const res = await this.runMaybeTx(
+      `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ${where} ` +
+        `ORDER BY ${JobColumn.CREATED_AT} DESC` +
+        this.window(options, params),
       params,
     );
     return res.rows.map((r) => this.mapJob(r));
   }
 
-  async countJobs(options: {
-    queueName?: string;
-    statuses?: JobStatus[];
-    scheduleId?: string;
-    processedOnInstanceKey?: string;
-  }): Promise<number> {
+  async countJobs(options: JobListFilter): Promise<number> {
     const params: unknown[] = [];
     const where = this.jobFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT COUNT(*) AS c FROM ${this.t(TableName.JOB)} ${where}`,
       params,
     );
@@ -969,32 +857,17 @@ export class MysqlDriver implements Driver {
     queueName?: string;
     processedOnInstanceKey?: string;
   }): Promise<Record<JobStatus, number>> {
-    const clauses: string[] = [];
     const params: unknown[] = [];
-    if (options.queueName) {
-      clauses.push(`${JobColumn.QUEUE_NAME} = ${this.ph(params.length)}`);
-      params.push(options.queueName);
-    }
-    if (options.processedOnInstanceKey) {
-      clauses.push(`${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(params.length)}`);
-      params.push(options.processedOnInstanceKey);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-    const res = await this.execute(
+    const where = this.jobFilterClauses(options, params);
+    const res = await this.runMaybeTx(
       `SELECT ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ${where} GROUP BY ${JobColumn.STATUS}`,
       params,
     );
-    const counts = emptyStatusCounts();
-    for (const row of res.rows) {
-      counts[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
-    }
+    const counts = this.emptyStatusCounts();
+    for (const row of res.rows) counts[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
     return counts;
   }
 
-  /**
-   * Per-status counts for many queues in one grouped pass. One query replaces the
-   * `countJobsByStatus`-per-row storm a queue list page would otherwise issue.
-   */
   async countJobsByStatusPerQueue(options: {
     queueNames: string[];
   }): Promise<Record<string, Record<JobStatus, number>>> {
@@ -1013,12 +886,11 @@ export class MysqlDriver implements Driver {
     keys: string[],
   ): Promise<Record<string, Record<JobStatus, number>>> {
     const out: Record<string, Record<JobStatus, number>> = {};
-    for (const key of keys) out[key] = emptyStatusCounts();
+    for (const key of keys) out[key] = this.emptyStatusCounts();
     if (!keys.length) return out;
-    const placeholders = keys.map((_, i) => this.ph(i)).join(', ');
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT ${keyColumn}, ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ` +
-        `WHERE ${keyColumn} IN (${placeholders}) GROUP BY ${keyColumn}, ${JobColumn.STATUS}`,
+        `WHERE ${keyColumn} IN (${this.phList(keys.length)}) GROUP BY ${keyColumn}, ${JobColumn.STATUS}`,
       keys,
     );
     for (const row of res.rows) {
@@ -1033,7 +905,7 @@ export class MysqlDriver implements Driver {
     const clauses: string[] = [];
     if (options.search) {
       clauses.push(`LOWER(${QueueColumn.NAME}) LIKE ${this.ph(params.length)} ESCAPE '!'`);
-      params.push(likePattern(options.search));
+      params.push(this.likePattern(options.search));
     }
     if (options.processingPaused !== undefined) {
       clauses.push(`${QueueColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
@@ -1045,23 +917,19 @@ export class MysqlDriver implements Driver {
   async listQueues(options: QueueListFilter & PageWindow = {}): Promise<QueueRow[]> {
     const params: unknown[] = [];
     const where = this.queueFilterClauses(options, params);
-    const res = await this.execute(
+    // `name` is the primary key, so a page can no longer contain the same queue twice.
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.QUEUE)} ${where} ORDER BY ${QueueColumn.NAME} ASC` +
         this.window(options, params),
       params,
     );
-    // No unique index on name: dedupe defensively so a creation race can't surface twice.
-    return this.mapUnique(
-      res.rows,
-      (r) => this.mapQueue(r),
-      (q) => q.name,
-    );
+    return res.rows.map((r) => this.mapQueue(r));
   }
 
   async countQueues(options: QueueListFilter = {}): Promise<number> {
     const params: unknown[] = [];
     const where = this.queueFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT COUNT(*) AS c FROM ${this.t(TableName.QUEUE)} ${where}`,
       params,
     );
@@ -1080,8 +948,7 @@ export class MysqlDriver implements Driver {
       params.push(this.boolIn(options.enabled));
     }
     if (options.search) {
-      // A schedule is searchable by any of the three things the table actually shows.
-      const pattern = likePattern(options.search);
+      const pattern = this.likePattern(options.search);
       const cols = [ScheduleColumn.ID, ScheduleColumn.QUEUE_NAME, ScheduleColumn.CRON];
       const ors = cols.map((col) => {
         const clause = `LOWER(${col}) LIKE ${this.ph(params.length)} ESCAPE '!'`;
@@ -1096,7 +963,7 @@ export class MysqlDriver implements Driver {
   async listSchedules(options: ScheduleListFilter & PageWindow = {}): Promise<ScheduleRow[]> {
     const params: unknown[] = [];
     const where = this.scheduleFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.SCHEDULE)} ${where} ` +
         `ORDER BY ${ScheduleColumn.CREATED_AT} ASC, ${ScheduleColumn.ID} ASC` +
         this.window(options, params),
@@ -1108,14 +975,15 @@ export class MysqlDriver implements Driver {
   async countSchedules(options: ScheduleListFilter = {}): Promise<number> {
     const params: unknown[] = [];
     const where = this.scheduleFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT COUNT(*) AS c FROM ${this.t(TableName.SCHEDULE)} ${where}`,
       params,
     );
     return Number(res.rows[0]?.c ?? 0);
   }
+
   async getSchedule(options: { scheduleId: string }): Promise<ScheduleRow | null> {
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} = ${this.ph(0)}`,
       [options.scheduleId],
     );
@@ -1123,9 +991,11 @@ export class MysqlDriver implements Driver {
   }
 
   async getDueSchedules(options: { now: number; limit: number }): Promise<ScheduleRow[]> {
-    const res = await this.execute(
-      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ENABLED} = 1 AND ${ScheduleColumn.NEXT_RUN_AT} IS NOT NULL AND ${ScheduleColumn.NEXT_RUN_AT} <= ${this.ph(0)} ORDER BY ${ScheduleColumn.NEXT_RUN_AT} ASC LIMIT ${this.ph(1)}`,
-      [options.now, options.limit],
+    const res = await this.runMaybeTx(
+      `SELECT * FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ENABLED} = ${this.ph(0)} ` +
+        `AND ${ScheduleColumn.NEXT_RUN_AT} IS NOT NULL AND ${ScheduleColumn.NEXT_RUN_AT} <= ${this.ph(1)} ` +
+        `ORDER BY ${ScheduleColumn.NEXT_RUN_AT} ASC LIMIT ${this.ph(2)}`,
+      [this.boolIn(true), options.now, options.limit],
     );
     return res.rows.map((r) => this.mapSchedule(r));
   }
@@ -1136,8 +1006,11 @@ export class MysqlDriver implements Driver {
     lastRunAt: number;
     fromNextRunAt: number;
   }): Promise<boolean> {
-    const res = await this.execute(
-      `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(0)}, ${ScheduleColumn.LAST_RUN_AT} = ${this.ph(1)}, ${ScheduleColumn.UPDATED_AT} = ${this.ph(2)} WHERE ${ScheduleColumn.ID} = ${this.ph(3)} AND ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(4)}`,
+    // Guarded on the previous next_run_at: only one instance claims each tick.
+    const res = await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.SCHEDULE)} SET ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(0)}, ` +
+        `${ScheduleColumn.LAST_RUN_AT} = ${this.ph(1)}, ${ScheduleColumn.UPDATED_AT} = ${this.ph(2)} ` +
+        `WHERE ${ScheduleColumn.ID} = ${this.ph(3)} AND ${ScheduleColumn.NEXT_RUN_AT} = ${this.ph(4)}`,
       [
         options.nextRunAt,
         options.lastRunAt,
@@ -1154,39 +1027,69 @@ export class MysqlDriver implements Driver {
     jobId: string;
     now: number;
     tx?: TransactionHandle;
-  }): Promise<boolean> {
-    const res = await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = '${JobStatus.CANCELLED}', ${JobColumn.CANCELLED_AT} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} IN ('${JobStatus.PENDING}','${JobStatus.RETRY}')`,
-      [options.now, options.now, options.jobId],
-      options.tx,
-    );
-    return res.rowCount > 0;
+  }): Promise<JobRef | null> {
+    const [ref] = await this.cancelJobs({
+      jobIds: [options.jobId],
+      now: options.now,
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return ref ?? null;
   }
 
-  async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
-    // Never delete a running job — an ACTIVE row is skipped and this returns false; cancel it first.
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} = ${this.ph(0)} AND ${JobColumn.STATUS} != ${this.ph(1)}`,
-      [options.jobId, JobStatus.ACTIVE],
-      options.tx,
-    );
-    return res.rowCount > 0;
-  }
-
-  async removeJobsByIds(options: {
+  async cancelJobs(options: {
     jobIds: string[];
-    queueName: string;
+    now: number;
     tx?: TransactionHandle;
-  }): Promise<number> {
-    if (!options.jobIds.length) return 0;
-    const idPh = options.jobIds.map((_, i) => this.ph(i)).join(', ');
-    // ACTIVE (running) jobs are never removed — they're skipped and left out of the returned count.
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${idPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.jobIds.length)} AND ${JobColumn.STATUS} != ${this.ph(options.jobIds.length + 1)}`,
-      [...options.jobIds, options.queueName, JobStatus.ACTIVE],
-      options.tx,
-    );
-    return res.rowCount;
+  }): Promise<JobRef[]> {
+    if (!options.jobIds.length) return [];
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
+          `AND ${JobColumn.STATUS} IN (${this.phList(2, options.jobIds.length)}) FOR UPDATE`,
+        [...options.jobIds, JobStatus.PENDING, JobStatus.RETRY],
+      );
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => this.mapJobRef(r));
+      const ids = refs.map((r) => r.jobId);
+      await run(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.CANCELLED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 3)})`,
+        [JobStatus.CANCELLED, options.now, options.now, ...ids],
+      );
+      return refs;
+    });
+  }
+
+  async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<JobRef | null> {
+    const [ref] = await this.removeJobs({
+      jobIds: [options.jobId],
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return ref ?? null;
+  }
+
+  async removeJobs(options: { jobIds: string[]; tx?: TransactionHandle }): Promise<JobRef[]> {
+    if (!options.jobIds.length) return [];
+    // Never delete a running job — an ACTIVE row belongs to a live handler, so it is skipped and
+    // simply absent from the result; cancel it first.
+    return this.inTx(options.tx, async (run) => {
+      const sel = await run(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
+          `AND ${JobColumn.STATUS} <> ${this.ph(options.jobIds.length)} FOR UPDATE`,
+        [...options.jobIds, JobStatus.ACTIVE],
+      );
+      if (!sel.rows.length) return [];
+      const refs = sel.rows.map((r) => this.mapJobRef(r));
+      const ids = refs.map((r) => r.jobId);
+      await run(
+        `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${this.phList(ids.length)})`,
+        ids,
+      );
+      return refs;
+    });
   }
 
   async removeJobsByStatus(options: {
@@ -1195,9 +1098,9 @@ export class MysqlDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<number> {
     if (!options.statuses.length) return 0;
-    const statusPh = options.statuses.map((_, i) => this.ph(i)).join(', ');
     const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${statusPh}) AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.statuses.length)}`,
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${this.phList(options.statuses.length)}) ` +
+        `AND ${JobColumn.QUEUE_NAME} = ${this.ph(options.statuses.length)}`,
       [...options.statuses, options.queueName],
       options.tx,
     );
@@ -1211,7 +1114,7 @@ export class MysqlDriver implements Driver {
     acceptingPaused?: boolean;
     now: number;
     tx?: TransactionHandle;
-  }): Promise<void> {
+  }): Promise<QueueRow | null> {
     const sets: string[] = [];
     const params: unknown[] = [];
     if (options.processingPaused !== undefined) {
@@ -1224,12 +1127,20 @@ export class MysqlDriver implements Driver {
     }
     sets.push(`${QueueColumn.UPDATED_AT} = ${this.ph(params.length)}`);
     params.push(options.now);
+    const namePh = this.ph(params.length);
     params.push(options.queueName);
-    await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE ${QueueColumn.NAME} = ${this.ph(params.length - 1)}`,
-      params,
-      options.tx,
-    );
+    // No RETURNING: update, then read the row back in the same transaction.
+    return this.inTx(options.tx, async (run) => {
+      await run(
+        `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE ${QueueColumn.NAME} = ${namePh}`,
+        params,
+      );
+      const res = await run(
+        `SELECT * FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
+        [options.queueName],
+      );
+      return res.rows[0] ? this.mapQueue(res.rows[0]) : null;
+    });
   }
 
   async ensureQueue(options: {
@@ -1238,26 +1149,23 @@ export class MysqlDriver implements Driver {
     now: number;
     tx?: TransactionHandle;
   }): Promise<QueueRow> {
-    // Both reads run on the caller's transaction: outside it they would deadlock a
-    // single-connection engine, and the read-back below would not see the row just inserted.
-    const existing = await this.getQueueByName({
-      name: options.name,
-      ...(options.tx ? { tx: options.tx } : {}),
+    // Get-or-create in one statement pair. `name` is the primary key, so `INSERT IGNORE` makes a
+    // concurrent create a no-op rather than an error. Queue options are process-local; only the
+    // pause flags are ever persisted, so an existing row is never rewritten from here.
+    return this.inTx(options.tx, async (run) => {
+      await run(
+        `INSERT IGNORE INTO ${this.t(TableName.QUEUE)} (${QueueColumn.NAME}, ${QueueColumn.PROCESSING_PAUSED}, ` +
+          `${QueueColumn.ACCEPTING_PAUSED}, ${QueueColumn.CREATED_AT}, ${QueueColumn.UPDATED_AT}) ` +
+          `VALUES (${this.phList(5)})`,
+        [options.name, this.boolIn(false), this.boolIn(false), options.now, options.now],
+      );
+      const res = await run(
+        `SELECT * FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
+        [options.name],
+      );
+      if (!res.rows[0]) throw new DriverQueryError(`Failed to ensure queue '${options.name}'.`);
+      return this.mapQueue(res.rows[0]);
     });
-    if (existing) return existing;
-    // Get-or-create, not an UPSERT. No unique index on name; a rare creation race can leave two
-    // rows, and listQueues/getQueueByName dedupe by name so callers never see both.
-    await this.runMaybeTx(
-      `INSERT INTO ${this.t(TableName.QUEUE)} (${QueueColumn.NAME}, ${QueueColumn.PROCESSING_PAUSED}, ${QueueColumn.ACCEPTING_PAUSED}, ${QueueColumn.CREATED_AT}, ${QueueColumn.UPDATED_AT}) VALUES (${this.ph(0)}, 0, 0, ${this.ph(1)}, ${this.ph(2)})`,
-      [options.name, options.now, options.now],
-      options.tx,
-    );
-    const row = await this.getQueueByName({
-      name: options.name,
-      ...(options.tx ? { tx: options.tx } : {}),
-    });
-    if (!row) throw new DriverQueryError(`Failed to ensure queue '${options.name}'.`);
-    return row;
   }
 
   async getQueueByName(options: {
@@ -1273,6 +1181,7 @@ export class MysqlDriver implements Driver {
   }
 
   async deleteQueue(options: { name: string; tx?: TransactionHandle }): Promise<boolean> {
+    // Only removes the queue row. Jobs link by queue_name (no FK), so this never cascades.
     const res = await this.runMaybeTx(
       `DELETE FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
       [options.name],
@@ -1287,36 +1196,57 @@ export class MysqlDriver implements Driver {
     now: number;
     metrics?: InstanceMetrics;
   }): Promise<InstanceRow> {
-    // Update-first, then insert if absent — NOT a database UPSERT. The heartbeat's common case is
-    // "row exists"; only the first beat falls through to INSERT. No RETURNING on MySQL, so read the
-    // row back by key afterwards. A rare create race can leave two rows; listInstances dedupes.
+    // Update-first, then insert only if the row is genuinely absent, then read it back — three
+    // statements where Postgres needs one, because MySQL has no RETURNING and reports an UPDATE that
+    // changed nothing as zero rows affected. The read-back is what the caller takes
+    // `processingPaused` from, so there is no query after this transaction. The pause flag is never
+    // written here.
     const m = options.metrics;
-    const updated = await this.execute(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.LAST_SEEN_AT} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}, ${InstanceColumn.CPU_PERCENT} = COALESCE(${this.ph(2)}, ${InstanceColumn.CPU_PERCENT}), ${InstanceColumn.MEMORY_PERCENT} = COALESCE(${this.ph(3)}, ${InstanceColumn.MEMORY_PERCENT}) WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(4)}`,
-      [
-        options.now,
-        options.now,
-        m?.cpuPercent ?? null,
-        m?.memoryPercent ?? null,
-        options.instanceKey,
-      ],
-    );
-    if (updated.rowCount === 0) {
-      await this.execute(
-        `INSERT INTO ${this.t(TableName.INSTANCE)} (${InstanceColumn.INSTANCE_KEY}, ${InstanceColumn.PROCESSING_PAUSED}, ${InstanceColumn.CREATED_AT}, ${InstanceColumn.UPDATED_AT}, ${InstanceColumn.LAST_SEEN_AT}, ${InstanceColumn.CPU_PERCENT}, ${InstanceColumn.MEMORY_PERCENT}) VALUES (${this.ph(0)}, 0, ${this.ph(1)}, ${this.ph(2)}, ${this.ph(3)}, ${this.ph(4)}, ${this.ph(5)})`,
+    return this.inTx(undefined, async (run) => {
+      await run(
+        `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.LAST_SEEN_AT} = ${this.ph(0)}, ` +
+          `${InstanceColumn.UPDATED_AT} = ${this.ph(1)}, ` +
+          `${InstanceColumn.CPU_PERCENT} = COALESCE(${this.ph(2)}, ${InstanceColumn.CPU_PERCENT}), ` +
+          `${InstanceColumn.MEMORY_PERCENT} = COALESCE(${this.ph(3)}, ${InstanceColumn.MEMORY_PERCENT}) ` +
+          `WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(4)}`,
         [
-          options.instanceKey,
-          options.now,
           options.now,
           options.now,
           m?.cpuPercent ?? null,
           m?.memoryPercent ?? null,
+          options.instanceKey,
         ],
       );
-    }
-    const row = await this.getInstance({ instanceKey: options.instanceKey });
-    if (!row) throw new DriverQueryError(`Failed to upsert instance '${options.instanceKey}'.`);
-    return row;
+      const read = async (): Promise<Row | undefined> => {
+        const res = await run(
+          `SELECT * FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
+          [options.instanceKey],
+        );
+        return res.rows[0];
+      };
+      let row = await read();
+      if (!row) {
+        await run(
+          `INSERT IGNORE INTO ${this.t(TableName.INSTANCE)} (${InstanceColumn.INSTANCE_KEY}, ${InstanceColumn.PROCESSING_PAUSED}, ` +
+            `${InstanceColumn.CREATED_AT}, ${InstanceColumn.UPDATED_AT}, ${InstanceColumn.LAST_SEEN_AT}, ` +
+            `${InstanceColumn.CPU_PERCENT}, ${InstanceColumn.MEMORY_PERCENT}) VALUES (${this.phList(7)})`,
+          [
+            options.instanceKey,
+            this.boolIn(false),
+            options.now,
+            options.now,
+            options.now,
+            m?.cpuPercent ?? null,
+            m?.memoryPercent ?? null,
+          ],
+        );
+        row = await read();
+      }
+      if (!row) {
+        throw new DriverQueryError(`Failed to register instance '${options.instanceKey}'.`);
+      }
+      return this.mapInstance(row);
+    });
   }
 
   /** WHERE clauses for an instance-list filter, appending each value to `params`. */
@@ -1326,7 +1256,7 @@ export class MysqlDriver implements Driver {
       clauses.push(
         `LOWER(${InstanceColumn.INSTANCE_KEY}) LIKE ${this.ph(params.length)} ESCAPE '!'`,
       );
-      params.push(likePattern(options.search));
+      params.push(this.likePattern(options.search));
     }
     if (options.processingPaused !== undefined) {
       clauses.push(`${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
@@ -1345,29 +1275,26 @@ export class MysqlDriver implements Driver {
   async listInstances(options: InstanceListFilter & PageWindow = {}): Promise<InstanceRow[]> {
     const params: unknown[] = [];
     const where = this.instanceFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.INSTANCE)} ${where} ORDER BY ${InstanceColumn.INSTANCE_KEY} ASC` +
         this.window(options, params),
       params,
     );
-    return this.mapUnique(
-      res.rows,
-      (r) => this.mapInstance(r),
-      (i) => i.instanceKey,
-    );
+    return res.rows.map((r) => this.mapInstance(r));
   }
 
   async countInstances(options: InstanceListFilter = {}): Promise<number> {
     const params: unknown[] = [];
     const where = this.instanceFilterClauses(options, params);
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT COUNT(*) AS c FROM ${this.t(TableName.INSTANCE)} ${where}`,
       params,
     );
     return Number(res.rows[0]?.c ?? 0);
   }
+
   async getInstance(options: { instanceKey: string }): Promise<InstanceRow | null> {
-    const res = await this.execute(
+    const res = await this.runMaybeTx(
       `SELECT * FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
       [options.instanceKey],
     );
@@ -1379,8 +1306,9 @@ export class MysqlDriver implements Driver {
     processingPaused: boolean;
     now: number;
   }): Promise<void> {
-    await this.execute(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(2)}`,
+    await this.runMaybeTx(
+      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ` +
+        `${InstanceColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(2)}`,
       [this.boolIn(options.processingPaused), options.now, options.instanceKey],
     );
   }
@@ -1395,29 +1323,51 @@ export class MysqlDriver implements Driver {
   }
 
   // --- Retention ---
-  async deleteFinishedJobs(options: {
-    olderThan: number;
-    statuses: JobStatus[];
-    limit: number;
-    now: number;
-  }): Promise<number> {
-    if (!options.statuses.length) return 0;
-    const statusPh = options.statuses.map((_, i) => this.ph(i)).join(', ');
-    const cutoffPh = this.ph(options.statuses.length);
-    const limitPh = this.ph(options.statuses.length + 1);
-    // MySQL forbids LIMIT inside an `IN (SELECT ... LIMIT)` subquery, so wrap it one level deeper.
-    const res = await this.execute(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.STATUS} IN (${statusPh}) ` +
-        `AND ${JobColumn.RETENTION_MODE} = 'DELETE_AFTER' AND ${JobColumn.RETENTION_TTL_SECONDS} IS NOT NULL ` +
-        `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_SECONDS} * 1000) <= ${cutoffPh} LIMIT ${limitPh}) AS victims)`,
-      [...options.statuses, options.olderThan, options.limit],
+  async deleteFinishedJobs(options: { olderThan: number; limit: number }): Promise<number> {
+    const params: unknown[] = [];
+    const where = this.retentionWhere(options.olderThan, params);
+    const limitPh = this.ph(params.length);
+    params.push(options.limit);
+    // MySQL rejects `LIMIT` inside an `IN` subquery but supports it directly on `DELETE`, so the
+    // bounded batch is one statement rather than the select-then-delete pair other engines use.
+    const res = await this.runMaybeTx(
+      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${where} LIMIT ${limitPh}`,
+      params,
     );
     return res.rowCount;
   }
 
-  // --- Pub/sub (unsupported: MySQL has no LISTEN/NOTIFY; the safety poll backstops it) ---
+  /**
+   * The retention predicate: a DELETE_AFTER row, in a status **its own policy** covers, whose TTL
+   * has elapsed since it finished. A row with a NULL `retention_statuses` is eligible in every
+   * finished status (the default); a row that named a subset is eligible only in one of those.
+   */
+  private retentionWhere(olderThan: number, params: unknown[]): string {
+    const modePh = this.ph(params.length);
+    params.push(RetentionMode.DELETE_AFTER);
+    const statusPh = this.phList(FINISHED_STATUSES.length, params.length);
+    params.push(...FINISHED_STATUSES);
+    const scoped = FINISHED_STATUSES.map((status) => {
+      const clause =
+        `(${JobColumn.STATUS} = ${this.ph(params.length)} AND ` +
+        `${JobColumn.RETENTION_STATUSES} LIKE ${this.ph(params.length + 1)})`;
+      params.push(status, retentionStatusPattern(status));
+      return clause;
+    });
+    const cutoffPh = this.ph(params.length);
+    params.push(olderThan);
+    return (
+      `${JobColumn.RETENTION_MODE} = ${modePh} AND ${JobColumn.RETENTION_TTL_SECONDS} IS NOT NULL ` +
+      `AND ${JobColumn.STATUS} IN (${statusPh}) ` +
+      `AND (${JobColumn.RETENTION_STATUSES} IS NULL OR ${scoped.join(' OR ')}) ` +
+      `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ` +
+      `${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_SECONDS} * 1000) <= ${cutoffPh}`
+    );
+  }
+
+  // --- Pub/sub (interval polling instead of LISTEN/NOTIFY) ---
   async notify(_options: { channel: string; payload: string }): Promise<void> {
-    // No-op — MySQL does not implement LISTEN/NOTIFY.
+    // No-op: MySQL has no LISTEN/NOTIFY; subscribers rely on interval polling.
   }
 
   async subscribe(_options: {
@@ -1426,7 +1376,7 @@ export class MysqlDriver implements Driver {
   }): Promise<Subscription> {
     throw new UnsupportedCapabilityError(
       DriverCapability.LISTEN_NOTIFY,
-      'MySQL has no LISTEN/NOTIFY; PortQueue uses interval polling instead. Core should not call subscribe() without the LISTEN_NOTIFY capability.',
+      'MySQL has no LISTEN/NOTIFY; use interval polling.',
     );
   }
 
@@ -1444,27 +1394,4 @@ export class MysqlDriver implements Driver {
       return options.fn(handle);
     });
   }
-}
-
-function emptyStatusCounts(): Record<JobStatus, number> {
-  return {
-    [JobStatus.PENDING]: 0,
-    [JobStatus.ACTIVE]: 0,
-    [JobStatus.COMPLETED]: 0,
-    [JobStatus.FAILED]: 0,
-    [JobStatus.RETRY]: 0,
-    [JobStatus.CANCELLED]: 0,
-    [JobStatus.EXPIRED]: 0,
-  };
-}
-
-/**
- * A bound `LIKE` pattern for a case-insensitive substring search. The term is lower-cased (the
- * column is too, at the query site) and `%`/`_`/`!` are escaped with `!` — declared by the
- * query's own `ESCAPE '!'` — so a user typing `100%` searches for that text rather than matching
- * everything. Still a bound parameter: nothing here is interpolated into SQL.
- */
-function likePattern(term: string): string {
-  const escaped = term.toLowerCase().replace(/[!%_]/g, (ch) => `!${ch}`);
-  return `%${escaped}%`;
 }

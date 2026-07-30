@@ -1,14 +1,26 @@
 /** @jest-environment node */
-import type { PortQueue } from '@portqueue/core';
+import type { Driver, PortQueue } from '@portqueue/core';
 import { createDashboard } from './create-dashboard';
 import { createEngine } from './engine';
 import { makeReq, makeRes } from '../test-support/http-mocks';
 import type { KoaContext } from './types';
+import type { DashboardClient } from './client';
 
-/** The engine only reaches the PortQueue on API paths; asset paths never touch it. */
+/** The engine only reaches the client on API paths; asset paths never touch it. */
 const fakePq = {
   _dashboard: { getQueues: async () => ({ items: [], total: 0 }) },
 } as unknown as PortQueue;
+
+/**
+ * `createDashboard` now takes a driver and builds its own client, so these tests inject a stub
+ * client and a driver that is never touched — mounting must not connect to anything.
+ */
+const stubClient: DashboardClient = { get: async () => fakePq, close: async () => {} };
+const unusedDriver = {
+  connect: () => {
+    throw new Error('the dashboard must not connect at mount time');
+  },
+} as unknown as Driver;
 
 /** Silence the "no client bundle" warning the engine emits at mount time in these tests. */
 const quiet = { warn: () => {} };
@@ -27,7 +39,12 @@ async function until(check: () => boolean, timeoutMs = 2000): Promise<void> {
 
 describe('createDashboard', () => {
   it('exposes a handler per framework and a normalized basePath', () => {
-    const dash = createDashboard({ portQueue: fakePq, basePath: 'admin/', logger: quiet });
+    const dash = createDashboard({
+      driver: unusedDriver,
+      client: stubClient,
+      basePath: 'admin/',
+      logger: quiet,
+    });
     expect(dash.basePath).toBe('/admin');
     for (const key of ['node', 'express', 'koa', 'fastify', 'nest'] as const) {
       expect(typeof dash[key]).toBe('function');
@@ -37,7 +54,7 @@ describe('createDashboard', () => {
 
 describe('engine.serve', () => {
   it('serves the SPA shell for the mount root', async () => {
-    const engine = createEngine({ portQueue: fakePq, logger: quiet });
+    const engine = createEngine({ driver: unusedDriver, client: stubClient, logger: quiet });
     const res = makeRes();
     await engine.serve(makeReq({ url: '/portqueue' }), res);
     expect(res.statusCode).toBe(200);
@@ -45,7 +62,7 @@ describe('engine.serve', () => {
   });
 
   it('sets the hardening headers on every response', async () => {
-    const engine = createEngine({ portQueue: fakePq, logger: quiet });
+    const engine = createEngine({ driver: unusedDriver, client: stubClient, logger: quiet });
     const res = makeRes();
     await engine.serve(makeReq({ url: '/portqueue' }), res);
     expect(res.headers['x-content-type-options']).toBe('nosniff');
@@ -54,7 +71,7 @@ describe('engine.serve', () => {
   });
 
   it('serves the API without demanding credentials — auth is the host’s job', async () => {
-    const engine = createEngine({ portQueue: fakePq, logger: quiet });
+    const engine = createEngine({ driver: unusedDriver, client: stubClient, logger: quiet });
     const res = makeRes();
     await engine.serve(makeReq({ url: '/portqueue/api/queues' }), res);
     expect(res.statusCode).toBe(200);
@@ -65,13 +82,17 @@ describe('engine.serve', () => {
     // A missing bundle otherwise serves the fallback shell with a 200, which reads as a working
     // deploy — this warning is the only signal a misconfigured install gets.
     const warnings: string[] = [];
-    createEngine({ portQueue: fakePq, logger: { warn: (m) => warnings.push(String(m)) } });
+    createEngine({
+      driver: unusedDriver,
+      client: stubClient,
+      logger: { warn: (m) => warnings.push(String(m)) },
+    });
     await until(() => warnings.length > 0);
     expect(warnings.join('\n')).toContain('No client bundle found');
   });
 
   it('reports ownership via owns()', () => {
-    const engine = createEngine({ portQueue: fakePq, logger: quiet });
+    const engine = createEngine({ driver: unusedDriver, client: stubClient, logger: quiet });
     expect(engine.owns('/portqueue')).toBe(true);
     expect(engine.owns('/portqueue/api/queues')).toBe(true);
     expect(engine.owns('/other')).toBe(false);
@@ -86,7 +107,7 @@ describe('engine.serve', () => {
  */
 describe('adapters', () => {
   const dashboard = (): ReturnType<typeof createDashboard> =>
-    createDashboard({ portQueue: fakePq, logger: quiet });
+    createDashboard({ driver: unusedDriver, client: stubClient, logger: quiet });
 
   describe('node', () => {
     it('returns false for an unrelated URL and true for an owned one', () => {

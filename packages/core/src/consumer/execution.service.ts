@@ -1,4 +1,6 @@
 import { PortQueueEvent } from '../events/event-name.enum';
+import { secondsToMs } from '../util/seconds';
+import { LOCK_HEARTBEATS_PER_WINDOW, MIN_LOCK_HEARTBEAT_SECONDS } from '../constants';
 import type { Job, JobHandler } from '../jobs/job';
 import type { JobRecord } from '../jobs/job-record';
 import type { ErrorClass } from '../options/worker-options';
@@ -90,8 +92,15 @@ export class ExecutionService {
   }
 
   private startHeartbeat(jobId: string, controller: AbortController): NodeJS.Timeout {
-    // Beat at a third of the lock window, never faster than once a second.
-    const intervalMs = Math.max(1000, Math.floor((this.config.lockDurationSeconds * 1000) / 3));
+    // Beat at a fraction of the lock window, never faster than the floor, so a lock is renewed
+    // several times before it could lapse.
+    const intervalMs = Math.max(
+      secondsToMs(MIN_LOCK_HEARTBEAT_SECONDS, 'lock heartbeat floor'),
+      Math.floor(
+        secondsToMs(this.config.lockDurationSeconds, 'limiter.lockDurationSeconds') /
+          LOCK_HEARTBEATS_PER_WINDOW,
+      ),
+    );
     const timer = setInterval(async () => {
       try {
         const held = await this.runtime.driver.extendLock({

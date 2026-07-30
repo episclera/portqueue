@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
   await pq.init();
 
-  const reports = pq.createQueue<{ id: string }>({ name: 'reports' });
+  pq.createQueue<{ id: string }>({ name: 'reports' });
 
   pq.createWorker<{ id: string }>({
     queue: 'reports',
@@ -49,7 +49,7 @@ async function main(): Promise<void> {
     },
   });
 
-  await reports.addJob({ data: { id: 'r-1' } });
+  await pq.addJob({ queue: 'reports', data: { id: 'r-1' } });
 
   // Let the handler start, then shut down gracefully with a generous window so it can complete.
   await new Promise((r) => setTimeout(r, 500));

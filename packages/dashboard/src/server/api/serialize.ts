@@ -17,7 +17,7 @@ import type {
 } from '../../shared/dto';
 
 /** A schedule as core's dashboard facade returns it: `ScheduleInfo` plus its queue. */
-export interface ScheduleWithQueue {
+export interface ScheduleInfo {
   scheduleId: string;
   queue: string;
   cron?: string | null;
@@ -76,7 +76,6 @@ export function serializeQueue(q: QueueInfo): QueueDto {
     processingPaused: q.processingPaused,
     acceptingPaused: q.acceptingPaused,
     counts: counts(q.counts),
-    inUse: q.inUse,
   };
 }
 
@@ -98,7 +97,7 @@ export function serializeJobPage(page: Page<JobSnapshot>): JobPageDto {
   };
 }
 
-export function serializeSchedule(s: ScheduleWithQueue): ScheduleDto {
+export function serializeSchedule(s: ScheduleInfo): ScheduleDto {
   return {
     scheduleId: s.scheduleId,
     queue: s.queue,
@@ -112,7 +111,7 @@ export function serializeSchedule(s: ScheduleWithQueue): ScheduleDto {
   };
 }
 
-export function serializeSchedulePage(page: Page<ScheduleWithQueue>): SchedulePageDto {
+export function serializeSchedulePage(page: Page<ScheduleInfo>): SchedulePageDto {
   return { items: page.items.map(serializeSchedule), total: page.total };
 }
 

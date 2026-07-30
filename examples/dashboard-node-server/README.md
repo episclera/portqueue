@@ -24,7 +24,7 @@ an instance so the dashboard's **Instances** page has a row — start a second c
 The key wiring is:
 
 ```ts
-const dashboard = createDashboard({ portQueue: pq });
+const dashboard = createDashboard({ driver });
 const handler = dashboard.node();               // (req, res) => boolean
 createServer((req, res) => {
   if (handler(req, res)) return;                // dashboard served it

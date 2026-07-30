@@ -1,14 +1,14 @@
 /**
- * The jobs route: what it forwards to core's dashboard facade, and how it shapes the reply.
+ * The jobs routes: what they forward to core's dashboard facade, and how they shape the reply.
  *
- * The search *filtering* itself lives in core now (`pq._dashboard.getJobs`), so these cover the
- * route's own job: parsing and clamping the query string, passing the scan-window limit through,
- * and serializing the page — including the `searchTruncated` flag the UI depends on.
+ * The filtering itself — search included — happens in the database, inside
+ * `pq._dashboard.getJobs`. What is left for a route to get wrong is the query string: parsing it,
+ * clamping it, and dropping values that mean nothing. That is what these cover.
  * @jest-environment node
  */
 import type { JobSnapshot, PortQueue } from '@portqueue/core';
-import { createRouter } from './routes';
-import type { JobPageDto } from '../../shared/dto';
+import { request, stubClient } from '../../../test-support/api';
+import type { JobPageDto } from '../../../shared/dto';
 
 const job = (id: string, status = 'COMPLETED'): JobSnapshot =>
   ({
@@ -56,8 +56,7 @@ function fakePq(
 }
 
 const read = async (pq: PortQueue, url: string): Promise<JobPageDto> => {
-  const router = createRouter({ portQueue: pq, basePath: '/portqueue' });
-  const res = await router.handle({ method: 'GET', url, body: undefined, headers: {} });
+  const res = await request(stubClient(pq), { method: 'GET', url });
   expect(res.status).toBe(200);
   return JSON.parse(res.body) as JobPageDto;
 };
@@ -91,11 +90,17 @@ describe('GET /api/jobs', () => {
     expect(queries[0]?.scheduleId).toBe('sch-1');
   });
 
-  it('passes the search term through, with no scan window to cap it', async () => {
+  it('passes the search term through to the database', async () => {
     const { pq, queries } = fakePq([job('alpha-1')]);
     await read(pq, '/portqueue/api/jobs?search=alpha');
     expect(queries[0]?.search).toBe('alpha');
-    // Nothing bounds the search: core scans every row the other filters allow.
-    expect(Object.keys(queries[0] ?? {})).not.toContain('searchScanLimit');
+  });
+
+  it('treats a blank filter as absent rather than as an empty match', async () => {
+    // `?queue=&search=` is what an emptied form field posts. Forwarding `''` would ask core to match
+    // the empty string, which finds nothing — the opposite of what clearing a filter means.
+    const { pq, queries } = fakePq([]);
+    await read(pq, '/portqueue/api/jobs?queue=&search=&scheduleId=&statuses=');
+    expect(Object.keys(queries[0] ?? {}).sort()).toEqual(['limit', 'offset']);
   });
 });

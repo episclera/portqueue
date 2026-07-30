@@ -1,7 +1,13 @@
 import { BackoffStrategy, RetentionMode } from './enums';
 import type { JobOptions } from './job-options';
 import type { RetentionOptions } from './common';
+import type { JobStatus } from '../jobs/job-state.enum';
 import { wholeSeconds, wholeSecondsToMs } from '../util/seconds';
+import {
+  DEFAULT_PRIORITY,
+  DEFAULT_RETRY_DELAY_SECONDS,
+  DEFAULT_RETRY_MAX_ATTEMPTS,
+} from '../constants';
 
 /**
  * The fully-resolved per-job settings frozen onto a `job` row. Instants (`startAfter`, `expireAt`)
@@ -20,6 +26,8 @@ export interface ResolvedJobOptions {
   retryJitter: boolean;
   retentionMode: RetentionMode;
   retentionTtlSeconds: number | null;
+  /** The finished statuses retention may delete this job in, or null for every finished status. */
+  retentionStatuses: JobStatus[] | null;
   idempotencyKey: string | null;
   singletonKey: string | null;
 }
@@ -48,17 +56,19 @@ export class OptionResolver {
         : null;
 
     const backoff = merged.retry?.backoff;
+    // Retention is chosen whole, never merged field by field: a per-job policy replaces the
+    // queue's rather than inheriting half of it.
     const retention = merged.retention ?? queueRetention;
 
     return {
-      priority: merged.priority ?? 0,
+      priority: merged.priority ?? DEFAULT_PRIORITY,
       startAfter,
       expireAt,
-      retryMaxAttempts: merged.retry?.maxAttempts ?? 1,
+      retryMaxAttempts: merged.retry?.maxAttempts ?? DEFAULT_RETRY_MAX_ATTEMPTS,
       retryDelaySeconds:
         merged.retry?.delaySeconds != null
           ? wholeSeconds(merged.retry.delaySeconds, 'retry.delaySeconds')
-          : 0,
+          : DEFAULT_RETRY_DELAY_SECONDS,
       retryBackoff: backoff?.strategy ?? BackoffStrategy.FIXED,
       retryBackoffFactor: backoff?.factor ?? null,
       retryMaxDelaySeconds:
@@ -71,6 +81,9 @@ export class OptionResolver {
         retention?.ttlSeconds != null
           ? wholeSeconds(retention.ttlSeconds, 'retention.ttlSeconds')
           : null,
+      // Null, not a defaulted list: "the caller didn't scope this" is a distinct state from "the
+      // caller asked for exactly these", and the column stores null for the common case.
+      retentionStatuses: retention?.statuses?.length ? [...retention.statuses] : null,
       idempotencyKey: merged.idempotencyKey ?? null,
       singletonKey: merged.singletonKey ?? null,
     };

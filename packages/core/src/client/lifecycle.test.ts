@@ -2,8 +2,8 @@ import { PortQueue } from '../port-queue';
 import { createDriver, TEST_ENGINES } from '../test-utils/create-test-queue';
 import { NoopLogger } from '../logging/console-logger';
 import { FakeClock } from '../util/clock';
-import type { Driver } from '../drivers/driver.interface';
-import type { JobRecord } from '../jobs/job-record';
+import { ShutdownTimeoutError } from '../errors/errors';
+import type { Driver, JobRef } from '../drivers/driver.interface';
 
 /** A promise plus the function that settles it, so a test can hold a driver call open. */
 function gate(): { wait: Promise<void>; open: () => void } {
@@ -28,8 +28,9 @@ describe.each(TEST_ENGINES)('client shutdown (%s)', (engine) => {
     const expireDueJobs = driver.expireDueJobs.bind(driver);
     driver.expireDueJobs = async (options: {
       queueName?: string;
+      limit: number;
       now: number;
-    }): Promise<JobRecord[]> => {
+    }): Promise<JobRef[]> => {
       await held.wait;
       if (disconnected) queriedAfterDisconnect = true;
       return expireDueJobs(options);
@@ -52,27 +53,39 @@ describe.each(TEST_ENGINES)('client shutdown (%s)', (engine) => {
     expect(queriedAfterDisconnect).toBe(false);
   });
 
-  it('gives up on background work that outlasts the shutdown timeout', async () => {
+  it('gives up on background work that outlasts the shutdown timeout, and says so', async () => {
     const driver = createDriver(engine);
     const held = gate();
     const expireDueJobs = driver.expireDueJobs.bind(driver);
     driver.expireDueJobs = async (options: {
       queueName?: string;
+      limit: number;
       now: number;
-    }): Promise<JobRecord[]> => {
+    }): Promise<JobRef[]> => {
       await held.wait;
       return expireDueJobs(options);
     };
 
     const pq = newClient(driver);
     await pq.init();
-    await pq.shutdown({ graceful: false, timeoutSeconds: 0.025 });
+    // The shutdown still completes — the driver is disconnected and the client is stopped — but it
+    // reports that it abandoned work rather than letting a half-finished stop look clean.
+    await expect(pq.shutdown({ graceful: false, timeoutSeconds: 0.025 })).rejects.toThrow(
+      ShutdownTimeoutError,
+    );
     expect(pq.isRunning).toBe(false);
 
     // Release the parked call so it doesn't outlive the test; it fails harmlessly on the
     // disconnected driver and the tick swallows it.
     held.open();
     await flush();
+  });
+
+  it('resolves quietly when everything settles inside the timeout', async () => {
+    const pq = newClient(createDriver(engine));
+    await pq.init();
+    await expect(pq.shutdown()).resolves.toBeUndefined();
+    expect(pq.isRunning).toBe(false);
   });
 });
 

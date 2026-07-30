@@ -25,8 +25,8 @@ on message strings.
 import { PortQueueError, PortQueueErrorCode } from '@portqueue/core';
 
 try {
-  const emailsQueue = pq.createQueue({ name: 'emails' });
-  await emailsQueue.addJob({ data });
+  pq.createQueue({ name: 'emails' });
+  await pq.addJob({ queue: 'emails', data });
 } catch (err) {
   if (err instanceof PortQueueError && err.code === PortQueueErrorCode.QUEUE_PAUSED) {
     // handle the specific case
@@ -38,50 +38,48 @@ try {
 
 | Code | Error class | What it means & the fix |
 |---|---|---|
-| `NOT_STARTED` | `NotStartedError` | You called a method before `await pq.init()`. Await `init()` first. |
-| `ALREADY_STARTED` | — | `init()` called twice with intervening state change. `init()` is idempotent; call it once. |
-| `ALREADY_STOPPED` | — | Operation after `shutdown()`. Create a new client or don't use it post-shutdown. |
+| `NOT_STARTED` | `NotStartedError` | You called a method before `await pq.init()`. The message names the method. Await `init()` first. |
 | `INVALID_OPTIONS` | `InvalidOptionsError` | An options object failed validation (e.g. both `schedule.cron` and `schedule.startEverySeconds`, a one-off delay combined with a recurring mode, or a duration that isn't a non-negative number of seconds). Read the message; it names the offending field. |
 | `UNSUPPORTED_CAPABILITY` | `UnsupportedCapabilityError` | The driver's engine can't do what you asked. Use a driver that supports it or the documented fallback. |
-| `IDEMPOTENCY_CONFLICT` | — | An `idempotencyKey` matched an existing job. Usually expected — inspect `result.deduplicated` instead of catching. |
-| `SINGLETON_CONFLICT` | — | A `singletonKey` already has an active job. Expected under contention; retry later or rely on dedup. |
 | `SCHEMA_VERSION_MISMATCH` | `SchemaVersionMismatchError` | The DB schema version differs from the library's. Run `portqueue migrate` (see [Going to Production](./production.md)). |
 | `MIGRATION_FAILED` | `MigrationFailedError` | A migration step errored. Check DB permissions and the underlying error; re-run migrate. |
-| `MIGRATION_CHECKSUM_MISMATCH` | — | A previously applied migration's checksum changed — a tampered/edited migration. Do not hand-edit applied migrations. |
 | `DRIVER_CONNECTION_ERROR` | `DriverConnectionError` | Couldn't connect. Check connection string, network, credentials, and that the DB client peer dep is installed. |
 | `DRIVER_QUERY_ERROR` | `DriverQueryError` | A query failed at the engine. Inspect the wrapped cause; often a permissions or schema issue. |
-| `JOB_NOT_FOUND` | `JobNotFoundError` | No job for the given `jobId` (removed by retention, or wrong id). |
-| `QUEUE_NOT_FOUND` | — | Referenced a queue that was never ensured. Call `createQueue` first. |
-| `QUEUE_PAUSED` | `QueuePausedError` | `add` refused because the queue is paused with `PauseMode.ALL`. Resume it, or expect this during a drain. |
-| `SHUTDOWN_TIMEOUT` | `ShutdownTimeoutError` | Graceful shutdown didn't drain within `timeoutSeconds`. Raise the timeout or make long handlers honor `job.signal`. |
+| `QUEUE_NOT_FOUND` | `QueueNotFoundError` | An **admin** client (the dashboard or CLI) was asked to produce onto a queue with no row. Declare it in your application with `pq.createQueue({ name })` first — an admin tool never creates queues. Also raised by `pauseQueue`/`resumeQueue` for a name nothing has ever used. |
+| `QUEUE_PAUSED` | `QueuePausedError` | An add was refused because the queue is paused with `PauseMode.ALL`. Resume it, or expect this during a drain. |
+| `SHUTDOWN_TIMEOUT` | `ShutdownTimeoutError` | `shutdown()` gave up on in-flight work after `timeoutSeconds`. The client is stopped and the driver disconnected either way; raise the timeout or make long handlers honour `job.signal`. |
 | `MISSING_PEER_DEPENDENCY` | `MissingPeerDependencyError` | The driver's client (e.g. `pg`, `better-sqlite3`) isn't installed. Install the peer shown in the message. |
 
-:::warning No dedicated class for some codes
-Rows with `—` in the **Error class** column have **no dedicated subclass**. They are thrown as
-the base `PortQueueError` (or a related class) carrying that `code` — there is no
-`AlreadyStartedError`, `IdempotencyConflictError`, `QueueNotFoundError`, etc. Always branch on
-`err.code`, never `instanceof` a code-specific class you'd expect to exist. (Every error is
-still `instanceof PortQueueError`.)
+:::tip Every code has a class
+Each code above is carried by the class beside it, and every one of them is `instanceof
+PortQueueError`. There are no codes without a class: a code nothing can throw would be a promise the
+library doesn't keep, so the never-thrown placeholders that used to sit here (`ALREADY_STARTED`,
+`ALREADY_STOPPED`, `IDEMPOTENCY_CONFLICT`, `SINGLETON_CONFLICT`, `MIGRATION_CHECKSUM_MISMATCH`) are
+gone. `init()` is idempotent, dedup returns `result.deduplicated` rather than raising, and a migration
+is identified by its version alone.
+
+There is no `JOB_NOT_FOUND` for the same reason: every by-id operation already says "not found" in its
+return type — `getJob` gives `null`, `removeJob`/`cancelJob` give `false`, `retryJob` gives `null` —
+which is also what lets a bulk action skip a stale id instead of failing the whole batch.
 :::
 
 ### Exported error classes
 
 Every class below is importable from `@portqueue/core` and extends `PortQueueError`. Each
 instance carries `.code` (a `PortQueueErrorCode` string enum value) and `.context` (an object
-with the offending fields). Because some codes have no dedicated class (see the note above),
-prefer branching on `err.code`.
+with the offending fields). Branching on `err.code` is still the most robust check.
 
 | Class | `.code` | Meaning | Typical fix |
 |---|---|---|---|
-| `PortQueueError` | *(any)* | Base class — also thrown directly for codes without a dedicated subclass. | Branch on `err.code`. |
+| `PortQueueError` | *(any)* | Base class for every error the library throws. | Branch on `err.code`. |
 | `NotStartedError` | `NOT_STARTED` | A method was called before `await pq.init()`. | Await `init()` first. |
+| `QueueNotFoundError` | `QUEUE_NOT_FOUND` | A headless (dashboard/CLI) client named a queue with no row, or a pause targeted a name nothing has used. | Declare the queue in your application first. |
 | `InvalidOptionsError` | `INVALID_OPTIONS` | An options object failed validation. | Read the message; it names the offending field. |
 | `UnsupportedCapabilityError` | `UNSUPPORTED_CAPABILITY` | The driver's engine can't do what was asked. | Use a capable driver or the documented fallback. |
 | `SchemaVersionMismatchError` | `SCHEMA_VERSION_MISMATCH` | DB schema version differs from the library's. | Run `portqueue migrate`. |
 | `MigrationFailedError` | `MIGRATION_FAILED` | A migration step errored. | Check DB permissions and the cause; re-run migrate. |
 | `DriverConnectionError` | `DRIVER_CONNECTION_ERROR` | Couldn't connect to the DB. | Check connection string, network, credentials, peer dep. |
 | `DriverQueryError` | `DRIVER_QUERY_ERROR` | A query failed at the engine. | Inspect the wrapped cause (permissions/schema). |
-| `JobNotFoundError` | `JOB_NOT_FOUND` | No job for the given `jobId`. | Removed by retention or wrong id — re-check the id. |
 | `QueuePausedError` | `QUEUE_PAUSED` | `add` refused because the queue is paused with `PauseMode.ALL`. | Resume the queue, or expect this during a drain. |
 | `QueueInUseError` | `QUEUE_IN_USE` | `removeQueue` refused because the queue still has jobs/workers. | Drain and stop workers before removing. |
 | `InstanceActiveError` | `INSTANCE_ACTIVE` | `removeInstance` refused because the instance is still live. | Pause/stop the instance first, then remove. |

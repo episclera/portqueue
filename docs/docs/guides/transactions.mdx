@@ -37,7 +37,7 @@ all. If you roll back, the job insert rolls back with your business row.
 ```ts
 import { fromKnex } from '@portqueue/core/tx';
 
-const emailsQueue = pq.createQueue<{ to: string }>({ name: 'emails' });
+pq.createQueue<{ to: string }>({ name: 'emails' });
 
 // 1. Open your own transaction.
 await knex.transaction(async (trx) => {
@@ -45,7 +45,8 @@ await knex.transaction(async (trx) => {
   const [order] = await trx('orders').insert({ customer: 'a@b.com', total: 4200 }).returning('*');
 
   // 3. Enqueue on the SAME transaction — wrap it in a PortQueue adapter.
-  await emailsQueue.addJob({
+  await pq.addJob({
+    queue: 'emails',
     data: { to: order.customer },
     tx: fromKnex(trx),
   });

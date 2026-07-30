@@ -79,10 +79,10 @@ an `instance.instanceKey`; passing a pattern from an anonymous process throws.
 
 ```ts
 // Runs only on the 8 GB servers.
-await queue.addJob({ data, preferredInstanceKeyPattern: 'ram-8gb' });
+await pq.addJob({ queue: 'reports', data, preferredInstanceKeyPattern: 'ram-8gb' });
 
 // Runs only on 8 GB servers that also have 4 cores — '.*' skips whatever sits between the tags.
-await queue.addJob({ data, preferredInstanceKeyPattern: 'ram-8gb.*cpu-4cor' });
+await pq.addJob({ queue: 'reports', data, preferredInstanceKeyPattern: 'ram-8gb.*cpu-4cor' });
 ```
 
 The pattern is matched **unanchored** — a plain "the key contains this" test — and is

@@ -32,10 +32,26 @@ npm run lint       # ESLint + `tsc --noEmit` in one step
 Commits follow **[Conventional Commits](https://www.conventionalcommits.org)** (enforced
 by commitlint) — the changelog is derived from them.
 
-Tests use **PGLite + SQLite only**, so they run anywhere with no external DB server. If
-you need a real Postgres, MySQL or Oracle (e.g. for manual driver testing), start one in
-Docker. Each has an `npm run` script and an equivalent shell script under `scripts/dev/db/`
-— use whichever you prefer:
+**Automated tests run on PGLite + SQLite only**, so they need no external DB server. Both are
+in-process, so the whole suite — the conformance kit included — runs anywhere; and because PGLite *is*
+Postgres compiled to WASM, the Postgres SQL is exercised by inheritance too.
+
+**MySQL and Oracle are verified by hand.** Their SQL is authored in their own dialects and no
+in-process engine can exercise it, so a change to either driver isn't finished until you've run the
+[conformance kit](./advanced.md#validate-with-the-conformance-kit) against a real server:
+
+```ts
+import { runConformance } from '@portqueue/core/conformance';
+import { MysqlDriver } from '@portqueue/core/drivers/mysql';
+
+runConformance({
+  name: 'mysql',
+  createDriver: () => new MysqlDriver({ connectionString: process.env.DATABASE_URL }),
+});
+```
+
+Start one in Docker. Each engine has an `npm run` script and an equivalent shell script under
+`scripts/dev/db/` — use whichever you prefer:
 
 ```bash
 npm run db:pg:up          # or: ./scripts/dev/db/start-postgres.sh   (stop: db:pg:down)
@@ -67,7 +83,8 @@ Packages:
 - Open issues and PRs on [GitHub](https://github.com/episclera/portqueue). Include a
   minimal repro for bugs.
 - New behavior needs tests; a driver contribution should pass the
-  [conformance kit](./advanced.md#validate-with-the-conformance-kit).
+  [conformance kit](./advanced.md#validate-with-the-conformance-kit) — against a real server for
+  MySQL and Oracle, and say so in the PR.
 - Be kind — a standard code of conduct applies.
 
 Meet the people behind it on the [Team](./team.mdx) page.

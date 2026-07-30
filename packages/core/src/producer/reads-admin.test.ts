@@ -13,10 +13,10 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('reports client-wide stats and queue listing', async () => {
-    const a = h.pq.createQueue({ name: 'a' });
-    const b = h.pq.createQueue({ name: 'b' });
-    await a.addJob({ data: {} });
-    await b.addJob({ data: {} });
+    h.pq.createQueue({ name: 'a' });
+    h.pq.createQueue({ name: 'b' });
+    await h.pq.addJob({ queue: 'a', data: {} });
+    await h.pq.addJob({ queue: 'b', data: {} });
     const queues = await h.pq.getQueues();
     expect(queues.items.map((q) => q.name).sort()).toEqual(['a', 'b']);
     const stats = await h.pq.getQueuesStats();
@@ -29,7 +29,7 @@ describe('client reads & admin (sqlite)', () => {
 
   it('reads one queue and one instance by key, and null for an unknown one', async () => {
     h.pq.createQueue({ name: 'solo' });
-    await h.pq.createQueue({ name: 'solo' }).addJob({ data: {} });
+    await h.pq.addJob({ queue: 'solo', data: {} });
 
     const queue = await h.pq.getQueue({ name: 'solo' });
     expect(queue).toMatchObject({ name: 'solo', inUse: true });
@@ -43,8 +43,8 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('pages jobs by offset and reports the filter total on every page', async () => {
-    const q = h.pq.createQueue({ name: 'offset-paged' });
-    for (let i = 0; i < 5; i += 1) await q.addJob({ data: { i } });
+    h.pq.createQueue({ name: 'offset-paged' });
+    for (let i = 0; i < 5; i += 1) await h.pq.addJob({ queue: 'offset-paged', data: { i } });
 
     const page1 = await h.pq.getJobs({ queue: 'offset-paged', limit: 2, offset: 0 });
     const page3 = await h.pq.getJobs({ queue: 'offset-paged', limit: 2, offset: 4 });
@@ -62,9 +62,10 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('counts only the filtered rows in total', async () => {
-    const q = h.pq.createQueue({ name: 'counted' });
-    for (let i = 0; i < 3; i += 1) await q.addJob({ data: { i } });
-    await h.pq.createQueue({ name: 'other' }).addJob({ data: {} });
+    h.pq.createQueue({ name: 'counted' });
+    for (let i = 0; i < 3; i += 1) await h.pq.addJob({ queue: 'counted', data: { i } });
+    h.pq.createQueue({ name: 'other' });
+    await h.pq.addJob({ queue: 'other', data: {} });
 
     const scoped = await h.pq.getJobs({ queue: 'counted', limit: 1 });
     expect(scoped.total).toBe(3);
@@ -81,31 +82,30 @@ describe('client reads & admin (sqlite)', () => {
   it('pauses and resumes via the client convenience methods', async () => {
     h.pq.createQueue({ name: 'cq' });
     await h.pq.pauseQueue({ queue: 'cq', mode: PauseMode.ALL });
-    await expect(h.pq.createQueue({ name: 'cq' }).addJob({ data: {} })).rejects.toThrow(
-      /refusing new jobs/,
-    );
+    await expect(h.pq.addJob({ queue: 'cq', data: {} })).rejects.toThrow(/refusing new jobs/);
     await h.pq.resumeQueue({ queue: 'cq' });
-    const res = await h.pq.createQueue({ name: 'cq' }).addJob({ data: {} });
+    const res = await h.pq.addJob({ queue: 'cq', data: {} });
     expect(res.jobId).toBeTruthy();
   });
 
   it('re-runs a finished single-function job by re-arming its own row', async () => {
-    const q = h.pq.createQueue({ name: 're' });
+    h.pq.createQueue({ name: 're' });
     h.pq.createWorker({
       queue: 're',
       limiter: { pollIntervalSeconds: 0.02 },
       handler: async () => 'ok',
     });
-    const res = await q.addJob({ data: { v: 1 } });
+    const res = await h.pq.addJob({ queue: 're', data: { v: 1 } });
     await waitFor(
-      async () => (await q.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
+      async () => (await h.pq.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
     );
-    const requeued = await q.retryJob({ jobId: res.jobId! });
-    expect(requeued.jobId).toBe(res.jobId); // same row, re-armed (not a fresh job)
-    expect(requeued.status).toBe(JobStatus.PENDING);
+    const requeued = await h.pq.retryJob({ jobId: res.jobId! });
+    expect(requeued!.jobId).toBe(res.jobId); // same row, re-armed (not a fresh job)
+    expect(requeued!.status).toBe(JobStatus.PENDING);
+    expect(requeued!.queue).toBe('re');
     // and it runs again to completion
     await waitFor(
-      async () => (await q.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
+      async () => (await h.pq.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
     );
   });
 
@@ -114,18 +114,20 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('bulk-removes jobs by id and leaves the counts empty', async () => {
-    const q = h.pq.createQueue({ name: 'bulk' });
+    h.pq.createQueue({ name: 'bulk' });
     const ids: string[] = [];
-    for (let i = 0; i < 3; i += 1) ids.push((await q.addJob({ data: { i } })).jobId!);
-    const removed = await q.removeJobs({ jobIds: ids });
+    for (let i = 0; i < 3; i += 1) {
+      ids.push((await h.pq.addJob({ queue: 'bulk', data: { i } })).jobId!);
+    }
+    const removed = await h.pq.removeJobs({ jobIds: ids });
     expect(removed).toBe(3);
-    const stats = await q.getQueueStats();
+    const stats = await h.pq.getQueueStats({ queue: 'bulk' });
     expect(stats.counts.PENDING).toBe(0);
   });
 
   it('never removes an ACTIVE job — it must be cancelled first', async () => {
-    const q = h.pq.createQueue({ name: 'rm-active' });
-    const jobId = (await q.addJob({ data: {} })).jobId!;
+    h.pq.createQueue({ name: 'rm-active' });
+    const jobId = (await h.pq.addJob({ queue: 'rm-active', data: {} })).jobId!;
     // Claim it so the row is ACTIVE, exactly as a worker would hold it.
     await h.driver.claimJobs({
       queueName: 'rm-active',
@@ -133,16 +135,20 @@ describe('client reads & admin (sqlite)', () => {
       lockDurationSeconds: 30_000,
       now: h.clock.now(),
     });
-    expect((await q.getJob({ jobId }))!.status).toBe(JobStatus.ACTIVE);
+    expect((await h.pq.getJob({ jobId }))!.status).toBe(JobStatus.ACTIVE);
 
     // removeJob skips the running row and reports it didn't act.
-    expect(await q.removeJob({ jobId })).toBe(false);
+    expect(await h.pq.removeJob({ jobId })).toBe(false);
     // removeJobs by id leaves the active job out of the deleted count.
-    expect(await q.removeJobs({ jobIds: [jobId] })).toBe(0);
+    expect(await h.pq.removeJobs({ jobIds: [jobId] })).toBe(0);
     // removeJobs by ACTIVE status is rejected outright.
-    await expect(q.removeJobs({ statuses: [JobStatus.ACTIVE] })).rejects.toThrow(/ACTIVE/);
+    await expect(
+      h.pq.removeJobs({ queue: 'rm-active', statuses: [JobStatus.ACTIVE] }),
+    ).rejects.toThrow(/ACTIVE/);
+    // retryJob refuses it too: re-arming a running job would let a second worker claim it.
+    expect(await h.pq.retryJob({ jobId })).toBeNull();
     // The job is still there, untouched.
-    expect((await q.getJob({ jobId }))!.status).toBe(JobStatus.ACTIVE);
+    expect((await h.pq.getJob({ jobId }))!.status).toBe(JobStatus.ACTIVE);
   });
 
   it('removes only a long-inactive instance', async () => {

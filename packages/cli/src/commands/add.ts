@@ -56,7 +56,8 @@ export const addCommand: Command = {
     else if (every !== undefined) schedule.startEverySeconds = every;
     if (Object.keys(schedule).length > 0) options.schedule = schedule;
 
-    const result = await pq.createQueue({ name: queue }).addJob(options as never);
+    // Addressed by name: this admin process declares nothing, so there is no handle to build.
+    const result = await pq.addJob({ queue, ...options } as never);
     if (flagBool(flags, 'json')) return printJson(result);
     if (result.scheduleId) {
       success(

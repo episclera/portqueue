@@ -29,8 +29,10 @@ export const dashboardCommand: Command = {
 
     const basePath = flagString(flags, 'base-path');
     const { createDashboard } = await import('@portqueue/dashboard');
+    // The dashboard builds and owns its own headless client from the driver — it does not ride on
+    // the CLI's. Handing it `pq._cli.driver` is the whole of the wiring.
     const dashboard = createDashboard({
-      portQueue: pq,
+      driver: pq._cli.driver,
       ...(basePath ? { basePath } : {}),
     });
 

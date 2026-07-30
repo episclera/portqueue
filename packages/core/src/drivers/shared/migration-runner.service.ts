@@ -3,16 +3,20 @@ import { PortQueueEvent } from '../../events/event-name.enum';
 import { MigrationFailedError, SchemaVersionMismatchError } from '../../errors/errors';
 import { DriverCapability } from '../driver-capabilities';
 import { latestVersion } from './migration';
+import { MIGRATION_WAIT_POLL_SECONDS, MIGRATION_WAIT_TIMEOUT_SECONDS } from '../../constants';
+import { secondsToMs } from '../../util/seconds';
 import type { Driver } from '../driver.interface';
 import type { DriverContext } from '../driver-context';
 import type { Logger } from '../../logging/logger.interface';
 import type { EventBusService } from '../../events/event-bus.service';
+import type { Clock } from '../../util/clock';
 
 /**
- * Applies a driver's ordered, checksum-guarded migrations. The steps come from the driver itself
+ * Applies a driver's ordered migrations. The steps come from the driver itself
  * (`driver.migrations`) — each engine authors its own DDL alongside its driver; this is the single
- * shared mechanism that runs them. Race-safe across instances via an advisory lock where
- * available. Supports AUTO / MANUAL / VALIDATE_ONLY.
+ * shared mechanism that runs them. A migration is identified by its version and nothing else.
+ * Race-safe across instances via an advisory lock where available. Supports AUTO / MANUAL /
+ * VALIDATE_ONLY.
  */
 export class MigrationRunner {
   constructor(
@@ -20,6 +24,7 @@ export class MigrationRunner {
     private readonly context: DriverContext,
     private readonly logger: Logger,
     private readonly events: EventBusService,
+    private readonly clock: Clock,
   ) {}
 
   /** The schema version this driver's migration set ships (its latest step). */
@@ -86,13 +91,26 @@ export class MigrationRunner {
     }
   }
 
-  private async waitForVersion(target: number, timeoutSeconds = 30): Promise<void> {
-    const timeoutMs = timeoutSeconds * 1000;
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
+  /**
+   * Poll until another instance's migration lands. Timed against the injected clock, like every
+   * other deadline in the codebase, so a test with a fake clock controls this wait rather than
+   * spending real seconds inside it.
+   */
+  private async waitForVersion(
+    target: number,
+    timeoutSeconds = MIGRATION_WAIT_TIMEOUT_SECONDS,
+  ): Promise<void> {
+    const timeoutMs = secondsToMs(timeoutSeconds, 'migration wait timeout');
+    const pollMs = secondsToMs(MIGRATION_WAIT_POLL_SECONDS, 'migration wait poll');
+    const deadline = this.clock.now() + timeoutMs;
+    for (;;) {
       const v = await this.driver.getSchemaVersion();
       if ((v ?? 0) >= target) return;
-      await new Promise((r) => setTimeout(r, 200));
+      if (this.clock.now() >= deadline) break;
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, pollMs);
+        timer.unref?.();
+      });
     }
     throw new MigrationFailedError(
       'Timed out waiting for another instance to complete migrations.',

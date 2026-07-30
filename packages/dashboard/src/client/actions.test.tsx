@@ -18,7 +18,6 @@ const QUEUES = page([
     name: 'emails',
     processingPaused: false,
     acceptingPaused: false,
-    inUse: true,
     counts: { PENDING: 1, ACTIVE: 0, COMPLETED: 3, FAILED: 1, RETRY: 0 },
   },
 ]);

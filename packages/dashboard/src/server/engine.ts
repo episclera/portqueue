@@ -1,7 +1,9 @@
 /**
  * The framework-agnostic serve core. Holds the router, config and path matching, and exposes
- * `serve`/`serveSafely` that every adapter drives with a raw Node `(req, res)` pair. Uses the
- * provided PortQueue instance only; never opens a DB connection.
+ * `serve`/`serveSafely` that every adapter drives with a raw Node `(req, res)` pair.
+ *
+ * It owns the dashboard's own headless client (see `client.ts`), built from the driver it was given.
+ * Nothing connects at mount: the first API request opens the connection, and `close()` releases it.
  *
  * The dashboard has no authentication of its own — see `api/routes.ts` and the dashboard docs.
  */
@@ -9,6 +11,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createRouter, type HandlerInput } from './api/routes';
 import { hasBuiltClient, serveAsset } from './assets';
 import { normalizeBase, readBody, toHeaders } from './request';
+import { createDashboardClient, type DashboardClient } from './client';
 import type { DashboardOptions } from './types';
 import type { DashboardConfigDto } from '../shared/dto';
 
@@ -32,13 +35,22 @@ export interface DashboardEngine {
   serve(req: IncomingMessage, res: ServerResponse): Promise<void>;
   /** `serve` wrapped so any error becomes a 500 instead of an unhandled rejection. */
   serveSafely(req: IncomingMessage, res: ServerResponse): void;
+  /** Release the dashboard's own client. */
+  close(): Promise<void>;
 }
 
-export function createEngine(options: DashboardOptions): DashboardEngine {
+export function createEngine(
+  options: DashboardOptions & { client?: DashboardClient },
+): DashboardEngine {
   const basePath = normalizeBase(options.basePath ?? '/portqueue');
   const config: DashboardConfigDto = { basePath };
-  const router = createRouter({ portQueue: options.portQueue, basePath });
   const logger = options.logger ?? console;
+  // The client is injectable so a test can drive the router without a driver; production always
+  // builds it from the driver the host supplied.
+  const client =
+    options.client ??
+    createDashboardClient({ driver: options.driver, ...(options.logger ? { logger } : {}) });
+  const router = createRouter({ client, basePath });
 
   // A missing bundle makes every navigation serve the "not built" shell with a 200, which reads
   // as a working deploy. Say so once, at mount time, rather than letting it pass silently.
@@ -113,5 +125,5 @@ export function createEngine(options: DashboardOptions): DashboardEngine {
     });
   }
 
-  return { basePath, owns, serve, serveSafely };
+  return { basePath, owns, serve, serveSafely, close: () => client.close() };
 }

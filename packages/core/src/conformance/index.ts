@@ -6,11 +6,17 @@ import type { Driver } from '../drivers/driver.interface';
 import type { NewJobRecord } from '../jobs/job-record';
 
 /**
- * Driver conformance kit. A parameterized suite that takes a `Driver`
- * factory and asserts the contract (claim atomicity, ordering, visibility timeout, insert
- * semantics, tool-managed idempotency, transactional enqueue, schedule upsert idempotency,
- * instance-affinity claiming, and instance liveness). Shipped from `@portqueue/core/conformance`
- * so custom-driver authors validate the same way.
+ * Driver conformance kit. A parameterized suite that takes a `Driver` factory and asserts the
+ * contract every driver has to keep: claim atomicity and ordering, the visibility timeout, insert
+ * semantics, tool-managed idempotency and singleton dedup, transactional enqueue, schedule dedup,
+ * instance-affinity claiming, instance liveness — and the guards core relies on that nothing used to
+ * check: `requeueJob`/`removeJob`/`cancelJob` refusing an ACTIVE row, `expireDueJobs`,
+ * `deleteFinishedJobs` (including per-row retention statuses), `advanceSchedule`'s guarded claim, the
+ * `search` filter, and agreement between every list page and its `count*`.
+ *
+ * Shipped from `@portqueue/core/conformance` so custom-driver authors validate the same way. PGLite
+ * and SQLite run it in CI; MySQL and Oracle are validated with it by hand against a real server (see
+ * the testing note in CLAUDE.md).
  */
 export interface ConformanceOptions {
   name: string;
@@ -21,7 +27,6 @@ const QUEUE = 'conformance';
 
 async function bootstrap(driver: Driver): Promise<{ queueName: string; context: DriverContext }> {
   await driver.connect();
-  await driver.ensureBaseObjects();
   for (const migration of driver.migrations) await driver.applyMigration({ migration });
   const queue = await driver.ensureQueue({ name: QUEUE, now: Date.now() });
   return { queueName: queue.name, context: driver.context };
@@ -48,6 +53,7 @@ function newJob(
     retryJitter: false,
     retentionMode: RetentionMode.KEEP_FOREVER,
     retentionTtlSeconds: null,
+    retentionStatuses: null,
     idempotencyKey: null,
     scheduleId: null,
     singletonKey: null,
@@ -142,8 +148,8 @@ export function runConformance(options: ConformanceOptions): void {
         lockDurationSeconds: 1,
         now,
       });
-      const reclaimed = await driver.reclaimStalledJobs({ now: now + 5000 });
-      expect(reclaimed.map((j) => j.id)).toContain(inserted.id);
+      const reclaimed = await driver.reclaimStalledJobs({ now: now + 5000, limit: 100 });
+      expect(reclaimed.map((j) => j.jobId)).toContain(inserted.id);
       const record = await driver.getJob({ jobId: inserted.id });
       expect(record?.status).toBe(JobStatus.PENDING);
     });
@@ -314,6 +320,396 @@ export function runConformance(options: ConformanceOptions): void {
       });
       expect(claim).toHaveLength(1);
       expect((claim[0]!.data as { mine?: boolean }).mine).toBe(true);
+    });
+
+    // --- Batch inserts ---
+
+    it('inserts a batch in one call, preserving order and deduplicating within it', async () => {
+      const inserted = await driver.insertJobs({
+        jobs: [
+          newJob(queueName, now, { data: { n: 1 }, idempotencyKey: 'b1' }),
+          newJob(queueName, now, { data: { n: 2 } }),
+          newJob(queueName, now, { data: { n: 3 } }),
+        ],
+      });
+      expect(inserted).toHaveLength(3);
+      expect(new Set(inserted.map((r) => r.id)).size).toBe(3);
+      expect(inserted.every((r) => r.deduplicated === false)).toBe(true);
+
+      // The same key again dedups against the row the batch just wrote.
+      const again = await driver.insertJobs({
+        jobs: [newJob(queueName, now, { idempotencyKey: 'b1' })],
+      });
+      expect(again[0]!.deduplicated).toBe(true);
+      expect(again[0]!.id).toBe(inserted[0]!.id);
+    });
+
+    it('deduplicates a singleton key only while a job holds the slot', async () => {
+      const first = await driver.insertJob({
+        job: newJob(queueName, now, { singletonKey: 's1' }),
+      });
+      const blocked = await driver.insertJob({
+        job: newJob(queueName, now, { singletonKey: 's1' }),
+      });
+      expect(blocked.deduplicated).toBe(true);
+      expect(blocked.id).toBe(first.id);
+      expect(blocked.deduplicationReason).toBe('SINGLETON');
+
+      // Once it settles, the slot is free again.
+      await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 30, now: now + 1 });
+      await driver.completeJob({ jobId: first.id, now: now + 2 });
+      const next = await driver.insertJob({
+        job: newJob(queueName, now, { singletonKey: 's1' }),
+      });
+      expect(next.deduplicated).toBe(false);
+    });
+
+    // --- Guards core depends on ---
+
+    it('refuses to requeue an ACTIVE job, and re-arms a settled one', async () => {
+      const active = await driver.insertJob({ job: newJob(queueName, now) });
+      await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 60, now: now + 1 });
+      // Re-arming a running job would clear its lock and let a second worker claim it.
+      expect(await driver.requeueJob({ jobId: active.id, now: now + 2 })).toBe(null);
+      expect((await driver.getJob({ jobId: active.id }))?.status).toBe(JobStatus.ACTIVE);
+
+      await driver.failJob({ jobId: active.id, lastError: 'boom', now: now + 3 });
+      const requeued = await driver.requeueJob({ jobId: active.id, now: now + 4 });
+      expect(requeued).toEqual(
+        expect.objectContaining({ jobId: active.id, queueName, status: JobStatus.PENDING }),
+      );
+      const row = await driver.getJob({ jobId: active.id });
+      expect(row?.status).toBe(JobStatus.PENDING);
+      expect(row?.failureMessage).toBe(null);
+      expect(row?.retryAttempt).toBe(0);
+
+      // An unknown id is not an error — a stale id must never fail a batch.
+      expect(await driver.requeueJob({ jobId: 'missing', now: now + 5 })).toBe(null);
+    });
+
+    it('refuses to remove an ACTIVE job and returns the queue of one it removed', async () => {
+      const job = await driver.insertJob({ job: newJob(queueName, now) });
+      await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 60, now: now + 1 });
+      expect(await driver.removeJob({ jobId: job.id })).toBe(null);
+      expect(await driver.getJob({ jobId: job.id })).not.toBe(null);
+
+      await driver.completeJob({ jobId: job.id, now: now + 2 });
+      expect(await driver.removeJob({ jobId: job.id })).toEqual({ jobId: job.id, queueName });
+      expect(await driver.getJob({ jobId: job.id })).toBe(null);
+    });
+
+    it('cancels only a pending or retrying job', async () => {
+      const pending = await driver.insertJob({ job: newJob(queueName, now) });
+      expect(await driver.cancelJob({ jobId: pending.id, now: now + 1 })).toEqual({
+        jobId: pending.id,
+        queueName,
+      });
+      expect((await driver.getJob({ jobId: pending.id }))?.status).toBe(JobStatus.CANCELLED);
+      // Already settled: nothing left to cancel.
+      expect(await driver.cancelJob({ jobId: pending.id, now: now + 2 })).toBe(null);
+
+      const active = await driver.insertJob({ job: newJob(queueName, now) });
+      await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 60, now: now + 1 });
+      expect(await driver.cancelJob({ jobId: active.id, now: now + 3 })).toBe(null);
+    });
+
+    it('applies batch job control in one call, skipping ids it refuses', async () => {
+      const settled = await driver.insertJob({ job: newJob(queueName, now, { data: { a: 1 } }) });
+      const active = await driver.insertJob({ job: newJob(queueName, now, { data: { a: 2 } }) });
+      await driver.claimJobs({ queueName, limit: 2, lockDurationSeconds: 60, now: now + 1 });
+      await driver.completeJob({ jobId: settled.id, now: now + 2 });
+
+      const requeued = await driver.requeueJobs({
+        jobIds: [settled.id, active.id, 'missing'],
+        now: now + 3,
+      });
+      expect(requeued.map((r) => r.jobId)).toEqual([settled.id]);
+
+      const removed = await driver.removeJobs({ jobIds: [settled.id, active.id, 'missing'] });
+      expect(removed.map((r) => r.jobId)).toEqual([settled.id]);
+    });
+
+    // --- Expiry ---
+
+    it('expires due-but-unstarted jobs and leaves running ones alone', async () => {
+      const expiring = await driver.insertJob({
+        job: newJob(queueName, now, { expireAt: now + 1000 }),
+      });
+      const claimed = await driver.insertJob({
+        job: newJob(queueName, now, { expireAt: now + 1000 }),
+      });
+      await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 60, now: now + 1 });
+
+      const expired = await driver.expireDueJobs({ now: now + 5000, limit: 100 });
+      const expiredIds = expired.map((j) => j.jobId);
+      // Exactly one of the two was still claimable; the other is ACTIVE and must survive.
+      expect(expiredIds).toHaveLength(1);
+      expect(expired[0]!.queueName).toBe(queueName);
+      const survivor = expiredIds.includes(expiring.id) ? claimed.id : expiring.id;
+      expect((await driver.getJob({ jobId: survivor }))?.status).toBe(JobStatus.ACTIVE);
+      expect((await driver.getJob({ jobId: expiredIds[0]! }))?.status).toBe(JobStatus.EXPIRED);
+    });
+
+    it('honours the limit on expiry and reclaim', async () => {
+      for (let i = 0; i < 5; i += 1) {
+        await driver.insertJob({ job: newJob(queueName, now, { expireAt: now + 1000 }) });
+      }
+      const first = await driver.expireDueJobs({ now: now + 5000, limit: 2 });
+      expect(first).toHaveLength(2);
+      const rest = await driver.expireDueJobs({ now: now + 5000, limit: 10 });
+      expect(rest).toHaveLength(3);
+    });
+
+    // --- Retention ---
+
+    it('deletes finished jobs whose TTL elapsed, and only those', async () => {
+      const kept = await driver.insertJob({
+        job: newJob(queueName, now, { retentionMode: RetentionMode.KEEP_FOREVER }),
+      });
+      const swept = await driver.insertJob({
+        job: newJob(queueName, now, {
+          retentionMode: RetentionMode.DELETE_AFTER,
+          retentionTtlSeconds: 10,
+        }),
+      });
+      const tooYoung = await driver.insertJob({
+        job: newJob(queueName, now, {
+          retentionMode: RetentionMode.DELETE_AFTER,
+          retentionTtlSeconds: 10_000,
+        }),
+      });
+      for (const id of [kept.id, swept.id, tooYoung.id]) {
+        await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 60, now: now + 1 });
+        await driver.completeJob({ jobId: id, now: now + 2 });
+      }
+      const removed = await driver.deleteFinishedJobs({ olderThan: now + 60_000, limit: 100 });
+      expect(removed).toBe(1);
+      expect(await driver.getJob({ jobId: swept.id })).toBe(null);
+      expect(await driver.getJob({ jobId: kept.id })).not.toBe(null);
+      expect(await driver.getJob({ jobId: tooYoung.id })).not.toBe(null);
+    });
+
+    it('scopes retention to the statuses the job itself named', async () => {
+      // Same TTL, same mode; one policy covers FAILED only, the other every finished status.
+      const scoped = await driver.insertJob({
+        job: newJob(queueName, now, {
+          retentionMode: RetentionMode.DELETE_AFTER,
+          retentionTtlSeconds: 10,
+          retentionStatuses: [JobStatus.FAILED],
+        }),
+      });
+      const unscoped = await driver.insertJob({
+        job: newJob(queueName, now, {
+          retentionMode: RetentionMode.DELETE_AFTER,
+          retentionTtlSeconds: 10,
+        }),
+      });
+      for (const id of [scoped.id, unscoped.id]) {
+        await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 60, now: now + 1 });
+        await driver.completeJob({ jobId: id, now: now + 2 });
+      }
+      const removed = await driver.deleteFinishedJobs({ olderThan: now + 60_000, limit: 100 });
+      expect(removed).toBe(1);
+      // The scoped job completed rather than failed, so its own policy leaves it in place.
+      expect(await driver.getJob({ jobId: scoped.id })).not.toBe(null);
+      expect(await driver.getJob({ jobId: unscoped.id })).toBe(null);
+    });
+
+    // --- Schedules ---
+
+    it('lets exactly one caller win a guarded schedule advance', async () => {
+      const schedule = await driver.insertSchedule({
+        schedule: {
+          queueName,
+          cron: null,
+          everySeconds: 60,
+          timezone: null,
+          data: {},
+          priority: null,
+          retryMaxAttempts: null,
+          retryDelaySeconds: null,
+          nextRunAt: now,
+          enabled: true,
+          startAt: null,
+          endAt: null,
+          idempotencyKey: null,
+          jobOptions: null,
+        },
+      });
+      const advance = (): Promise<boolean> =>
+        driver.advanceSchedule({
+          scheduleId: schedule.id,
+          nextRunAt: now + 60_000,
+          lastRunAt: now,
+          fromNextRunAt: now,
+        });
+      // Both read the same `fromNextRunAt`; only the first may win.
+      expect(await advance()).toBe(true);
+      expect(await advance()).toBe(false);
+      expect((await driver.getSchedule({ scheduleId: schedule.id }))?.nextRunAt).toBe(now + 60_000);
+    });
+
+    it('returns due schedules only once they are armed and due', async () => {
+      const base = {
+        queueName,
+        cron: null,
+        everySeconds: 60,
+        timezone: null,
+        data: {},
+        priority: null,
+        retryMaxAttempts: null,
+        retryDelaySeconds: null,
+        nextRunAt: now,
+        enabled: true,
+        startAt: null,
+        endAt: null,
+        idempotencyKey: null,
+        jobOptions: null,
+      };
+      const due = await driver.insertSchedule({ schedule: base });
+      await driver.insertSchedule({ schedule: { ...base, nextRunAt: now + 60_000 } });
+      const disarmed = await driver.insertSchedule({ schedule: { ...base, enabled: false } });
+
+      const found = await driver.getDueSchedules({ now, limit: 100 });
+      expect(found.map((s) => s.id)).toEqual([due.id]);
+
+      // Arming the disabled one brings it into the due set.
+      const toggled = await driver.setScheduleEnabled({
+        scheduleId: disarmed.id,
+        enabled: true,
+        now,
+      });
+      expect(toggled).toEqual({ scheduleId: disarmed.id, queueName });
+      expect((await driver.getDueSchedules({ now, limit: 100 })).map((s) => s.id)).toEqual(
+        expect.arrayContaining([due.id, disarmed.id]),
+      );
+    });
+
+    it('deletes schedules in one call and reports each removed row with its queue', async () => {
+      const base = {
+        queueName,
+        cron: null,
+        everySeconds: 60,
+        timezone: null,
+        data: {},
+        priority: null,
+        retryMaxAttempts: null,
+        retryDelaySeconds: null,
+        nextRunAt: now,
+        enabled: true,
+        startAt: null,
+        endAt: null,
+        idempotencyKey: null,
+        jobOptions: null,
+      };
+      const a = await driver.insertSchedule({ schedule: base });
+      const b = await driver.insertSchedule({ schedule: base });
+      const removed = await driver.deleteSchedules({
+        scheduleIds: [a.id, b.id, 'missing'],
+      });
+      expect(removed).toHaveLength(2);
+      expect(removed.every((r) => r.queueName === queueName)).toBe(true);
+      expect(await driver.getSchedule({ scheduleId: a.id })).toBe(null);
+      // An unknown id is skipped, not an error.
+      expect(await driver.deleteSchedule({ scheduleId: 'missing' })).toBe(null);
+    });
+
+    // --- Reads: filters, search and page/count agreement ---
+
+    it('matches the free-text search in SQL across id, status, key, failure and payload', async () => {
+      const needle = await driver.insertJob({
+        job: newJob(queueName, now, {
+          data: { recipient: 'ada@example.com' },
+          idempotencyKey: 'welcome-ada',
+        }),
+      });
+      await driver.insertJob({ job: newJob(queueName, now, { data: { recipient: 'bob@x.io' } }) });
+
+      const byPayload = await driver.getJobs({ search: 'ada@example', limit: 50, offset: 0 });
+      expect(byPayload.map((j) => j.id)).toEqual([needle.id]);
+
+      const byKey = await driver.getJobs({ search: 'WELCOME-ADA', limit: 50, offset: 0 });
+      expect(byKey.map((j) => j.id)).toEqual([needle.id]);
+
+      const byId = await driver.getJobs({ search: needle.id, limit: 50, offset: 0 });
+      expect(byId.map((j) => j.id)).toEqual([needle.id]);
+
+      // A term with LIKE metacharacters searches for that text, not everything.
+      expect(await driver.getJobs({ search: '%', limit: 50, offset: 0 })).toHaveLength(0);
+    });
+
+    it('agrees between every list page and its count', async () => {
+      for (let i = 0; i < 7; i += 1) {
+        await driver.insertJob({ job: newJob(queueName, now, { data: { i } }) });
+      }
+      const filter = { queueName, statuses: [JobStatus.PENDING] };
+      const page = await driver.getJobs({ ...filter, limit: 3, offset: 0 });
+      const second = await driver.getJobs({ ...filter, limit: 3, offset: 3 });
+      expect(page).toHaveLength(3);
+      expect(second).toHaveLength(3);
+      expect(await driver.countJobs(filter)).toBe(7);
+      // No id appears on two pages.
+      expect(new Set([...page, ...second].map((j) => j.id)).size).toBe(6);
+
+      // The same agreement for the other three lists.
+      expect((await driver.listQueues({ limit: 10, offset: 0 })).length).toBe(
+        await driver.countQueues(),
+      );
+      expect((await driver.listSchedules({ limit: 10, offset: 0 })).length).toBe(
+        await driver.countSchedules({}),
+      );
+      await driver.upsertInstance({ instanceKey: 'inst-page', now });
+      expect((await driver.listInstances({ limit: 10, offset: 0 })).length).toBe(
+        await driver.countInstances(),
+      );
+    });
+
+    it('narrows a queue list by search and pause state, in SQL', async () => {
+      await driver.ensureQueue({ name: 'alpha-billing', now });
+      await driver.ensureQueue({ name: 'beta-email', now });
+      await driver.setQueuePaused({
+        queueName: 'alpha-billing',
+        processingPaused: true,
+        now,
+      });
+      expect((await driver.listQueues({ search: 'BILL' })).map((q) => q.name)).toEqual([
+        'alpha-billing',
+      ]);
+      expect(await driver.countQueues({ search: 'bill' })).toBe(1);
+      expect((await driver.listQueues({ processingPaused: true })).map((q) => q.name)).toEqual([
+        'alpha-billing',
+      ]);
+    });
+
+    it('gets or creates a queue without ever rewriting an existing row', async () => {
+      const created = await driver.ensureQueue({ name: 'idem-queue', now });
+      await driver.setQueuePaused({ queueName: 'idem-queue', processingPaused: true, now });
+      // A second ensure must not reset the pause flag it found.
+      const again = await driver.ensureQueue({ name: 'idem-queue', now: now + 1000 });
+      expect(again.processingPaused).toBe(true);
+      expect(again.createdAt).toBe(created.createdAt);
+      // Concurrent ensures resolve to one row.
+      await Promise.all([
+        driver.ensureQueue({ name: 'race-queue', now }),
+        driver.ensureQueue({ name: 'race-queue', now }),
+      ]);
+      expect((await driver.listQueues({ search: 'race-queue' })).length).toBe(1);
+    });
+
+    it('reports a null schema version before migrating rather than failing', async () => {
+      const fresh = options.createDriver();
+      await fresh.connect();
+      try {
+        expect(await fresh.getSchemaVersion()).toBe(null);
+        for (const migration of fresh.migrations) await fresh.applyMigration({ migration });
+        expect(await fresh.getSchemaVersion()).toBe(
+          fresh.migrations.reduce((max, m) => Math.max(max, m.version), 0),
+        );
+        // Re-applying is a no-op, not a duplicate-version error.
+        for (const migration of fresh.migrations) await fresh.applyMigration({ migration });
+      } finally {
+        await fresh.disconnect();
+      }
     });
   });
 }

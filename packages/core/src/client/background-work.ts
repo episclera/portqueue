@@ -1,3 +1,5 @@
+import { secondsToMs } from '../util/seconds';
+
 /**
  * Tracks the work this client starts without awaiting it — the maintenance tick, a worker's
  * claim pump, an instance heartbeat, a NOTIFY — so shutdown can wait for it to settle before
@@ -22,18 +24,13 @@ export class BackgroundWork {
     void tracked.then(() => this.pending.delete(tracked));
   }
 
-  /** How many tasks are still in flight (diagnostics; drain is the real gate). */
-  get inFlight(): number {
-    return this.pending.size;
-  }
-
   /**
    * Wait for everything in flight — and anything those tasks start in turn — to settle.
    * Resolves `true` when the set emptied, `false` when `timeoutSeconds` elapsed first, so the
    * caller can carry on with a shutdown it must not abandon.
    */
   async drain(timeoutSeconds: number): Promise<boolean> {
-    const expired = expiresIn(timeoutSeconds * 1000);
+    const expired = expiresIn(secondsToMs(timeoutSeconds, 'shutdown timeoutSeconds'));
     while (this.pending.size > 0) {
       const settled = await Promise.race([
         Promise.all([...this.pending]).then(() => true),

@@ -4,23 +4,18 @@
  * it exists so a CLI requirement never forces a change to `PortQueue`. See CLAUDE.md.
  *
  * The CLI's distinguishing constraint is that it is an **admin process that never owns the app's
- * queues**. Calling `createQueue` to reach a queue-scoped method would register that queue in the
- * CLI's own process — harmless while the CLI is short-lived, but it makes `inUse` and the
- * `removeQueue` guard mean the wrong thing. Everything here therefore addresses queues by name
- * against the driver instead.
+ * queues**: it runs on a headless client (see `PortQueueOptions._headless`), so it declares nothing,
+ * registers no instance row, and addresses every queue by name against the driver.
  */
-import { PortQueueEvent } from '../events/event-name.enum';
 import { JobStatus } from '../jobs/job-state.enum';
 import { InvalidOptionsError } from '../errors/errors';
+import { pageWindow } from '../monitoring/stats.service';
+import { latestVersion } from '../drivers/shared/migration';
 import type { Runtime } from '../client/runtime';
 import type { Driver } from '../drivers/driver.interface';
-import type { ScheduleInfo } from '../producer/results';
+import type { Page, ScheduleInfo } from '../producer/results';
+import type { ProducerService } from '../producer/producer.service';
 import type { TransactionHandle } from '../tx/transaction-handle';
-
-/** A schedule plus the queue it belongs to, as the `schedules` command prints it. */
-export interface CliSchedule extends ScheduleInfo {
-  queue: string;
-}
 
 /** What `portqueue doctor` reports about the connection it just made. */
 export interface DoctorReport {
@@ -37,7 +32,10 @@ export interface DoctorReport {
 }
 
 export class CliService {
-  constructor(private readonly runtime: Runtime) {}
+  constructor(
+    private readonly runtime: Runtime,
+    private readonly producer: ProducerService,
+  ) {}
 
   /** The live driver, for CLI paths that need engine detail the public API doesn't expose. */
   get driver(): Driver {
@@ -49,50 +47,26 @@ export class CliService {
   }
 
   /**
-   * Schedules for one queue, or across every queue when `queue` is omitted — read straight from
-   * the driver, so listing them never registers a queue in the CLI's process (which the public
-   * `queue.getSchedules()` would, since it needs a `Queue` handle).
+   * A **page** of schedules — one queue's, or across every queue when `queue` is omitted.
+   *
+   * Paged like every other list path. This used to call `listSchedules` with no window at all, so
+   * `portqueue schedules` loaded every schedule row in the database into the terminal.
    */
-  async getSchedules(options: { queue?: string } = {}): Promise<CliSchedule[]> {
-    const rows = await this.runtime.driver.listSchedules(
-      options.queue ? { queueName: options.queue } : {},
-    );
-    return rows.map((s) => ({
-      scheduleId: s.id,
-      queue: s.queueName,
-      cron: s.cron,
-      everySeconds: s.everySeconds,
-      timezone: s.timezone,
-      nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
-      lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,
-      enabled: s.enabled,
-      idempotencyKey: s.idempotencyKey,
-    }));
-  }
-
-  /**
-   * Remove a schedule by id alone. The public API removes one through a `Queue` handle, which
-   * forces the caller to already know the queue; the CLI's `remove --schedule-id` doesn't.
-   */
-  async removeSchedule(options: { scheduleId: string }): Promise<boolean> {
-    const row = await this.runtime.driver.getSchedule({ scheduleId: options.scheduleId });
-    if (!row) return false;
-    const ok = await this.runtime.driver.runInTransaction({
-      fn: (tx) => this.runtime.driver.deleteSchedule({ scheduleId: options.scheduleId, tx }),
+  getSchedules(
+    options: { queue?: string; limit?: number; offset?: number } = {},
+  ): Promise<Page<ScheduleInfo>> {
+    const { limit, offset } = pageWindow(options);
+    return this.producer.getSchedules({
+      ...(options.queue ? { queue: options.queue } : {}),
+      limit,
+      offset,
     });
-    if (ok) {
-      this.runtime.events.emit(PortQueueEvent.SCHEDULE_REMOVED, {
-        scheduleId: options.scheduleId,
-        queue: row.queueName,
-      });
-    }
-    return ok;
   }
 
   /**
    * Delete every job on a queue in the given states (`portqueue purge`). Addresses the queue by
-   * name rather than through a `Queue` handle, so purging doesn't claim the queue. ACTIVE is
-   * refused for the same reason the public path refuses it: the row belongs to a running handler.
+   * name, so purging never declares it. ACTIVE is refused for the same reason the public path
+   * refuses it: the row belongs to a running handler.
    */
   async purge(options: { queue: string; statuses: JobStatus[] }): Promise<number> {
     if (options.statuses.includes(JobStatus.ACTIVE)) {
@@ -102,13 +76,9 @@ export class CliService {
         { queue: options.queue },
       );
     }
-    return this.runtime.driver.runInTransaction({
-      fn: (tx) =>
-        this.runtime.driver.removeJobsByStatus({
-          queueName: options.queue,
-          statuses: options.statuses,
-          tx,
-        }),
+    return this.runtime.driver.removeJobsByStatus({
+      queueName: options.queue,
+      statuses: options.statuses,
     });
   }
 
@@ -125,13 +95,12 @@ export class CliService {
       driver.countQueues(),
       driver.countInstances(),
     ]);
-    const latestVersion = driver.migrations.reduce((max, m) => Math.max(max, m.version), 0);
     return {
       engine: driver.engine,
       serverVersion: probe.serverVersion,
       verifiedCapabilities: probe.verifiedCapabilities.map(String),
       schemaVersion,
-      latestVersion,
+      latestVersion: latestVersion(driver.migrations),
       queueCount,
       instanceCount,
     };

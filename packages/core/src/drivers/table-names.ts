@@ -1,3 +1,4 @@
+import { DEFAULT_MAX_IDENTIFIER_LEN, DEFAULT_TABLE_PREFIX } from '../constants';
 import { InvalidOptionsError } from '../errors/errors';
 
 /** Logical table names. Never a string literal at a query site. */
@@ -33,7 +34,6 @@ export enum JobColumn {
   PRIORITY = 'priority',
   DATA = 'data',
   RETURN_VALUE = 'return_value',
-  METADATA = 'metadata',
   CREATED_AT = 'created_at',
   UPDATED_AT = 'updated_at',
   START_AFTER = 'start_after',
@@ -58,6 +58,12 @@ export enum JobColumn {
   FAILURE_MESSAGE = 'failure_message',
   RETENTION_MODE = 'retention_mode',
   RETENTION_TTL_SECONDS = 'retention_ttl_seconds',
+  /**
+   * The finished statuses this job's retention policy may delete, as a comma-separated token list,
+   * or NULL for "every finished status". Frozen onto the row like every other retention field, so a
+   * policy change never retroactively re-scopes jobs that are already queued.
+   */
+  RETENTION_STATUSES = 'retention_statuses',
   IDEMPOTENCY_KEY = 'idempotency_key',
   SCHEDULE_ID = 'schedule_id',
   SINGLETON_KEY = 'singleton_key',
@@ -97,7 +103,6 @@ export enum InstanceColumn {
 export enum MigrationColumn {
   VERSION = 'version',
   APPLIED_AT = 'applied_at',
-  CHECKSUM = 'checksum',
   CREATED_AT = 'created_at',
   UPDATED_AT = 'updated_at',
 }
@@ -108,7 +113,11 @@ const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * Validate a user-influenced identifier (schema / tablePrefix) against a strict
  * allowlist. Fails fast with a clear error; never reaches SQL raw.
  */
-export function validateIdentifier(kind: string, value: string, maxLen = 63): string {
+export function validateIdentifier(
+  kind: string,
+  value: string,
+  maxLen = DEFAULT_MAX_IDENTIFIER_LEN,
+): string {
   if (!IDENTIFIER_RE.test(value)) {
     throw new InvalidOptionsError(
       `Invalid ${kind} '${value}': must match ${IDENTIFIER_RE} (letters, digits, underscore; not starting with a digit).`,
@@ -123,7 +132,15 @@ export function validateIdentifier(kind: string, value: string, maxLen = 63): st
 }
 
 /**
- * Resolves fully-qualified, prefixed, schema-qualified object names once.
+ * Resolves prefixed and (where the engine has them) schema-qualified object names once.
+ *
+ * Two accessors, because the two forms are not interchangeable:
+ *
+ * - {@link qualified} is what every query site uses. With `schema: 'jobs'` it returns
+ *   `jobs.pq_job`, so the tables really are created in and read from that schema.
+ * - {@link bare} is the unqualified `pq_job`, for the places a schema prefix is wrong: naming a
+ *   *derived* object (an index, a constraint) that an engine files alongside its table, and
+ *   engine metadata lookups that take a schema and a table name as separate values.
  */
 export class TableNames {
   readonly prefix: string;
@@ -132,7 +149,7 @@ export class TableNames {
   constructor(options: { tablePrefix?: string; schema?: string; maxIdentifierLen?: number }) {
     this.prefix = validateIdentifier(
       'tablePrefix',
-      options.tablePrefix ?? 'pq_',
+      options.tablePrefix ?? DEFAULT_TABLE_PREFIX,
       options.maxIdentifierLen,
     );
     if (options.schema !== undefined) {
@@ -143,5 +160,23 @@ export class TableNames {
   /** The bare (unqualified) physical table name, e.g. `pq_job`. */
   bare(table: TableName): string {
     return `${this.prefix}${table}`;
+  }
+
+  /**
+   * The name a query must use: schema-qualified when a `schema` was configured, bare otherwise.
+   * Both halves are allowlist-validated identifiers, so nothing here can be injected.
+   */
+  qualified(table: TableName): string {
+    const name = this.bare(table);
+    return this.schema ? `${this.schema}.${name}` : name;
+  }
+
+  /**
+   * The name for an object an engine files *inside* the table's own schema — an index or a
+   * constraint. `<prefix><table>_<suffix>`, unqualified, because qualifying it would name the
+   * schema twice (`CREATE INDEX jobs.x ON jobs.pq_job` is an error on Postgres).
+   */
+  derived(table: TableName, suffix: string): string {
+    return `${this.bare(table)}_${suffix}`;
   }
 }

@@ -20,19 +20,31 @@ import TxTabs from '@site/src/components/TxTabs';
 
 # Producing jobs
 
-All producing goes through a `Queue` handle. Every method takes **one options object**
-and returns a **result object**.
+All producing goes through `pq` itself. Every method takes **one options object** — with the queue
+named in it — and returns a **result object**. `pq.createQueue({ name })` _declares_ a queue (its
+defaults, retention and hooks); the handle it returns has no methods of its own.
 
 ## Add a job
 
 ```ts
-const emailsQueue = pq.createQueue<{ to: string }>({ name: 'emails' });
+pq.createQueue<{ to: string }>({ name: 'emails' });
 
-await emailsQueue.addJob({ data: { to: 'a@b.com' } });
+await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
 ```
 
-Need to enqueue several? Call `addJob` in a loop — each job then carries its own options
-explicitly, with nothing silently shared between them.
+Need to enqueue several at once? `pq.addJobs({ queue, jobs })` inserts the whole batch in **one**
+statement and returns a result per entry, in order. Each entry still carries its own options
+explicitly — nothing is silently shared between them:
+
+```ts
+const results = await pq.addJobs({
+  queue: 'emails',
+  jobs: [{ data: { to: 'a@b.com' } }, { data: { to: 'c@d.com' }, priority: 10 }],
+});
+```
+
+`addJobs` is for one-off jobs only: a recurring entry is rejected, because each recurrence needs its
+own `addJob` call to return a `scheduleId`.
 
 `AddJobResult` carries `jobId`, `queue`, `status`, `deduplicated`, `startAfter`, and —
 for scheduled adds — `scheduleId` / `nextRunAt`.
@@ -45,10 +57,11 @@ the rest are optional and default sensibly.
 All timing lives under the `schedule` group — pass exactly one mode. Durations are **whole seconds**:
 
 ```ts
-await emailsQueue.addJob({ data, schedule: { startAfterSeconds: 86_400 } }); // 24 h, in seconds
-await emailsQueue.addJob({ data, schedule: { startEverySeconds: 30 } }); // recurring interval, in seconds
-await emailsQueue.addJob({ data, schedule: { cron: '0 8 * * 1-5' } }); // recurring cron (UTC)
-await emailsQueue.addJob({
+await pq.addJob({ queue: 'emails', data, schedule: { startAfterSeconds: 86_400 } }); // 24 h, in seconds
+await pq.addJob({ queue: 'emails', data, schedule: { startEverySeconds: 30 } }); // recurring interval, in seconds
+await pq.addJob({ queue: 'emails', data, schedule: { cron: '0 8 * * 1-5' } }); // recurring cron (UTC)
+await pq.addJob({
+  queue: 'emails',
   data,
   schedule: { cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' } },
 });
@@ -68,7 +81,7 @@ full recurring story (dedup, timezones, unscheduling).
 ## Priority
 
 ```ts
-await emailsQueue.addJob({ data, priority: 10 }); // higher values are claimed first
+await pq.addJob({ queue: 'emails', data, priority: 10 }); // higher values are claimed first
 ```
 
 `priority` orders ready jobs — higher values run sooner (default `0`). It composes with
@@ -80,7 +93,8 @@ among the ready set.
 `retry` sets the per-job retry policy: how many attempts, the base delay, and the backoff curve.
 
 ```ts
-await emailsQueue.addJob({
+await pq.addJob({
+  queue: 'emails',
   data,
   retry: {
     maxAttempts: 5, // total attempts incl. the first (default 1 = no retry)
@@ -103,7 +117,7 @@ A throwing handler is retried per this policy until attempts are exhausted, then
 ## Expiry
 
 ```ts
-await emailsQueue.addJob({ data, expireInSeconds: 3600 }); // give up if it hasn't started within an hour
+await pq.addJob({ queue: 'emails', data, expireInSeconds: 3600 }); // give up if it hasn't started within an hour
 ```
 
 `expireInSeconds` drops the job to `EXPIRED` if it hasn't **started** within that many seconds —
@@ -113,7 +127,8 @@ handler's own run time.
 ## Retention
 
 ```ts
-await emailsQueue.addJob({
+await pq.addJob({
+  queue: 'emails',
   data,
   retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 604_800 }, // 7 days, in seconds
 });
@@ -127,7 +142,7 @@ the trade-offs.
 
 ```ts
 // Runs only on 8 GB servers that also have 4 cores; '.*' skips whatever sits between the tags.
-await emailsQueue.addJob({ data, preferredInstanceKeyPattern: 'ram-8gb.*cpu-4cor' });
+await pq.addJob({ queue: 'emails', data, preferredInstanceKeyPattern: 'ram-8gb.*cpu-4cor' });
 ```
 
 `preferredInstanceKeyPattern` is a regular-expression **source string** matched against instance
@@ -140,14 +155,18 @@ See [Multi-server / instance](./../scale-horizontally.md#choosing-a-preferred-se
 
 ## Retry a job
 
-Requeue a **failed or completed** job to run again with `retryJob`. It **re-arms that job's own
-row** — status back to `PENDING`, retry counters/lock/timestamps reset — and returns an
+Requeue a **settled** job to run again with `retryJob`. It **re-arms that job's own row** — status
+back to `PENDING`, retry counters, lock, return value and timestamps reset — and returns an
 `AddJobResult` (never a bare id). There are no retry "modes": one job id, one behaviour.
 
 ```ts
-const result = await emailsQueue.retryJob({ jobId });
-// → AddJobResult for the requeued job (status back to PENDING)
+const result = await pq.retryJob({ jobId });
+// → AddJobResult for the requeued job, or null if it couldn't be re-armed
 ```
+
+`null` means the id is unknown **or the job is `ACTIVE`**. A running job is never re-armed: clearing
+its lock would let a second worker claim it, so the same job would run twice at once. Cancel it first
+with [`cancelJob`](#cancel-a-job) and retry once it has settled.
 
 To start a **fresh run from scratch** instead, don't retry at all — just
 [add a new job](#add-a-job) to the queue.
@@ -157,7 +176,7 @@ To start a **fresh run from scratch** instead, don't retry at all — just
 Stop a **one-off job** — an immediate or a delayed one — from running, without deleting its row.
 
 ```ts
-await emailsQueue.cancelJob({ jobId });
+await pq.cancelJob({ jobId });
 ```
 
 If the job is still **pending/delayed**, it's marked `CANCELLED` so it never runs. If it's
@@ -174,7 +193,7 @@ remove its **schedule** instead — see [Remove a schedule](#remove-a-schedule) 
 ## Remove a schedule
 
 ```ts
-await emailsQueue.removeSchedule({ scheduleId }); // delete a schedule row
+await pq.removeSchedule({ scheduleId }); // delete a schedule row
 ```
 
 `removeSchedule` deletes a row from the **schedule** table, so no _new_ jobs are produced from
@@ -187,9 +206,9 @@ gone too.
 Removal **deletes rows** — it is for cleanup, not for stopping work:
 
 ```ts
-await emailsQueue.removeJob({ jobId }); // delete one job row (accepts tx)
-await emailsQueue.removeJobs({ jobIds: [a, b] }); // delete several job rows by id
-await emailsQueue.removeJobs({ statuses: [JobStatus.COMPLETED] }); // bulk-delete job rows by status
+await pq.removeJob({ jobId }); // delete one job row (accepts tx)
+await pq.removeJobs({ jobIds: [a, b] }); // delete several by id, in one statement (any queue)
+await pq.removeJobs({ queue: 'emails', statuses: [JobStatus.COMPLETED] }); // by status, one queue
 ```
 
 `removeJob` / `removeJobs` delete rows from the **jobs** table. The job is gone — its history,
@@ -204,7 +223,7 @@ A job that is currently **`ACTIVE`** (being processed) is never deleted — **ca
 
 - `removeJob({ jobId })` on an active job **skips it and returns `false`**.
 - `removeJobs({ jobIds })` **skips any active ids** and returns a count that excludes them.
-- `removeJobs({ statuses })` **throws** if you pass `JobStatus.ACTIVE` — you can't bulk-delete
+- `removeJobs({ queue, statuses })` **throws** if you pass `JobStatus.ACTIVE` — you can't bulk-delete
   running jobs by status.
   :::
 
@@ -219,9 +238,9 @@ let PortQueue prune finished jobs for you. Keep manual `remove*` for deliberate 
 Persisted and cluster-wide — every instance honours it:
 
 ```ts
-await emailsQueue.pause({ mode: PauseMode.PROCESSING }); // stop claiming; still accepts adds (default)
-await emailsQueue.pause({ mode: PauseMode.ALL }); // also refuse new adds (drain)
-await emailsQueue.resume();
+await pq.pauseQueue({ queue: 'emails', mode: PauseMode.PROCESSING }); // stop claiming; still accepts adds (default)
+await pq.pauseQueue({ queue: 'emails', mode: PauseMode.ALL }); // also refuse new adds (drain)
+await pq.resumeQueue({ queue: 'emails' });
 ```
 
 ## Idempotency & singleton
@@ -240,15 +259,16 @@ Both keys are **queue-scoped**, but they solve different problems:
   per tenant at a time), while still allowing the next run later.
 
 ```ts
-const paymentsQueue = pq.createQueue({ name: 'payments' });
-const paymentsJob = await paymentsQueue.addJob({
+pq.createQueue({ name: 'payments' });
+const paymentsJob = await pq.addJob({
+  queue: 'payments',
   data: { orderId },
   idempotencyKey: `charge:${orderId}`,
 });
 if (paymentsJob.deduplicated) logger.info('already queued', { jobId: paymentsJob.jobId }); // charged at most once
 
-const reindexQueue = pq.createQueue({ name: 'reindex' });
-await reindexQueue.addJob({ data, singletonKey: `reindex:${tenantId}` }); // one live reindex per tenant
+pq.createQueue({ name: 'reindex' });
+await pq.addJob({ queue: 'reindex', data, singletonKey: `reindex:${tenantId}` }); // one live reindex per tenant
 ```
 
 ## Transactional enqueue
@@ -264,27 +284,34 @@ ORMs, and raw drivers alike. Pick your tab:
 
 <TxTabs />
 
-Every job-manipulating method that writes to the database (`addJob`, `retryJob`, `cancelJob`,
-`removeJob`, `removeJobs`, `removeSchedule`) accepts `tx`; omit it and the method runs autonomously
-in its own short transaction. See
+Every job-manipulating method that writes to the database (`addJob`, `addJobs`, `retryJob`,
+`cancelJob`, `removeJob`, `removeJobs`, `removeSchedule`) accepts `tx`; omit it and the method runs
+autonomously. `addJobs` is one insert for the whole batch, so every entry must share the same `tx`
+(or none of them set one). See
 [Transactions](./transactions.mdx) for the full list of adapters and the reasoning behind
 the design.
 
 ## Inspect
 
-Read-side views of what you've produced (all scoped to this queue):
+Read-side views of what you've produced. A per-queue read names its queue; a by-id read doesn't need
+one, because an id already identifies exactly one row:
 
 ```ts
-const emailsJob = await emailsQueue.getJob({ jobId }); // JobSnapshot | null
-const emailsStats = await emailsQueue.getQueueStats(); // per-status counts
+const emailsJob = await pq.getJob({ jobId }); // JobSnapshot | null
+const emailsStats = await pq.getQueueStats({ queue: 'emails' }); // per-status counts
 
 // The two list reads take the same window — `limit` (default 50, max 500) and `offset` — and
 // return `{ items, total }`. `total` counts every row matching the filter, not just this page.
-const failed = await emailsQueue.getJobs({ statuses: [JobStatus.FAILED], limit: 20, offset: 0 });
+const failed = await pq.getJobs({
+  queue: 'emails',
+  statuses: [JobStatus.FAILED],
+  limit: 20,
+  offset: 0,
+});
 failed.items; // JobSnapshot[] — this page, newest first
 failed.total; // e.g. 143 — every FAILED job on the queue
 
-const schedules = await emailsQueue.getSchedules({ enabled: true, limit: 20, offset: 0 });
+const schedules = await pq.getSchedules({ queue: 'emails', enabled: true, limit: 20, offset: 0 });
 schedules.items; // ScheduleInfo[] — each with the scheduleId you pass to removeSchedule
 schedules.total; // every armed schedule on the queue
 
@@ -297,7 +324,12 @@ There is no `hasMore` flag on a page: another page follows when
 
 ```ts
 for (let offset = 0; ; offset += 100) {
-  const page = await emailsQueue.getJobs({ statuses: [JobStatus.FAILED], limit: 100, offset });
+  const page = await pq.getJobs({
+    queue: 'emails',
+    statuses: [JobStatus.FAILED],
+    limit: 100,
+    offset,
+  });
   for (const job of page.items) await triage(job);
   if (offset + page.items.length >= page.total) break;
 }
@@ -321,12 +353,12 @@ PortQueue has no `update*` method on any entity. Three reasons:
 
 Add a new entity rather than editing an old one. The right move depends on where the job is:
 
-| Situation                                                               | Do this                                                                                                                                                           |
-| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Finished** job (`COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED`)        | Leave it. It's your history, and [retention](./retention.md) deletes it on schedule. Add a new job for what you need now.                                         |
-| **Pending or delayed** job that shouldn't run as configured             | `queue.cancelJob({ jobId })` so it never becomes eligible, then `addJob` with the settings you want.                                                              |
-| **Recurring schedule** that needs a different cron, interval or payload | `queue.removeSchedule({ scheduleId })` so it stops spawning jobs, then `addJob` with the new definition. See [Changing a schedule](./scheduling.md#unscheduling). |
-| **Active** job                                                          | Nothing to update — it's running. Let it finish, or cancel cooperatively (the handler observes `job.signal`) and add a replacement.                               |
+| Situation                                                               | Do this                                                                                                                                                        |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Finished** job (`COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED`)        | Leave it. It's your history, and [retention](./retention.md) deletes it on schedule. Add a new job for what you need now.                                      |
+| **Pending or delayed** job that shouldn't run as configured             | `pq.cancelJob({ jobId })` so it never becomes eligible, then `addJob` with the settings you want.                                                              |
+| **Recurring schedule** that needs a different cron, interval or payload | `pq.removeSchedule({ scheduleId })` so it stops spawning jobs, then `addJob` with the new definition. See [Changing a schedule](./scheduling.md#unscheduling). |
+| **Active** job                                                          | Nothing to update — it's running. Let it finish, or cancel cooperatively (the handler observes `job.signal`) and add a replacement.                            |
 
 Cancel-then-add and remove-then-add cost one extra call, and in exchange every row stays a truthful
 record of one attempt at one configuration. Give the replacement an `idempotencyKey` if it must be

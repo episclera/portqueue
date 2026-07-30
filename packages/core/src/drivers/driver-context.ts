@@ -1,13 +1,14 @@
+import { DEFAULT_NAMESPACE } from '../constants';
 import { TableNames } from './table-names';
 
 /**
  * How a driver lays its data out in the database. Every field is per-engine: two drivers pointing
  * at different databases can use different schemas, prefixes, and namespaces, so these belong on
- * each driver's own options — not on the top-level client. A capable engine may honour `schema`;
- * engines without schemas ignore it.
+ * each driver's own options — not on the top-level client. Engines that have schemas honour
+ * `schema` by qualifying every object name with it; SQLite has none and does not accept the option.
  */
 export interface StorageOptions {
-  /** DB schema/namespace (Postgres/Oracle). */
+  /** DB schema/namespace (Postgres/PGLite/MySQL/Oracle). */
   schema?: string;
   /** Prefix for all created tables (default 'pq_'). */
   tablePrefix?: string;
@@ -36,6 +37,6 @@ export class DriverContext {
         ? { maxIdentifierLen: options.maxIdentifierLen }
         : {}),
     });
-    this.namespace = options.namespace ?? 'portqueue';
+    this.namespace = options.namespace ?? DEFAULT_NAMESPACE;
   }
 }

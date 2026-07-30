@@ -1,4 +1,4 @@
-import { PortQueue } from '@portqueue/core';
+import { MigrationMode, PortQueue } from '@portqueue/core';
 import type { Driver } from '@portqueue/core';
 import { CliError } from './errors';
 
@@ -33,15 +33,29 @@ const SCHEME_TO_ENGINE: Record<string, CliEngine> = {
 const KNOWN_ENGINES = new Set<string>(Object.values(CliEngine));
 
 /**
- * Builds the CLI's own short-lived PortQueue from connection flags. It never loads the user's
- * app config: it constructs a driver from `--driver`/`--connection-string` (or `DATABASE_URL`)
- * and returns a client with no `systemLimiter`, no `instanceKey`, and no workers.
+ * Builds the CLI's own short-lived PortQueue from connection flags. It never loads the user's app
+ * config: it constructs a driver from `--driver`/`--connection-string` (or `DATABASE_URL`) and
+ * returns a **headless** client (`_headless: true`).
+ *
+ * Headless is what keeps an admin tool from behaving like a participant: it declares no queues and
+ * writes no queue rows, registers no instance row (so `portqueue instances` never shows the CLI
+ * itself), and runs no workers, scheduler or retention sweep.
+ *
+ * Migration is the one thing the CLI opts back into. A headless client defaults to `MANUAL` — that
+ * default exists for the dashboard, which must never change a schema by being pointed at it — but
+ * bringing a schema up to date is squarely the CLI's remit, and a fresh database should answer
+ * `portqueue queues` rather than an error about a missing table.
  */
 export async function buildPortQueue(flags: DriverFlags): Promise<PortQueue> {
+  const driver = await buildDriver(flags);
+  return new PortQueue({ driver, _headless: true, migration: MigrationMode.AUTO });
+}
+
+/** The driver alone, for the `dashboard` command — `createDashboard` builds its own client. */
+export async function buildDriver(flags: DriverFlags): Promise<Driver> {
   const connectionString = flags.connectionString ?? process.env.DATABASE_URL;
   const engine = resolveEngine(flags.driver, connectionString);
-  const driver = await createDriver(engine, connectionString, flags);
-  return new PortQueue({ driver });
+  return createDriver(engine, connectionString, flags);
 }
 
 /** Determines the engine from `--driver`, else infers it from the connection string scheme. */

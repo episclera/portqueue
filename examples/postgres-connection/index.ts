@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   await pq.init();
   console.log(`Connected to Postgres and migrated schema (${connectionString}).`);
 
-  const welcome = pq.createQueue<{ user: string }>({ name: 'welcome' });
+  pq.createQueue<{ user: string }>({ name: 'welcome' });
 
   const done = new Promise<void>((resolve) => {
     pq.createWorker<{ user: string }>({
@@ -38,7 +38,7 @@ async function main(): Promise<void> {
     });
   });
 
-  const res = await welcome.addJob({ data: { user: 'ada' } });
+  const res = await pq.addJob({ queue: 'welcome', data: { user: 'ada' } });
   console.log(`Enqueued job ${res.jobId}. Waiting for the worker…`);
 
   await done;

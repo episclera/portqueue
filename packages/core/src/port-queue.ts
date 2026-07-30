@@ -18,34 +18,58 @@ import { DashboardService } from './dashboard/dashboard.service';
 import { CliService } from './cli/cli.service';
 import { Queue } from './producer/queue';
 import { Worker, type WorkerConfig } from './consumer/worker';
-import { InstanceActiveError, InvalidOptionsError, QueueInUseError } from './errors/errors';
+import { JobStatus } from './jobs/job-state.enum';
+import {
+  InstanceActiveError,
+  InvalidOptionsError,
+  NotStartedError,
+  QueueInUseError,
+  QueueNotFoundError,
+} from './errors/errors';
 import { SystemClock } from './util/clock';
+import { secondsToMs } from './util/seconds';
+import {
+  DEFAULT_CONCURRENCY,
+  DEFAULT_LOCK_DURATION_SECONDS,
+  DEFAULT_POLL_INTERVAL_SECONDS,
+  DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
+  DEFAULT_TICK_INTERVAL_SECONDS,
+  INSTANCE_REMOVAL_STALE_SECONDS,
+} from './constants';
 import type { PortQueueOptions, ShutdownOptions } from './options/client-options';
 import type { CreateQueueOptions } from './options/queue-options';
 import type { WorkerOptions } from './options/worker-options';
+import type { AddJobOptions } from './options/job-options';
 import type { JobHandler } from './jobs/job';
 import type { Logger } from './logging/logger.interface';
 import type { Runtime } from './client/runtime';
 import type { HookRegistration } from './events/hooks';
+import type { TransactionHandle } from './tx/transaction-handle';
+import type { QueueRow } from './jobs/job-record';
 import type { EventListener, Unsubscribe } from './events/event-name.enum';
 import type {
+  AddJobResult,
   GetInstancesQuery,
   GetJobsQuery,
   GetQueuesQuery,
+  GetSchedulesQuery,
   InstanceInfo,
   JobSnapshot,
   Page,
   QueueInfo,
   QueueStats,
+  ScheduleInfo,
 } from './producer/results';
 
-/** An instance must be unseen for at least this long (seconds) before it can be manually removed. */
-const INSTANCE_REMOVAL_STALE_SECONDS = 30 * 60;
-
 /**
- * The top-level client. Owns connection, migration,
- * shared services, and produces Queue/Worker handles. A thin facade — all real work lives
- * in focused services. Construction wires dependencies only; no I/O until `init()`.
+ * The top-level client, and **the whole developer-facing surface**. Owns connection, migration,
+ * shared services, and the queue/worker registrations. A thin facade — all real work lives in
+ * focused services. Construction wires dependencies only; no I/O until `init()`.
+ *
+ * Every operation lives here rather than on the handles `createQueue`/`createWorker` return: those
+ * are registrations with no methods (see {@link Queue}). A per-queue operation takes `queue` as a
+ * named argument, so one import reaches every queue and no read can silently escape the scope its
+ * handle implied.
  *
  * @typeParam TQueues - an optional string enum/union of this app's queue names, threaded
  * through every queue-name argument for compile-time safety (defaults to `string`).
@@ -61,6 +85,7 @@ export class PortQueue<TQueues extends string = string> {
   private readonly hooks: HookRunner;
   private readonly state = { running: false };
   private readonly hookedQueues = new Set<string>();
+  private readonly headless: boolean;
 
   /**
    * Internal facade for `@portqueue/dashboard`. **Not a developer API** — it is undocumented,
@@ -81,6 +106,14 @@ export class PortQueue<TQueues extends string = string> {
         'PortQueue requires a `driver`. Pass a driver instance, e.g. `new SqliteDriver(...)`.',
       );
     }
+    this.headless = options._headless === true;
+    if (this.headless && options.instance?.instanceKey) {
+      throw new InvalidOptionsError(
+        'A headless PortQueue (the dashboard or CLI) cannot take an `instance.instanceKey`. An ' +
+          'admin client is anonymous: it registers no instance row, so naming it would put a ' +
+          'heartbeat in the instances list for a process that never claims a job.',
+      );
+    }
     const logger = resolveLogger(options.logger);
     const clock = options.clock ?? new SystemClock();
     const context = options.driver.context;
@@ -88,7 +121,10 @@ export class PortQueue<TQueues extends string = string> {
     this.hooks = new HookRunner(logger, this.events);
     const resolver = new OptionResolver();
     const wakeup = new Wakeup();
-    const registry = new QueueRegistry(options.driver, clock);
+    const registry = new QueueRegistry(options.driver, clock, {
+      tickIntervalSeconds: options.tickIntervalSeconds ?? DEFAULT_TICK_INTERVAL_SECONDS,
+      headless: this.headless,
+    });
     this.clientRegistry = new ClientRegistryService();
 
     this.runtime = {
@@ -103,8 +139,10 @@ export class PortQueue<TQueues extends string = string> {
       registry,
       wakeup,
       background: new BackgroundWork(),
-      instanceKey: options.instance?.instanceKey ?? null,
+      // A headless client is anonymous by construction — no instance row, no affinity, no pause.
+      instanceKey: this.headless ? null : (options.instance?.instanceKey ?? null),
       instances: null,
+      headless: this.headless,
       isRunning: () => this.state.running,
       cancelRunning: (jobId: string) => this.clientRegistry.cancelRunning(jobId),
       isJobRunningHere: (jobId: string) => this.clientRegistry.isRunning(jobId),
@@ -119,8 +157,8 @@ export class PortQueue<TQueues extends string = string> {
     this.reads = new ReadService(this.runtime);
     this.completion = new CompletionService(this.runtime);
     this.lifecycle = new ClientLifecycleService(this.runtime, this.clientRegistry, this.state);
-    this._dashboard = new DashboardService(this.runtime, this.reads);
-    this._cli = new CliService(this.runtime);
+    this._dashboard = new DashboardService(this.runtime, this.reads, this.producer);
+    this._cli = new CliService(this.runtime, this.producer);
   }
 
   // --- Lifecycle ---
@@ -131,7 +169,7 @@ export class PortQueue<TQueues extends string = string> {
   async shutdown(options: ShutdownOptions = {}): Promise<void> {
     await this.lifecycle.shutdown({
       graceful: options.graceful ?? true,
-      timeoutSeconds: options.timeoutSeconds ?? 30,
+      timeoutSeconds: options.timeoutSeconds ?? DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
     });
   }
 
@@ -144,12 +182,26 @@ export class PortQueue<TQueues extends string = string> {
     return this.lifecycle.migrate();
   }
 
-  // --- Handles ---
+  // --- Registrations ---
+  /**
+   * Declare a queue in this process: its default job options, its retention policy and its
+   * queue-scoped hooks. The returned {@link Queue} carries the name and the payload type and nothing
+   * else — every operation is a method on this class.
+   *
+   * This is the **only** thing that records queue options, and it *replaces* them: a second call
+   * with different options re-declares the queue. Nothing internal calls it — `pauseQueue`,
+   * `getJobs`, the dashboard and the CLI all address a queue by name — so an admin action can never
+   * blank the defaults a declaration set.
+   *
+   * On a headless client (the dashboard or CLI) this declares nothing and writes nothing; it only
+   * hands back a typed name.
+   */
   createQueue<TData = unknown>(options: CreateQueueOptions<TQueues>): Queue<TData> {
     const { name, ...queueOptions } = options;
-    this.runtime.registry.define(name, queueOptions);
-    // Register queue-scoped hooks once (QueueOptions.hooks).
-    if (queueOptions.hooks && !this.hookedQueues.has(name)) {
+    this.runtime.registry.declare(name, queueOptions);
+    // Register queue-scoped hooks once (QueueOptions.hooks) — a second declaration with different
+    // hooks would otherwise stack duplicates onto every job.
+    if (!this.headless && queueOptions.hooks && !this.hookedQueues.has(name)) {
       this.hookedQueues.add(name);
       for (const hook of queueOptions.hooks) {
         this.hooks.register(hook.queue ? hook : { ...hook, queue: name });
@@ -157,7 +209,7 @@ export class PortQueue<TQueues extends string = string> {
     }
     const existing = this.clientRegistry.getQueue(name) as Queue<TData> | undefined;
     if (existing) return existing;
-    const queue = new Queue<TData>(name, this.producer, this.reads, this.runtime);
+    const queue = new Queue<TData>(name);
     this.clientRegistry.addQueue(name, queue as Queue<unknown>);
     return queue;
   }
@@ -172,9 +224,8 @@ export class PortQueue<TQueues extends string = string> {
       );
     }
     const handler = options.handler as unknown as JobHandler;
-    this.runtime.registry.define(options.queue, this.runtime.registry.getOptions(options.queue));
     const limiter = options.limiter ?? {};
-    const concurrency = limiter.concurrency ?? 1;
+    const concurrency = limiter.concurrency ?? DEFAULT_CONCURRENCY;
     const rate =
       limiter.rateMax != null && limiter.rateDurationSeconds != null
         ? { max: limiter.rateMax, durationSeconds: limiter.rateDurationSeconds }
@@ -184,11 +235,11 @@ export class PortQueue<TQueues extends string = string> {
       handler,
       concurrency,
       batchSize: limiter.batchSize ?? concurrency,
-      lockDurationSeconds: limiter.lockDurationSeconds ?? 30,
-      // Default poll cadence is 5 seconds for every driver. LISTEN/NOTIFY-capable engines wake
-      // instantly on new jobs and only fall back to polling as a safety net; non-notify engines
-      // poll on this same cadence. Lower it via `limiter.pollIntervalSeconds` for snappier pickup.
-      pollIntervalSeconds: limiter.pollIntervalSeconds ?? 5,
+      lockDurationSeconds: limiter.lockDurationSeconds ?? DEFAULT_LOCK_DURATION_SECONDS,
+      // LISTEN/NOTIFY-capable engines wake instantly on new jobs and only fall back to polling as a
+      // safety net; non-notify engines poll on this cadence. Lower it via
+      // `limiter.pollIntervalSeconds` for snappier pickup.
+      pollIntervalSeconds: limiter.pollIntervalSeconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
       ...(rate ? { limiter: rate } : {}),
       dontAutoretryFor: options.dontAutoretryFor ?? [],
       queueOptions: this.runtime.registry.getOptions(options.queue),
@@ -204,32 +255,210 @@ export class PortQueue<TQueues extends string = string> {
     return worker;
   }
 
-  // --- Cross-cutting reads ---
+  // --- Producing ---
+  /** Add one job to a queue (or create a recurring schedule, with `schedule.cron`/`startEverySeconds`). */
+  addJob<TData = unknown>(
+    options: AddJobOptions<TData> & { queue: TQueues | string },
+  ): Promise<AddJobResult> {
+    this.requireStarted('addJob');
+    const { queue, ...jobOptions } = options;
+    return this.producer.addJob<TData>(queue, jobOptions as AddJobOptions<TData>);
+  }
+
+  /**
+   * Add many one-off jobs to one queue in a **single** insert — one round trip for the whole batch
+   * rather than two per job. Results come back in the order the jobs were given. Recurring entries
+   * are rejected: each recurrence needs its own {@link addJob} so its result can carry a `scheduleId`.
+   */
+  addJobs<TData = unknown>(options: {
+    queue: TQueues | string;
+    jobs: Array<AddJobOptions<TData>>;
+  }): Promise<AddJobResult[]> {
+    this.requireStarted('addJobs');
+    return this.producer.addJobs<TData>(options.queue, options.jobs);
+  }
+
+  // --- Reads ---
   /** A page of queues with their per-status counts, plus the total across every page. */
   getQueues(options: GetQueuesQuery = {}): Promise<Page<QueueInfo>> {
+    this.requireStarted('getQueues');
     return this.reads.getQueues(options);
   }
 
   /** One queue by name, with the same counts and `inUse` flag the list carries. */
   getQueue(options: { name: TQueues | string }): Promise<QueueInfo | null> {
+    this.requireStarted('getQueue');
     return this.reads.getQueue(options.name);
   }
 
   getQueueStats(options: { queue?: TQueues } = {}): Promise<QueueStats> {
+    this.requireStarted('getQueueStats');
     return this.reads.getQueueStats(options.queue);
   }
 
   /** Client-wide stats across every queue — the same shape `getQueueStats` returns for one. */
   getQueuesStats(): Promise<QueueStats> {
+    this.requireStarted('getQueuesStats');
     return this.reads.getQueueStats();
   }
 
+  /** One job by id, from any queue. */
   getJob<TData = unknown>(options: { jobId: string }): Promise<JobSnapshot<TData> | null> {
+    this.requireStarted('getJob');
     return this.reads.getJob<TData>(options.jobId);
   }
 
-  getJobs<TData = unknown>(options: GetJobsQuery = {}): Promise<Page<JobSnapshot<TData>>> {
+  /** A page of jobs, newest first. Narrow with `queue`, `statuses` or `scheduleId`. */
+  getJobs<TData = unknown>(
+    options: GetJobsQuery & { queue?: TQueues | string } = {},
+  ): Promise<Page<JobSnapshot<TData>>> {
+    this.requireStarted('getJobs');
     return this.reads.getJobs<TData>(options);
+  }
+
+  /** A page of recurring schedules — one queue's with `queue`, every queue's without it. */
+  getSchedules(
+    options: GetSchedulesQuery & { queue?: TQueues | string } = {},
+  ): Promise<Page<ScheduleInfo>> {
+    this.requireStarted('getSchedules');
+    return this.producer.getSchedules(options);
+  }
+
+  /** One schedule by id, with the queue it produces onto. Null if unknown. */
+  getSchedule(options: { scheduleId: string }): Promise<ScheduleInfo | null> {
+    this.requireStarted('getSchedule');
+    return this.producer.getSchedule(options.scheduleId);
+  }
+
+  // --- Job control ---
+  /**
+   * Requeue a **settled** job to run again — its own row is re-armed with its persisted data (status
+   * back to `PENDING`, retry counters, lock, return value and timestamps reset). To start a fresh
+   * run instead, add a new job with {@link addJob}.
+   *
+   * A **running** job is never re-armed: clearing its lock would let a second worker claim it while
+   * the first handler is still going, so an `ACTIVE` job — like an unknown id — returns `null`.
+   * Cancel it first with {@link cancelJob} and retry once it has settled.
+   */
+  async retryJob(options: { jobId: string; tx?: TransactionHandle }): Promise<AddJobResult | null> {
+    this.requireStarted('retryJob');
+    const requeued = await this.runtime.driver.requeueJob({
+      jobId: options.jobId,
+      now: this.runtime.clock.now(),
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    if (!requeued) return null;
+    this.runtime.wakeup.signal(requeued.queueName);
+    this.events.emit(PortQueueEvent.JOB_ADDED, {
+      jobId: requeued.jobId,
+      queue: requeued.queueName,
+      deduplicated: false,
+    });
+    return {
+      jobId: requeued.jobId,
+      queue: requeued.queueName,
+      status: requeued.status,
+      startAfter: new Date(requeued.startAfter),
+      deduplicated: false,
+    };
+  }
+
+  /**
+   * Cancel a job. If the job is **currently running in this process**, its handler's `AbortSignal` is
+   * fired for cooperative cancellation (the handler must honour `job.signal` to actually stop) and
+   * that settles the row. Otherwise a pending/delayed job is marked `CANCELLED` so it never runs.
+   * Returns true if either path acted.
+   */
+  async cancelJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
+    this.requireStarted('cancelJob');
+    // A locally-running handler owns its row's outcome — fire its signal and let it settle,
+    // rather than racing a DB write against its completion.
+    if (this.runtime.cancelRunning?.(options.jobId)) return true;
+    const cancelled = await this.runtime.driver.cancelJob({
+      jobId: options.jobId,
+      now: this.runtime.clock.now(),
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    if (!cancelled) return false;
+    this.events.emit(PortQueueEvent.JOB_CANCELLED, {
+      jobId: cancelled.jobId,
+      queue: cancelled.queueName,
+    });
+    return true;
+  }
+
+  /**
+   * Remove a single job's row. Never removes a **running** job: an `ACTIVE` row is skipped and this
+   * returns `false` without touching it — cancel it first with {@link cancelJob}, then remove it once
+   * it has settled.
+   */
+  async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
+    this.requireStarted('removeJob');
+    const removed = await this.runtime.driver.removeJob({
+      jobId: options.jobId,
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    if (!removed) return false;
+    this.events.emit(PortQueueEvent.JOB_REMOVED, {
+      jobId: removed.jobId,
+      queue: removed.queueName,
+    });
+    return true;
+  }
+
+  /**
+   * Remove many jobs — either a set of ids (from any queue) or every job on one queue in the given
+   * statuses. Returns how many rows went away.
+   *
+   * `ACTIVE` is refused both ways: by id an active row is skipped, and by status it throws, because
+   * deleting a running job's row would yank it out from under its handler.
+   */
+  async removeJobs(
+    options: ({ jobIds: string[] } | { queue: TQueues | string; statuses: JobStatus[] }) & {
+      tx?: TransactionHandle;
+    },
+  ): Promise<number> {
+    this.requireStarted('removeJobs');
+    if ('jobIds' in options) {
+      const removed = await this.runtime.driver.removeJobs({
+        jobIds: options.jobIds,
+        ...(options.tx ? { tx: options.tx } : {}),
+      });
+      for (const ref of removed) {
+        this.events.emit(PortQueueEvent.JOB_REMOVED, {
+          jobId: ref.jobId,
+          queue: ref.queueName,
+        });
+      }
+      return removed.length;
+    }
+    if (options.statuses.includes(JobStatus.ACTIVE)) {
+      throw new InvalidOptionsError(
+        `Cannot remove jobs by status ACTIVE on queue '${options.queue}': an ACTIVE job is ` +
+          `running. Cancel it first with cancelJob({ jobId }), then remove it once it has settled.`,
+        { queue: options.queue },
+      );
+    }
+    return this.runtime.driver.removeJobsByStatus({
+      queueName: options.queue,
+      statuses: options.statuses,
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+  }
+
+  /** Remove a recurring schedule by id. Returns true when a schedule went away. */
+  async removeSchedule(options: { scheduleId: string; tx?: TransactionHandle }): Promise<boolean> {
+    this.requireStarted('removeSchedule');
+    const removed = await this.runtime.driver.deleteSchedule({
+      scheduleId: options.scheduleId,
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    if (!removed) return false;
+    this.events.emit(PortQueueEvent.SCHEDULE_REMOVED, {
+      scheduleId: removed.scheduleId,
+      queue: removed.queueName,
+    });
+    return true;
   }
 
   // --- Events & hooks ---
@@ -254,14 +483,54 @@ export class PortQueue<TQueues extends string = string> {
     return this.hooks.register(hook);
   }
 
-  // --- Direct queue control (convenience; also on Queue) ---
-  async pauseQueue(options: { queue: TQueues; mode?: PauseMode }): Promise<void> {
-    await this.createQueue({ name: options.queue }).pause(
-      options.mode ? { mode: options.mode } : {},
-    );
+  // --- Queue control (persisted, cluster-wide) ---
+  /**
+   * Stop workers everywhere from claiming this queue's jobs. With `mode: PauseMode.ALL` the queue
+   * also refuses new jobs.
+   *
+   * This flips the queue row's two flags and touches nothing else — in particular it does **not**
+   * re-declare the queue, so it can never overwrite the default job options or retention policy a
+   * `createQueue` registered. A queue this process declared is created first if it has not produced
+   * anything yet (its row is written lazily); a name nothing has ever used throws
+   * {@link QueueNotFoundError} rather than conjuring a paused queue no code consumes.
+   */
+  async pauseQueue(options: { queue: TQueues | string; mode?: PauseMode }): Promise<void> {
+    this.requireStarted('pauseQueue');
+    const mode = options.mode ?? PauseMode.PROCESSING;
+    const row = await this.setPaused(options.queue, true, mode === PauseMode.ALL);
+    if (row) this.runtime.registry.update(row);
+    this.events.emit(PortQueueEvent.QUEUE_PAUSED, { queue: options.queue, mode });
   }
-  async resumeQueue(options: { queue: TQueues }): Promise<void> {
-    await this.createQueue({ name: options.queue }).resume();
+
+  /** Resume claiming (and accepting) on this queue. See {@link pauseQueue} for what it touches. */
+  async resumeQueue(options: { queue: TQueues | string }): Promise<void> {
+    this.requireStarted('resumeQueue');
+    const row = await this.setPaused(options.queue, false, false);
+    if (row) this.runtime.registry.update(row);
+    this.runtime.wakeup.signal(options.queue);
+    this.events.emit(PortQueueEvent.QUEUE_RESUMED, { queue: options.queue });
+  }
+
+  /**
+   * Write both pause flags, returning the updated row so the cached flags this process's workers
+   * read are refreshed without a second query.
+   */
+  private async setPaused(
+    queue: string,
+    processingPaused: boolean,
+    acceptingPaused: boolean,
+  ): Promise<QueueRow | null> {
+    // A queue declared here may not have written its row yet (it is created on first use), so
+    // ensure it before pausing. `ensure` only creates the row; it never writes queue options.
+    if (this.runtime.registry.isRegistered(queue)) await this.runtime.registry.ensure(queue);
+    const row = await this.runtime.driver.setQueuePaused({
+      queueName: queue,
+      processingPaused,
+      acceptingPaused,
+      now: this.runtime.clock.now(),
+    });
+    if (!row) throw new QueueNotFoundError(queue);
+    return row;
   }
 
   /**
@@ -271,6 +540,7 @@ export class PortQueue<TQueues extends string = string> {
    * for queues no longer used by any running code. Job rows link by name (no FK) and are untouched.
    */
   async removeQueue(options: { name: TQueues | string }): Promise<boolean> {
+    this.requireStarted('removeQueue');
     if (this.runtime.registry.isRegistered(options.name)) {
       throw new QueueInUseError(options.name);
     }
@@ -282,16 +552,19 @@ export class PortQueue<TQueues extends string = string> {
   // --- Instances (multi-instance mode) ---
   /** A page of known instances with liveness + per-instance job attribution, plus the total. */
   getInstances(options: GetInstancesQuery = {}): Promise<Page<InstanceInfo>> {
+    this.requireStarted('getInstances');
     return this.reads.getInstances(options);
   }
 
   /** One instance by key, with the same liveness, health and attribution the list carries. */
   getInstance(options: { instanceKey: string }): Promise<InstanceInfo | null> {
+    this.requireStarted('getInstance');
     return this.reads.getInstance(options.instanceKey);
   }
 
   /** Stop the named instance from claiming jobs (persisted; the target picks it up on heartbeat). */
   async pauseInstance(options: { instanceKey: string }): Promise<void> {
+    this.requireStarted('pauseInstance');
     await this.runtime.driver.setInstancePaused({
       instanceKey: options.instanceKey,
       processingPaused: true,
@@ -306,6 +579,7 @@ export class PortQueue<TQueues extends string = string> {
 
   /** Resume the named instance's job claiming. */
   async resumeInstance(options: { instanceKey: string }): Promise<void> {
+    this.requireStarted('resumeInstance');
     await this.runtime.driver.setInstancePaused({
       instanceKey: options.instanceKey,
       processingPaused: false,
@@ -325,15 +599,29 @@ export class PortQueue<TQueues extends string = string> {
    * never touches job rows — it only tidies the instances list. The tool never does this itself.
    */
   async removeInstance(options: { instanceKey: string }): Promise<boolean> {
+    this.requireStarted('removeInstance');
     const row = await this.runtime.driver.getInstance({ instanceKey: options.instanceKey });
     if (!row) return false;
     const now = this.runtime.clock.now();
-    if (row.lastSeenAt >= now - INSTANCE_REMOVAL_STALE_SECONDS * 1000) {
+    const staleAfterMs = secondsToMs(
+      INSTANCE_REMOVAL_STALE_SECONDS,
+      'instance removal staleness window',
+    );
+    if (row.lastSeenAt >= now - staleAfterMs) {
       throw new InstanceActiveError(options.instanceKey);
     }
     const ok = await this.runtime.driver.deleteInstance({ instanceKey: options.instanceKey });
     if (ok) this.events.emit(PortQueueEvent.INSTANCE_REMOVED, { instanceKey: options.instanceKey });
     return ok;
+  }
+
+  /**
+   * Every method that touches the database goes through this first. Before `init()` the driver is
+   * not connected, and the failure the caller used to get was whatever the driver said about its own
+   * connection — which named neither the mistake nor the fix.
+   */
+  private requireStarted(method: string): void {
+    if (!this.state.running) throw new NotStartedError(method);
   }
 }
 

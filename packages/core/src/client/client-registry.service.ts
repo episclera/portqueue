@@ -22,10 +22,6 @@ export class ClientRegistryService {
     return this.workers;
   }
 
-  totalInFlight(): number {
-    return this.workers.reduce((sum, w) => sum + w.inFlight, 0);
-  }
-
   /** Try to cooperatively cancel an active job across all workers on this instance. */
   cancelRunning(jobId: string): boolean {
     for (const worker of this.workers) {

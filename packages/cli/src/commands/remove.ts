@@ -20,13 +20,12 @@ export const removeCommand: Command = {
     if (id) {
       const snap = await pq.getJob({ jobId: id });
       if (!snap) throw new CliError(`Job '${id}' not found.`);
-      const ok = await pq.createQueue({ name: snap.queue }).removeJob({ jobId: id });
+      const ok = await pq.removeJob({ jobId: id });
       if (ok) success(`Removed job ${id}.`);
-      else warn(`Job ${id} not removed.`);
+      else warn(`Job ${id} not removed (it is running — cancel it first).`);
     } else {
-      // The facade resolves the schedule's queue from the id itself, so `--queue` is no longer
-      // needed — and removing one never registers a queue in this admin process.
-      const ok = await pq._cli.removeSchedule({ scheduleId: scheduleId! });
+      // Removal is by id alone: the schedule row carries its own queue, so `--queue` is not needed.
+      const ok = await pq.removeSchedule({ scheduleId: scheduleId! });
       if (ok) success(`Removed schedule ${scheduleId}.`);
       else warn(`Schedule ${scheduleId} not found.`);
     }

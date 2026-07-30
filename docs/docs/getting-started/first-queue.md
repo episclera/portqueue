@@ -29,7 +29,7 @@ const pq = new PortQueue<QueueName>({
 });
 await pq.init();
 
-const emailsQueue = pq.createQueue<{ to: string; template: string }>({ name: QueueName.Emails });
+pq.createQueue<{ to: string; template: string }>({ name: QueueName.Emails });
 // pq.createQueue({ name: 'typo' });  // ❌ compile error — not a QueueName
 ```
 
@@ -42,7 +42,7 @@ handler. `TQueues` constrains *names* only; the two are independent.
 argument — and returns a **result object**, not a bare id.
 
 ```ts
-const emailsJob = await emailsQueue.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
+const emailsJob = await pq.addJob({ queue: QueueName.Emails, data: { to: 'a@b.com', template: 'welcome' } });
 // emailsJob: { jobId, queue: 'emails', status: JobStatus.PENDING, deduplicated: false, startAfter }
 ```
 
@@ -83,8 +83,8 @@ the two tiers agree on the queue with no extra coordination.
 
 ```ts
 // api-server.ts — producer only, no worker here
-const emailsQueue = pq.createQueue({ name: QueueName.Emails });
-await emailsQueue.addJob({ data: { to: 'a@b.com', template: 'welcome' } });
+pq.createQueue({ name: QueueName.Emails });
+await pq.addJob({ queue: QueueName.Emails, data: { to: 'a@b.com', template: 'welcome' } });
 // → handled by the worker tier, not this process
 ```
 

@@ -1,15 +1,16 @@
 /**
- * The `pq._dashboard` job search. Its one job is to be complete: the engine carries no text index,
- * so the term is matched in JS over a chunked scan of every row the other filters allow. These
- * tests pin that — a match in the oldest row is found, and `total` counts every match rather than
- * whatever fitted in one window.
+ * The `pq._dashboard` job search. Its job is to be complete *and* cheap: the term is matched with a
+ * `LIKE` **in SQL** across the five fields an operator triages by, so a match in the oldest row is
+ * found without this process ever seeing the rows that didn't match, and `total` is a `COUNT` rather
+ * than a running tally of a scan.
  *
- * The scan chunk is 1000 rows, so the fixture deliberately spans more than one chunk.
+ * The fixture spans more rows than any page, which is what the previous chunked-scan implementation
+ * needed several round trips and a `JSON.parse` per row to cover.
  */
 import { createTestQueue, type TestQueueHandle } from '../test-utils/create-test-queue';
 import { JobStatus } from '../jobs/job-state.enum';
 
-/** Rows either side of the chunk boundary, so the loop has to come back for more. */
+/** Comfortably more rows than a page, so a match at the far end has to be found by the query. */
 const ROWS = 1200;
 
 describe('dashboard job search (sqlite)', () => {
@@ -23,12 +24,15 @@ describe('dashboard job search (sqlite)', () => {
 
   /** `ROWS` jobs, oldest first, with the needle in the very first (so: last page of a desc scan). */
   async function seed(): Promise<void> {
-    const q = h.pq.createQueue<{ tag: string }>({ name: 'searched' });
-    await q.addJob({ data: { tag: 'needle-oldest' } });
-    for (let i = 1; i < ROWS; i += 1) await q.addJob({ data: { tag: `filler-${i}` } });
+    h.pq.createQueue<{ tag: string }>({ name: 'searched' });
+    await h.pq.addJob({ queue: 'searched', data: { tag: 'needle-oldest' } });
+    await h.pq.addJobs({
+      queue: 'searched',
+      jobs: Array.from({ length: ROWS - 1 }, (_, i) => ({ data: { tag: `filler-${i + 1}` } })),
+    });
   }
 
-  it('finds a match in the oldest row, far outside any single scan chunk', async () => {
+  it('finds a match in the oldest row, far outside any single page', async () => {
     await seed();
     const page = await h.pq._dashboard.getJobs<{ tag: string }>({
       queue: 'searched',
@@ -65,9 +69,8 @@ describe('dashboard job search (sqlite)', () => {
 
   it('searches only inside the other filters', async () => {
     await seed();
-    await h.pq
-      .createQueue<{ tag: string }>({ name: 'elsewhere' })
-      .addJob({ data: { tag: 'needle-oldest' } });
+    h.pq.createQueue<{ tag: string }>({ name: 'elsewhere' });
+    await h.pq.addJob({ queue: 'elsewhere', data: { tag: 'needle-oldest' } });
 
     const scoped = await h.pq._dashboard.getJobs({
       queue: 'searched',
@@ -86,8 +89,12 @@ describe('dashboard job search (sqlite)', () => {
   });
 
   it('matches the payload, the idempotency key and the id, case-insensitively', async () => {
-    const q = h.pq.createQueue<{ to: string }>({ name: 'fields' });
-    const res = await q.addJob({ data: { to: 'ada@example.com' }, idempotencyKey: 'WELCOME-ada' });
+    h.pq.createQueue<{ to: string }>({ name: 'fields' });
+    const res = await h.pq.addJob({
+      queue: 'fields',
+      data: { to: 'ada@example.com' },
+      idempotencyKey: 'WELCOME-ada',
+    });
 
     const byPayload = await h.pq._dashboard.getJobs({ queue: 'fields', search: 'ADA@example' });
     const byKey = await h.pq._dashboard.getJobs({ queue: 'fields', search: 'welcome-' });
@@ -96,9 +103,38 @@ describe('dashboard job search (sqlite)', () => {
     expect([byPayload.total, byKey.total, byId.total]).toEqual([1, 1, 1]);
   });
 
+  it('matches the failure message of a failed job', async () => {
+    h.pq.createQueue({ name: 'broken' });
+    h.pq.createWorker({
+      queue: 'broken',
+      limiter: { pollIntervalSeconds: 0.02 },
+      handler: async () => {
+        throw new Error('smtp connection refused');
+      },
+    });
+    const res = await h.pq.addJob({ queue: 'broken', data: {} });
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      if ((await h.pq.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    const found = await h.pq._dashboard.getJobs({ queue: 'broken', search: 'smtp connection' });
+    expect(found.total).toBe(1);
+    expect(found.items[0]!.id).toBe(res.jobId);
+  });
+
+  it('treats a LIKE metacharacter as text rather than a wildcard', async () => {
+    h.pq.createQueue<{ note: string }>({ name: 'escaped' });
+    await h.pq.addJob({ queue: 'escaped', data: { note: 'discount 100% off' } });
+    await h.pq.addJob({ queue: 'escaped', data: { note: 'plain' } });
+    // A bare `%` used to match everything; it now searches for that character.
+    expect((await h.pq._dashboard.getJobs({ queue: 'escaped', search: '100%' })).total).toBe(1);
+    expect((await h.pq._dashboard.getJobs({ queue: 'escaped', search: '%' })).total).toBe(1);
+  });
+
   it('returns the plain paged read when there is no term', async () => {
-    const q = h.pq.createQueue({ name: 'unsearched' });
-    for (let i = 0; i < 3; i += 1) await q.addJob({ data: { i } });
+    h.pq.createQueue({ name: 'unsearched' });
+    for (let i = 0; i < 3; i += 1) await h.pq.addJob({ queue: 'unsearched', data: { i } });
     const page = await h.pq._dashboard.getJobs({ queue: 'unsearched', limit: 2 });
     expect(page.total).toBe(3);
     expect(page.items).toHaveLength(2);

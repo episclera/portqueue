@@ -85,7 +85,6 @@ export interface ListParams extends Params {
 
 export interface QueueListParams extends ListParams {
   processingPaused?: boolean;
-  inUse?: boolean;
 }
 
 export interface InstanceListParams extends ListParams {

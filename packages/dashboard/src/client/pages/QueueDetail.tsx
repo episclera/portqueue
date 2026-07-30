@@ -20,12 +20,7 @@ import { ActionKind, type QueuePageDto, type StatsDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
-import {
-  ACTIONS_CONFIG,
-  PAUSE_MODES_CONFIG,
-  QUEUE_USAGE_CONFIG,
-  pauseStateLabel,
-} from '../constants/labels';
+import { ACTIONS_CONFIG, PAUSE_MODES_CONFIG, pauseStateLabel } from '../constants/labels';
 import { KpiCards } from '../components/KpiCards';
 import { JobsTable } from '../components/JobsTable';
 import { AddJobForm } from '../components/AddJobForm';
@@ -61,11 +56,7 @@ export function QueueDetailPage(): React.ReactElement {
     },
   ];
 
-  const description = info
-    ? `${pauseStateLabel(info)} · ${
-        info.inUse ? QUEUE_USAGE_CONFIG.inUse.label : QUEUE_USAGE_CONFIG.unused.label
-      }`
-    : 'Jobs, activity and controls for this queue.';
+  const description = info ? pauseStateLabel(info) : 'Jobs, activity and controls for this queue.';
 
   const actions = (
     <Inline gap={2} align="center" wrap>
@@ -86,10 +77,10 @@ export function QueueDetailPage(): React.ReactElement {
       <Button variant="primary" icon={ACTIONS_CONFIG.add.icon} onClick={() => setAddOpen(true)}>
         {ACTIONS_CONFIG.add.label}
       </Button>
-      {info && !info.inUse && (
+      {info && (
         <Popconfirm
           title="Remove this queue from the database?"
-          description="Only allowed because no running process declares it. Job rows are untouched."
+          description="Refused while a running process still declares this queue. Job rows are untouched."
           okDanger
           onConfirm={() => void run({ kind: ActionKind.REMOVE_QUEUE, queue }, 'Queue removed')}
         >

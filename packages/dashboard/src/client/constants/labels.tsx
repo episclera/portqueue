@@ -80,12 +80,6 @@ export const PAUSE_MODES_CONFIG: Record<PauseMode, DisplayConfig> = {
   [PauseMode.ALL]: { label: 'Pause all (also refuse new jobs)' },
 };
 
-/** Whether a queue is declared by a running process. */
-export const QUEUE_USAGE_CONFIG = {
-  inUse: { label: 'In use' },
-  unused: { label: 'Unused' },
-} satisfies Record<string, DisplayConfig>;
-
 /** A queue's / instance's pause state. */
 export const PAUSE_STATES_CONFIG = {
   running: { label: 'Running' },

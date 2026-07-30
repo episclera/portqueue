@@ -46,6 +46,9 @@ export type {
   PageQuery,
 } from './options/common';
 
+// Defaults — every value the tool applies when a caller names none, in one place.
+export * from './constants';
+
 // Result & snapshot types
 export type {
   AddJobResult,
@@ -75,11 +78,31 @@ export type {
 } from './events/hooks';
 
 // Driver contract (for custom drivers) + transactions
-export type { Driver, DriverProbe, Subscription, MigrationStep } from './drivers/driver.interface';
+export type {
+  Driver,
+  DriverProbe,
+  Subscription,
+  MigrationStep,
+  PageWindow,
+  JobListFilter,
+  JobRef,
+  StalledJobRef,
+  RequeuedJobRef,
+  ScheduleRef,
+  QueueListFilter,
+  ScheduleListFilter,
+  InstanceListFilter,
+} from './drivers/driver.interface';
 export type { DriverCapabilitySet } from './drivers/driver-capabilities';
 export { capabilities } from './drivers/driver-capabilities';
 export { DriverContext } from './drivers/driver-context';
 export type { StorageOptions } from './drivers/driver-context';
+// The shared driver base: row mapping, value conversion and the affinity scan, for a custom driver
+// that wants them. Its SQL is entirely the subclass's own.
+export { BaseDriver, JOB_COLUMNS, SCHEDULE_INSERT_COLUMNS } from './drivers/shared/base-driver';
+export type { RawResult, Row, Session } from './drivers/shared/base-driver';
+export { toMigrationSteps, latestVersion } from './drivers/shared/migration';
+export type { FlavourMigration, MigrationNames } from './drivers/shared/migration';
 export type { TransactionHandle, TxQueryResult } from './tx/transaction-handle';
 
 // Logging
@@ -95,7 +118,7 @@ export {
   MigrationFailedError,
   DriverConnectionError,
   DriverQueryError,
-  JobNotFoundError,
+  QueueNotFoundError,
   QueuePausedError,
   QueueInUseError,
   InstanceActiveError,
@@ -119,6 +142,5 @@ export type {
   DashboardSchedulesQuery,
   JobInstanceFilter,
   JobSearchQuery,
-  ScheduleWithQueue,
 } from './dashboard/dashboard-results';
-export type { CliSchedule, DoctorReport } from './cli/cli.service';
+export type { DoctorReport } from './cli/cli.service';

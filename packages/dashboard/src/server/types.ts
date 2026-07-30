@@ -1,10 +1,20 @@
 /** Public option, handler, and framework-shape types for the dashboard middleware. */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Logger, PortQueue } from '@portqueue/core';
+import type { Driver, Logger } from '@portqueue/core';
 
 export interface DashboardOptions {
-  /** The developer's running PortQueue instance. The dashboard rides on it. */
-  portQueue: PortQueue;
+  /**
+   * A driver pointed at the PortQueue database — and that is the whole of the wiring.
+   *
+   * The dashboard builds and owns its own **headless** client from this (see `server/client.ts`): it
+   * declares no queues, registers no instance, runs no workers or scheduler, and never migrates. It
+   * deliberately does **not** take the application's `PortQueue`: the dashboard is normally a
+   * different process from the workers, so riding on their client only ever worked when the two
+   * happened to share one — and it coupled an observer to a participant.
+   *
+   * The connection opens on the first request, not at mount.
+   */
+  driver: Driver;
   /** Mount path (default `/portqueue`). */
   basePath?: string;
   /**
@@ -64,4 +74,9 @@ export interface Dashboard {
   nest: () => NestMiddleware;
   /** The resolved base path. */
   basePath: string;
+  /**
+   * Disconnect the dashboard's own client. Call it when the host shuts down. A no-op if no request
+   * ever caused a connection, and safe to call more than once.
+   */
+  close: () => Promise<void>;
 }

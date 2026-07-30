@@ -21,24 +21,24 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   it('adds, claims, and completes a job', async () => {
     const completed: string[] = [];
     h.pq.on(PortQueueEvent.JOB_COMPLETED, (p) => completed.push(p.jobId));
-    const queue = h.pq.createQueue<{ to: string }>({ name: 'emails' });
+    h.pq.createQueue<{ to: string }>({ name: 'emails' });
     h.pq.createWorker<{ to: string }>({
       queue: 'emails',
       handler: async (job) => ({ sent: job.data.to }),
     });
-    const res = await queue.addJob({ data: { to: 'a@b.com' } });
+    const res = await h.pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
     expect(res.jobId).toBeTruthy();
     expect(res.deduplicated).toBe(false);
 
     await waitFor(() => completed.length === 1);
-    const snap = await queue.getJob({ jobId: res.jobId! });
+    const snap = await h.pq.getJob({ jobId: res.jobId! });
     expect(snap?.status).toBe(JobStatus.COMPLETED);
     expect(snap?.returnValue).toEqual({ sent: 'a@b.com' });
   });
 
   it('retries a throwing handler then succeeds', async () => {
     let calls = 0;
-    const queue = h.pq.createQueue({ name: 'flaky' });
+    h.pq.createQueue({ name: 'flaky' });
     h.pq.createWorker({
       queue: 'flaky',
       handler: async () => {
@@ -47,35 +47,64 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
         return 'ok';
       },
     });
-    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 3, delaySeconds: 0 } });
+    const res = await h.pq.addJob({
+      queue: 'flaky',
+      data: {},
+      retry: { maxAttempts: 3, delaySeconds: 0 },
+    });
     await waitFor(
-      async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
+      async () => (await h.pq.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
     );
     expect(calls).toBe(3);
   });
 
   it('fails terminally after exhausting attempts', async () => {
-    const queue = h.pq.createQueue({ name: 'doomed' });
+    h.pq.createQueue({ name: 'doomed' });
     h.pq.createWorker({
       queue: 'doomed',
       handler: async () => {
         throw new Error('always');
       },
     });
-    const res = await queue.addJob({ data: {}, retry: { maxAttempts: 2, delaySeconds: 0 } });
+    const res = await h.pq.addJob({
+      queue: 'doomed',
+      data: {},
+      retry: { maxAttempts: 2, delaySeconds: 0 },
+    });
     await waitFor(
-      async () => (await queue.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED,
+      async () => (await h.pq.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED,
     );
-    const snap = await queue.getJob({ jobId: res.jobId! });
+    const snap = await h.pq.getJob({ jobId: res.jobId! });
     expect(snap?.failureMessage).toContain('always');
+  });
+
+  it('truncates a very long failure message rather than storing an unbounded stack', async () => {
+    h.pq.createQueue({ name: 'verbose' });
+    h.pq.createWorker({
+      queue: 'verbose',
+      handler: async () => {
+        const err = new Error('short message');
+        err.stack = `Error: short message\n${'    at somewhere (file.ts:1:1)\n'.repeat(2000)}`;
+        throw err;
+      },
+    });
+    const res = await h.pq.addJob({ queue: 'verbose', data: {} });
+    await waitFor(
+      async () => (await h.pq.getJob({ jobId: res.jobId! }))?.status === JobStatus.FAILED,
+    );
+    const snap = await h.pq.getJob({ jobId: res.jobId! });
+    // The throw site survives; the endless frames after it do not.
+    expect(snap!.failureMessage).toContain('short message');
+    expect(snap!.failureMessage).toContain('truncated');
+    expect(snap!.failureMessage!.length).toBeLessThan(5000);
   });
 
   it('processes higher priority first', async () => {
     const order: number[] = [];
-    const queue = h.pq.createQueue<{ n: number }>({ name: 'prio' });
+    h.pq.createQueue<{ n: number }>({ name: 'prio' });
     // Add before creating the worker so both jobs are pending when claiming starts.
-    await queue.addJob({ data: { n: 1 }, priority: 1 });
-    await queue.addJob({ data: { n: 2 }, priority: 10 });
+    await h.pq.addJob({ queue: 'prio', data: { n: 1 }, priority: 1 });
+    await h.pq.addJob({ queue: 'prio', data: { n: 2 }, priority: 10 });
     h.pq.createWorker<{ n: number }>({
       queue: 'prio',
       limiter: { concurrency: 1 },
@@ -88,29 +117,77 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('deduplicates by idempotency key', async () => {
-    const queue = h.pq.createQueue({ name: 'idem' });
-    const a = await queue.addJob({ data: { x: 1 }, idempotencyKey: 'once' });
-    const b = await queue.addJob({ data: { x: 2 }, idempotencyKey: 'once' });
+    h.pq.createQueue({ name: 'idem' });
+    const a = await h.pq.addJob({ queue: 'idem', data: { x: 1 }, idempotencyKey: 'once' });
+    const b = await h.pq.addJob({ queue: 'idem', data: { x: 2 }, idempotencyKey: 'once' });
     expect(b.deduplicated).toBe(true);
     expect(b.jobId).toBe(a.jobId);
   });
 
+  it('adds a batch of jobs in one insert', async () => {
+    h.pq.createQueue<{ n: number }>({ name: 'batch' });
+    const results = await h.pq.addJobs({
+      queue: 'batch',
+      jobs: [{ data: { n: 1 } }, { data: { n: 2 }, idempotencyKey: 'b-2' }, { data: { n: 3 } }],
+    });
+    expect(results).toHaveLength(3);
+    expect(new Set(results.map((r) => r.jobId)).size).toBe(3);
+    expect(results.every((r) => r.deduplicated === false)).toBe(true);
+
+    // Order is preserved: result[i] describes jobs[i].
+    const second = await h.pq.getJob<{ n: number }>({ jobId: results[1]!.jobId! });
+    expect(second!.data.n).toBe(2);
+    expect(second!.idempotencyKey).toBe('b-2');
+
+    // The batch's own keys dedup on a later add.
+    const again = await h.pq.addJobs({
+      queue: 'batch',
+      jobs: [{ data: { n: 9 }, idempotencyKey: 'b-2' }],
+    });
+    expect(again[0]!.deduplicated).toBe(true);
+    expect(again[0]!.jobId).toBe(results[1]!.jobId);
+
+    const page = await h.pq.getJobs({ queue: 'batch' });
+    expect(page.total).toBe(3);
+  });
+
+  it('refuses a recurring entry inside a batch', async () => {
+    h.pq.createQueue({ name: 'batch-recurring' });
+    await expect(
+      h.pq.addJobs({
+        queue: 'batch-recurring',
+        jobs: [{ data: {} }, { data: {}, schedule: { startEverySeconds: 60 } }],
+      }),
+    ).rejects.toThrow(/cannot create recurring jobs/);
+  });
+
   it('pauses and resumes processing cluster-wide', async () => {
     const done: string[] = [];
-    const queue = h.pq.createQueue({ name: 'pausable' });
+    h.pq.createQueue({ name: 'pausable' });
     h.pq.createWorker({ queue: 'pausable', handler: async (job) => void done.push(job.id) });
-    await queue.pause({ mode: PauseMode.PROCESSING });
-    const res = await queue.addJob({ data: {} });
+    await h.pq.pauseQueue({ queue: 'pausable', mode: PauseMode.PROCESSING });
+    const res = await h.pq.addJob({ queue: 'pausable', data: {} });
     // Give the loop a chance; it must NOT process while paused.
     await new Promise((r) => setTimeout(r, 100));
     expect(done).toHaveLength(0);
-    await queue.resume();
+    await h.pq.resumeQueue({ queue: 'pausable' });
     await waitFor(() => done.includes(res.jobId!));
   });
 
   it('refuses new jobs when paused with ALL', async () => {
-    const queue = h.pq.createQueue({ name: 'drain' });
-    await queue.pause({ mode: PauseMode.ALL });
-    await expect(queue.addJob({ data: {} })).rejects.toThrow(/refusing new jobs/);
+    h.pq.createQueue({ name: 'drain' });
+    await h.pq.pauseQueue({ queue: 'drain', mode: PauseMode.ALL });
+    await expect(h.pq.addJob({ queue: 'drain', data: {} })).rejects.toThrow(/refusing new jobs/);
+  });
+
+  it('keeps a queue’s declared defaults across a pause and resume', async () => {
+    // Pausing used to re-declare the queue with no options, silently dropping its retry defaults.
+    h.pq.createQueue({ name: 'defaults', defaultJobOptions: { retry: { maxAttempts: 5 } } });
+    await h.pq.addJob({ queue: 'defaults', data: { first: true } });
+    await h.pq.pauseQueue({ queue: 'defaults' });
+    await h.pq.resumeQueue({ queue: 'defaults' });
+    const res = await h.pq.addJob({ queue: 'defaults', data: { second: true } });
+    const snap = await h.pq.getJob({ jobId: res.jobId! });
+    expect(snap!.retryMaxAttempts).toBe(5);
   });
 });

@@ -8,14 +8,13 @@ export interface FakePqCalls {
   removeJob: unknown[];
   /** `pq._cli.purge(...)` — the facade path a purge takes. */
   purge: unknown[];
-  /** `pq._cli.removeSchedule(...)` — the facade path a schedule removal takes. */
   removeSchedule: unknown[];
   pauseQueue: unknown[];
   resumeQueue: unknown[];
   /**
-   * Queue names this command registered in the process. Commands that only read or address a
-   * queue by name must leave this empty — registering pins `inUse` and trips the removeQueue
-   * guard, which is exactly what the `_cli` facade exists to avoid.
+   * Queue names this command declared in the process. **Every command must leave this empty**: the
+   * CLI runs a headless client and addresses every queue by name, so nothing it does should ever
+   * declare one.
    */
   createQueue: string[];
   migrated: boolean;
@@ -86,38 +85,18 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
     migrated: false,
   };
 
-  const queue = {
-    getSchedules: async () => overrides.schedules ?? [],
-    addJob: async (opts: unknown) => {
-      calls.addJob.push(opts);
-      return overrides.addResult ?? { jobId: 'job-new', deduplicated: false };
-    },
-    retryJob: async (arg: unknown) => {
-      calls.retryJob.push(arg);
-      return overrides.retryResult ?? { jobId: 'job-retried' };
-    },
-    cancelJob: async (arg: unknown) => {
-      calls.cancelJob.push(arg);
-      return overrides.cancelOk ?? true;
-    },
-    removeJob: async (arg: unknown) => {
-      calls.removeJob.push(arg);
-      return overrides.removeJobOk ?? true;
-    },
-  };
-
   /** The `pq._cli` facade the CLI reaches for instead of widening the public API. */
   const cli = {
-    getSchedules: async () => overrides.schedules ?? [],
-    removeSchedule: async (arg: unknown) => {
-      calls.removeSchedule.push(arg);
-      return overrides.removeScheduleOk ?? true;
+    getSchedules: async () => {
+      const items = (overrides.schedules ?? []) as unknown[];
+      return { items, total: items.length };
     },
     purge: async (arg: unknown) => {
       calls.purge.push(arg);
       return overrides.removed ?? 3;
     },
     doctor: async () => overrides.doctor ?? DEFAULT_DOCTOR,
+    driver: {} as never,
   };
 
   const pq = {
@@ -147,9 +126,31 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
       const items = (overrides.instances ?? [DEFAULT_INSTANCE]) as { instanceKey: string }[];
       return items.find((i) => i.instanceKey === instanceKey) ?? null;
     },
-    createQueue: (name: string) => {
-      calls.createQueue.push(name);
-      return queue;
+    addJob: async (opts: unknown) => {
+      calls.addJob.push(opts);
+      return overrides.addResult ?? { jobId: 'job-new', deduplicated: false };
+    },
+    retryJob: async (arg: unknown) => {
+      calls.retryJob.push(arg);
+      return 'retryResult' in overrides
+        ? overrides.retryResult
+        : { jobId: 'job-abcdef123456', queue: 'emails', status: 'PENDING' };
+    },
+    cancelJob: async (arg: unknown) => {
+      calls.cancelJob.push(arg);
+      return overrides.cancelOk ?? true;
+    },
+    removeJob: async (arg: unknown) => {
+      calls.removeJob.push(arg);
+      return overrides.removeJobOk ?? true;
+    },
+    removeSchedule: async (arg: unknown) => {
+      calls.removeSchedule.push(arg);
+      return overrides.removeScheduleOk ?? true;
+    },
+    createQueue: (options: { name: string }) => {
+      calls.createQueue.push(options.name);
+      return { name: options.name };
     },
     pauseQueue: async (arg: unknown) => {
       calls.pauseQueue.push(arg);
