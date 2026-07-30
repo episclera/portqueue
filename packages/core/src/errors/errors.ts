@@ -145,7 +145,7 @@ export class QueuePausedError extends PortQueueError {
 export class QueueInUseError extends PortQueueError {
   constructor(queue: string) {
     super(
-      `Queue '${queue}' is still registered in this process (createQueue/createWorker) and cannot ` +
+      `Queue '${queue}' is still declared in this process (createQueue) and cannot ` +
         `be removed. Removal is a manual admin action for queues no longer used by any running ` +
         `code — stop referencing it everywhere first. The tool never removes queues on its own.`,
       { code: PortQueueErrorCode.QUEUE_IN_USE, context: { queue } },

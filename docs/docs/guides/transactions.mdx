@@ -37,8 +37,6 @@ all. If you roll back, the job insert rolls back with your business row.
 ```ts
 import { fromKnex } from '@portqueue/core/tx';
 
-pq.createQueue<{ to: string }>({ name: 'emails' });
-
 // 1. Open your own transaction.
 await knex.transaction(async (trx) => {
   // 2. Do your business write on it.
@@ -80,7 +78,8 @@ Adapters ship for the query builders `fromKnex`, `fromKysely`, `fromDrizzle`; th
 `fromPg`, `fromOracle`, `fromBetterSqlite3`, and `fromNodeSqlite`.
 
 When no `tx` is passed, the method runs autonomously in its own short transaction. **Every
-job-manipulating method that writes to the database takes an optional `tx`** — `addJob`,
+job-manipulating method that writes to the database takes an optional `tx`** — `addJob`, `addJobs`,
 `retryJob`, `cancelJob`, `removeJob`, `removeJobs`, and `removeSchedule` — so any of them can join
-your transaction and commit atomically with your business write. (Queue/instance control and
-`createQueue` / `createWorker` are not DB mutations and take no `tx`.)
+your transaction and commit atomically with your business write. `addJobs` is a single insert for the
+whole batch, so its entries must all carry the **same** `tx` (or none at all). (Queue/instance
+control and `createQueue` are not DB mutations and take no `tx`.)

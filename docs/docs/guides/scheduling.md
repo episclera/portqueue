@@ -22,21 +22,14 @@ Omit the `schedule` group entirely — the default — and the job is one-off an
 
 The timing props are **mutually exclusive**: a one-off delay never combines with a recurring mode.
 
-**Every duration PortQueue accepts is a number of seconds** — here and everywhere else in the API.
-There are no unit strings to parse and no `'1m'` that might mean a minute or a month; write `60`.
-A job's own durations must be **whole** seconds, since that is how they are stored (integer columns),
-so a fraction is rejected rather than truncated. And there is exactly **one** way to express each of
-them — no `Date`-shaped alternative to `startAfterSeconds`, no unit-string alternative anywhere.
-
 ## Delayed (one-off)
 
 `schedule.startAfterSeconds` delays a one-off job by that many seconds from now:
 
 ```ts
-pq.createQueue({ name: 'emails' });
 await pq.addJob({ queue: 'emails', data, schedule: { startAfterSeconds: 86_400 } }); // 24 hours, in seconds
 
-// For a known wall-clock instant, subtract — there is no absolute-Date option:
+// For a known wall-clock instant, subtract:
 const at = new Date('2026-08-01T09:00:00Z');
 await pq.addJob({
   queue: 'emails',
@@ -52,8 +45,7 @@ become the **template** for each produced run. `schedule.cron` is either a bare 
 (evaluated in UTC) or `{ pattern, tz }` for a timezone:
 
 ```ts
-pq.createQueue({ name: 'reports' });
-const result = await pq.addJob({
+const reportsJob = await pq.addJob({
   queue: 'reports',
   data: { kind: 'sales' },       // template for each run
   priority: 5,                   // job options apply to each run
@@ -94,7 +86,6 @@ cron), just add it twice. To keep exactly one, opt in with an `idempotencyKey` (
 ## Recurring — fixed interval
 
 ```ts
-pq.createQueue({ name: 'healthchecks' });
 // startEverySeconds is a plain number of seconds between runs.
 await pq.addJob({ queue: 'healthchecks', data: {}, schedule: { startEverySeconds: 30 } });
 ```
@@ -121,9 +112,8 @@ Because identical recurrences coexist, the way to guarantee **only one** produce
 `idempotencyKey`. The key is the dedup identity, scoped to the queue, and it is **first-writer-wins**:
 
 ```ts
-pq.createQueue({ name: 'reports' });
-const first = await pq.addJob({ queue: 'reports', data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
-const second = await pq.addJob({ queue: 'reports', data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
+const firstJob = await pq.addJob({ queue: 'reports', data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
+const secondJob = await pq.addJob({ queue: 'reports', data: { kind: 'sales' }, schedule: { cron: '0 8 * * *' }, idempotencyKey: 'daily-sales' });
 // secondJob.deduplicated === true; secondJob.scheduleId === firstJob.scheduleId.
 // The existing schedule is kept **unchanged** — a re-add never mutates it.
 ```
@@ -152,7 +142,6 @@ each schedule's `idempotencyKey` for inspection.
 Unschedule a **recurring** definition by its `scheduleId`:
 
 ```ts
-pq.createQueue({ name: 'reports' });
 await pq.removeSchedule({ scheduleId: reportsJob.scheduleId });
 ```
 
@@ -176,7 +165,6 @@ delete the row outright. See [Cancel a job](./producing-jobs.mdx#cancel-a-job) a
 List a queue's recurring definitions — each carries the `scheduleId` you pass to `removeSchedule`:
 
 ```ts
-pq.createQueue({ name: 'reports' });
 const schedules = await pq.getSchedules({ queue: 'reports' }); // { items, total }
 
 // Paged, and narrowed to the armed ones:

@@ -37,8 +37,8 @@ import {
   INSTANCE_REMOVAL_STALE_SECONDS,
 } from './constants';
 import type { PortQueueOptions, ShutdownOptions } from './options/client-options';
-import type { CreateQueueOptions } from './options/queue-options';
-import type { WorkerOptions } from './options/worker-options';
+import type { CreateQueueOptions, ErrorClass } from './options/queue-options';
+import type { LimiterOptions } from './options/common';
 import type { AddJobOptions } from './options/job-options';
 import type { JobHandler } from './jobs/job';
 import type { Logger } from './logging/logger.interface';
@@ -63,13 +63,14 @@ import type {
 
 /**
  * The top-level client, and **the whole developer-facing surface**. Owns connection, migration,
- * shared services, and the queue/worker registrations. A thin facade — all real work lives in
- * focused services. Construction wires dependencies only; no I/O until `init()`.
+ * shared services, and the queue declarations. A thin facade — all real work lives in focused
+ * services. Construction wires dependencies only; no I/O until `init()`.
  *
- * Every operation lives here rather than on the handles `createQueue`/`createWorker` return: those
- * are registrations with no methods (see {@link Queue}). A per-queue operation takes `queue` as a
- * named argument, so one import reaches every queue and no read can silently escape the scope its
- * handle implied.
+ * Every operation lives here rather than on the handle `createQueue` returns: that is a registration
+ * with no methods (see {@link Queue}). A per-queue operation takes `queue` as a named argument, so one
+ * import reaches every queue and no read can silently escape the scope its handle implied. There is
+ * also no `createWorker`: one `createQueue` call declares a queue *and*, if it carries a `handler`,
+ * consumes it.
  *
  * @typeParam TQueues - an optional string enum/union of this app's queue names, threaded
  * through every queue-name argument for compile-time safety (defaults to `string`).
@@ -84,7 +85,6 @@ export class PortQueue<TQueues extends string = string> {
   private readonly events: EventBusService;
   private readonly hooks: HookRunner;
   private readonly state = { running: false };
-  private readonly hookedQueues = new Set<string>();
   private readonly headless: boolean;
 
   /**
@@ -184,28 +184,63 @@ export class PortQueue<TQueues extends string = string> {
 
   // --- Registrations ---
   /**
-   * Declare a queue in this process: its default job options, its retention policy and its
-   * queue-scoped hooks. The returned {@link Queue} carries the name and the payload type and nothing
-   * else — every operation is a method on this class.
+   * Declare a queue in this process — **everything about it, in one call**: the `handler` that
+   * processes its jobs, the `limiter` / `dontAutoretryFor` settings that shape how it claims them, and
+   * the `defaultJobOptions`, `retention` and `hooks` its jobs inherit.
    *
-   * This is the **only** thing that records queue options, and it *replaces* them: a second call
-   * with different options re-declares the queue. Nothing internal calls it — `pauseQueue`,
-   * `getJobs`, the dashboard and the CLI all address a queue by name — so an admin action can never
-   * blank the defaults a declaration set.
+   * The handler is required: declaring a queue *is* declaring that this process consumes it. A process
+   * that only enqueues declares nothing — {@link addJob} addresses a queue by name and creates its row
+   * on first use, so an API tier can produce onto a queue its worker tier consumes.
    *
-   * On a headless client (the dashboard or CLI) this declares nothing and writes nothing; it only
-   * hands back a typed name.
+   * The returned {@link Queue} carries the name and the payload type and nothing else — every
+   * operation is a method on this class.
+   *
+   * A queue is declared **once per process**: a second call for the same name throws, because two
+   * handlers would run two claim loops over the same rows. This is also the only thing that records
+   * queue options, and nothing internal calls it — `pauseQueue`, `getJobs`, the dashboard and the CLI
+   * all address a queue by name — so an admin action can never blank the defaults a declaration set.
+   *
+   * On a headless client (the dashboard or CLI) this declares nothing, writes nothing and consumes
+   * nothing; it only hands back a typed name.
    */
-  createQueue<TData = unknown>(options: CreateQueueOptions<TQueues>): Queue<TData> {
-    const { name, ...queueOptions } = options;
+  createQueue<TData = unknown, TResult = unknown>(
+    options: CreateQueueOptions<TData, TResult, TQueues>,
+  ): Queue<TData> {
+    const { name, handler, limiter, dontAutoretryFor, ...queueOptions } = options;
+    // Every rule about the *call* is checked before anything is recorded: a rejected declaration
+    // must not have replaced the queue's options or its hooks on its way to throwing.
+    if (typeof handler !== 'function') {
+      throw new InvalidOptionsError(
+        `createQueue for queue '${name}' requires 'handler' to be a function — a queue is declared ` +
+          `by the process that processes it. To only enqueue, skip createQueue and call ` +
+          `pq.addJob({ queue: '${name}', data }), which creates the queue's row on first use.`,
+        { queue: name },
+      );
+    }
+    if (this.clientRegistry.hasWorker(name)) {
+      throw new InvalidOptionsError(
+        `Queue '${name}' already has a handler in this process. A queue is consumed by at most ` +
+          `one handler per process — two claim loops over the same rows only compete for them. ` +
+          `Raise 'limiter.concurrency' to process more jobs at once, or run another instance.`,
+        { queue: name },
+      );
+    }
+    if ((limiter?.rateMax == null) !== (limiter?.rateDurationSeconds == null)) {
+      throw new InvalidOptionsError(
+        `createQueue for queue '${name}' set only one half of the rate cap. ` +
+          `'limiter.rateMax' and 'limiter.rateDurationSeconds' define one setting — how many jobs ` +
+          `may start per window — so either both are given or neither is.`,
+        { queue: name },
+      );
+    }
     this.runtime.registry.declare(name, queueOptions);
-    // Register queue-scoped hooks once (QueueOptions.hooks) — a second declaration with different
-    // hooks would otherwise stack duplicates onto every job.
-    if (!this.headless && queueOptions.hooks && !this.hookedQueues.has(name)) {
-      this.hookedQueues.add(name);
-      for (const hook of queueOptions.hooks) {
+    if (!this.headless) {
+      // Reached at most once per queue: the handler check above rejects a second declaration, so
+      // these hooks can never stack duplicates onto every add.
+      for (const hook of queueOptions.hooks ?? []) {
         this.hooks.register(hook.queue ? hook : { ...hook, queue: name });
       }
+      this.startConsuming(name, handler as JobHandler, limiter, dontAutoretryFor);
     }
     const existing = this.clientRegistry.getQueue(name) as Queue<TData> | undefined;
     if (existing) return existing;
@@ -214,24 +249,24 @@ export class PortQueue<TQueues extends string = string> {
     return queue;
   }
 
-  createWorker<TData = unknown, TResult = unknown>(
-    options: WorkerOptions<TData, TResult, TQueues>,
-  ): Worker {
-    if (typeof options.handler !== 'function') {
-      throw new InvalidOptionsError(
-        `createWorker for queue '${options.queue}' requires 'handler' to be a function.`,
-        { queue: options.queue },
-      );
-    }
-    const handler = options.handler as unknown as JobHandler;
-    const limiter = options.limiter ?? {};
+  /**
+   * Build the claim loop behind a queue that declared a `handler`, and start it if the client is
+   * already running. Internal: there is no worker on the public surface, so nothing is handed back.
+   */
+  private startConsuming(
+    queue: string,
+    handler: JobHandler,
+    limiterOptions: LimiterOptions = {},
+    dontAutoretryFor: Array<ErrorClass | string> = [],
+  ): void {
+    const limiter = limiterOptions;
     const concurrency = limiter.concurrency ?? DEFAULT_CONCURRENCY;
     const rate =
       limiter.rateMax != null && limiter.rateDurationSeconds != null
         ? { max: limiter.rateMax, durationSeconds: limiter.rateDurationSeconds }
         : null;
     const config: WorkerConfig = {
-      queue: options.queue,
+      queue,
       handler,
       concurrency,
       batchSize: limiter.batchSize ?? concurrency,
@@ -241,8 +276,7 @@ export class PortQueue<TQueues extends string = string> {
       // `limiter.pollIntervalSeconds` for snappier pickup.
       pollIntervalSeconds: limiter.pollIntervalSeconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
       ...(rate ? { limiter: rate } : {}),
-      dontAutoretryFor: options.dontAutoretryFor ?? [],
-      queueOptions: this.runtime.registry.getOptions(options.queue),
+      dontAutoretryFor,
     };
     const worker = new Worker(
       this.runtime,
@@ -250,9 +284,8 @@ export class PortQueue<TQueues extends string = string> {
       config,
       () => this.lifecycle.systemPressureHigh,
     );
-    this.clientRegistry.addWorker(worker);
+    this.clientRegistry.addWorker(queue, worker);
     if (this.state.running) void worker.start();
-    return worker;
   }
 
   // --- Producing ---
@@ -535,8 +568,8 @@ export class PortQueue<TQueues extends string = string> {
 
   /**
    * Manually remove a queue's row from the database. Refuses if the queue is still declared in
-   * *this* process (via createQueue/createWorker) — a running process must not have its queue
-   * deleted from under it. The tool never removes queues automatically; this is an admin action
+   * *this* process (via `createQueue`) — a running process must not have its queue deleted from
+   * under it. The tool never removes queues automatically; this is an admin action
    * for queues no longer used by any running code. Job rows link by name (no FK) and are untouched.
    */
   async removeQueue(options: { name: TQueues | string }): Promise<boolean> {

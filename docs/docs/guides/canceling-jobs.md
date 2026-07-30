@@ -91,8 +91,8 @@ can come back. To make cancellation final, add it to the worker's `dontAutoretry
 `AbortError` the moment it fires:
 
 ```ts
-pq.createWorker({
-  queue: 'sync',
+pq.createQueue({
+  name: 'sync',
   handler: async (job) => {
     const res = await fetch(`https://api.example.com/sync/${job.data.id}`, { signal: job.signal });
     return res.json();

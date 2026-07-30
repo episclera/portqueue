@@ -24,7 +24,7 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
 
 ## Connection pool sizing
 
-Size for the **sum of worker concurrencies** + headroom for claim/heartbeat/notify
+Size for the **sum of every consumed queue's `limiter.concurrency`** + headroom for claim/heartbeat/notify
 traffic. Keep handler transactions short so one queue can't starve the shared pool.
 
 ## Reliability & idempotency
@@ -45,7 +45,7 @@ your own pruning); keep failed jobs longer than completed.
 
 ## Backpressure & rate limits
 
-Set a [`systemLimiter`](./guides/rate-limiting.md#system-pressure-backpressure) and a worker-local
+Set a [`systemLimiter`](./guides/rate-limiting.md#system-pressure-backpressure) and a per-queue
 [rate limiter](./guides/rate-limiting.md) for third-party APIs.
 
 Its thresholds read **this Node process**, not the machine: `maxCpuPercent` is a share (0–100) of
@@ -131,11 +131,11 @@ until `init()` resolved.
 
 - [ ] Producers and consumers split; critical vs bulk on separate instances/pools.
 - [ ] `SIGTERM`/`SIGINT` → `pq.shutdown({ graceful: true })`; long handlers honor `job.signal`.
-- [ ] Pool sized for the sum of worker concurrencies + headroom.
+- [ ] Pool sized for the sum of every consumed queue's `limiter.concurrency` + headroom.
 - [ ] Handlers idempotent; `idempotencyKey`/`singletonKey` where relevant.
 - [ ] Retries with jitter + cap; `dontAutoretryFor` for non-retryable errors.
 - [ ] Retention on; failed kept longer than completed.
-- [ ] `systemLimiter` set (thresholds read this process, not the host); worker-local rate limiter set for third-party APIs.
+- [ ] `systemLimiter` set (thresholds read this process, not the host); per-queue rate limiter set for third-party APIs.
 - [ ] `--max-old-space-size` set to fit the machine or container, not left at Node's default.
 - [ ] Stable `instance.instanceKey` on every process (even a single one); jobs that need locality targeted by capability pattern; heartbeat interval tuned.
 - [ ] `PortQueueEvent.ERROR` subscribed; metrics/tracing via hooks.

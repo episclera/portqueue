@@ -24,8 +24,7 @@ import { fromKnex } from '@portqueue/core/tx';
 
 await knex.transaction(async (trx) => {
   await trx('order').insert(order);
-  const fulfillmentQueue = pq.createQueue('fulfillment');
-  await fulfillmentQueue.addJob({ data: { orderId }, tx: fromKnex(trx) });
+  await pq.addJob({ queue: 'fulfillment', data: { orderId }, tx: fromKnex(trx) });
 }); // your trx owns commit/rollback
 ```
 

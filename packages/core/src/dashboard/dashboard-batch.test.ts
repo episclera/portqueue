@@ -29,7 +29,6 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
 
   /** `count` pending jobs on one queue, returning their ids. */
   async function seed(queue: string, count: number): Promise<string[]> {
-    h.pq.createQueue({ name: queue });
     const added = await h.pq.addJobs({
       queue,
       jobs: Array.from({ length: count }, (_, i) => ({ data: { i } })),
@@ -54,10 +53,9 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
   });
 
   it('re-arms a failed job rather than adding a new one', async () => {
-    h.pq.createQueue<{ v: number }>({ name: 'batched' });
     let attempts = 0;
-    h.pq.createWorker({
-      queue: 'batched',
+    h.pq.createQueue<{ v: number }>({
+      name: 'batched',
       limiter: { pollIntervalSeconds: 0.02 },
       handler: async () => {
         attempts += 1;
@@ -157,7 +155,6 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
   });
 
   it('removes many schedules in one call, reporting each one’s queue', async () => {
-    h.pq.createQueue({ name: 'sched-batch' });
     const a = await h.pq.addJob({
       queue: 'sched-batch',
       data: {},

@@ -21,9 +21,8 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   it('adds, claims, and completes a job', async () => {
     const completed: string[] = [];
     h.pq.on(PortQueueEvent.JOB_COMPLETED, (p) => completed.push(p.jobId));
-    h.pq.createQueue<{ to: string }>({ name: 'emails' });
-    h.pq.createWorker<{ to: string }>({
-      queue: 'emails',
+    h.pq.createQueue<{ to: string }>({
+      name: 'emails',
       handler: async (job) => ({ sent: job.data.to }),
     });
     const res = await h.pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
@@ -38,9 +37,8 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
 
   it('retries a throwing handler then succeeds', async () => {
     let calls = 0;
-    h.pq.createQueue({ name: 'flaky' });
-    h.pq.createWorker({
-      queue: 'flaky',
+    h.pq.createQueue({
+      name: 'flaky',
       handler: async () => {
         calls += 1;
         if (calls < 3) throw new Error('boom');
@@ -59,9 +57,8 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('fails terminally after exhausting attempts', async () => {
-    h.pq.createQueue({ name: 'doomed' });
-    h.pq.createWorker({
-      queue: 'doomed',
+    h.pq.createQueue({
+      name: 'doomed',
       handler: async () => {
         throw new Error('always');
       },
@@ -79,9 +76,8 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('truncates a very long failure message rather than storing an unbounded stack', async () => {
-    h.pq.createQueue({ name: 'verbose' });
-    h.pq.createWorker({
-      queue: 'verbose',
+    h.pq.createQueue({
+      name: 'verbose',
       handler: async () => {
         const err = new Error('short message');
         err.stack = `Error: short message\n${'    at somewhere (file.ts:1:1)\n'.repeat(2000)}`;
@@ -101,12 +97,11 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
 
   it('processes higher priority first', async () => {
     const order: number[] = [];
-    h.pq.createQueue<{ n: number }>({ name: 'prio' });
-    // Add before creating the worker so both jobs are pending when claiming starts.
+    // Enqueue before the queue is declared, so both jobs are pending when claiming starts.
     await h.pq.addJob({ queue: 'prio', data: { n: 1 }, priority: 1 });
     await h.pq.addJob({ queue: 'prio', data: { n: 2 }, priority: 10 });
-    h.pq.createWorker<{ n: number }>({
-      queue: 'prio',
+    h.pq.createQueue<{ n: number }>({
+      name: 'prio',
       limiter: { concurrency: 1 },
       handler: async (job) => {
         order.push(job.data.n);
@@ -117,7 +112,6 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('deduplicates by idempotency key', async () => {
-    h.pq.createQueue({ name: 'idem' });
     const a = await h.pq.addJob({ queue: 'idem', data: { x: 1 }, idempotencyKey: 'once' });
     const b = await h.pq.addJob({ queue: 'idem', data: { x: 2 }, idempotencyKey: 'once' });
     expect(b.deduplicated).toBe(true);
@@ -125,7 +119,6 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('adds a batch of jobs in one insert', async () => {
-    h.pq.createQueue<{ n: number }>({ name: 'batch' });
     const results = await h.pq.addJobs({
       queue: 'batch',
       jobs: [{ data: { n: 1 } }, { data: { n: 2 }, idempotencyKey: 'b-2' }, { data: { n: 3 } }],
@@ -152,7 +145,6 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('refuses a recurring entry inside a batch', async () => {
-    h.pq.createQueue({ name: 'batch-recurring' });
     await expect(
       h.pq.addJobs({
         queue: 'batch-recurring',
@@ -163,8 +155,7 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
 
   it('pauses and resumes processing cluster-wide', async () => {
     const done: string[] = [];
-    h.pq.createQueue({ name: 'pausable' });
-    h.pq.createWorker({ queue: 'pausable', handler: async (job) => void done.push(job.id) });
+    h.pq.createQueue({ name: 'pausable', handler: async (job) => void done.push(job.id) });
     await h.pq.pauseQueue({ queue: 'pausable', mode: PauseMode.PROCESSING });
     const res = await h.pq.addJob({ queue: 'pausable', data: {} });
     // Give the loop a chance; it must NOT process while paused.
@@ -175,14 +166,18 @@ describe.each(TEST_ENGINES)('producer/consumer behavior (%s)', (engine) => {
   });
 
   it('refuses new jobs when paused with ALL', async () => {
-    h.pq.createQueue({ name: 'drain' });
+    h.pq.createQueue({ name: 'drain', handler: async () => 'ok' });
     await h.pq.pauseQueue({ queue: 'drain', mode: PauseMode.ALL });
     await expect(h.pq.addJob({ queue: 'drain', data: {} })).rejects.toThrow(/refusing new jobs/);
   });
 
   it('keeps a queue’s declared defaults across a pause and resume', async () => {
     // Pausing used to re-declare the queue with no options, silently dropping its retry defaults.
-    h.pq.createQueue({ name: 'defaults', defaultJobOptions: { retry: { maxAttempts: 5 } } });
+    h.pq.createQueue({
+      name: 'defaults',
+      defaultJobOptions: { retry: { maxAttempts: 5 } },
+      handler: async () => 'ok',
+    });
     await h.pq.addJob({ queue: 'defaults', data: { first: true } });
     await h.pq.pauseQueue({ queue: 'defaults' });
     await h.pq.resumeQueue({ queue: 'defaults' });

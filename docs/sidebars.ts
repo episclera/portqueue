@@ -6,12 +6,7 @@ import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
  */
 const sidebars: SidebarsConfig = {
   docsSidebar: [
-    {
-      type: 'category',
-      label: 'Getting Started',
-      collapsed: false,
-      items: ['getting-started/installation', 'getting-started/first-queue'],
-    },
+    'getting-started',
     {
       type: 'category',
       label: 'Core Guides',

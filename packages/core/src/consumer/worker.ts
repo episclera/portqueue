@@ -5,11 +5,10 @@ import { secondsToMs } from '../util/seconds';
 import { DRAIN_POLL_SECONDS } from '../constants';
 import type { CompletionService } from './completion.service';
 import type { JobHandler } from '../jobs/job';
-import type { ErrorClass } from '../options/worker-options';
-import type { QueueOptions } from '../options/queue-options';
+import type { ErrorClass } from '../options/queue-options';
 import type { Runtime } from '../client/runtime';
 
-/** Worker wiring, resolved from `WorkerOptions`. Every duration is seconds. */
+/** Worker wiring, resolved from the consumer half of `CreateQueueOptions`. Every duration is seconds. */
 export interface WorkerConfig {
   queue: string;
   handler: JobHandler;
@@ -19,14 +18,16 @@ export interface WorkerConfig {
   pollIntervalSeconds: number;
   limiter?: { max: number; durationSeconds: number };
   dontAutoretryFor: Array<ErrorClass | string>;
-  queueOptions: QueueOptions;
 }
 
 /**
  * The consumer for one queue. Owns its own claim loop, heartbeat, and
- * wakeup subscription — queues are independent lanes. A registration,
- * not a control surface: it begins claiming when the client starts and its queue isn't
- * paused, and stops when the client stops. No public methods.
+ * wakeup subscription — queues are independent lanes.
+ *
+ * **Internal.** There is no developer-facing worker: `pq.createQueue({ name, handler })` builds one
+ * of these behind the queue's declaration, and it is never handed out. It begins claiming when the
+ * client starts and its queue isn't paused, and stops when the client stops — so there was never a
+ * lifecycle method to expose in the first place.
  */
 export class Worker {
   private readonly execution: ExecutionService;
@@ -52,7 +53,6 @@ export class Worker {
       handler: config.handler,
       dontAutoretryFor: config.dontAutoretryFor,
       lockDurationSeconds: config.lockDurationSeconds,
-      queueOptions: config.queueOptions,
     };
     this.execution = new ExecutionService(runtime, completion, execConfig);
     if (config.limiter) this.limiter = new RateLimiterService(config.limiter, runtime.clock);

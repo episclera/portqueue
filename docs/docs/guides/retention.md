@@ -31,6 +31,7 @@ import { RetentionMode } from '@portqueue/core';
 pq.createQueue({
   name: 'emails',
   retention: { mode: RetentionMode.DELETE_AFTER, ttlSeconds: 259_200 }, // 3 days, in seconds
+  handler: async (job) => send(job.data),
 });
 
 // per-job override (highest precedence) — keep this one longer
@@ -55,6 +56,7 @@ await pq.addJob({ queue: 'emails', data, retention: { mode: RetentionMode.DELETE
       ttlSeconds: 259_200,
       statuses: [JobStatus.COMPLETED], // sweep the successes; keep the failures
     },
+    handler: async (job) => send(job.data),
   });
   ```
 
@@ -68,16 +70,10 @@ row. Changing a queue's policy therefore governs the jobs added after it, never 
 queued — which is the same rule `ttlSeconds` follows, and the reason the sweeper never has to re-read
 a queue's live options.
 
-:::info No count-based retention
-PortQueue only supports **TTL-based** deletion via `DELETE_AFTER`. There is **no** count-based
-retention — nothing like BullMQ's `removeOnComplete: { count: N }`. If you need to cap the number of
-rows, use TTL and/or manual pruning (below).
-:::
-
 Retention only ever acts on **finished** jobs — those with status `COMPLETED`, `FAILED`,
 `CANCELLED`, or `EXPIRED` (and only when their resolved retention is `DELETE_AFTER` and the
-TTL has elapsed). Jobs still in flight — `PENDING`, `ACTIVE`, `RETRY`, and the derived
-`STALLED` status — are **never touched** by retention.
+TTL has elapsed). Jobs still in flight — `PENDING`, `ACTIVE` (including an `ACTIVE` row whose
+lock has lapsed, which reads as `stalled`) and `RETRY` — are **never touched** by retention.
 
 :::info Keep failed jobs longer
 There is **no dead-letter queue** — failed jobs stay in `job` with status `FAILED` for
@@ -100,6 +96,5 @@ Manual pruning is always available:
 ```ts
 import { JobStatus } from '@portqueue/core';
 
-pq.createQueue({ name: 'emails' });
 await pq.removeJobs({ queue: 'emails', statuses: [JobStatus.COMPLETED] });
 ```

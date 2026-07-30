@@ -25,7 +25,7 @@ a robust queue, as pg-boss showed. PortQueue takes that insight and makes it
 ## What you get
 
 - **One API across every engine.** Swap the driver import; your app code is unchanged.
-- **Producer/consumer split.** `Queue` produces, `Worker` consumes — "produce here,
+- **Producer/consumer split.** One `pq` object produces and consumes — "produce here,
   process there" is a first-class deployment.
 - **Transactional enqueue.** A job exists only if your business transaction commits — the
   dual-write bug, gone.
@@ -41,12 +41,12 @@ import { PostgresDriver } from '@portqueue/core/drivers/postgres';
 const pq = new PortQueue({ driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }) });
 await pq.init();
 
-const emailsQueue = pq.createQueue('emails');
-await emailsQueue.addJob({ data: { to: 'a@b.com' } });
+// One call declares the queue and processes it: name, tuning, and the handler together.
+pq.createQueue({ name: 'emails', limiter: { concurrency: 10 }, handler: async (job) => send(job.data) });
 
-pq.createWorker({ queue: 'emails', concurrency: 10, handler: async (job) => send(job.data) });
+await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
 ```
 
 Free and open source. Commercial use permitted. No license fee, no obligations.
 
-Head to [Getting Started](/docs/getting-started/installation) to try it.
+Head to [Getting Started](/docs/getting-started) to try it.

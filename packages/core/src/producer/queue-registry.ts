@@ -160,10 +160,10 @@ export class QueueRegistry {
   }
 
   /**
-   * Whether this queue was declared in *this* process (via createQueue/createWorker), whether or
-   * not its row has been ensured yet. Used to block manual queue removal of an in-use queue: a
-   * running process that still references the queue must not have it deleted from under it. Always
-   * false on a headless client — an admin tool never owns a queue.
+   * Whether this queue was declared in *this* process (via `createQueue`), whether or not its row
+   * has been ensured yet. Used to block manual queue removal of an in-use queue: a running process
+   * that still references the queue must not have it deleted from under it. Always false on a
+   * headless client — an admin tool never owns a queue.
    */
   isRegistered(name: string): boolean {
     if (this.headless) return false;

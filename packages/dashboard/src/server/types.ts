@@ -7,7 +7,7 @@ export interface DashboardOptions {
    * A driver pointed at the PortQueue database — and that is the whole of the wiring.
    *
    * The dashboard builds and owns its own **headless** client from this (see `server/client.ts`): it
-   * declares no queues, registers no instance, runs no workers or scheduler, and never migrates. It
+   * declares no queues, registers no instance, consumes no queue, runs no scheduler, and never migrates. It
    * deliberately does **not** take the application's `PortQueue`: the dashboard is normally a
    * different process from the workers, so riding on their client only ever worked when the two
    * happened to share one — and it coupled an observer to a participant.

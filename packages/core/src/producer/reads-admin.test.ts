@@ -13,8 +13,6 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('reports client-wide stats and queue listing', async () => {
-    h.pq.createQueue({ name: 'a' });
-    h.pq.createQueue({ name: 'b' });
     await h.pq.addJob({ queue: 'a', data: {} });
     await h.pq.addJob({ queue: 'b', data: {} });
     const queues = await h.pq.getQueues();
@@ -28,7 +26,6 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('reads one queue and one instance by key, and null for an unknown one', async () => {
-    h.pq.createQueue({ name: 'solo' });
     await h.pq.addJob({ queue: 'solo', data: {} });
 
     const queue = await h.pq.getQueue({ name: 'solo' });
@@ -43,7 +40,6 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('pages jobs by offset and reports the filter total on every page', async () => {
-    h.pq.createQueue({ name: 'offset-paged' });
     for (let i = 0; i < 5; i += 1) await h.pq.addJob({ queue: 'offset-paged', data: { i } });
 
     const page1 = await h.pq.getJobs({ queue: 'offset-paged', limit: 2, offset: 0 });
@@ -62,9 +58,7 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('counts only the filtered rows in total', async () => {
-    h.pq.createQueue({ name: 'counted' });
     for (let i = 0; i < 3; i += 1) await h.pq.addJob({ queue: 'counted', data: { i } });
-    h.pq.createQueue({ name: 'other' });
     await h.pq.addJob({ queue: 'other', data: {} });
 
     const scoped = await h.pq.getJobs({ queue: 'counted', limit: 1 });
@@ -80,7 +74,7 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('pauses and resumes via the client convenience methods', async () => {
-    h.pq.createQueue({ name: 'cq' });
+    h.pq.createQueue({ name: 'cq', handler: async () => 'ok' });
     await h.pq.pauseQueue({ queue: 'cq', mode: PauseMode.ALL });
     await expect(h.pq.addJob({ queue: 'cq', data: {} })).rejects.toThrow(/refusing new jobs/);
     await h.pq.resumeQueue({ queue: 'cq' });
@@ -89,9 +83,8 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('re-runs a finished single-function job by re-arming its own row', async () => {
-    h.pq.createQueue({ name: 're' });
-    h.pq.createWorker({
-      queue: 're',
+    h.pq.createQueue({
+      name: 're',
       limiter: { pollIntervalSeconds: 0.02 },
       handler: async () => 'ok',
     });
@@ -114,7 +107,6 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('bulk-removes jobs by id and leaves the counts empty', async () => {
-    h.pq.createQueue({ name: 'bulk' });
     const ids: string[] = [];
     for (let i = 0; i < 3; i += 1) {
       ids.push((await h.pq.addJob({ queue: 'bulk', data: { i } })).jobId!);
@@ -126,7 +118,6 @@ describe('client reads & admin (sqlite)', () => {
   });
 
   it('never removes an ACTIVE job — it must be cancelled first', async () => {
-    h.pq.createQueue({ name: 'rm-active' });
     const jobId = (await h.pq.addJob({ queue: 'rm-active', data: {} })).jobId!;
     // Claim it so the row is ACTIVE, exactly as a worker would hold it.
     await h.driver.claimJobs({
@@ -195,7 +186,7 @@ describe('client reads & admin (sqlite)', () => {
     expect(await h.driver.getQueueByName({ name: 'orphan' })).toBeNull();
 
     // A queue still declared on this client is refused.
-    h.pq.createQueue({ name: 'live' });
-    await expect(h.pq.removeQueue({ name: 'live' })).rejects.toThrow(/still registered/);
+    h.pq.createQueue({ name: 'live', handler: async () => 'ok' });
+    await expect(h.pq.removeQueue({ name: 'live' })).rejects.toThrow(/still declared/);
   });
 });

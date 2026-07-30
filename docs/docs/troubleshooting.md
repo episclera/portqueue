@@ -25,7 +25,6 @@ on message strings.
 import { PortQueueError, PortQueueErrorCode } from '@portqueue/core';
 
 try {
-  pq.createQueue({ name: 'emails' });
   await pq.addJob({ queue: 'emails', data });
 } catch (err) {
   if (err instanceof PortQueueError && err.code === PortQueueErrorCode.QUEUE_PAUSED) {
@@ -45,8 +44,10 @@ try {
 | `MIGRATION_FAILED` | `MigrationFailedError` | A migration step errored. Check DB permissions and the underlying error; re-run migrate. |
 | `DRIVER_CONNECTION_ERROR` | `DriverConnectionError` | Couldn't connect. Check connection string, network, credentials, and that the DB client peer dep is installed. |
 | `DRIVER_QUERY_ERROR` | `DriverQueryError` | A query failed at the engine. Inspect the wrapped cause; often a permissions or schema issue. |
-| `QUEUE_NOT_FOUND` | `QueueNotFoundError` | An **admin** client (the dashboard or CLI) was asked to produce onto a queue with no row. Declare it in your application with `pq.createQueue({ name })` first — an admin tool never creates queues. Also raised by `pauseQueue`/`resumeQueue` for a name nothing has ever used. |
+| `QUEUE_NOT_FOUND` | `QueueNotFoundError` | An **admin** client (the dashboard or CLI) was asked to produce onto a queue with no row. Have the application declare it (or add a job to it) first — an admin tool never creates queues. Also raised by `pauseQueue`/`resumeQueue` for a name nothing has ever used. |
 | `QUEUE_PAUSED` | `QueuePausedError` | An add was refused because the queue is paused with `PauseMode.ALL`. Resume it, or expect this during a drain. |
+| `QUEUE_IN_USE` | `QueueInUseError` | `removeQueue` refused because the queue is still declared in *this* process (by `createQueue`). Remove it from an admin client, or stop declaring it here first. |
+| `INSTANCE_ACTIVE` | `InstanceActiveError` | `removeInstance` refused because the instance was last seen less than 30 minutes ago. Wait until it has been unseen that long — a live instance would just re-register. |
 | `SHUTDOWN_TIMEOUT` | `ShutdownTimeoutError` | `shutdown()` gave up on in-flight work after `timeoutSeconds`. The client is stopped and the driver disconnected either way; raise the timeout or make long handlers honour `job.signal`. |
 | `MISSING_PEER_DEPENDENCY` | `MissingPeerDependencyError` | The driver's client (e.g. `pg`, `better-sqlite3`) isn't installed. Install the peer shown in the message. |
 
@@ -81,15 +82,15 @@ with the offending fields). Branching on `err.code` is still the most robust che
 | `DriverConnectionError` | `DRIVER_CONNECTION_ERROR` | Couldn't connect to the DB. | Check connection string, network, credentials, peer dep. |
 | `DriverQueryError` | `DRIVER_QUERY_ERROR` | A query failed at the engine. | Inspect the wrapped cause (permissions/schema). |
 | `QueuePausedError` | `QUEUE_PAUSED` | `add` refused because the queue is paused with `PauseMode.ALL`. | Resume the queue, or expect this during a drain. |
-| `QueueInUseError` | `QUEUE_IN_USE` | `removeQueue` refused because the queue still has jobs/workers. | Drain and stop workers before removing. |
-| `InstanceActiveError` | `INSTANCE_ACTIVE` | `removeInstance` refused because the instance is still live. | Pause/stop the instance first, then remove. |
+| `QueueInUseError` | `QUEUE_IN_USE` | `removeQueue` refused because the queue is still declared in this process. | Stop declaring it here, or remove it from an admin client. |
+| `InstanceActiveError` | `INSTANCE_ACTIVE` | `removeInstance` refused because the instance was seen less than 30 minutes ago. | Wait until it has been unseen for 30 minutes. |
 | `ShutdownTimeoutError` | `SHUTDOWN_TIMEOUT` | Graceful shutdown didn't finish within `timeoutSeconds`. | Raise the timeout or make handlers honor `job.signal`. |
 | `MissingPeerDependencyError` | `MISSING_PEER_DEPENDENCY` | The driver's client peer dep isn't installed. | Install the peer shown in the message. |
 
 ## Diagnose with events
 
 A `try/catch` only covers failures on *your* call path. Everything that happens inside the
-worker loops — a handler throwing, a job stalling because an instance died, an internal error
+claim loops — a handler throwing, a job stalling because an instance died, an internal error
 the tool swallows to stay up — surfaces as an [event](./events-hooks/events.md), never an
 exception. Subscribe on the client to watch it live and wire it to your logs/metrics:
 
@@ -127,16 +128,16 @@ change* an operation rather than observe it, use a [hook](./events-hooks/hooks.m
 - **A handler keeps re-running** — it's throwing. Watch `JOB_FAILED` / `JOB_RETRYING` and
   inspect the `error`. Failed jobs stay in the `job` table (there is no dead-letter queue), so
   you can inspect them and `retryJob`.
-- **Nothing is processing** — the queue may be paused (`QUEUE_PAUSED`), or no worker is
-  registered on any instance. Confirm a worker tier is running the queue (watch `WORKER_STARTED`).
+- **Nothing is processing** — the queue may be paused (`QUEUE_PAUSED`), or no running process
+  declared it **with a handler**. Confirm a consumer tier is up (watch `WORKER_STARTED`).
 - **Jobs are never picked up** — a job sits enqueued forever with no `JOB_ACTIVE`. Usual causes:
   - **Affinity mismatch** — the job's `preferredInstanceKeyPattern` matches no *live* instance,
     so nothing is eligible to run it. It waits indefinitely until a matching `instanceKey` comes
     online. Widen the pattern or start an instance whose key matches.
   - **Queue paused** — the queue is paused with `PauseMode.PROCESSING`, so `add` still succeeds
     but nothing dequeues. Resume it.
-  - **No worker started** — no worker is registered for that queue on any running instance. Start
-    a worker (watch `WORKER_STARTED`).
+  - **Nothing consumes the queue** — no running instance declared it with a `handler`, so its jobs
+    just accumulate. Add the handler to that queue's `createQueue` call (watch `WORKER_STARTED`).
 - **Schema / table-prefix mismatch** — a CLI invocation or a second app sees no queues/jobs (or
   raises `SCHEMA_VERSION_MISMATCH`) even though the primary app is busy. This happens when the
   `--table-prefix` / `--schema` / `--namespace` given to the CLI (or a second driver) differs

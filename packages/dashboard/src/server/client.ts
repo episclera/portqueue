@@ -11,7 +11,7 @@
  *
  * - it declares no queues and writes no queue rows, so browsing never creates anything;
  * - it registers no instance row, so the dashboard never shows up in its own instances list;
- * - it runs no workers, scheduler, retention sweep or health monitor — the app's processes own that
+ * - it consumes no queue and runs no scheduler, retention sweep or health monitor — the app's processes own that
  *   work, and a dashboard quietly firing the cluster's schedules would be a second producer nobody
  *   asked for;
  * - it never migrates: pointing the dashboard at a database must not change its schema.

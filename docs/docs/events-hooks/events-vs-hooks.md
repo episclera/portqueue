@@ -21,7 +21,7 @@ question: *"do we need hooks if we have `on`/`off`?"* — yes.) Pick by a single
 | Can change the outcome? | **No** — read-only payload | **Yes** — mutate options/data, or **veto by throwing** |
 | Inside the caller's transaction? | No | `BEFORE_ADD` does when `tx` is used |
 | On the hot path? | Must never block it | Deliberately part of the operation |
-| Typical use | metrics, logging, dashboard live view, alerts | inject `metadata`, enforce a tenant `idempotencyKey`, authorize/veto an add, enrich/skip before processing |
+| Typical use | metrics, logging, dashboard live view, alerts | enrich the outgoing `data`, enforce a tenant `idempotencyKey`, authorize/veto an add, enrich/skip before processing |
 
 Only hooks can do three things an event fundamentally cannot:
 

@@ -21,16 +21,31 @@ import TxTabs from '@site/src/components/TxTabs';
 # Producing jobs
 
 All producing goes through `pq` itself. Every method takes **one options object** — with the queue
-named in it — and returns a **result object**. `pq.createQueue({ name })` _declares_ a queue (its
-defaults, retention and hooks); the handle it returns has no methods of its own.
+named in it — and returns a **result object**.
+
+You do **not** need to declare a queue to produce onto it: `addJob` addresses it by name and creates
+its row on first use, which is why an API tier, the dashboard and the CLI can all enqueue without
+knowing anything about how the queue is processed. Declaring a queue with `pq.createQueue({ … })` is
+how a process takes on _processing_ it — see [Consuming jobs](./consuming-jobs.md).
 
 ## Add a job
 
-```ts
-pq.createQueue<{ to: string }>({ name: 'emails' });
+`addJob` names the queue, carries the payload under `data`, and hands back a result object:
 
-await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
+```ts
+const emailJob = await pq.addJob({
+  queue: 'emails',
+  data: { to: 'a@b.com', template: 'welcome' },
+});
+
+emailJob.jobId; // 'b0f1…' — the row that was inserted
+emailJob.status; // JobStatus.PENDING — waiting to be claimed
+emailJob.startAfter; // Date — when it becomes eligible (now, unless delayed)
+emailJob.deduplicated; // false — no idempotency/singleton key matched
 ```
+
+The queue's row is created on first use, so the call above works whether or not this process declared
+`emails` — a producer-only tier just calls `addJob`.
 
 Need to enqueue several at once? `pq.addJobs({ queue, jobs })` inserts the whole batch in **one**
 statement and returns a result per entry, in order. Each entry still carries its own options
@@ -67,8 +82,8 @@ await pq.addJob({
 });
 ```
 
-- `schedule.startAfterSeconds` — delay a **one-off** job by N seconds from now. There is no
-  absolute-`Date` variant; for a known instant, pass `(at.getTime() - Date.now()) / 1000`.
+- `schedule.startAfterSeconds` — delay a **one-off** job by N seconds from now; for a known instant,
+  pass `(at.getTime() - Date.now()) / 1000`.
 - `schedule.startEverySeconds` — a **recurring** fixed interval, in seconds between runs.
 - `schedule.cron` — a **recurring** cron expression, a bare string (UTC) or `{ pattern, tz }`.
 
@@ -259,7 +274,6 @@ Both keys are **queue-scoped**, but they solve different problems:
   per tenant at a time), while still allowing the next run later.
 
 ```ts
-pq.createQueue({ name: 'payments' });
 const paymentsJob = await pq.addJob({
   queue: 'payments',
   data: { orderId },
@@ -267,7 +281,6 @@ const paymentsJob = await pq.addJob({
 });
 if (paymentsJob.deduplicated) logger.info('already queued', { jobId: paymentsJob.jobId }); // charged at most once
 
-pq.createQueue({ name: 'reindex' });
 await pq.addJob({ queue: 'reindex', data, singletonKey: `reindex:${tenantId}` }); // one live reindex per tenant
 ```
 

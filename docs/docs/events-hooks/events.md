@@ -2,7 +2,7 @@
 id: events
 title: Events reference
 sidebar_label: Events
-description: PortQueue emits typed, non-blocking lifecycle events on the client — subscribe with pq.on for job, schedule, worker, and system signals.
+description: PortQueue emits typed, non-blocking lifecycle events on the client — subscribe with pq.on for job, schedule, processing, and system signals.
 keywords: [portqueue, events, lifecycle, observability, job queue, node.js, typescript]
 ---
 
@@ -46,11 +46,12 @@ pq.once(PortQueueEvent.CLIENT_STARTED, () => {});
 
 - `SCHEDULE_CREATED`, `SCHEDULE_UPDATED`, `SCHEDULE_REMOVED`, `SCHEDULE_FIRED`
 
-**Queue & worker**
+**Queue & processing**
 
 - `QUEUE_PAUSED`, `QUEUE_RESUMED`
 - `QUEUE_REMOVED` — `{ queue }` — fired by `pq.removeQueue`
-- `WORKER_STARTED`, `WORKER_STOPPED`
+- `WORKER_STARTED`, `WORKER_STOPPED` — `{ queue }` — this process started or stopped claiming that
+  queue: a `createQueue` with a `handler` began its claim loop, or shutdown ended it.
 
 **Instances**
 

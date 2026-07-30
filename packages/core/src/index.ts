@@ -1,9 +1,9 @@
 // @portqueue/core — the developer-facing barrel.
 
-// Client, handles, and the Job context type
+// Client, the queue registration, and the Job context type. There is no `Worker`: a queue declares
+// its own handler, and the claim loop behind it is internal.
 export { PortQueue } from './port-queue';
 export { Queue } from './producer/queue';
-export { Worker } from './consumer/worker';
 export type { Job, JobHandler } from './jobs/job';
 
 // Enums (no magic strings)
@@ -33,8 +33,7 @@ export {
 
 // Option types (the disjoint bags)
 export type { PortQueueOptions, ShutdownOptions, InstanceOptions } from './options/client-options';
-export type { QueueOptions, CreateQueueOptions } from './options/queue-options';
-export type { WorkerOptions, ErrorClass } from './options/worker-options';
+export type { QueueOptions, CreateQueueOptions, ErrorClass } from './options/queue-options';
 export type { JobOptions, AddJobOptions, ScheduleOptions, CronSpec } from './options/job-options';
 export type {
   BackoffOptions,

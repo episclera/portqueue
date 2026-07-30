@@ -45,18 +45,16 @@ async function main(): Promise<void> {
     };
   });
 
-  pq.createQueue<Record<string, never>>({ name: 'healthchecks' });
-  pq.createWorker<Record<string, never>>({
-    queue: 'healthchecks',
+  pq.createQueue<Record<string, never>>({
+    name: 'healthchecks',
     handler: async () => {
       markRun('healthchecks');
       console.log(`💓 [${new Date().toISOString()}] healthcheck (run ${runs.healthchecks})`);
     },
   });
 
-  pq.createQueue<{ kind: string }>({ name: 'reports' });
-  pq.createWorker<{ kind: string }>({
-    queue: 'reports',
+  pq.createQueue<{ kind: string }>({
+    name: 'reports',
     handler: async (job) => {
       markRun('reports');
       console.log(

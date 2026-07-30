@@ -26,10 +26,9 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('dontAutoretryFor short-circuits retries to FAILED', async () => {
-    h.pq.createQueue({ name: 'nr' });
     let calls = 0;
-    h.pq.createWorker({
-      queue: 'nr',
+    h.pq.createQueue({
+      name: 'nr',
       dontAutoretryFor: [NonRetryableError],
       handler: async () => {
         calls += 1;
@@ -48,10 +47,9 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('matches dontAutoretryFor by error name string too', async () => {
-    h.pq.createQueue({ name: 'nr2' });
     let calls = 0;
-    h.pq.createWorker({
-      queue: 'nr2',
+    h.pq.createQueue({
+      name: 'nr2',
       dontAutoretryFor: ['CustomFatal'],
       handler: async () => {
         calls += 1;
@@ -72,7 +70,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('exponential backoff lands the retry in the future', async () => {
-    h.pq.createQueue({ name: 'bk' });
+    // Enqueued before anything consumes 'bk'.
     const res = await h.pq.addJob({
       queue: 'bk',
       data: {},
@@ -82,8 +80,8 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
         backoff: { strategy: BackoffStrategy.EXPONENTIAL, factor: 2 },
       },
     });
-    h.pq.createWorker({
-      queue: 'bk',
+    h.pq.createQueue({
+      name: 'bk',
       handler: async () => {
         throw new Error('boom');
       },
@@ -97,7 +95,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('enforces singletonKey (only one active/pending at a time)', async () => {
-    h.pq.createQueue({ name: 'sng' });
     const a = await h.pq.addJob({ queue: 'sng', data: { n: 1 }, singletonKey: 'only' });
     const b = await h.pq.addJob({ queue: 'sng', data: { n: 2 }, singletonKey: 'only' });
     expect(b.deduplicated).toBe(true);
@@ -106,10 +103,9 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('does not run a delayed job until it becomes due', async () => {
-    h.pq.createQueue({ name: 'delayed' });
     const done: string[] = [];
-    h.pq.createWorker({
-      queue: 'delayed',
+    h.pq.createQueue({
+      name: 'delayed',
       limiter: { pollIntervalSeconds: 0.02 },
       handler: async (job) => void done.push(job.id),
     });
@@ -125,7 +121,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('expires a PENDING job past its expireInSeconds deadline', async () => {
-    h.pq.createQueue({ name: 'exp' });
     // No worker — it must expire before ever running.
     const res = await h.pq.addJob({ queue: 'exp', data: {}, expireInSeconds: 1 });
     h.clock.advance(2000);
@@ -135,7 +130,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('cancels a not-yet-active job', async () => {
-    h.pq.createQueue({ name: 'cancel' });
     const res = await h.pq.addJob({
       queue: 'cancel',
       data: {},
@@ -147,10 +141,9 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('cooperatively cancels a running job via job.signal', async () => {
-    h.pq.createQueue({ name: 'coop' });
     let aborted = false;
-    h.pq.createWorker({
-      queue: 'coop',
+    h.pq.createQueue({
+      name: 'coop',
       limiter: { pollIntervalSeconds: 0.02 },
       handler: async (job) => {
         await new Promise<void>((resolve) => {
@@ -171,8 +164,14 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('runs BEFORE_ADD (mutate) and AFTER_PROCESS hooks', async () => {
-    h.pq.createQueue<{ tenant?: string }>({ name: 'hooked' });
     const outcomes: string[] = [];
+    let seenTenant: string | undefined;
+    h.pq.createQueue<{ tenant?: string }>({
+      name: 'hooked',
+      handler: async (job) => {
+        seenTenant = job.data.tenant;
+      },
+    });
     h.pq.useHook({
       phase: HookPhase.BEFORE_ADD,
       queue: 'hooked',
@@ -187,13 +186,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
       queue: 'hooked',
       handler: (ctx: { outcome: { kind: string } }) => void outcomes.push(ctx.outcome.kind),
     });
-    let seenTenant: string | undefined;
-    h.pq.createWorker<{ tenant?: string }>({
-      queue: 'hooked',
-      handler: async (job) => {
-        seenTenant = job.data.tenant;
-      },
-    });
     const res = await h.pq.addJob({ queue: 'hooked', data: {} });
     await waitFor(
       async () => (await h.pq.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
@@ -203,7 +195,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('vetoes an add when a BEFORE_ADD hook throws', async () => {
-    h.pq.createQueue({ name: 'veto' });
     h.pq.useHook({
       phase: HookPhase.BEFORE_ADD,
       queue: 'veto',
@@ -215,8 +206,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
   });
 
   it('filters events by queue', async () => {
-    h.pq.createQueue({ name: 'qa' });
-    h.pq.createQueue({ name: 'qb' });
     const seen: string[] = [];
     h.pq.on(PortQueueEvent.JOB_ADDED, (p) => seen.push(p.queue), { queue: 'qa' });
     await h.pq.addJob({ queue: 'qa', data: {} });
@@ -224,23 +213,22 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     expect(seen).toEqual(['qa']);
   });
 
-  it('registers queue-scoped hooks once even when the queue is re-declared', async () => {
+  it('runs the queue-scoped hooks a declaration carries, once per add', async () => {
     const seen: string[] = [];
     h.pq.createQueue({
-      name: 'hook-once',
+      name: 'hook-scoped',
       hooks: [{ phase: HookPhase.BEFORE_ADD, handler: () => void seen.push('before') }],
+      handler: async () => 'ok',
     });
-    // A second declaration must not stack a duplicate registration onto every add.
-    h.pq.createQueue({
-      name: 'hook-once',
-      hooks: [{ phase: HookPhase.BEFORE_ADD, handler: () => void seen.push('before') }],
-    });
-    await h.pq.addJob({ queue: 'hook-once', data: {} });
+    const res = await h.pq.addJob({ queue: 'hook-scoped', data: {} });
     expect(seen).toEqual(['before']);
+    // Let the job settle before the suite tears the database down.
+    await waitFor(
+      async () => (await h.pq.getJob({ jobId: res.jobId! }))?.status === JobStatus.COMPLETED,
+    );
   });
 
   it('removes jobs by id and by status', async () => {
-    h.pq.createQueue({ name: 'rm' });
     const a = await h.pq.addJob({ queue: 'rm', data: { n: 1 } });
     const b = await h.pq.addJob({ queue: 'rm', data: { n: 2 } });
     expect(await h.pq.removeJob({ jobId: a.jobId! })).toBe(true);
@@ -252,6 +240,7 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
 
   it('honours retention.statuses instead of sweeping every finished status', async () => {
     // Same TTL for both jobs, but the policy names COMPLETED only, so the failed one must survive.
+    let shouldFail = false;
     h.pq.createQueue({
       name: 'retained',
       retention: {
@@ -259,10 +248,6 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
         ttlSeconds: 1,
         statuses: [JobStatus.COMPLETED],
       },
-    });
-    let shouldFail = false;
-    h.pq.createWorker({
-      queue: 'retained',
       limiter: { pollIntervalSeconds: 0.02 },
       handler: async () => {
         if (shouldFail) throw new Error('nope');
@@ -285,11 +270,10 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     expect(await h.pq.getJob({ jobId: failed.jobId! })).not.toBeNull();
   });
 
-  it('applies a worker-local rate limiter', async () => {
-    h.pq.createQueue({ name: 'rate' });
+  it('applies a queue-local rate limiter', async () => {
     const started: string[] = [];
-    h.pq.createWorker({
-      queue: 'rate',
+    h.pq.createQueue({
+      name: 'rate',
       limiter: { concurrency: 5, pollIntervalSeconds: 0.02, rateMax: 2, rateDurationSeconds: 10 },
       handler: async (job) => {
         started.push(job.id);
@@ -300,5 +284,40 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
     await new Promise((r) => setTimeout(r, 150));
     // Only the 2 tokens available in this window may have started.
     expect(started.length).toBeLessThanOrEqual(2);
+  });
+
+  it('refuses a second handler for one queue in the same process', async () => {
+    h.pq.createQueue({ name: 'once', handler: async () => 'ok' });
+    expect(() => h.pq.createQueue({ name: 'once', handler: async () => 'again' })).toThrow(
+      /already has a handler in this process/,
+    );
+  });
+
+  it('requires a handler — a queue is declared by the process that processes it', async () => {
+    expect(() =>
+      // @ts-expect-error a declaration without a handler is a type error too.
+      h.pq.createQueue({ name: 'no-handler', limiter: { concurrency: 4 } }),
+    ).toThrow(/requires 'handler' to be a function/);
+  });
+
+  it('refuses half a rate cap', async () => {
+    expect(() =>
+      h.pq.createQueue({ name: 'half-rate', limiter: { rateMax: 5 }, handler: async () => 'ok' }),
+    ).toThrow(/only one half of the rate cap/);
+    expect(() =>
+      h.pq.createQueue({
+        name: 'half-rate-2',
+        limiter: { rateDurationSeconds: 60 },
+        handler: async () => 'ok',
+      }),
+    ).toThrow(/only one half of the rate cap/);
+  });
+
+  it('leaves jobs pending on a queue nothing in this process consumes', async () => {
+    // Producing needs no declaration, and an undeclared queue has no handler here — the job waits
+    // for whichever process does declare it.
+    const res = await h.pq.addJob({ queue: 'produce-only', data: {} });
+    await new Promise((r) => setTimeout(r, 120));
+    expect((await h.pq.getJob({ jobId: res.jobId! }))?.status).toBe(JobStatus.PENDING);
   });
 });

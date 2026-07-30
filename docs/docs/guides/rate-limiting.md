@@ -2,24 +2,25 @@
 id: rate-limiting
 title: Rate limiting & backpressure
 sidebar_label: Rate limiting
-description: Throttle PortQueue workers with concurrency, token-bucket rate limits, and system-pressure backpressure to protect third-party APIs and busy hosts.
-keywords: [portqueue, rate limiting, concurrency, backpressure, workers, job queue, throughput, node.js]
+description: Throttle PortQueue processing with concurrency, token-bucket rate limits, and system-pressure backpressure to protect third-party APIs and busy hosts.
+keywords: [portqueue, rate limiting, concurrency, backpressure, job queue, throughput, node.js]
 ---
 
 # Rate limiting & backpressure
 
-Every throughput throttle lives under one `limiter` group on the worker. **All of these are
-worker-local** — they apply in-process, to that one running instance only. There is no
-cluster-wide coordination: two instances each keep their own counters. Omit the whole group
-to run with defaults (concurrency 1, unbounded rate).
+Every throughput throttle lives under one `limiter` group on the **queue declaration**, beside the
+handler it tunes. **All of these are process-local** — they apply in-process, to that one running
+instance only. There is no cluster-wide coordination: two instances each keep their own counters.
+Omit the whole group to run with defaults (concurrency 1, unbounded rate).
 
 ## The `limiter` options
 
-Everything you can set on `createWorker({ limiter })`, all scoped to that single worker/instance:
+Everything you can set on `createQueue({ limiter, handler })`, all scoped to this queue in this
+process:
 
 | Option | Type | Default | What it does |
 |---|---|---|---|
-| `concurrency` | `number` | `1` | Max handlers running **in parallel** in this worker. |
+| `concurrency` | `number` | `1` | Max handlers running **in parallel** for this queue here. |
 | `rateMax` | `number` | unset (unbounded) | Token-bucket cap: max jobs started per window. Requires `rateDurationSeconds`. |
 | `rateDurationSeconds` | `number` | unset | The window for `rateMax`, in seconds — e.g. `60`. Requires `rateMax`. |
 | `batchSize` | `number` | `concurrency` | Max jobs claimed per fetch. |
@@ -27,36 +28,39 @@ Everything you can set on `createWorker({ limiter })`, all scoped to that single
 | `lockDurationSeconds` | `number` | `30` | Visibility timeout / heartbeat window for a claimed job, in seconds. |
 
 None of these are persisted or shared: they tune how hard *this* process pulls from the queue.
-To change fleet-wide throughput, add or remove workers/instances.
+To change fleet-wide throughput, add or remove instances.
 
-Whether a worker pauses under system pressure is **not** a `limiter` option — it follows from
+Whether processing pauses under system pressure is **not** a `limiter` option — it follows from
 `systemLimiter` on the PortQueue (below).
 
-## Worker-local rate cap
+## Process-local rate cap
 
-- **Worker rate cap** — `rateMax` + `rateDurationSeconds` form a **worker-local**, in-process token
-  bucket (exact for that worker): at most `rateMax` jobs started per `rateDurationSeconds` window. Both
-  are required together. Use it to bound one process's throughput, e.g. to protect a third-party API.
+- **Queue rate cap** — `rateMax` + `rateDurationSeconds` form a **process-local**, in-memory token
+  bucket (exact for this queue here): at most `rateMax` jobs started per `rateDurationSeconds`
+  window. Both are required together. Use it to bound one process's throughput, e.g. to protect a
+  third-party API.
 
 PortQueue has **no cluster-wide job-rate cap** — there is no shared DB counter throttling how
-many jobs the fleet may process. If a worker is running, it claims the work that's there;
-scale throughput by adding/removing workers and instances, and bound a single process with its
+many jobs the fleet may process. If a process is consuming a queue, it claims the work that's there;
+scale throughput by adding/removing instances, and bound a single process with its
 local rate cap. (Cluster-wide *pause* is still available via queue and instance pause.)
 
 ```ts
 const pq = new PortQueue({
   driver,
-  // Defining this is what makes every worker respect pressure. Omit it and none do.
+  // Defining this is what makes every queue this process consumes respect pressure. Omit it and
+  // none do.
   systemLimiter: { maxEventLoopDelaySeconds: 0.2, maxCpuPercent: 85 },
 });
 
-pq.createWorker({
-  queue: 'third-party',
+pq.createQueue({
+  name: 'third-party',
   limiter: {
     concurrency: 10,
-    rateMax: 50, // this worker's local cap…
+    rateMax: 50, // this process's local cap…
     rateDurationSeconds: 60, // …per 60-second window
   },
+  handler: async (job) => callThirdParty(job.data),
 });
 ```
 
@@ -64,12 +68,12 @@ pq.createWorker({
 
 ## System-pressure backpressure
 
-`systemLimiter` is both the configuration and the switch. Pass it and **every** worker on the client
-stops claiming while any threshold you set is breached, resuming on the first sample where every
-watched metric is back at or under its limit. Omit it — the default — and nothing throttles.
+`systemLimiter` is both the configuration and the switch. Pass it and **every** queue this client
+consumes stops claiming while any threshold you set is breached, resuming on the first sample where
+every watched metric is back at or under its limit. Omit it — the default — and nothing throttles.
 
-There is deliberately no per-worker opt-in. A limiter describes the health of *the process*, and one
-worker continuing to claim while its siblings back off would defeat the point; the earlier
+There is deliberately no per-queue opt-in. A limiter describes the health of *the process*, and one
+queue continuing to claim while the others back off would defeat the point; the earlier
 `limiter.respectSystemPressure` flag also made it easy to configure thresholds that silently did
 nothing.
 

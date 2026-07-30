@@ -3,8 +3,7 @@ import { secondsToMs } from '../util/seconds';
 import { LOCK_HEARTBEATS_PER_WINDOW, MIN_LOCK_HEARTBEAT_SECONDS } from '../constants';
 import type { Job, JobHandler } from '../jobs/job';
 import type { JobRecord } from '../jobs/job-record';
-import type { ErrorClass } from '../options/worker-options';
-import type { QueueOptions } from '../options/queue-options';
+import type { ErrorClass } from '../options/queue-options';
 import type { Runtime } from '../client/runtime';
 import type { CompletionService } from './completion.service';
 
@@ -13,7 +12,6 @@ export interface ExecutionConfig {
   handler: JobHandler;
   dontAutoretryFor: Array<ErrorClass | string>;
   lockDurationSeconds: number;
-  queueOptions: QueueOptions;
 }
 
 /**

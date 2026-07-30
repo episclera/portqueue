@@ -23,10 +23,8 @@ async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
   await pq.init();
 
-  pq.createQueue<{ message: string }>({ name: 'reminders' });
-
-  pq.createWorker<{ message: string }>({
-    queue: 'reminders',
+  pq.createQueue<{ message: string }>({
+    name: 'reminders',
     handler: async (job) => {
       console.log(`⏰ [${new Date().toISOString()}] reminder: ${job.data.message}`);
     },

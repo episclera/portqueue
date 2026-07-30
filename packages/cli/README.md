@@ -6,7 +6,7 @@ The command-line tool for monitoring and operating [PortQueue](https://episclera
 npm install -D @portqueue/cli
 ```
 
-It builds its own short-lived, **headless** client from `--driver`/`--connection-string` (or `DATABASE_URL`): it declares no queues, registers no instance row, and runs no workers or scheduler, so an admin command never joins the cluster it is inspecting.
+It builds its own short-lived, **headless** client from `--driver`/`--connection-string` (or `DATABASE_URL`): it declares no queues, registers no instance row, and consumes no queue or scheduler, so an admin command never joins the cluster it is inspecting.
 
 ```bash
 portqueue stats --watch

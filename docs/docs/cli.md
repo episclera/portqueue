@@ -10,8 +10,8 @@ keywords: [portqueue, cli, command line, job queue, postgres queue, database que
 
 `@portqueue/cli` operates a PortQueue from the terminal. It **builds its own short-lived
 instance** from the connection flags you pass — it never loads your app's code or a config
-file. The CLI runs with no `systemLimiter`, no `instanceKey`, and no workers, so it never picks
-up jobs or registers as an instance; it just connects, runs one command, and disconnects.
+file. The CLI runs with no `systemLimiter`, no `instanceKey`, and no queue handlers, so it never
+picks up jobs or registers as an instance; it just connects, runs one command, and disconnects.
 
 ## Connecting
 

@@ -30,7 +30,7 @@ export interface RetentionOptions {
    * DELETE_AFTER).
    */
   ttlSeconds?: number;
-  /** Which finished statuses the policy applies to (default: [COMPLETED]). */
+  /** Which finished statuses the policy applies to (default: every finished status). */
   statuses?: JobStatus[];
 }
 

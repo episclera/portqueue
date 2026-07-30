@@ -26,11 +26,11 @@ async function main(): Promise<void> {
   await pq.init();
   console.log(`Connected to Postgres and migrated schema (${connectionString}).`);
 
-  pq.createQueue<{ user: string }>({ name: 'welcome' });
-
+  // One call declares the queue and consumes it: the `handler` is what makes this process a
+  // consumer. Omit it and the declaration is producer-only.
   const done = new Promise<void>((resolve) => {
-    pq.createWorker<{ user: string }>({
-      queue: 'welcome',
+    pq.createQueue<{ user: string }>({
+      name: 'welcome',
       handler: async (job) => {
         console.log(`👋 welcoming ${job.data.user}`);
         resolve();
@@ -39,7 +39,7 @@ async function main(): Promise<void> {
   });
 
   const res = await pq.addJob({ queue: 'welcome', data: { user: 'ada' } });
-  console.log(`Enqueued job ${res.jobId}. Waiting for the worker…`);
+  console.log(`Enqueued job ${res.jobId}. Waiting for the handler…`);
 
   await done;
   await pq.shutdown();

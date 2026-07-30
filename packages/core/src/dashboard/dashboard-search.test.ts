@@ -24,7 +24,6 @@ describe('dashboard job search (sqlite)', () => {
 
   /** `ROWS` jobs, oldest first, with the needle in the very first (so: last page of a desc scan). */
   async function seed(): Promise<void> {
-    h.pq.createQueue<{ tag: string }>({ name: 'searched' });
     await h.pq.addJob({ queue: 'searched', data: { tag: 'needle-oldest' } });
     await h.pq.addJobs({
       queue: 'searched',
@@ -69,7 +68,6 @@ describe('dashboard job search (sqlite)', () => {
 
   it('searches only inside the other filters', async () => {
     await seed();
-    h.pq.createQueue<{ tag: string }>({ name: 'elsewhere' });
     await h.pq.addJob({ queue: 'elsewhere', data: { tag: 'needle-oldest' } });
 
     const scoped = await h.pq._dashboard.getJobs({
@@ -89,7 +87,6 @@ describe('dashboard job search (sqlite)', () => {
   });
 
   it('matches the payload, the idempotency key and the id, case-insensitively', async () => {
-    h.pq.createQueue<{ to: string }>({ name: 'fields' });
     const res = await h.pq.addJob({
       queue: 'fields',
       data: { to: 'ada@example.com' },
@@ -104,9 +101,8 @@ describe('dashboard job search (sqlite)', () => {
   });
 
   it('matches the failure message of a failed job', async () => {
-    h.pq.createQueue({ name: 'broken' });
-    h.pq.createWorker({
-      queue: 'broken',
+    h.pq.createQueue({
+      name: 'broken',
       limiter: { pollIntervalSeconds: 0.02 },
       handler: async () => {
         throw new Error('smtp connection refused');
@@ -124,7 +120,6 @@ describe('dashboard job search (sqlite)', () => {
   });
 
   it('treats a LIKE metacharacter as text rather than a wildcard', async () => {
-    h.pq.createQueue<{ note: string }>({ name: 'escaped' });
     await h.pq.addJob({ queue: 'escaped', data: { note: 'discount 100% off' } });
     await h.pq.addJob({ queue: 'escaped', data: { note: 'plain' } });
     // A bare `%` used to match everything; it now searches for that character.
@@ -133,7 +128,6 @@ describe('dashboard job search (sqlite)', () => {
   });
 
   it('returns the plain paged read when there is no term', async () => {
-    h.pq.createQueue({ name: 'unsearched' });
     for (let i = 0; i < 3; i += 1) await h.pq.addJob({ queue: 'unsearched', data: { i } });
     const page = await h.pq._dashboard.getJobs({ queue: 'unsearched', limit: 2 });
     expect(page.total).toBe(3);

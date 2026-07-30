@@ -45,7 +45,6 @@ describe('PgliteDriver extends PostgresDriver', () => {
       expect(cols.rows.map((r) => r.column_name)).toContain('idempotency_key');
 
       // An inherited write + its in-code dedup, run through PGLite's execute/transaction.
-      pq.createQueue({ name: 'emails' });
       const a = await pq.addJob({ queue: 'emails', data: { n: 1 }, idempotencyKey: 'k1' });
       const b = await pq.addJob({ queue: 'emails', data: { n: 2 }, idempotencyKey: 'k1' });
       expect(b.deduplicated).toBe(true);

@@ -3,7 +3,7 @@ import { requireQueue } from './validate';
 import { ActionKind, type ActionResultDto } from '../../../../shared/dto';
 import type { ActionRoute } from './types';
 
-/** `resume` — let workers claim this queue again, and accept new jobs. */
+/** `resume` — let instances claim this queue again, and accept new jobs. */
 export const resumeAction: ActionRoute = {
   kind: ActionKind.RESUME,
   summary: 'Resume a paused queue',

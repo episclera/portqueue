@@ -49,7 +49,7 @@ export interface PortQueueOptions {
    * - It runs no workers, no scheduler, no retention sweep and no health monitor — an admin tool must
    *   not quietly become a second producer of the cluster's scheduled work.
    * - `migration` defaults to `MANUAL`, so pointing a dashboard at a database never migrates it as a
-   *   side effect. (The CLI's `migrate` command applies them explicitly.)
+   *   side effect. (The CLI opts back into `AUTO`: bringing a schema up to date is squarely its remit.)
    *
    * @internal Documented in the API reference for completeness; not part of the application surface.
    */

@@ -18,7 +18,8 @@ server** when it needs one.
 ## Running on multiple instances
 
 Run the **same code on every server** and start as many processes as you need — that's all
-it takes to add capacity. Every process is interchangeable: any worker can claim any job.
+it takes to add capacity. Every process is interchangeable: any instance can claim any job on a
+queue it declared with a handler.
 
 ## Choosing a preferred server with RegEx patterns
 
@@ -104,11 +105,12 @@ If no live server matches, the job simply **waits** until one does — nothing r
 accident". Prefer broad, capability-based RegEx patterns (`ram-8gb`) over narrow host pins so
 work is never stranded when a single server goes away.
 
-> Because affinity uses regexes and the schema is index-free, the claim path evaluates affinity
-> **in the tool**, not in SQL. It pages through candidates highest-priority-first and keeps only the
-> ones this server matches, stopping when the batch is full or the backlog is exhausted — so a
-> server is never starved by a burst of jobs meant for others. Over LISTEN/NOTIFY, a wakeup for a
-> job whose pattern can't match this server is skipped outright.
+> Because affinity uses regexes, the claim path evaluates the pattern **in the tool**, not in SQL —
+> a regex is the one predicate an index can't serve. It pages through candidates
+> highest-priority-first (that ordering *is* indexed) and keeps only the ones this server matches,
+> stopping when the batch is full or the backlog is exhausted — so a server is never starved by a
+> burst of jobs meant for others. Over LISTEN/NOTIFY, a wakeup for a job whose pattern can't match
+> this server is skipped outright.
 
 ### Replacing a server without stranding work
 
@@ -172,12 +174,12 @@ mechanisms let many instances share one database with no double-processing and n
 - **Per-queue claim loops** — each queue has its own `queue_name`-scoped claim loop, so a
   job never waits on another queue and busy `orders` traffic can't starve `emails`.
 - **Visibility timeout** — a claim is invisible to others for `lockDurationSeconds`, refreshed
-  by an automatic heartbeat. If an instance dies, the lock lapses and the job becomes
-  `STALLED` and reclaimable by another instance.
+  by an automatic heartbeat. If an instance dies, the lock lapses, the row reads as
+  `stalled`, and another instance reclaims it.
 - **Cluster-coordinated scheduling & retention** — schedule ticks and retention are
   coordinated so exactly one instance produces a given scheduled run.
 - **Connection-pool caveat** — many instances sharing one database still share its
-  connection budget. Size pools for the sum of worker concurrencies plus headroom; for
+  connection budget. Size pools for the sum of every consumed queue's concurrency plus headroom; for
   strict isolation, run critical vs bulk workloads as **separate `PortQueue` instances /
   pools** so one can't exhaust the other's connections.
 

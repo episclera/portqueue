@@ -5,7 +5,7 @@ import { ActionKind, type ActionResultDto } from '../../../../shared/dto';
 import type { ActionRoute } from './types';
 
 /**
- * `pause` — stop workers everywhere from claiming this queue's jobs.
+ * `pause` — stop every instance from claiming this queue's jobs.
  *
  * `mode: ALL` also refuses new jobs. Anything other than `ALL` reads as `PROCESSING` rather than
  * being rejected: the stricter mode must always be asked for explicitly.

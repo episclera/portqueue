@@ -18,7 +18,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('produces a job from an interval schedule and stamps scheduleId', async () => {
-    h.pq.createQueue({ name: 'reports' });
     const res = await h.pq.addJob({
       queue: 'reports',
       data: { report: 'daily' },
@@ -38,7 +37,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('carries per-job options (expireInSeconds) from a recurring add onto every spawned job', async () => {
-    h.pq.createQueue({ name: 'carry' });
     // No worker: a produced run just sits until it expires. The recurring add sets
     // expireInSeconds, which must ride along and apply to each spawned job (relative to its own
     // fire time). Without carry-through the produced job would have no deadline and never expire.
@@ -65,7 +63,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('lists schedules and removes them', async () => {
-    h.pq.createQueue({ name: 'sched' });
     const res = await h.pq.addJob({ queue: 'sched', data: {}, schedule: { cron: '0 0 * * *' } });
     let schedules = await h.pq.getSchedules({ queue: 'sched' });
     expect(schedules.total).toBe(1);
@@ -89,7 +86,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('pages schedules by offset, reports the filter total, and narrows by enabled', async () => {
-    h.pq.createQueue({ name: 'sched-paged' });
     for (let i = 0; i < 5; i += 1) {
       await h.pq.addJob({
         queue: 'sched-paged',
@@ -121,8 +117,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('lists schedules across every queue when none is named', async () => {
-    h.pq.createQueue({ name: 'cross-a' });
-    h.pq.createQueue({ name: 'cross-b' });
     await h.pq.addJob({ queue: 'cross-a', data: {}, schedule: { cron: '0 1 * * *' } });
     await h.pq.addJob({ queue: 'cross-b', data: {}, schedule: { cron: '0 2 * * *' } });
     const all = await h.pq.getSchedules();
@@ -131,7 +125,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('allows identical recurrences on a queue to coexist (no dedup without a key)', async () => {
-    h.pq.createQueue({ name: 'sched-dup' });
     const a = await h.pq.addJob({
       queue: 'sched-dup',
       data: { n: 1 },
@@ -148,7 +141,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('deduplicates schedules by idempotency key (keeps the first, unchanged)', async () => {
-    h.pq.createQueue({ name: 'sched-idem' });
     const a = await h.pq.addJob({
       queue: 'sched-idem',
       data: { n: 1 },
@@ -169,7 +161,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('idempotency key dedups per table — one-off and recurring keys are independent', async () => {
-    h.pq.createQueue({ name: 'sched-cross' });
     // A one-off add only checks the jobs table.
     const job = await h.pq.addJob({ queue: 'sched-cross', data: {}, idempotencyKey: 'shared' });
     // A recurring add with the same key checks only the schedule table, so it is NOT deduped
@@ -204,8 +195,7 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('deletes finished jobs after their retention TTL elapses', async () => {
-    h.pq.createQueue({ name: 'ephemeral' });
-    h.pq.createWorker({ queue: 'ephemeral', handler: async () => 'done' });
+    h.pq.createQueue({ name: 'ephemeral', handler: async () => 'done' });
     const res = await h.pq.addJob({
       queue: 'ephemeral',
       data: {},
@@ -230,7 +220,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   it('fires more due schedules than one batch holds without waiting for the next tick', async () => {
     // The scheduler batches at 100 and loops until a batch comes back short. Without the loop the
     // 101st due schedule would sit idle for a whole tick interval.
-    h.pq.createQueue({ name: 'many' });
     for (let i = 0; i < 105; i += 1) {
       await h.pq.addJob({ queue: 'many', data: { i }, schedule: { startEverySeconds: 3600 } });
     }
@@ -243,7 +232,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('rejects an unknown schedule key instead of quietly running the job now', async () => {
-    h.pq.createQueue({ name: 'typo' });
     // The old absolute-Date `startAfter` is gone, and `startEvery` never existed without its unit.
     // Dropping either silently would look like the scheduler losing the job.
     await expect(
@@ -255,7 +243,6 @@ describe.each(TEST_ENGINES)('scheduling & retention (%s)', (engine) => {
   });
 
   it('refuses a one-off delay combined with a recurring cadence', async () => {
-    h.pq.createQueue({ name: 'both' });
     await expect(
       h.pq.addJob({
         queue: 'both',

@@ -39,7 +39,7 @@ const KNOWN_ENGINES = new Set<string>(Object.values(CliEngine));
  *
  * Headless is what keeps an admin tool from behaving like a participant: it declares no queues and
  * writes no queue rows, registers no instance row (so `portqueue instances` never shows the CLI
- * itself), and runs no workers, scheduler or retention sweep.
+ * itself), and consumes no queue, so it runs no claim loop, scheduler or retention sweep.
  *
  * Migration is the one thing the CLI opts back into. A headless client defaults to `MANUAL` — that
  * default exists for the dashboard, which must never change a schema by being pointed at it — but

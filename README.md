@@ -6,7 +6,7 @@
 
 📚 **[Read the full documentation →](https://episclera.github.io/portqueue/)**
 
-- **Getting started** — [Installation](https://episclera.github.io/portqueue/docs/getting-started/installation) · [Your first queue](https://episclera.github.io/portqueue/docs/getting-started/first-queue)
+- **Getting started** — [Install, first queue, core ideas](https://episclera.github.io/portqueue/docs/getting-started)
 - **Guides** — [Producing jobs](https://episclera.github.io/portqueue/docs/guides/producing-jobs) · [Consuming jobs](https://episclera.github.io/portqueue/docs/guides/consuming-jobs) · [Transactional enqueue](https://episclera.github.io/portqueue/docs/guides/transactions) · [Scheduling & cron](https://episclera.github.io/portqueue/docs/guides/scheduling)
 - **Operate** — [Scaling horizontally](https://episclera.github.io/portqueue/docs/scale-horizontally) · [Dashboard](https://episclera.github.io/portqueue/docs/dashboard) · [CLI](https://episclera.github.io/portqueue/docs/cli)
 - **Reference** — [API reference](https://episclera.github.io/portqueue/docs/api-reference)
@@ -40,13 +40,14 @@ const pq = new PortQueue({
 });
 await pq.init();
 
-pq.createQueue({ name: 'emails' });
-pq.createWorker({
-  queue: 'emails',
+// One call per queue: its name, its tuning, and — if this process should process it — its handler.
+pq.createQueue({
+  name: 'emails',
   limiter: { concurrency: 10 },
   handler: async (job) => { await send(job.data); },
 });
 
+// Every operation is a method on `pq`, with the queue named in it.
 await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
 ```
 

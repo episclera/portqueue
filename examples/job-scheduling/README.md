@@ -40,7 +40,7 @@ Two details the example makes visible:
   runs it is waiting for.
 
 A recurring `addJob` returns a `scheduleId` — the example logs it and then uses it to
-`queue.removeSchedule({ scheduleId })` at the end. Persist it somewhere durable if you might later
+`pq.removeSchedule({ scheduleId })` at the end. Persist it somewhere durable if you might later
 want to stop new runs being spawned for that interval/cron.
 
 ```bash

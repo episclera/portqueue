@@ -63,19 +63,30 @@ in three sections, and no section at all when there is nothing to put in it.
   absolute `Date` beside a seconds delay, a unit string beside a number, a singular beside a plural).
   Two doors to one room double the validation, the docs, the tests and the ways a caller can be
   wrong. A delay is `startAfterSeconds` and nothing else; a caller who has an instant subtracts.
-- **`PortQueue` is the whole developer surface; the handles have no methods.** `createQueue` and
-  `createWorker` return *registrations*, not control surfaces — `Queue` carries its name and payload
-  type and nothing else. Every operation is a method on `pq` that takes `queue` as a named argument
+- **`PortQueue` is the whole developer surface; the handle has no methods.** `createQueue` returns a
+  *registration*, not a control surface — `Queue` carries its name and payload type and nothing else.
+  Every operation is a method on `pq` that takes `queue` as a named argument
   (`pq.addJob({ queue, data })`, `pq.getJobs({ queue })`, `pq.pauseQueue({ queue })`). Never add a
-  method to `Queue` or `Worker`. Two reasons this is the right shape, both learned the hard way: a
+  method to `Queue`. Two reasons this is the right shape, both learned the hard way: a
   queue-scoped handle that forwards to an unscoped read silently returns another queue's row typed as
   this queue's payload; and code touching five queues should pass five names to one object rather than
   thread five handles through its own plumbing.
+- **A queue declares its own consumer — there is no `createWorker` and no `Worker` on the surface.**
+  `createQueue({ name, handler, limiter, dontAutoretryFor, defaultJobOptions, retention, hooks })` is
+  the whole thing, and **`handler` is required**: declaring a queue *is* declaring that this process
+  processes it. The `Worker` class stays internal (`consumer/worker.ts`), built by `createQueue` and
+  never handed out; its claim loop starts with the client and stops on shutdown, so there was never a
+  lifecycle method to expose. Two rules hold: a queue is declared **once per process** — a second
+  `createQueue` for the same name throws, and every such check runs *before* anything is recorded so a
+  rejected call can never half-replace a declaration; and **producing needs no declaration at all**,
+  since `addJob` addresses a queue by name and ensures its row, which is how a producer-only tier, the
+  dashboard and the CLI all enqueue. Splitting the two calls cost a real bug class: the worker
+  captured the queue's options at creation, so a declaration made afterwards was silently ignored.
 - **`createQueue` is the only thing that records queue options, and nothing internal calls it.** It is
-  a *declaration*: the caller states what the queue is, and a later call replaces what the previous
-  one said. That is only safe because no admin action, pause, read or facade method goes through it —
-  `pauseQueue` writes the two pause flags and touches nothing else. Before this rule, `pauseQueue`
-  called `createQueue({ name })` with no options and silently wiped the queue's registered
+  a *declaration*, made once per process: the caller states what the queue is, and there is no second
+  call to disagree with it. That is only safe because no admin action, pause, read or facade method
+  goes through it — `pauseQueue` writes the two pause flags and touches nothing else. Before this rule,
+  `pauseQueue` called `createQueue({ name })` with no options and silently wiped the queue's registered
   `defaultJobOptions` and `retention`. If you find yourself reaching for `createQueue` inside the
   library, address the queue by name instead.
 - **A method never has a side effect its name doesn't imply.** A read does not write: `getSchedules`
@@ -84,7 +95,8 @@ in three sections, and no section at all when there is nothing to put in it.
 - **Admin clients are headless.** `PortQueueOptions._headless` (set only by `@portqueue/dashboard` and
   `@portqueue/cli`) marks a client that observes and administers a deployment without joining it: it
   declares no queues and writes no queue rows, registers **no instance row** and rejects an
-  `instanceKey`, runs no workers/scheduler/retention/monitor, and defaults `migration` to `MANUAL`.
+  `instanceKey`, consumes no queue and runs no scheduler/retention/monitor, and defaults `migration`
+  to `MANUAL`.
   Document the flag in the API reference and nowhere else — an application never sets it. The visible
   consequence: `QueueInfo.inUse` means "declared in the process that produced this info", so it is
   always false on a headless client, which is why the dashboard does not surface it.

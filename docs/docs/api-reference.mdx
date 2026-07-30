@@ -20,7 +20,7 @@ with its type and default.
 ## PortQueue
 
 The top-level client. A thin facade over a driver: runs migrations on `init()`, wires the
-shared services, and produces `Queue` and `Worker` handles. Construction wires dependencies
+shared services, and holds this process's queue declarations. Construction wires dependencies
 only; no I/O until `init()`.
 
 <ul className="api-tree">
@@ -43,7 +43,7 @@ only; no I/O until `init()`.
   <li>
     <span className="api-badge">shutdown(options?)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;void&gt;</code> — drain workers and disconnect
+      → <code>Promise&lt;void&gt;</code> — drain in-flight handlers and disconnect
     </span>
     <ul>
       <li>
@@ -65,36 +65,18 @@ only; no I/O until `init()`.
     </span>
   </li>
   <li>
-    <span className="api-badge">createQueue&lt;TData&gt;(options)</span>{' '}
+    <span className="api-badge">createQueue&lt;TData, TResult&gt;(options)</span>{' '}
     <span className="api-note">
       →{' '}
       <a href="#queue">
         <code>Queue&lt;TData&gt;</code>
-      </a>
+      </a>{' '}
+      — declare a queue and, with a <code>handler</code>, consume it. There is no{' '}
+      <code>createWorker</code>.
     </span>
     <ul>
       <li>
-        <span className="api-badge">name</span>{' '}
-        <span className="api-note">
-          <code>TQueues</code> — the queue name
-        </span>
-      </li>
-      <li>
-        <a href="#queueoptions">QueueOptions</a>
-      </li>
-    </ul>
-  </li>
-  <li>
-    <span className="api-badge">createWorker&lt;TData, TResult&gt;(options)</span>{' '}
-    <span className="api-note">
-      →{' '}
-      <a href="#worker">
-        <code>Worker</code>
-      </a>
-    </span>
-    <ul>
-      <li>
-        <a href="#workeroptions">WorkerOptions</a>
+        <a href="#createqueueoptions">CreateQueueOptions&lt;TData, TResult&gt;</a>
       </li>
     </ul>
   </li>
@@ -301,11 +283,11 @@ only; no I/O until `init()`.
 
 ## Queue
 
-The handle `pq.createQueue({ name, ...options })` returns. Creating it **declares** the queue in this
-process — its default job options, its retention policy and its queue-scoped hooks — and that is all
-it does.
+The handle `pq.createQueue({ name, ...options })` returns. That call **declares** the queue in this
+process — the `handler` that processes its jobs, the claim tuning around it, and the default job
+options, retention policy and hooks its jobs inherit.
 
-**It has no methods.** Like `Worker`, it is a registration, not a control surface; everything you
+**It has no methods.** It is a registration, not a control surface; everything you
 _do_ with a queue is a method on `pq` that takes `queue` as a named argument. Two reasons:
 
 - **Nothing silently escapes its scope.** `queue.getJob({ jobId })` forwarded to an unscoped read, so
@@ -314,37 +296,30 @@ _do_ with a queue is a method on `pq` that takes `queue` as a named argument. Tw
 - **One import, one object.** Code that touches five queues passes five names to one `pq` rather than
   threading five handles through its own plumbing.
 
+Keeping the handle is therefore optional — `pq.addJob({ queue: 'emails', … })` works from a name
+alone, and a process that only produces need not declare the queue at all.
+
 <ul className="api-tree">
   <li>
-    <span className="api-badge">get name</span>{' '}
+    <span className="api-badge">name</span>{' '}
     <span className="api-note">
-      → <code>string</code>
+      → <code>string</code> — the declared queue name, and the handle's only member
     </span>
   </li>
 </ul>
 
 ---
 
-## Worker
+## There is no Worker
 
-A consumer registration from `pq.createWorker(options)`. It starts claiming automatically after
-`pq.init()` and stops on shutdown — **there are no lifecycle methods**. Control processing with
-`pq.pauseQueue` / `pq.resumeQueue` and observe it through `pq.on(...)`. All consumer settings live on
-[WorkerOptions](#workeroptions).
+Consuming is a property of the queue, not a second object: `pq.createQueue({ name, handler })`
+declares the queue **and** processes it. Claiming starts once `pq.init()` has run and the queue isn't
+paused, and stops on shutdown, so there was never a lifecycle method worth exposing. Control
+processing with `pq.pauseQueue` / `pq.resumeQueue`, observe it through `pq.on(...)`, and tune it with
+the `limiter` / `dontAutoretryFor` fields of [CreateQueueOptions](#createqueueoptions).
 
-<ul className="api-tree">
-  <li>
-    <span className="api-badge">Worker</span>{' '}
-    <span className="api-note">
-      created via <code>createWorker</code>
-    </span>
-    <ul>
-      <li>
-        <a href="#workeroptions">WorkerOptions</a>
-      </li>
-    </ul>
-  </li>
-</ul>
+A queue is consumed by **one handler per process**: a second `createQueue` for the same name throws.
+Raise `limiter.concurrency` to process more at once, or run another instance.
 
 ---
 
@@ -751,15 +726,25 @@ real ceiling is well below the host's. Event-loop delay is the exception on meas
 | `maxCpuPercent`            | `number` | unset   | This process's CPU above this share (0–100) of the cores available to it counts as pressure — core-count independent, so `85` means the same on any box. |
 | `maxMemoryPercent`         | `number` | unset   | This process's used heap above this share (0–100) of V8's heap limit counts as pressure.                                                                 |
 
-### QueueOptions
+### CreateQueueOptions
 
-The definition options `createQueue` takes alongside `name`.
+The single argument to `createQueue` — **everything about one queue in one call**: the `handler` that
+processes its jobs, the `limiter` / `dontAutoretryFor` settings that shape how it claims them, and the
+`defaultJobOptions`, `retention` and `hooks` its jobs inherit. To enqueue without processing, skip
+`createQueue` and call `addJob` — it creates the queue's row on first use.
 
-| Option              | Type                                    | Default      | Description                                                            |
-| ------------------- | --------------------------------------- | ------------ | ---------------------------------------------------------------------- |
-| `defaultJobOptions` | [`JobOptions`](#joboptions)             | —            | Defaults every job on this queue inherits; a per-job option overrides. |
-| `retention`         | [`RetentionOptions`](#retentionoptions) | keep forever | Queue default retention; resolved per-job and frozen onto each row.    |
-| `hooks`             | `HookRegistration[]`                    | `[]`         | Queue-scoped [participation hooks](./events-hooks/hooks.md).           |
+| Option              | Type                                    | Default        | Description                                                                                     |
+| ------------------- | --------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------- |
+| `name`              | `TQueues`                               | — **required** | The queue name every job, schedule and read is filed under.                                     |
+| `defaultJobOptions` | [`JobOptions`](#joboptions)             | —              | Defaults every job **this process adds** to the queue inherits; a per-job option overrides.     |
+| `retention`         | [`RetentionOptions`](#retentionoptions) | keep forever   | Queue default retention; resolved per-job and frozen onto each row.                             |
+| `hooks`             | `HookRegistration[]`                    | `[]`           | Queue-scoped [participation hooks](./events-hooks/hooks.md).                                    |
+| `handler`           | `JobHandler<TData, TResult>`            | — **required** | The processor for this queue's jobs — declaring a queue is how a process takes on consuming it. |
+| `limiter`           | [`LimiterOptions`](#limiteroptions)     | defaults       | Throughput & claim tuning for this queue's processing.                                          |
+| `dontAutoretryFor`  | `Array<ErrorClass \| string>`           | `[]`           | Non-retryable errors, matched by `instanceof` or `error.name`.                                  |
+
+Queue options are **process-local**: only the pause flags are ever persisted. A queue is declared
+once per process — a second `createQueue` for the same name throws.
 
 ### JobOptions
 
@@ -804,11 +789,11 @@ Per-job settings (highest precedence). Also the base of [`AddJobOptions`](#addjo
 
 ### RetentionOptions
 
-| Option       | Type            | Default        | Description                                                                                |
-| ------------ | --------------- | -------------- | ------------------------------------------------------------------------------------------ |
-| `mode`       | `RetentionMode` | — **required** | `KEEP_FOREVER` or `DELETE_AFTER`.                                                          |
-| `ttlSeconds` | `number`        | —              | How many seconds after finishing before deletion is allowed (required for `DELETE_AFTER`). |
-| `statuses`   | `JobStatus[]`   | `[COMPLETED]`  | Which finished statuses the policy applies to.                                             |
+| Option       | Type            | Default               | Description                                                                                                    |
+| ------------ | --------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `mode`       | `RetentionMode` | — **required**        | `KEEP_FOREVER` or `DELETE_AFTER`.                                                                              |
+| `ttlSeconds` | `number`        | —                     | How many seconds after finishing before deletion is allowed (required for `DELETE_AFTER`).                     |
+| `statuses`   | `JobStatus[]`   | every finished status | Which finished statuses the policy applies to (`COMPLETED`, `FAILED`, `CANCELLED`, `EXPIRED` unless narrowed). |
 
 ### ScheduleOptions
 
@@ -820,24 +805,14 @@ Exactly one timing mode may be set.
 | `startEverySeconds` | `number`   | — (not recurring) | Recurring: seconds between runs, e.g. `30`.     |
 | `cron`              | `CronSpec` | — (not recurring) | Recurring: a cron string, or `{ pattern, tz }`. |
 
-### WorkerOptions
-
-The argument to `createWorker`.
-
-| Option             | Type                                | Default        | Description                                                    |
-| ------------------ | ----------------------------------- | -------------- | -------------------------------------------------------------- |
-| `queue`            | `TQueues`                           | — **required** | The queue this worker claims from.                             |
-| `handler`          | `JobHandler`                        | — **required** | A single processor function.                                   |
-| `limiter`          | [`LimiterOptions`](#limiteroptions) | defaults       | Throughput & claim tuning.                                     |
-| `dontAutoretryFor` | `Array<ErrorClass \| string>`       | `[]`           | Non-retryable errors, matched by `instanceof` or `error.name`. |
-
 ### LimiterOptions
 
-All **worker-local** — no cluster-wide coordination.
+The consumer tuning group on [CreateQueueOptions](#createqueueoptions). All **process-local** — no
+cluster-wide coordination.
 
 | Option                | Type     | Default       | Description                                                                         |
 | --------------------- | -------- | ------------- | ----------------------------------------------------------------------------------- |
-| `concurrency`         | `number` | `1`           | Max handlers running at once in this worker.                                        |
+| `concurrency`         | `number` | `1`           | Max handlers running at once for this queue in this process.                        |
 | `rateMax`             | `number` | —             | Max jobs started per `rateDurationSeconds` window (set with `rateDurationSeconds`). |
 | `rateDurationSeconds` | `number` | —             | The window for `rateMax`, in seconds — e.g. `60`.                                   |
 | `batchSize`           | `number` | `concurrency` | Max jobs claimed per fetch.                                                         |
@@ -921,6 +896,7 @@ Reads return objects, never bare ids. The main shapes:
 `PauseMode` (`PROCESSING`, `ALL`) ·
 `BackoffStrategy` (`FIXED`, `EXPONENTIAL`) · `RetentionMode` (`KEEP_FOREVER`, `DELETE_AFTER`) ·
 `MigrationMode` (`AUTO`, `MANUAL`, `VALIDATE_ONLY`) · `DeduplicationReason` (`IDEMPOTENCY`, `SINGLETON`) ·
+`LogLevel` (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`) ·
 `DatabaseEngine` · [`PortQueueEvent`](./events-hooks/events.md) · [`HookPhase`](./events-hooks/hooks.md) ·
 [`PortQueueErrorCode`](./troubleshooting.md).
 

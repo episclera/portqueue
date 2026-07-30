@@ -33,10 +33,8 @@ async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
   await pq.init();
 
-  pq.createQueue<{ id: string }>({ name: 'reports' });
-
-  pq.createWorker<{ id: string }>({
-    queue: 'reports',
+  pq.createQueue<{ id: string }>({
+    name: 'reports',
     handler: async (job) => {
       console.log(`▶️  building report ${job.data.id} (honouring job.signal)…`);
       try {

@@ -61,16 +61,15 @@ afterEach(async () => {
 });
 
 it('processes a job', async () => {
-  pq.createQueue<{ to: string }>({ name: 'emails' });
   const seen: string[] = [];
-  pq.createWorker<{ to: string }>({
-    queue: 'emails',
+  pq.createQueue<{ to: string }>({
+    name: 'emails',
     handler: async (job) => {
       seen.push(job.data.to);
     },
   });
-  const { id } = await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
-  await waitForStatus(queue, id, JobStatus.COMPLETED);
+  const { jobId } = await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
+  await waitForStatus(jobId, JobStatus.COMPLETED);
   expect(seen).toEqual(['a@b.com']);
 });
 ```
@@ -88,7 +87,7 @@ and an overall timeout. This is the pattern new tests most often need:
 ```ts
 import { JobStatus } from '@portqueue/core';
 
-async function waitForStatus(queue, jobId, status, timeoutMs = 5000) {
+async function waitForStatus(jobId, status, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const job = await pq.getJob({ jobId });
@@ -99,9 +98,8 @@ async function waitForStatus(queue, jobId, status, timeoutMs = 5000) {
 }
 ```
 
-Use `pq.getJob({ jobId })` (or `pq.getJob({ jobId })`) as the source of truth — it reads
-the real row through the driver, exactly as production code would. Poll for `JobStatus.FAILED`
-when you're testing the failure path.
+Use `pq.getJob({ jobId })` as the source of truth — it reads the real row through the driver,
+exactly as production code would. Poll for `JobStatus.FAILED` when you're testing the failure path.
 
 ## Nothing to mock
 

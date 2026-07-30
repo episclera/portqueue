@@ -37,11 +37,9 @@ async function main(): Promise<void> {
   });
   await pq.init();
 
-  pq.createQueue<{ orderId: string }>({ name: 'order-confirmations' });
-
   const done = new Promise<void>((resolve) => {
-    pq.createWorker<{ orderId: string }>({
-      queue: 'order-confirmations',
+    pq.createQueue<{ orderId: string }>({
+      name: 'order-confirmations',
       handler: async (job) => {
         console.log(`✉️  sending confirmation for order ${job.data.orderId}`);
         resolve();

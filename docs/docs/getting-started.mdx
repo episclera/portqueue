@@ -1,0 +1,105 @@
+---
+id: getting-started
+title: Getting Started
+sidebar_label: Getting Started
+description: Install PortQueue, connect it to the database you already run, declare your first queue, and add a job — plus the handful of ideas the rest of the docs build on.
+keywords:
+  [
+    portqueue,
+    job queue,
+    background jobs,
+    getting started,
+    installation,
+    postgres queue,
+    node.js,
+    typescript,
+  ]
+---
+
+import DriverTabs from '@site/src/components/DriverTabs';
+import PackageManagerTabs from '@site/src/components/PackageManagerTabs';
+
+# Getting Started
+
+PortQueue is a background-job queue that runs on **the database you already have** — Postgres,
+MySQL, Oracle, PGLite or SQLite. No broker and no second datastore to run: your jobs live in the same
+database as the rest of your data, so they commit with your own writes and you can query them with SQL.
+
+## Install
+
+Install `@portqueue/core` plus the **client for your database** — the DB clients are
+**optional peer dependencies**, never auto-installed, so you only pull in what you use.
+
+Requires **Node.js 20.11 or newer**.
+
+<DriverTabs mode="install" />
+
+Prefer another package manager? The install is identical apart from the command — the DB
+client tracks the engine you picked above:
+
+<PackageManagerTabs />
+
+## A minimal queue
+
+Construction wires dependencies only — **no connection, no I/O**. `init()` connects, migrates, and
+starts services; it is idempotent, so awaiting it once is enough.
+
+<DriverTabs mode="connect" />
+
+With `pq` running, declare the queue — its name, how hard it should pull, and the handler that
+processes its jobs — then add a job to it:
+
+```ts
+pq.createQueue<{ to: string }>({
+  name: 'emails',
+  limiter: { concurrency: 10 }, // up to 10 handlers at once in this process
+  handler: async (job) => {
+    await sendEmail(job.data); // job.data is typed to the queue's payload
+  },
+});
+
+await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
+```
+
+That is the whole loop: processing starts on its own, so there is no worker to wire up and nothing to
+call `.start()` on. Returning from the handler completes the job; throwing retries or fails it
+according to the job's retry policy.
+
+Swapping databases is the driver import above and nothing else.
+
+Read on in [Producing jobs](./guides/producing-jobs.mdx) for scheduling, priorities, retries and
+dedup, and [Consuming jobs](./guides/consuming-jobs.md) for concurrency, batching and cancellation.
+
+## Your mindset when using PortQueue
+
+**Everything hangs off `pq`.** Adding, reading, pausing, retrying, removing — every operation is a
+method on the client that names its queue: `pq.addJob({ queue, data })`,
+`pq.getJobs({ queue })`, `pq.pauseQueue({ queue })`. The value `createQueue` returns has no methods,
+so there is nothing to thread through your code.
+
+**Declaring a queue means processing it.** `createQueue` always takes a handler, and one queue takes
+one handler per process. To _only_ enqueue, don't declare anything: `pq.addJob({ queue, data })` works
+from the queue's name alone.
+
+**Produce here, process there.** An API tier can enqueue and never process, while a worker tier
+declares the same queue with a handler and never enqueues — same code, different processes. See
+[Multi-server](./scale-horizontally.md).
+
+**Name your queues with an enum.** `new PortQueue<QueueName>({ … })` threads a string enum (or
+literal union) of your queue names through every queue argument, so a typo is a compile error rather
+than a job nobody consumes.
+
+**Scale by running more copies.** Start another instance and it shares the work — nothing to
+configure, and no job is processed twice. Give each process an `instanceKey` and you can pause, drain
+and target them individually.
+
+**A job exists only if your write commits.** Pass your own transaction as `tx` and the job is
+inserted inside it. See [Transactional enqueue](./guides/transactions.mdx).
+
+**The operational tooling is in the box.** A mountable React [dashboard](./dashboard.mdx) for queues,
+jobs, schedules and instances; a [CLI](./cli.md) for the same from a terminal; typed
+[events and hooks](./events-hooks/events-vs-hooks.md) for metrics and tracing; and
+[retention](./guides/retention.md) so the table never fills up on its own.
+
+Want to see it running first? Every [example app](./examples.md) is self-contained and needs no
+database server.

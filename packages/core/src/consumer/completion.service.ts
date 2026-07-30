@@ -3,7 +3,7 @@ import { PortQueueEvent } from '../events/event-name.enum';
 import { computeBackoffSeconds } from '../util/backoff';
 import { msToSeconds, secondsToMs } from '../util/seconds';
 import { FAILURE_MESSAGE_MAX_CHARS, FAILURE_MESSAGE_TRUNCATION_SUFFIX } from '../constants';
-import type { ErrorClass } from '../options/worker-options';
+import type { ErrorClass } from '../options/queue-options';
 import type { JobRecord } from '../jobs/job-record';
 import type { Runtime } from '../client/runtime';
 import type { ProcessOutcome } from '../events/hooks';

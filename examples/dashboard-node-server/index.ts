@@ -37,10 +37,9 @@ async function main(): Promise<void> {
   });
   await pq.init();
 
-  // A worker so the dashboard has completing jobs to show.
-  pq.createQueue<{ to: string; template: string }>({ name: 'emails' });
-  pq.createWorker<{ to: string; template: string }>({
-    queue: 'emails',
+  // A handler on the declaration, so the dashboard has completing jobs to show.
+  pq.createQueue<{ to: string; template: string }>({
+    name: 'emails',
     limiter: { concurrency: 5 },
     handler: async (job) => {
       console.log(`📧 sending "${job.data.template}" to ${job.data.to}`);
@@ -62,11 +61,10 @@ async function main(): Promise<void> {
     schedule: { startAfterSeconds: 30 }, // a delay, in seconds
   });
 
-  pq.createQueue<{ kind: string }>({ name: 'reports' });
-  // Every queue with jobs needs a worker, or its jobs just sit there as PENDING — including the
+  // Every queue with jobs needs a handler, or its jobs just sit there as PENDING — including the
   // runs a recurring schedule keeps producing.
-  pq.createWorker<{ kind: string }>({
-    queue: 'reports',
+  pq.createQueue<{ kind: string }>({
+    name: 'reports',
     handler: async (job) => {
       console.log(`📊 building the ${job.data.kind} report`);
     },

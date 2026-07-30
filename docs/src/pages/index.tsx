@@ -49,7 +49,7 @@ const FEATURES: {
         picks the best strategy its engine supports, so your app code stays identical.
       </>
     ),
-    to: '/docs/getting-started/installation',
+    to: '/docs/getting-started',
     cta: 'Pick a driver',
   },
   {
@@ -92,16 +92,15 @@ const pq = new PortQueue<QueueName>({
 });
 await pq.init();
 
-// Producer — add a job (data is a named key, never positional).
-const emailsQueue = pq.createQueue<{ to: string }>({ name: QueueName.Emails });
-await emailsQueue.addJob({ data: { to: 'a@b.com' } });
-
-// Consumer — registering a worker is enough; it claims automatically.
-pq.createWorker({
-  queue: QueueName.Emails,
+// One call declares the queue and consumes it — the handler is what makes this a consumer.
+pq.createQueue<{ to: string }>({
+  name: QueueName.Emails,
   limiter: { concurrency: 10 },
   handler: async (job) => { await sendEmail(job.data); },
-});`;
+});
+
+// Every operation is a method on \`pq\`, with the queue named in it.
+await pq.addJob({ queue: QueueName.Emails, data: { to: 'a@b.com' } });`;
 
 const Hero = styled.header`
   position: relative;
@@ -273,7 +272,7 @@ export default function Home(): ReactNode {
         </HeroBrand>
         <HeroTagline>{siteConfig.tagline}</HeroTagline>
         <Ctas>
-          <CtaButton $variant="primary" to="/docs/getting-started/installation">
+          <CtaButton $variant="primary" to="/docs/getting-started">
             Get Started
           </CtaButton>
           <CtaButton

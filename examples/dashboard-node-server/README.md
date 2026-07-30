@@ -15,7 +15,7 @@ The root script rebuilds `@portqueue/core` and `@portqueue/dashboard` before sta
 you open is built from the current working tree (`PORTQUEUE_SKIP_BUILD=1` skips it).
 
 The example seeds a couple of `emails` jobs (immediate + one delayed) and a recurring `reports`
-schedule so the dashboard has live data to display, with a worker draining each queue.
+schedule so the dashboard has live data to display, with a handler draining each queue.
 
 The process names itself with `instance: { instanceKey: 'node-example-1' }`, which registers it as
 an instance so the dashboard's **Instances** page has a row — start a second copy with

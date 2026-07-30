@@ -24,7 +24,8 @@ async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
   await pq.init();
 
-  pq.createQueue<{ to: string }>({ name: 'emails' });
+  // The queue is declared further down, once the dedup demo is over: `addJob` addresses a queue by
+  // name and creates its row on first use, and it is the handler that starts draining.
 
   // Idempotency: enqueue the "same" welcome email twice with one key.
   const first = await pq.addJob({
@@ -59,8 +60,9 @@ async function main(): Promise<void> {
   console.log(`singleton first  → jobId=${a.jobId} deduplicated=${a.deduplicated}`);
   console.log(`singleton second → jobId=${b.jobId} deduplicated=${b.deduplicated}`);
 
-  // Only now start a worker: singleton dedup is about jobs that are still in flight, so a worker
-  // running during the adds above could have drained the first job and let the second one through.
+  // Only now declare the queue with a handler: singleton dedup is about jobs that are still in
+  // flight, so processing during the adds above could have drained the first job and let the second
+  // one through.
   // With the demonstration done, drain the two surviving jobs so the queue doesn't end up stuck.
   const expected = 2;
   let processed = 0;
@@ -72,9 +74,9 @@ async function main(): Promise<void> {
     };
   });
 
-  console.log('\nStarting a worker to drain the surviving jobs…');
-  pq.createWorker<{ to: string }>({
-    queue: 'emails',
+  console.log('\nDeclaring the queue with a handler, to drain the surviving jobs…');
+  pq.createQueue<{ to: string }>({
+    name: 'emails',
     handler: async (job) => {
       console.log(`📧 sending to ${job.data.to}`);
       markProcessed();
@@ -82,7 +84,7 @@ async function main(): Promise<void> {
   });
 
   // PortQueue's own timers are `unref`'d, so this deadline is what keeps the process alive while
-  // the worker drains — and stops the example hanging if a job never lands.
+  // the queue drains — and stops the example hanging if a job never lands.
   let deadline: NodeJS.Timeout | undefined;
   await Promise.race([
     drained,

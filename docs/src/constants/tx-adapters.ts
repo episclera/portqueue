@@ -32,8 +32,7 @@ export const TX_ADAPTERS: TxAdapterInfo[] = [
 
 await knex.transaction(async (trx) => {
   await trx('order').insert(order);
-  const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-  await fulfillmentQueue.addJob({ data: { orderId }, tx: fromKnex(trx) });
+  await pq.addJob({ queue: 'fulfillment', data: { orderId }, tx: fromKnex(trx) });
 }); // the developer's trx owns commit/rollback`,
   },
   {
@@ -45,8 +44,7 @@ await knex.transaction(async (trx) => {
 
 await prisma.$transaction(async (px) => {
   await px.order.create({ data: order });
-  const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-  await fulfillmentQueue.addJob({ data: { orderId }, tx: fromPrisma(px) });
+  await pq.addJob({ queue: 'fulfillment', data: { orderId }, tx: fromPrisma(px) });
 });`,
   },
   {
@@ -58,8 +56,7 @@ await prisma.$transaction(async (px) => {
 
 await db.transaction(async (tx) => {
   await tx.insert(orders).values(order);
-  const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-  await fulfillmentQueue.addJob({ data: { orderId }, tx: fromDrizzle(tx) });
+  await pq.addJob({ queue: 'fulfillment', data: { orderId }, tx: fromDrizzle(tx) });
 });`,
   },
   {
@@ -71,8 +68,7 @@ await db.transaction(async (tx) => {
 
 await dataSource.transaction(async (em) => {
   await em.save(Order, order);
-  const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-  await fulfillmentQueue.addJob({ data: { orderId }, tx: fromTypeorm(em) });
+  await pq.addJob({ queue: 'fulfillment', data: { orderId }, tx: fromTypeorm(em) });
 }); // works with an EntityManager or a QueryRunner's manager`,
   },
   {
@@ -84,9 +80,8 @@ await dataSource.transaction(async (em) => {
 
 await db.transaction().execute(async (trx) => {
   await trx.insertInto('order').values(order).execute();
-  const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
   // fromKysely wraps the transaction's raw executor (executeQuery(sql, params)).
-  await fulfillmentQueue.addJob({ data: { orderId }, tx: fromKysely(trx) });
+  await pq.addJob({ queue: 'fulfillment', data: { orderId }, tx: fromKysely(trx) });
 });`,
   },
   {
@@ -98,8 +93,11 @@ await db.transaction().execute(async (trx) => {
 
 await sequelize.transaction(async (t) => {
   await Order.create(order, { transaction: t });
-  const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-  await fulfillmentQueue.addJob({ data: { orderId }, tx: fromSequelize(sequelize, t) });
+  await pq.addJob({
+    queue: 'fulfillment',
+    data: { orderId },
+    tx: fromSequelize(sequelize, t),
+  });
 });`,
   },
   {
@@ -111,8 +109,7 @@ await sequelize.transaction(async (t) => {
 
 await orm.em.transactional(async (em) => {
   em.persist(new Order(order));
-  const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-  await fulfillmentQueue.addJob({ data: { orderId }, tx: fromMikroOrm(em) });
+  await pq.addJob({ queue: 'fulfillment', data: { orderId }, tx: fromMikroOrm(em) });
 });`,
   },
   {
@@ -124,8 +121,7 @@ await orm.em.transactional(async (em) => {
 
 await client.query('BEGIN');
 await client.query('INSERT INTO "order" (...) VALUES (...)');
-const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-await fulfillmentQueue.addJob({ data, tx: fromPg(client) });
+await pq.addJob({ queue: 'fulfillment', data, tx: fromPg(client) });
 await client.query('COMMIT'); // the app owns commit/rollback`,
   },
   {
@@ -138,8 +134,7 @@ await client.query('COMMIT'); // the app owns commit/rollback`,
 const connection = await oracledb.getConnection();
 try {
   await connection.execute('INSERT INTO "order" (...) VALUES (...)');
-  const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-  await fulfillmentQueue.addJob({ data, tx: fromOracle(connection) });
+  await pq.addJob({ queue: 'fulfillment', data, tx: fromOracle(connection) });
   await connection.commit(); // the app owns commit/rollback
 } finally {
   await connection.close();
@@ -155,8 +150,11 @@ try {
 // better-sqlite3 is synchronous; wrap the add in its transaction().
 const tx = db.transaction((order) => {
   db.prepare('INSERT INTO "order" (id) VALUES (?)').run(order.id);
-  const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-  void fulfillmentQueue.addJob({ data: { orderId: order.id }, tx: fromBetterSqlite3(db) });
+  void pq.addJob({
+    queue: 'fulfillment',
+    data: { orderId: order.id },
+    tx: fromBetterSqlite3(db),
+  });
 });
 tx(order);`,
   },
@@ -169,8 +167,7 @@ tx(order);`,
 
 db.exec('BEGIN');
 db.prepare('INSERT INTO "order" (id) VALUES (?)').run(order.id);
-const fulfillmentQueue = pq.createQueue({ name: 'fulfillment' });
-await fulfillmentQueue.addJob({ data: { orderId: order.id }, tx: fromNodeSqlite(db) });
+await pq.addJob({ queue: 'fulfillment', data: { orderId: order.id }, tx: fromNodeSqlite(db) });
 db.exec('COMMIT'); // the app owns commit/rollback`,
   },
 ];
