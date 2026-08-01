@@ -11,8 +11,18 @@ export class Wakeup {
       set = new Set();
       this.subscribers.set(queue, set);
     }
-    set.add(callback);
-    return () => set!.delete(callback);
+    const subscribers = set;
+    subscribers.add(callback);
+    return () => {
+      subscribers.delete(callback);
+      // Drop the queue's entry once its last subscriber goes, and only if it is still *this* set: a
+      // resubscribe between the two would have installed a new one, and deleting that would strand
+      // a live listener. An emptied set left in the map is small, but `signalAll` then walks it
+      // forever in a process that declares and tears down queues.
+      if (subscribers.size === 0 && this.subscribers.get(queue) === subscribers) {
+        this.subscribers.delete(queue);
+      }
+    };
   }
 
   /** Wake all loops for one queue. */
@@ -26,5 +36,13 @@ export class Wakeup {
     for (const set of this.subscribers.values()) {
       for (const cb of set) cb();
     }
+  }
+
+  /**
+   * How many queues currently have a subscriber. `@internal` — it exists so a test can assert the
+   * map does not grow with every queue a process declares and tears down.
+   */
+  get queueCount(): number {
+    return this.subscribers.size;
   }
 }

@@ -1,3 +1,4 @@
+import type { FailureDetail } from './enums';
 import type { JobOptions } from './job-options';
 import type { LimiterOptions, RetentionOptions } from './common';
 import type { HookRegistration } from '../events/hooks';
@@ -17,6 +18,15 @@ export interface QueueOptions {
   retention?: RetentionOptions;
   /** Queue-scoped participation hooks. */
   hooks?: HookRegistration[];
+  /**
+   * How much of a failure is stored on the job row. Default {@link FailureDetail.STACK}.
+   *
+   * A stack is what you want while diagnosing and the wrong default for a queue whose handler fails
+   * often and predictably: capped at 4000 characters, every failed row still carries up to ~4 KB, so
+   * a busy queue with a failing handler grows the table faster than the jobs themselves.
+   * {@link FailureDetail.MESSAGE} keeps `Error: …` and drops the frames.
+   */
+  failureDetail?: FailureDetail;
 }
 
 /**

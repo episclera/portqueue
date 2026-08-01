@@ -61,6 +61,7 @@ export function v1(names: MigrationNames): string[] {
       cancelled_at BIGINT,
       expired_at BIGINT,
       locked_until BIGINT,
+      lock_token TEXT,
       preferred_instance_key_pattern TEXT,
       processed_on_instance_key TEXT,
       retry_attempt INTEGER NOT NULL DEFAULT 0,
@@ -72,7 +73,7 @@ export function v1(names: MigrationNames): string[] {
       retry_jitter SMALLINT NOT NULL DEFAULT 0,
       failure_message TEXT,
       retention_ttl_seconds BIGINT,
-      retention_statuses TEXT,
+      retention_statuses INTEGER,
       idempotency_key TEXT,
       schedule_id TEXT,
       singleton_key TEXT

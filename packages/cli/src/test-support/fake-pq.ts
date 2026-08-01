@@ -1,3 +1,4 @@
+import { CancelOutcome, JobNotFoundError } from '@portqueue/core';
 import type { PortQueue } from '@portqueue/core';
 
 /** Records of the mutating calls a command made, for assertions. */
@@ -28,7 +29,8 @@ export interface FakePqOverrides {
   schedules?: unknown;
   addResult?: unknown;
   retryResult?: unknown;
-  cancelOk?: boolean;
+  /** What `cancelJob` answers. `null` models the id matching no row, which core throws for. */
+  cancelOutcome?: CancelOutcome | null;
   removeJobOk?: boolean;
   removeScheduleOk?: boolean;
   removed?: number;
@@ -138,7 +140,10 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
     },
     cancelJob: async (arg: unknown) => {
       calls.cancelJob.push(arg);
-      return overrides.cancelOk ?? true;
+      const outcome =
+        'cancelOutcome' in overrides ? overrides.cancelOutcome : CancelOutcome.CANCELLED;
+      if (outcome === null) throw new JobNotFoundError((arg as { jobId: string }).jobId);
+      return outcome;
     },
     removeJob: async (arg: unknown) => {
       calls.removeJob.push(arg);

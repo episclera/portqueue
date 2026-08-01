@@ -148,15 +148,28 @@ export class QueueRegistry {
 
   /**
    * Refresh every declared queue whose cached flags have gone stale. Driven by the maintenance tick,
-   * so a pause made by another instance is observed within one tick interval — the same latency the
-   * per-pump read gave, at one query per queue per tick instead of one per pump.
+   * so a pause made by another instance is observed within one tick interval.
+   *
+   * **One query for the whole set**, not one per queue: a process declaring 50 queues was issuing 50
+   * `getQueueByName` calls every tick to read two booleans each. `listQueues` returns every row, and
+   * the names this process cares about are already known here — so the tick costs one round trip
+   * whatever the declaration count. A name whose row has since been removed simply keeps its cached
+   * flags, exactly as the per-queue refresh did when it answered `null`.
    */
   async refreshStale(): Promise<void> {
     const now = this.clock.now();
-    const stale = [...this.entries.entries()]
-      .filter(([, entry]) => now - entry.refreshedAt >= this.staleAfterMs)
-      .map(([name]) => name);
-    await Promise.all(stale.map((name) => this.refresh(name).catch(() => null)));
+    const stale = new Set(
+      [...this.entries.entries()]
+        .filter(([, entry]) => now - entry.refreshedAt >= this.staleAfterMs)
+        .map(([name]) => name),
+    );
+    if (!stale.size) return;
+    try {
+      const rows = await this.driver.listQueues();
+      for (const row of rows) if (stale.has(row.name)) this.update(row);
+    } catch {
+      // A transient read failure leaves the cached flags in place; the next tick tries again.
+    }
   }
 
   /**

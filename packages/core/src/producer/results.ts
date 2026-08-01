@@ -130,8 +130,32 @@ export interface GetSchedulesQuery extends PageQuery {
   enabled?: boolean;
 }
 
-/** Query for paged instance reads. Same `limit`/`offset` window as {@link GetJobsQuery}. */
-export type GetInstancesQuery = PageQuery;
+/**
+ * Query for paged instance reads. Same `limit`/`offset` window as {@link GetJobsQuery}, plus the
+ * narrowings the driver applies **in SQL** — so finding the paused or stale instances never means
+ * paging the whole table and filtering in the process.
+ */
+export interface GetInstancesQuery extends PageQuery {
+  /** Case-insensitive substring of the instance key. */
+  search?: string;
+  /** `true` → only paused instances, `false` → only running ones, absent → both. */
+  processingPaused?: boolean;
+  /**
+   * `true` → only instances inside the liveness window, `false` → only stale ones, absent → both.
+   * The window is the same {@link InstanceInfo.alive} reports, derived from the heartbeat interval.
+   */
+  alive?: boolean;
+}
 
-/** Query for paged queue reads. Same `limit`/`offset` window as {@link GetJobsQuery}. */
-export type GetQueuesQuery = PageQuery;
+/**
+ * Query for paged queue reads. Same `limit`/`offset` window as {@link GetJobsQuery}, plus the two
+ * narrowings the driver applies in SQL. They are on the public query rather than dashboard-only
+ * because the alternative for a developer looking for paused queues was to page the whole table and
+ * filter in process — exactly what the filter-in-the-database invariant exists to prevent.
+ */
+export interface GetQueuesQuery extends PageQuery {
+  /** Case-insensitive substring of the queue name. */
+  search?: string;
+  /** `true` → only paused queues, `false` → only running ones, absent → both. */
+  processingPaused?: boolean;
+}

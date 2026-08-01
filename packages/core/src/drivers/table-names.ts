@@ -46,6 +46,15 @@ export enum JobColumn {
   CANCELLED_AT = 'cancelled_at',
   EXPIRED_AT = 'expired_at',
   LOCKED_UNTIL = 'locked_until',
+  /**
+   * A fresh token written by every claim, and the fence every completion is guarded on.
+   *
+   * `locked_until` alone cannot say *whose* claim a row is under: a lock that lapses is reclaimed,
+   * the row is claimed again, and it is `ACTIVE` with a future deadline once more — so a handler
+   * from the first run that ignored its abort signal could still write its outcome over the second
+   * run's. A token identifies the claim itself, so a stale completion matches nothing and is refused.
+   */
+  LOCK_TOKEN = 'lock_token',
   PREFERRED_INSTANCE_KEY_PATTERN = 'preferred_instance_key_pattern',
   PROCESSED_ON_INSTANCE_KEY = 'processed_on_instance_key',
   RETRY_ATTEMPT = 'retry_attempt',

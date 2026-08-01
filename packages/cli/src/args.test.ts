@@ -31,6 +31,32 @@ describe('parseArgs', () => {
     expect(parsed.positionals).toEqual(['extra']);
   });
 
+  it('never lets a boolean flag swallow the command that follows it', () => {
+    // `--json` and `--no-color` are advertised as global flags, which invites this ordering. It used
+    // to parse as `{ json: 'jobs' }` with no command at all, and the CLI printed help.
+    const parsed = parseArgs(['--json', 'jobs', '--queue', 'emails']);
+    expect(parsed.command).toEqual(['jobs']);
+    expect(parsed.flags).toEqual({ json: true, queue: 'emails' });
+    expect(parsed.positionals).toEqual([]);
+  });
+
+  it('parses the same command identically with the flag after it', () => {
+    const before = parseArgs(['--json', 'jobs']);
+    const after = parseArgs(['jobs', '--json']);
+    expect(before).toEqual(after);
+  });
+
+  it('still honours an explicit value on a boolean flag', () => {
+    // `--json=false` is an explicit choice; only the *bare* form refuses the next token.
+    expect(parseArgs(['jobs', '--json=false']).flags).toEqual({ json: 'false' });
+  });
+
+  it('lets a value flag before the command take its value, and the command still lands', () => {
+    const parsed = parseArgs(['--driver', 'sqlite', 'queues']);
+    expect(parsed.command).toEqual(['queues']);
+    expect(parsed.flags).toEqual({ driver: 'sqlite' });
+  });
+
   it('returns empty structures for no argv', () => {
     expect(parseArgs([])).toEqual({ command: [], flags: {}, positionals: [] });
   });

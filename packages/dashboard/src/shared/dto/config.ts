@@ -8,4 +8,13 @@
  */
 export interface DashboardConfigDto {
   basePath: string;
+  /**
+   * The most ids one bulk action may carry — core's `MAX_BATCH_IDS`, delivered rather than copied.
+   *
+   * The client needs it to stop a selection growing past what the server will accept, and it cannot
+   * import it: `@portqueue/core` reaches for `node:os`, `node:v8` and friends, so pulling a constant
+   * out of it drags Node builtins into the browser bundle. Sending the value keeps one source of
+   * truth for a limit the server enforces anyway.
+   */
+  maxBatchIds: number;
 }

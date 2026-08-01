@@ -29,9 +29,11 @@ describe('removeCommand', () => {
 
   it('rejects when neither or both selectors are given', async () => {
     const fake = makeFakePq();
-    await expect(removeCommand.run({ pq: fake.pq, flags: {} })).rejects.toThrow(/exactly one/);
+    await expect(removeCommand.run({ pq: fake.pq, onExit: () => {}, flags: {} })).rejects.toThrow(
+      /exactly one/,
+    );
     await expect(
-      removeCommand.run({ pq: fake.pq, flags: { id: 'a', 'schedule-id': 'b' } }),
+      removeCommand.run({ pq: fake.pq, onExit: () => {}, flags: { id: 'a', 'schedule-id': 'b' } }),
     ).rejects.toThrow(/exactly one/);
   });
 });

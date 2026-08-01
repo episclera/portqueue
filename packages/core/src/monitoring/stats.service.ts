@@ -1,4 +1,4 @@
-import { JobStatus } from '../jobs/job-state.enum';
+import { emptyStatusCounts, JobStatus } from '../jobs/job-state.enum';
 import { toSnapshot } from '../jobs/snapshot';
 import { secondsToMs } from '../util/seconds';
 import {
@@ -33,19 +33,6 @@ export function instanceStaleAfterMs(options: PortQueueOptions): number {
   const beatSeconds =
     options.instance?.heartbeatIntervalSeconds ?? DEFAULT_HEARTBEAT_INTERVAL_SECONDS;
   return secondsToMs(beatSeconds * HEARTBEAT_STALE_BEATS, 'instance.heartbeatIntervalSeconds');
-}
-
-/** A zeroed status breakdown, for a key a grouped count query returned nothing for. */
-export function emptyStatusCounts(): Record<JobStatus, number> {
-  return {
-    [JobStatus.PENDING]: 0,
-    [JobStatus.ACTIVE]: 0,
-    [JobStatus.COMPLETED]: 0,
-    [JobStatus.FAILED]: 0,
-    [JobStatus.RETRY]: 0,
-    [JobStatus.CANCELLED]: 0,
-    [JobStatus.EXPIRED]: 0,
-  };
 }
 
 /**
@@ -129,18 +116,16 @@ export class ReadService {
       ...(query.instanceKey ? { processedOnInstanceKey: query.instanceKey } : {}),
       ...(query.search ? { search: query.search } : {}),
     };
-    const records = await this.runtime.driver.getJobs({
-      ...filter,
-      limit: limit + 1,
-      offset,
-    });
-    // Over-fetching one row is what tells us whether anything follows this page — and whenever
-    // nothing does, it also pins the total, so the extra COUNT is only paid when it has to be.
-    const hasMore = records.length > limit;
-    const page = records.slice(0, limit);
-    const total = hasMore ? await this.runtime.driver.countJobs(filter) : offset + page.length;
+    // `total` is a real `COUNT` over the same predicate as the page, always. It used to be inferred
+    // from the page when nothing followed it — `offset + page.length` — which is only the count of
+    // anything on a forward walk: jumping straight to `offset: 1000` on a 20-row table reported
+    // `total: 1000`. Both the dashboard's pagination and the CLI's "… more" hint read this number.
+    const [records, total] = await Promise.all([
+      this.runtime.driver.getJobs({ ...filter, limit, offset }),
+      this.runtime.driver.countJobs(filter),
+    ]);
     const now = this.runtime.clock.now();
-    return { items: page.map((r) => toSnapshot<TData>(r, r.queueName, now)), total };
+    return { items: records.map((r) => toSnapshot<TData>(r, r.queueName, now)), total };
   }
 
   async getQueueStats(queue?: string): Promise<QueueStats> {
@@ -154,9 +139,16 @@ export class ReadService {
    */
   async getQueues(query: GetQueuesQuery = {}): Promise<Page<QueueInfo>> {
     const { limit, offset } = pageWindow(query);
+    // The filter goes to both calls, so the page and its total can never disagree about what they
+    // are describing — and a caller looking for paused queues narrows in SQL instead of paging the
+    // whole table and filtering here.
+    const filter = {
+      ...(query.search ? { search: query.search } : {}),
+      ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
+    };
     const [rows, total] = await Promise.all([
-      this.runtime.driver.listQueues({ limit, offset }),
-      this.runtime.driver.countQueues(),
+      this.runtime.driver.listQueues({ ...filter, limit, offset }),
+      this.runtime.driver.countQueues(filter),
     ]);
     if (!rows.length) return { items: [], total };
     // One grouped count for the whole page rather than a query per queue.
@@ -185,9 +177,19 @@ export class ReadService {
    */
   async getInstances(query: GetInstancesQuery = {}): Promise<Page<InstanceInfo>> {
     const { limit, offset } = pageWindow(query);
+    const filter = {
+      ...(query.search ? { search: query.search } : {}),
+      ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
+      ...(query.alive !== undefined
+        ? {
+            alive: query.alive,
+            seenSince: this.runtime.clock.now() - instanceStaleAfterMs(this.runtime.options),
+          }
+        : {}),
+    };
     const [rows, total] = await Promise.all([
-      this.runtime.driver.listInstances({ limit, offset }),
-      this.runtime.driver.countInstances(),
+      this.runtime.driver.listInstances({ ...filter, limit, offset }),
+      this.runtime.driver.countInstances(filter),
     ]);
     if (!rows.length) return { items: [], total };
     const seenSince = this.runtime.clock.now() - instanceStaleAfterMs(this.runtime.options);

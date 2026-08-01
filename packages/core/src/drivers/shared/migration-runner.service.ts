@@ -15,8 +15,23 @@ import type { Clock } from '../../util/clock';
  * Applies a driver's ordered migrations. The steps come from the driver itself
  * (`driver.migrations`) — each engine authors its own DDL alongside its driver; this is the single
  * shared mechanism that runs them. A migration is identified by its version and nothing else.
- * Race-safe across instances via an advisory lock where available. Supports AUTO / MANUAL /
- * VALIDATE_ONLY.
+ * Supports AUTO / MANUAL / VALIDATE_ONLY.
+ *
+ * **Two rules make `MAX(version)` a truthful answer**, which matters because that is what
+ * `getSchemaVersion` reads and what decides what is still pending:
+ *
+ * - Versions are applied in ascending order, and
+ * - each one is **confirmed recorded** before the next is attempted. So the applied set is always a
+ *   contiguous prefix, and there is no way to reach "v1 and v3 applied, v2 not" — the state in which
+ *   a maximum would read as complete while a version was missing.
+ *
+ * **Concurrency.** Where the engine has a named lock (Postgres' `pg_try_advisory_lock`, MySQL's
+ * `GET_LOCK`) one instance migrates and the rest wait for the version to land. Where it does not
+ * (Oracle, SQLite, PGLite) every instance proceeds, which is safe only because each engine's DDL is
+ * written to be idempotent — `IF NOT EXISTS`, `MERGE`, PL/SQL-guarded `CREATE INDEX` — and because
+ * the confirmation above turns a half-applied step into an error rather than a silent skip. For a
+ * multi-instance Oracle deployment, running `portqueue migrate` once before starting workers is
+ * still the recommendation; see the production docs.
  */
 export class MigrationRunner {
   constructor(
@@ -55,9 +70,8 @@ export class MigrationRunner {
   }
 
   private async migrateAuto(current: number | null): Promise<void> {
-    const pending = this.driver.migrations
-      .filter((m) => m.version > (current ?? 0))
-      .sort((a, b) => a.version - b.version);
+    const ordered = [...this.driver.migrations].sort((a, b) => a.version - b.version);
+    const pending = ordered.filter((m) => m.version > (current ?? 0));
     if (pending.length === 0) return;
 
     const useLock =
@@ -72,16 +86,37 @@ export class MigrationRunner {
         await this.waitForVersion(this.targetVersion);
         return;
       }
+    } else {
+      // No named lock on this engine. Every instance applies, which each engine's DDL is written to
+      // survive; the confirmation below is what keeps a partial apply from reading as a complete one.
+      this.logger.debug(
+        'This engine offers no advisory lock; applying migrations without one. Concurrent first ' +
+          'boots rely on the DDL being idempotent — run `portqueue migrate` first to avoid the race.',
+      );
     }
     try {
       const from = current;
       for (const migration of pending) {
         try {
           await this.driver.applyMigration({ migration });
-          this.logger.info(`Applied migration v${migration.version}.`);
         } catch (err) {
           throw new MigrationFailedError(`Migration v${migration.version} failed.`, err);
         }
+        // Read it back before moving on. On Postgres, SQLite and PGLite the statements and the
+        // version insert share a transaction, so this only ever confirms what is already true. On
+        // MySQL and Oracle it cannot: DDL commits implicitly there, so `applyMigration` runs the
+        // statements and *then* records the version, and a crash between the two would otherwise
+        // leave a schema that reads as one version behind — the next start re-running (idempotent)
+        // DDL, and any future non-idempotent step failing on it. Stopping here says so plainly.
+        const recorded = await this.driver.getSchemaVersion();
+        if ((recorded ?? 0) < migration.version) {
+          throw new MigrationFailedError(
+            `Migration v${migration.version} ran but was not recorded (the schema still reads as ` +
+              `v${recorded ?? 0}). On an engine where DDL commits implicitly this can only mean the ` +
+              `process was interrupted between the two; re-run the migration to finish it.`,
+          );
+        }
+        this.logger.info(`Applied migration v${migration.version}.`);
       }
       this.events.emit(PortQueueEvent.MIGRATION_APPLIED, { from, to: this.targetVersion });
     } finally {

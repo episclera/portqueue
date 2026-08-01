@@ -18,6 +18,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:core": "npm run test --workspace @portqueue/core",
+    "test:mysql": "npm run test:mysql --workspace @portqueue/core",
+    "test:oracle": "npm run test:oracle --workspace @portqueue/core",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "changeset": "changeset",

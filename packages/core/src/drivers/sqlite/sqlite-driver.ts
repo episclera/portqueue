@@ -23,7 +23,8 @@ import {
   type Row,
   type Session,
 } from '../shared/base-driver';
-import { retentionStatusPattern } from '../shared/retention-statuses';
+import { retentionStatusBit } from '../shared/retention-statuses';
+import { MS_PER_SECOND } from '../../util/seconds';
 import { toMigrationSteps } from '../shared/migration';
 import { SQLITE_MIGRATIONS } from './migrations';
 import type {
@@ -301,6 +302,9 @@ export class SqliteDriver extends BaseDriver implements Driver {
     const { jobs, tx } = options;
     if (!jobs.length) return [];
     return this.inTx(tx, async (run) => {
+      // No per-queue lock here, unlike the other engines: `transaction()` opens `BEGIN IMMEDIATE`,
+      // which takes SQLite's database-wide write lock before the first read. The dedup lookup and
+      // the insert therefore cannot interleave with another writer's by construction.
       const deduped = await this.findDeduplicated(jobs, run);
       const results = new Array<InsertedJobRow | undefined>(jobs.length);
       const fresh: Array<{ index: number; id: string; values: unknown[] }> = [];
@@ -485,13 +489,17 @@ export class SqliteDriver extends BaseDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<ScheduleRef[]> {
     if (!options.scheduleIds.length) return [];
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} IN (${this.phList(options.scheduleIds.length)}) ` +
-        `RETURNING ${ScheduleColumn.ID}, ${ScheduleColumn.QUEUE_NAME}`,
-      options.scheduleIds,
-      options.tx,
-    );
-    return res.rows.map((r) => this.mapScheduleRef(r));
+    // Chunked so one statement can never carry more ids than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.scheduleIds, async (scheduleIds) => {
+      const res = await this.runMaybeTx(
+        `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} IN (${this.phList(scheduleIds.length)}) ` +
+          `RETURNING ${ScheduleColumn.ID}, ${ScheduleColumn.QUEUE_NAME}`,
+        scheduleIds,
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapScheduleRef(r));
+    });
   }
 
   async setScheduleEnabled(options: {
@@ -519,6 +527,9 @@ export class SqliteDriver extends BaseDriver implements Driver {
   }): Promise<JobRecord[]> {
     const { queueName, limit, lockDurationSeconds, now, instanceKey } = options;
     const lockedUntil = this.lockDeadline(now, lockDurationSeconds);
+    // One token per claim call: every row this claim takes carries it, and every completion is
+    // fenced on it (see `claimFence`). A later claim of the same row writes a different one.
+    const lockToken = this.newId();
     const cols = JOB_COLUMNS.join(', ');
 
     // Single-instance mode: one guarded UPDATE ... RETURNING. SQLite has no row locks and needs
@@ -527,16 +538,17 @@ export class SqliteDriver extends BaseDriver implements Driver {
     if (!instanceKey) {
       const res = await this.runMaybeTx(
         `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STARTED_AT} = ${this.ph(1)}, ` +
-          `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)} ` +
+          `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.LOCK_TOKEN} = ${this.ph(3)}, ${JobColumn.UPDATED_AT} = ${this.ph(4)} ` +
           `WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} ` +
-          `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(4)} AND ${JobColumn.STATUS} IN (${this.ph(5)}, ${this.ph(6)}) ` +
-          `AND ${JobColumn.START_AFTER} <= ${this.ph(7)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(8)}) ` +
-          `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(9)}) ` +
+          `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(5)} AND ${JobColumn.STATUS} IN (${this.ph(6)}, ${this.ph(7)}) ` +
+          `AND ${JobColumn.START_AFTER} <= ${this.ph(8)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(9)}) ` +
+          `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(10)}) ` +
           `RETURNING ${cols}`,
         [
           JobStatus.ACTIVE,
           now,
           lockedUntil,
+          lockToken,
           now,
           queueName,
           JobStatus.PENDING,
@@ -571,11 +583,11 @@ export class SqliteDriver extends BaseDriver implements Driver {
       }
       if (ids.size === 0) return [];
       const idList = [...ids];
-      const head = [JobStatus.ACTIVE, now, lockedUntil, instanceKey, now];
+      const head = [JobStatus.ACTIVE, now, lockedUntil, lockToken, instanceKey, now];
       const upd = await this.execute(
         `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STARTED_AT} = ${this.ph(1)}, ` +
-          `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(3)}, ` +
-          `${JobColumn.UPDATED_AT} = ${this.ph(4)} ` +
+          `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.LOCK_TOKEN} = ${this.ph(3)}, ` +
+          `${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(4)}, ${JobColumn.UPDATED_AT} = ${this.ph(5)} ` +
           `WHERE ${JobColumn.ID} IN (${this.phList(idList.length, head.length)}) ` +
           `AND ${JobColumn.STATUS} IN (${this.ph(head.length + idList.length)}, ${this.ph(head.length + idList.length + 1)}) ` +
           `RETURNING ${cols}`,
@@ -586,20 +598,40 @@ export class SqliteDriver extends BaseDriver implements Driver {
     });
   }
 
+  /**
+   * The fence a completion is guarded on: the row must still be `ACTIVE` and, when the caller names
+   * the claim it is settling, still carry that claim's token.
+   *
+   * Status alone is not enough. A lapsed lock is reclaimed and the row claimed again, so it reads
+   * `ACTIVE` once more — and a handler from the first run that ignored its abort signal would write
+   * its outcome over the second run's. The token identifies the claim itself, so a stale completion
+   * matches nothing and reports "not settled" instead.
+   */
+  private claimFence(params: unknown[], lockToken: string | null | undefined): string {
+    let sql = ` AND ${JobColumn.STATUS} = ${this.ph(params.length)}`;
+    params.push(JobStatus.ACTIVE);
+    if (lockToken != null) {
+      sql += ` AND ${JobColumn.LOCK_TOKEN} = ${this.ph(params.length)}`;
+      params.push(lockToken);
+    }
+    return sql;
+  }
+
   async extendLock(options: {
     jobId: string;
     lockDurationSeconds: number;
     now: number;
+    lockToken?: string | null;
   }): Promise<boolean> {
+    const params: unknown[] = [
+      this.lockDeadline(options.now, options.lockDurationSeconds),
+      options.now,
+      options.jobId,
+    ];
     const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.LOCKED_UNTIL} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} ` +
-        `WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} = ${this.ph(3)}`,
-      [
-        this.lockDeadline(options.now, options.lockDurationSeconds),
-        options.now,
-        options.jobId,
-        JobStatus.ACTIVE,
-      ],
+        `WHERE ${JobColumn.ID} = ${this.ph(2)}${this.claimFence(params, options.lockToken)}`,
+      params,
     );
     return res.rowCount > 0;
   }
@@ -608,21 +640,24 @@ export class SqliteDriver extends BaseDriver implements Driver {
     jobId: string;
     returnValue?: unknown;
     now: number;
+    lockToken?: string | null;
     tx?: TransactionHandle;
-  }): Promise<void> {
-    await this.runMaybeTx(
+  }): Promise<boolean> {
+    const params: unknown[] = [
+      JobStatus.COMPLETED,
+      this.toJson(options.returnValue),
+      options.now,
+      options.now,
+      options.jobId,
+    ];
+    const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETURN_VALUE} = ${this.ph(1)}, ` +
-        `${JobColumn.COMPLETED_AT} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
-        `WHERE ${JobColumn.ID} = ${this.ph(4)}`,
-      [
-        JobStatus.COMPLETED,
-        this.toJson(options.returnValue),
-        options.now,
-        options.now,
-        options.jobId,
-      ],
+        `${JobColumn.COMPLETED_AT} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(4)}${this.claimFence(params, options.lockToken)}`,
+      params,
       options.tx,
     );
+    return res.rowCount > 0;
   }
 
   async retryJob(options: {
@@ -631,30 +666,47 @@ export class SqliteDriver extends BaseDriver implements Driver {
     retryAttempt: number;
     lastError: string;
     now: number;
-  }): Promise<void> {
-    await this.runMaybeTx(
+    lockToken?: string | null;
+  }): Promise<boolean> {
+    const params: unknown[] = [
+      JobStatus.RETRY,
+      options.retryAttempt,
+      options.nextRunAt,
+      options.now,
+      options.lastError,
+      options.now,
+      options.jobId,
+    ];
+    const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = ${this.ph(1)}, ` +
         `${JobColumn.START_AFTER} = ${this.ph(2)}, ${JobColumn.RETRIED_AT} = ${this.ph(3)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(4)}, ` +
-        `${JobColumn.UPDATED_AT} = ${this.ph(5)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(6)}`,
-      [
-        JobStatus.RETRY,
-        options.retryAttempt,
-        options.nextRunAt,
-        options.now,
-        options.lastError,
-        options.now,
-        options.jobId,
-      ],
+        `${JobColumn.UPDATED_AT} = ${this.ph(5)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(6)}${this.claimFence(params, options.lockToken)}`,
+      params,
     );
+    return res.rowCount > 0;
   }
 
-  async failJob(options: { jobId: string; lastError: string; now: number }): Promise<void> {
-    await this.runMaybeTx(
+  async failJob(options: {
+    jobId: string;
+    lastError: string;
+    now: number;
+    lockToken?: string | null;
+  }): Promise<boolean> {
+    const params: unknown[] = [
+      JobStatus.FAILED,
+      options.now,
+      options.lastError,
+      options.now,
+      options.jobId,
+    ];
+    const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.FAILED_AT} = ${this.ph(1)}, ` +
-        `${JobColumn.FAILURE_MESSAGE} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
-        `WHERE ${JobColumn.ID} = ${this.ph(4)}`,
-      [JobStatus.FAILED, options.now, options.lastError, options.now, options.jobId],
+        `${JobColumn.FAILURE_MESSAGE} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(4)}${this.claimFence(params, options.lockToken)}`,
+      params,
     );
+    return res.rowCount > 0;
   }
 
   async reclaimStalledJobs(options: {
@@ -676,7 +728,7 @@ export class SqliteDriver extends BaseDriver implements Driver {
     params.push(options.limit);
     const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STALLED_AT} = ${this.ph(1)}, ` +
-        `${JobColumn.LOCKED_UNTIL} = NULL ` +
+        `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
         `WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${where} LIMIT ${limitPh}) ` +
         `RETURNING ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}, ${JobColumn.PROCESSED_ON_INSTANCE_KEY}`,
       params,
@@ -711,7 +763,7 @@ export class SqliteDriver extends BaseDriver implements Driver {
     params.push(options.limit);
     const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.EXPIRED_AT} = ${this.ph(1)}, ` +
-        `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+        `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
         `WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} WHERE ${where} LIMIT ${limitPh}) ` +
         `RETURNING ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}`,
       params,
@@ -738,27 +790,31 @@ export class SqliteDriver extends BaseDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<RequeuedJobRef[]> {
     if (!options.jobIds.length) return [];
-    // Guarded on `status != ACTIVE`. Re-arming a running job would clear its lock and let a second
-    // worker claim it while the first handler is still going — the same job running twice at once.
-    // An ACTIVE or missing id is simply not re-armed, so a batch never fails on one stale id.
-    const head: unknown[] = [JobStatus.PENDING, options.now, options.now];
-    const res = await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = 0, ` +
-        `${JobColumn.START_AFTER} = ${this.ph(1)}, ${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ` +
-        `${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ` +
-        `${JobColumn.EXPIRED_AT} = NULL, ${JobColumn.RETURN_VALUE} = NULL, ${JobColumn.LOCKED_UNTIL} = NULL, ` +
-        `${JobColumn.UPDATED_AT} = ${this.ph(2)} ` +
-        `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length, head.length)}) ` +
-        `AND ${JobColumn.STATUS} <> ${this.ph(head.length + options.jobIds.length)} ` +
-        `RETURNING ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}`,
-      [...head, ...options.jobIds, JobStatus.ACTIVE],
-      options.tx,
-    );
-    return res.rows.map((r) => ({
-      ...this.mapJobRef(r),
-      status: r[JobColumn.STATUS] as JobStatus,
-      startAfter: Number(r[JobColumn.START_AFTER]),
-    }));
+    // Chunked so one statement can never carry more ids than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.jobIds, async (jobIds) => {
+      // Guarded on `status != ACTIVE`. Re-arming a running job would clear its lock and let a second
+      // worker claim it while the first handler is still going — the same job running twice at once.
+      // An ACTIVE or missing id is simply not re-armed, so a batch never fails on one stale id.
+      const head: unknown[] = [JobStatus.PENDING, options.now, options.now];
+      const res = await this.runMaybeTx(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = 0, ` +
+          `${JobColumn.START_AFTER} = ${this.ph(1)}, ${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ` +
+          `${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ` +
+          `${JobColumn.EXPIRED_AT} = NULL, ${JobColumn.RETURN_VALUE} = NULL, ${JobColumn.RETRIED_AT} = NULL, ${JobColumn.STALLED_AT} = NULL, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(2)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(jobIds.length, head.length)}) ` +
+          `AND ${JobColumn.STATUS} <> ${this.ph(head.length + jobIds.length)} ` +
+          `RETURNING ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}`,
+        [...head, ...jobIds, JobStatus.ACTIVE],
+        options.tx,
+      );
+      return res.rows.map((r) => ({
+        ...this.mapJobRef(r),
+        status: r[JobColumn.STATUS] as JobStatus,
+        startAfter: Number(r[JobColumn.START_AFTER]),
+      }));
+    });
   }
 
   // --- Reading ---
@@ -873,15 +929,20 @@ export class SqliteDriver extends BaseDriver implements Driver {
     const out: Record<string, Record<JobStatus, number>> = {};
     for (const key of keys) out[key] = this.emptyStatusCounts();
     if (!keys.length) return out;
-    const res = await this.runMaybeTx(
-      `SELECT ${keyColumn}, ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ` +
-        `WHERE ${keyColumn} IN (${this.phList(keys.length)}) GROUP BY ${keyColumn}, ${JobColumn.STATUS}`,
-      keys,
-    );
-    for (const row of res.rows) {
-      const bucket = out[String(row[keyColumn])];
-      if (bucket) bucket[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
-    }
+    // Chunked like every other key list: the instances page can ask about more keys than an engine
+    // will take in one `IN (...)`, and each chunk fills its own share of the same result.
+    await this.overIdChunks(keys, async (chunk) => {
+      const res = await this.runMaybeTx(
+        `SELECT ${keyColumn}, ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${keyColumn} IN (${this.phList(chunk.length)}) GROUP BY ${keyColumn}, ${JobColumn.STATUS}`,
+        chunk,
+      );
+      for (const row of res.rows) {
+        const bucket = out[String(row[keyColumn])];
+        if (bucket) bucket[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
+      }
+      return res.rows;
+    });
     return out;
   }
 
@@ -1028,18 +1089,22 @@ export class SqliteDriver extends BaseDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<JobRef[]> {
     if (!options.jobIds.length) return [];
-    const head: unknown[] = [JobStatus.CANCELLED, options.now, options.now];
-    const tail = [JobStatus.PENDING, JobStatus.RETRY];
-    const res = await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.CANCELLED_AT} = ${this.ph(1)}, ` +
-        `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
-        `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length, head.length)}) ` +
-        `AND ${JobColumn.STATUS} IN (${this.phList(tail.length, head.length + options.jobIds.length)}) ` +
-        `RETURNING ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}`,
-      [...head, ...options.jobIds, ...tail],
-      options.tx,
-    );
-    return res.rows.map((r) => this.mapJobRef(r));
+    // Chunked so one statement can never carry more ids than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.jobIds, async (jobIds) => {
+      const head: unknown[] = [JobStatus.CANCELLED, options.now, options.now];
+      const tail = [JobStatus.PENDING, JobStatus.RETRY];
+      const res = await this.runMaybeTx(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.CANCELLED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(jobIds.length, head.length)}) ` +
+          `AND ${JobColumn.STATUS} IN (${this.phList(tail.length, head.length + jobIds.length)}) ` +
+          `RETURNING ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}`,
+        [...head, ...jobIds, ...tail],
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapJobRef(r));
+    });
   }
 
   async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<JobRef | null> {
@@ -1052,16 +1117,20 @@ export class SqliteDriver extends BaseDriver implements Driver {
 
   async removeJobs(options: { jobIds: string[]; tx?: TransactionHandle }): Promise<JobRef[]> {
     if (!options.jobIds.length) return [];
-    // Never delete a running job — an ACTIVE row belongs to a live handler, so it is skipped and
-    // simply absent from the result; cancel it first.
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
-        `AND ${JobColumn.STATUS} <> ${this.ph(options.jobIds.length)} ` +
-        `RETURNING ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}`,
-      [...options.jobIds, JobStatus.ACTIVE],
-      options.tx,
-    );
-    return res.rows.map((r) => this.mapJobRef(r));
+    // Chunked so one statement can never carry more ids than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.jobIds, async (jobIds) => {
+      // Never delete a running job — an ACTIVE row belongs to a live handler, so it is skipped and
+      // simply absent from the result; cancel it first.
+      const res = await this.runMaybeTx(
+        `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${this.phList(jobIds.length)}) ` +
+          `AND ${JobColumn.STATUS} <> ${this.ph(jobIds.length)} ` +
+          `RETURNING ${JobColumn.ID}, ${JobColumn.QUEUE_NAME}`,
+        [...jobIds, JobStatus.ACTIVE],
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapJobRef(r));
+    });
   }
 
   async removeJobsByStatus(options: {
@@ -1308,11 +1377,13 @@ export class SqliteDriver extends BaseDriver implements Driver {
   private retentionWhere(olderThan: number, params: unknown[]): string {
     const statusPh = this.phList(FINISHED_STATUSES.length, params.length);
     params.push(...FINISHED_STATUSES);
+    // One integer test per status rather than a leading-wildcard `LIKE`: the old encoding could not
+    // use an index and cost four pattern matches per candidate row.
     const scoped = FINISHED_STATUSES.map((status) => {
       const clause =
         `(${JobColumn.STATUS} = ${this.ph(params.length)} AND ` +
-        `${JobColumn.RETENTION_STATUSES} LIKE ${this.ph(params.length + 1)})`;
-      params.push(status, retentionStatusPattern(status));
+        `${JobColumn.RETENTION_STATUSES} & ${this.ph(params.length + 1)} <> 0)`;
+      params.push(status, retentionStatusBit(status));
       return clause;
     });
     const cutoffPh = this.ph(params.length);
@@ -1322,7 +1393,7 @@ export class SqliteDriver extends BaseDriver implements Driver {
       `AND ${JobColumn.STATUS} IN (${statusPh}) ` +
       `AND (${JobColumn.RETENTION_STATUSES} IS NULL OR ${scoped.join(' OR ')}) ` +
       `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ` +
-      `${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_SECONDS} * 1000) <= ${cutoffPh}`
+      `${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_SECONDS} * ${MS_PER_SECOND}) <= ${cutoffPh}`
     );
   }
 

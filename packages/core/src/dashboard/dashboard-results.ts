@@ -6,19 +6,15 @@
 import type { JobStatus } from '../jobs/job-state.enum';
 import type { Page } from '../options/common';
 import type { GetSchedulesQuery, InstanceInfo, QueueInfo, ScheduleInfo } from '../producer/results';
-import { DASHBOARD_MAX_PAGE_LIMIT } from '../constants';
 
 export type { Page };
 
 /** The paging window every dashboard list read accepts. */
 export interface DashboardPageQuery {
-  /** Rows to return. Clamped to {@link DASHBOARD_MAX_LIMIT}. */
+  /** Rows to return. Clamped to `DASHBOARD_MAX_PAGE_LIMIT`. */
   limit?: number;
   offset?: number;
 }
-
-/** Hard ceiling on a dashboard page, so a crafted `limit` can't ask for the whole table. */
-export const DASHBOARD_MAX_LIMIT = DASHBOARD_MAX_PAGE_LIMIT;
 
 /** Pause-state narrowing shared by the queue and instance lists. */
 export interface PausedFilter {
@@ -27,12 +23,13 @@ export interface PausedFilter {
 }
 
 /**
- * The dashboard's queue query: the public paging window plus the narrowing only the dashboard's
- * queues table offers. Named for the facade rather than reusing the public `GetQueuesQuery`, which
- * carries paging and nothing else.
+ * The dashboard's queue query. Named for the facade, but the same shape as the public
+ * `GetQueuesQuery` — the search and pause-state narrowings started here and were promoted, since a
+ * developer looking for paused queues needed them just as much. The facade keeps the name (and the
+ * tighter page ceiling); it no longer keeps a second implementation.
  *
  * There is deliberately no `inUse` filter. `inUse` means "declared in the process that produced this
- * info", and the dashboard now runs on its own headless client (`createDashboard({ driver })`) rather
+ * info", and the dashboard runs on its own headless client (`createDashboard({ driver })`) rather
  * than riding on the application's — so it has no way to know which queues the workers declare, and a
  * filter that always answered "none" would be worse than no filter.
  */
@@ -41,11 +38,7 @@ export interface DashboardQueuesQuery extends DashboardPageQuery, PausedFilter {
   search?: string;
 }
 
-/**
- * The dashboard's instance query: the public paging window plus the narrowing only the dashboard's
- * instances table offers. Named for the facade rather than reusing the public
- * `GetInstancesQuery`, which carries paging and nothing else.
- */
+/** The dashboard's instance query — the public `GetInstancesQuery` under the facade's own name. */
 export interface DashboardInstancesQuery extends DashboardPageQuery, PausedFilter {
   /** Case-insensitive substring of the instance key. */
   search?: string;
@@ -106,6 +99,13 @@ export interface BatchResult {
   affected: number;
   /** How many ids were submitted, so a caller can report "3 of 5 removed". */
   requested: number;
+  /**
+   * Jobs a cancel could only *ask* to stop: they are running in this process, so their handler's
+   * `AbortSignal` was fired and their row will settle to whatever the handler does next. Counted
+   * apart from `affected` because nothing has been cancelled yet — reporting them as cancelled is
+   * how the dashboard used to claim "Cancelled 3 jobs" for three jobs that then completed normally.
+   */
+  signalled?: number;
 }
 
 export type { InstanceInfo, QueueInfo, ScheduleInfo };

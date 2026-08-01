@@ -57,9 +57,25 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/** True when a built client bundle is present in the package. */
-export async function hasBuiltClient(): Promise<boolean> {
-  return exists(join(clientDistDir(), 'index.html'));
+/**
+ * True when a built client bundle is present in the package.
+ *
+ * Resolved **once** and memoized: the bundle ships inside the package and cannot appear or disappear
+ * while the process runs, so asking the filesystem on every asset request was one `stat` per request
+ * for an answer that never changes. `createEngine` awaits it at mount to warn about a missing
+ * bundle, which is also what primes it.
+ */
+export function hasBuiltClient(): Promise<boolean> {
+  builtClient ??= exists(join(clientDistDir(), 'index.html'));
+  return builtClient;
+}
+
+/** The memoized answer. A promise, so concurrent first requests share one `stat`. */
+let builtClient: Promise<boolean> | null = null;
+
+/** Clear the memo. Test-only: a suite that creates and removes a fake bundle needs to re-ask. */
+export function resetBuiltClientCache(): void {
+  builtClient = null;
 }
 
 /**

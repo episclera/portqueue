@@ -1,4 +1,4 @@
-import { PauseMode } from './options/enums';
+import { CancelOutcome, FailureDetail, PauseMode } from './options/enums';
 import { PortQueueEvent } from './events/event-name.enum';
 import { DriverCapability } from './drivers/driver-capabilities';
 import { ConsoleLogger } from './logging/console-logger';
@@ -22,14 +22,17 @@ import { JobStatus } from './jobs/job-state.enum';
 import {
   InstanceActiveError,
   InvalidOptionsError,
+  JobNotFoundError,
   NotStartedError,
   QueueInUseError,
   QueueNotFoundError,
 } from './errors/errors';
 import { SystemClock } from './util/clock';
 import { secondsToMs } from './util/seconds';
+import { assertBatchIds } from './util/batch-ids';
 import {
   DEFAULT_CONCURRENCY,
+  DEFAULT_FAILURE_DETAIL,
   DEFAULT_LOCK_DURATION_SECONDS,
   DEFAULT_POLL_INTERVAL_SECONDS,
   DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
@@ -240,7 +243,13 @@ export class PortQueue<TQueues extends string = string> {
       for (const hook of queueOptions.hooks ?? []) {
         this.hooks.register(hook.queue ? hook : { ...hook, queue: name });
       }
-      this.startConsuming(name, handler as JobHandler, limiter, dontAutoretryFor);
+      this.startConsuming(
+        name,
+        handler as JobHandler,
+        limiter,
+        dontAutoretryFor,
+        queueOptions.failureDetail,
+      );
     }
     const existing = this.clientRegistry.getQueue(name) as Queue<TData> | undefined;
     if (existing) return existing;
@@ -258,6 +267,7 @@ export class PortQueue<TQueues extends string = string> {
     handler: JobHandler,
     limiterOptions: LimiterOptions = {},
     dontAutoretryFor: Array<ErrorClass | string> = [],
+    failureDetail: FailureDetail = DEFAULT_FAILURE_DETAIL,
   ): void {
     const limiter = limiterOptions;
     const concurrency = limiter.concurrency ?? DEFAULT_CONCURRENCY;
@@ -277,6 +287,7 @@ export class PortQueue<TQueues extends string = string> {
       pollIntervalSeconds: limiter.pollIntervalSeconds ?? DEFAULT_POLL_INTERVAL_SECONDS,
       ...(rate ? { limiter: rate } : {}),
       dontAutoretryFor,
+      failureDetail,
     };
     const worker = new Worker(
       this.runtime,
@@ -397,27 +408,41 @@ export class PortQueue<TQueues extends string = string> {
   }
 
   /**
-   * Cancel a job. If the job is **currently running in this process**, its handler's `AbortSignal` is
-   * fired for cooperative cancellation (the handler must honour `job.signal` to actually stop) and
-   * that settles the row. Otherwise a pending/delayed job is marked `CANCELLED` so it never runs.
-   * Returns true if either path acted.
+   * Cancel a job, and report **what actually happened** — see {@link CancelOutcome}.
+   *
+   * A job running in this process cannot be cancelled from outside its handler, only asked to stop:
+   * its `AbortSignal` fires and the outcome is `SIGNALLED`, because a handler that ignores
+   * `job.signal` runs to completion and the row ends `COMPLETED`. A pending or delayed job is marked
+   * `CANCELLED` so it never runs, and that is the only case that reports `CANCELLED`.
+   *
+   * Throws {@link JobNotFoundError} for an id that names no row: there is no honest outcome for
+   * cancelling a job that does not exist.
    */
-  async cancelJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
+  async cancelJob(options: { jobId: string; tx?: TransactionHandle }): Promise<CancelOutcome> {
     this.requireStarted('cancelJob');
     // A locally-running handler owns its row's outcome — fire its signal and let it settle,
     // rather than racing a DB write against its completion.
-    if (this.runtime.cancelRunning?.(options.jobId)) return true;
+    if (this.runtime.cancelRunning?.(options.jobId)) return CancelOutcome.SIGNALLED;
     const cancelled = await this.runtime.driver.cancelJob({
       jobId: options.jobId,
       now: this.runtime.clock.now(),
       ...(options.tx ? { tx: options.tx } : {}),
     });
-    if (!cancelled) return false;
-    this.events.emit(PortQueueEvent.JOB_CANCELLED, {
-      jobId: cancelled.jobId,
-      queue: cancelled.queueName,
+    if (cancelled) {
+      this.events.emit(PortQueueEvent.JOB_CANCELLED, {
+        jobId: cancelled.jobId,
+        queue: cancelled.queueName,
+      });
+      return CancelOutcome.CANCELLED;
+    }
+    // Nothing was cancellable, and the two reasons read very differently to an operator. One read
+    // separates them — on the refusal path only, never on a cancel that worked.
+    const row = await this.runtime.driver.getJob({
+      jobId: options.jobId,
+      ...(options.tx ? { tx: options.tx } : {}),
     });
-    return true;
+    if (!row) throw new JobNotFoundError(options.jobId);
+    return CancelOutcome.NOT_CANCELLABLE;
   }
 
   /**
@@ -453,6 +478,7 @@ export class PortQueue<TQueues extends string = string> {
   ): Promise<number> {
     this.requireStarted('removeJobs');
     if ('jobIds' in options) {
+      assertBatchIds(options.jobIds, 'removeJobs({ jobIds })');
       const removed = await this.runtime.driver.removeJobs({
         jobIds: options.jobIds,
         ...(options.tx ? { tx: options.tx } : {}),
@@ -530,8 +556,11 @@ export class PortQueue<TQueues extends string = string> {
   async pauseQueue(options: { queue: TQueues | string; mode?: PauseMode }): Promise<void> {
     this.requireStarted('pauseQueue');
     const mode = options.mode ?? PauseMode.PROCESSING;
+    // `setPaused` throws when no row matched, so everything after it describes a write that
+    // happened: the cache is refreshed and the event is emitted only on success. The `if (row)` that
+    // used to guard the cache update was dead code reading as though null were tolerated.
     const row = await this.setPaused(options.queue, true, mode === PauseMode.ALL);
-    if (row) this.runtime.registry.update(row);
+    this.runtime.registry.update(row);
     this.events.emit(PortQueueEvent.QUEUE_PAUSED, { queue: options.queue, mode });
   }
 
@@ -539,20 +568,21 @@ export class PortQueue<TQueues extends string = string> {
   async resumeQueue(options: { queue: TQueues | string }): Promise<void> {
     this.requireStarted('resumeQueue');
     const row = await this.setPaused(options.queue, false, false);
-    if (row) this.runtime.registry.update(row);
+    this.runtime.registry.update(row);
     this.runtime.wakeup.signal(options.queue);
     this.events.emit(PortQueueEvent.QUEUE_RESUMED, { queue: options.queue });
   }
 
   /**
-   * Write both pause flags, returning the updated row so the cached flags this process's workers
-   * read are refreshed without a second query.
+   * Write both pause flags and return the updated row, so the cached flags this process's workers
+   * read are refreshed without a second query. Throws {@link QueueNotFoundError} when the name
+   * matched nothing — there is no "paused nothing" outcome to report.
    */
   private async setPaused(
     queue: string,
     processingPaused: boolean,
     acceptingPaused: boolean,
-  ): Promise<QueueRow | null> {
+  ): Promise<QueueRow> {
     // A queue declared here may not have written its row yet (it is created on first use), so
     // ensure it before pausing. `ensure` only creates the row; it never writes queue options.
     if (this.runtime.registry.isRegistered(queue)) await this.runtime.registry.ensure(queue);

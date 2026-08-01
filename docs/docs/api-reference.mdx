@@ -173,8 +173,11 @@ only; no I/O until `init()`.
   <li>
     <span className="api-badge">cancelJob(&#123; jobId, tx? &#125;)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;boolean&gt;</code> — cancel a pending job, or fire a running job's abort
-      signal
+      → <code>Promise&lt;CancelOutcome&gt;</code> — reports <strong>what it did</strong>:{' '}
+      <code>CANCELLED</code> when the row is now cancelled, <code>SIGNALLED</code> when a
+      locally-running handler was only asked to stop, <code>NOT_CANCELLABLE</code> when the job has
+      already finished or is running in another process. Throws <code>JobNotFoundError</code> for an
+      id that names no row.
     </span>
   </li>
   <li>
@@ -190,7 +193,10 @@ only; no I/O until `init()`.
     </span>{' '}
     <span className="api-note">
       → <code>Promise&lt;number&gt;</code> — count deleted; skips <code>ACTIVE</code> ids, and
-      throws if <code>statuses</code> includes <code>ACTIVE</code>
+      throws if <code>statuses</code> includes <code>ACTIVE</code>. A batch is one statement, so{' '}
+      <code>jobIds</code> is capped at <code>MAX_BATCH_IDS</code> (1000, the tightest{' '}
+      <code>IN</code>-list limit of any supported engine) — pass more and it throws{' '}
+      <code>InvalidOptionsError</code> rather than failing in the driver.
     </span>
   </li>
   <li>
@@ -714,15 +720,16 @@ processes its jobs, the `limiter` / `dontAutoretryFor` settings that shape how i
 `defaultJobOptions`, `retention` and `hooks` its jobs inherit. To enqueue without processing, skip
 `createQueue` and call `addJob` — it creates the queue's row on first use.
 
-| Option              | Type                                    | Default        | Description                                                                                     |
-| ------------------- | --------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------- |
-| `name`              | `TQueues`                               | — **required** | The queue name every job, schedule and read is filed under.                                     |
-| `defaultJobOptions` | [`JobOptions`](#joboptions)             | —              | Defaults every job **this process adds** to the queue inherits; a per-job option overrides.     |
-| `retention`         | [`RetentionOptions`](#retentionoptions) | keep forever   | Queue default retention; resolved per-job and frozen onto each row.                             |
-| `hooks`             | `HookRegistration[]`                    | `[]`           | Queue-scoped [participation hooks](./events-hooks/hooks.md).                                    |
-| `handler`           | `JobHandler<TData, TResult>`            | — **required** | The processor for this queue's jobs — declaring a queue is how a process takes on consuming it. |
-| `limiter`           | [`LimiterOptions`](#limiteroptions)     | defaults       | Throughput & claim tuning for this queue's processing.                                          |
-| `dontAutoretryFor`  | `Array<ErrorClass \| string>`           | `[]`           | Non-retryable errors, matched by `instanceof` or `error.name`.                                  |
+| Option              | Type                                    | Default        | Description                                                                                                                                                                 |
+| ------------------- | --------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`              | `TQueues`                               | — **required** | The queue name every job, schedule and read is filed under.                                                                                                                 |
+| `defaultJobOptions` | [`JobOptions`](#joboptions)             | —              | Defaults every job **this process adds** to the queue inherits; a per-job option overrides.                                                                                 |
+| `retention`         | [`RetentionOptions`](#retentionoptions) | keep forever   | Queue default retention; resolved per-job and frozen onto each row.                                                                                                         |
+| `hooks`             | `HookRegistration[]`                    | `[]`           | Queue-scoped [participation hooks](./events-hooks/hooks.md).                                                                                                                |
+| `handler`           | `JobHandler<TData, TResult>`            | — **required** | The processor for this queue's jobs — declaring a queue is how a process takes on consuming it.                                                                             |
+| `limiter`           | [`LimiterOptions`](#limiteroptions)     | defaults       | Throughput & claim tuning for this queue's processing.                                                                                                                      |
+| `dontAutoretryFor`  | `Array<ErrorClass \| string>`           | `[]`           | Non-retryable errors, matched by `instanceof` or `error.name`.                                                                                                              |
+| `failureDetail`     | `FailureDetail`                         | `STACK`        | How much of a failure is stored on the row. `MESSAGE` drops the stack frames — worth it for a queue that fails often, where the capped stack is still ~4 KB per failed row. |
 
 Queue options are **process-local**: only the pause flags are ever persisted. A queue is declared
 once per process — a second `createQueue` for the same name throws.
@@ -838,22 +845,28 @@ it, so `limit`/`offset` mean the same thing wherever they appear, and each retur
 
 ### GetInstancesQuery
 
-`PageQuery` and nothing more, for `pq.getInstances()`. Returns a `Page<InstanceInfo>`.
+`PageQuery` plus the narrowings, for `pq.getInstances()`. Returns a `Page<InstanceInfo>`. Every filter
+runs in SQL, so finding the paused or stale instances is a query rather than a page-and-filter.
 
-| Option   | Type     | Default | Description                          |
-| -------- | -------- | ------- | ------------------------------------ |
-| `limit`  | `number` | `50`    | Page size, capped at `500`.          |
-| `offset` | `number` | `0`     | Row offset, for numbered pagination. |
+| Option             | Type      | Default | Description                                                               |
+| ------------------ | --------- | ------- | ------------------------------------------------------------------------- |
+| `search`           | `string`  | —       | Case-insensitive substring of the instance key.                           |
+| `processingPaused` | `boolean` | both    | `true` → only paused instances, `false` → only running, omitted → both.   |
+| `alive`            | `boolean` | both    | `true` → only instances inside the liveness window, `false` → only stale. |
+| `limit`            | `number`  | `50`    | Page size, capped at `500`.                                               |
+| `offset`           | `number`  | `0`     | Row offset, for numbered pagination.                                      |
 
 ### GetQueuesQuery
 
-`PageQuery` and nothing more, for `pq.getQueues()`. Returns a `Page<QueueInfo>` — each row with its
-per-status counts, and `total` for every queue in the database.
+`PageQuery` plus the two narrowings, for `pq.getQueues()`. Returns a `Page<QueueInfo>` — each row with
+its per-status counts, and `total` counted over the same filter as the page.
 
-| Option   | Type     | Default | Description                          |
-| -------- | -------- | ------- | ------------------------------------ |
-| `limit`  | `number` | `50`    | Page size, capped at `500`.          |
-| `offset` | `number` | `0`     | Row offset, for numbered pagination. |
+| Option             | Type      | Default | Description                                                          |
+| ------------------ | --------- | ------- | -------------------------------------------------------------------- |
+| `search`           | `string`  | —       | Case-insensitive substring of the queue name.                        |
+| `processingPaused` | `boolean` | both    | `true` → only paused queues, `false` → only running, omitted → both. |
+| `limit`            | `number`  | `50`    | Page size, capped at `500`.                                          |
+| `offset`           | `number`  | `0`     | Row offset, for numbered pagination.                                 |
 
 ---
 
@@ -879,6 +892,7 @@ Reads return objects, never bare ids. The main shapes:
 `PauseMode` (`PROCESSING`, `ALL`) ·
 `BackoffStrategy` (`FIXED`, `EXPONENTIAL`) ·
 `MigrationMode` (`AUTO`, `MANUAL`, `VALIDATE_ONLY`) · `DeduplicationReason` (`IDEMPOTENCY`, `SINGLETON`) ·
+`CancelOutcome` (`CANCELLED`, `SIGNALLED`, `NOT_CANCELLABLE`) · `FailureDetail` (`STACK`, `MESSAGE`) ·
 `LogLevel` (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`) ·
 `DatabaseEngine` · [`PortQueueEvent`](./events-hooks/events.md) · [`HookPhase`](./events-hooks/hooks.md) ·
 [`PortQueueErrorCode`](./troubleshooting.md).
@@ -893,7 +907,7 @@ importable from `@portqueue/core`, so you can branch with `instanceof`:
 
 `PortQueueError` (base) · `NotStartedError` · `InvalidOptionsError` · `UnsupportedCapabilityError` ·
 `SchemaVersionMismatchError` · `MigrationFailedError` · `DriverConnectionError` · `DriverQueryError` ·
-`QueueNotFoundError` · `QueuePausedError` · `QueueInUseError` · `InstanceActiveError` ·
-`ShutdownTimeoutError` · `MissingPeerDependencyError`.
+`JobNotFoundError` · `QueueNotFoundError` · `QueuePausedError` · `QueueInUseError` ·
+`InstanceActiveError` · `ShutdownTimeoutError` · `LockLostError` · `MissingPeerDependencyError`.
 
 The full error table — codes, causes, and remedies — lives in [Troubleshooting](./troubleshooting.md).

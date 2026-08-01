@@ -2,10 +2,11 @@ import { PortQueueEvent } from '../events/event-name.enum';
 import { RateLimiterService } from '../monitoring/rate-limiter.service';
 import { ExecutionService, type ExecutionConfig } from './execution.service';
 import { secondsToMs } from '../util/seconds';
-import { DRAIN_POLL_SECONDS } from '../constants';
+import { ABORT_GRACE_SECONDS, DRAIN_POLL_SECONDS, LOCK_RELEASE_SECONDS } from '../constants';
 import type { CompletionService } from './completion.service';
 import type { JobHandler } from '../jobs/job';
 import type { ErrorClass } from '../options/queue-options';
+import type { FailureDetail } from '../options/enums';
 import type { Runtime } from '../client/runtime';
 
 /** Worker wiring, resolved from the consumer half of `CreateQueueOptions`. Every duration is seconds. */
@@ -18,6 +19,8 @@ export interface WorkerConfig {
   pollIntervalSeconds: number;
   limiter?: { max: number; durationSeconds: number };
   dontAutoretryFor: Array<ErrorClass | string>;
+  /** How much of a failure this queue stores on the row. */
+  failureDetail: FailureDetail;
 }
 
 /**
@@ -53,6 +56,7 @@ export class Worker {
       handler: config.handler,
       dontAutoretryFor: config.dontAutoretryFor,
       lockDurationSeconds: config.lockDurationSeconds,
+      failureDetail: config.failureDetail,
     };
     this.execution = new ExecutionService(runtime, completion, execConfig);
     if (config.limiter) this.limiter = new RateLimiterService(config.limiter, runtime.clock);
@@ -178,19 +182,48 @@ export class Worker {
         elapses(secondsToMs(options.timeoutSeconds, 'shutdown timeoutSeconds')),
       ]);
     }
-    // Abort any still-running handlers and release their locks for fast reclaim.
-    for (const [jobId, controller] of this.execution.active) {
-      controller.abort();
+    await this.abortAndRelease();
+    this.started = false;
+    this.runtime.events.emit(PortQueueEvent.WORKER_STOPPED, { queue: this.config.queue });
+  }
+
+  /**
+   * Abort every handler still running, then release the lock of the ones that did not stop.
+   *
+   * The order matters, and the release used to sit beside the abort. An abort is cooperative: a
+   * handler that ignores `job.signal` — the common case for short work — keeps going and settles a
+   * moment later. Releasing its lock in that moment let another instance's reclaim return the row to
+   * `PENDING` and a second worker claim it, so the same job ran twice. Waiting for the abort to be
+   * observed means a handler that stops promptly settles its own row and needs no release at all;
+   * only a genuine straggler, which this process is about to abandon, has its lock cut short so
+   * another instance can pick the job up quickly.
+   *
+   * A straggler's completion is refused even if it does land later: the release clears the claim's
+   * fence token, and every completion is guarded on it (see `Driver.completeJob`).
+   */
+  private async abortAndRelease(): Promise<void> {
+    const claims = [...this.execution.active.entries()].map(([jobId, active]) => {
+      active.controller.abort();
+      return { jobId, lockToken: active.lockToken };
+    });
+    if (!claims.length) return;
+
+    await Promise.race([
+      this.awaitIdle(),
+      elapses(secondsToMs(ABORT_GRACE_SECONDS, 'abort grace')),
+    ]);
+
+    for (const claim of claims) {
+      if (!this.execution.active.has(claim.jobId)) continue; // stopped and settled its own row
       this.runtime.background.run(() =>
         this.runtime.driver.extendLock({
-          jobId,
-          lockDurationSeconds: -1,
+          jobId: claim.jobId,
+          lockDurationSeconds: LOCK_RELEASE_SECONDS,
           now: this.runtime.clock.now(),
+          lockToken: claim.lockToken,
         }),
       );
     }
-    this.started = false;
-    this.runtime.events.emit(PortQueueEvent.WORKER_STOPPED, { queue: this.config.queue });
   }
 
   /** Resolve once the last in-flight handler has settled. */
@@ -201,9 +234,9 @@ export class Worker {
 
   /** @internal Try to cooperatively cancel an active job on this instance. */
   cancelRunning(jobId: string): boolean {
-    const controller = this.execution.active.get(jobId);
-    if (!controller) return false;
-    controller.abort();
+    const active = this.execution.active.get(jobId);
+    if (!active) return false;
+    active.controller.abort();
     return true;
   }
 }

@@ -106,11 +106,11 @@ describe('job row actions', () => {
     fireEvent.click(rowAction('Retry'));
 
     await waitFor(() => expect(h.posts).toHaveLength(1));
-    expect(h.posts[0]?.url).toBe('/actions');
+    // Each mutation posts to its own endpoint, so the URL names the action.
+    expect(h.posts[0]?.url).toBe(`/actions/${ActionKind.RETRY}`);
     // A single id travels the same batch path as a bulk action — one is the trivial case.
     expect(h.lastAction()).toEqual({
       kind: ActionKind.RETRY,
-      queue: 'emails',
       jobId: JOB.id,
     });
   });
@@ -132,7 +132,6 @@ describe('job row actions', () => {
     await waitFor(() => expect(h.posts).toHaveLength(1));
     expect(h.lastAction()).toEqual({
       kind: ActionKind.CANCEL,
-      queue: 'emails',
       jobId: JOB.id,
     });
   });
@@ -164,7 +163,6 @@ describe('job row actions', () => {
     await waitFor(() => expect(h.posts).toHaveLength(1));
     expect(h.lastAction()).toEqual({
       kind: ActionKind.REMOVE,
-      queue: 'emails',
       jobId: JOB.id,
     });
   });
@@ -204,7 +202,6 @@ describe('bulk job actions', () => {
     await waitFor(() => expect(h.posts).toHaveLength(1));
     expect(h.lastAction()).toEqual({
       kind: ActionKind.RETRY,
-      queue: 'emails',
       jobIds: [JOB.id],
     });
   });
@@ -228,7 +225,6 @@ describe('bulk job actions', () => {
     await waitFor(() => expect(h.posts).toHaveLength(1));
     expect(h.lastAction()).toEqual({
       kind: ActionKind.REMOVE,
-      queue: 'emails',
       jobIds: [JOB.id],
     });
   });
@@ -292,7 +288,6 @@ describe('schedule actions', () => {
     await waitFor(() => expect(h.posts).toHaveLength(1));
     expect(h.lastAction()).toEqual({
       kind: ActionKind.SET_SCHEDULE_ENABLED,
-      queue: 'emails',
       scheduleId: SCHEDULE.scheduleId,
       enabled: false,
     });

@@ -1,3 +1,5 @@
+import { FailureDetail } from '../options/enums';
+
 /** Per-job resolution defaults — what a job gets when neither it nor its queue says otherwise. */
 
 /** Higher runs first. `JobOptions.priority`. */
@@ -11,6 +13,12 @@ export const DEFAULT_RETRY_DELAY_SECONDS = 0;
 
 /** Growth factor an EXPONENTIAL backoff uses when none is given. `retry.backoff.factor`. */
 export const DEFAULT_BACKOFF_FACTOR = 2;
+
+/**
+ * What a queue stores on a failed row when it names no `failureDetail`: the stack, because a
+ * developer reading a failure wants the throw site, and the cost is bounded by the cap below.
+ */
+export const DEFAULT_FAILURE_DETAIL = FailureDetail.STACK;
 
 /**
  * How much of a failure's stack is kept in `failure_message`. A stack is unbounded and every

@@ -53,11 +53,18 @@ export interface KoaContext {
   respond?: boolean;
 }
 
-/** Minimal structural Fastify instance. */
+/**
+ * Minimal structural Fastify instance — only what the adapter touches, so the dashboard needs no
+ * `fastify` dependency of its own. The hook may return a promise: Fastify decides whether a
+ * two-parameter hook is finished by awaiting what it returns.
+ */
 export interface FastifyLike {
   addHook: (
     name: 'onRequest',
-    fn: (req: { raw: IncomingMessage }, reply: { raw: ServerResponse; hijack: () => void }) => void,
+    fn: (
+      req: { raw: IncomingMessage },
+      reply: { raw: ServerResponse; hijack: () => void },
+    ) => void | Promise<void>,
   ) => void;
 }
 

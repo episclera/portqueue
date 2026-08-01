@@ -10,11 +10,11 @@ export const listenCommand: Command = {
   summary: 'Stream events infinitely',
   usage: '[--queue <name>]',
   persistent: true,
-  async run({ pq, flags }) {
+  async run({ pq, flags, onExit }) {
     const queue = flagString(flags, 'queue');
     const json = flagBool(flags, 'json');
     heading(`Listening${queue ? ` — ${queue}` : ''} (Ctrl+C to stop)`);
-    for (const event of Object.values(PortQueueEvent)) {
+    const unsubscribes = Object.values(PortQueueEvent).map((event) =>
       pq.on(
         event,
         (payload: PortQueueEventPayloads[typeof event]) => {
@@ -25,8 +25,14 @@ export const listenCommand: Command = {
           );
         },
         queue ? { queue } : undefined,
-      );
-    }
+      ),
+    );
+    // Detached before the client shuts down, so the drain's own events don't print after the
+    // "stopping" line — and so nothing holds a reference to this command's closure.
+    onExit(() => {
+      for (const unsubscribe of unsubscribes) unsubscribe();
+    });
+    // Held open until a stop signal; the runner shuts the client down.
     await new Promise(() => {});
   },
 };

@@ -1,4 +1,5 @@
 import { BackoffStrategy } from '../options/enums';
+import { DEFAULT_BACKOFF_FACTOR } from '../constants';
 
 export interface BackoffInput {
   strategy: BackoffStrategy;
@@ -25,7 +26,7 @@ export interface BackoffInput {
  */
 export function computeBackoffSeconds(input: BackoffInput): number {
   const { strategy, attempt, baseDelaySeconds } = input;
-  const factor = input.factor ?? 2;
+  const factor = input.factor ?? DEFAULT_BACKOFF_FACTOR;
   let delay: number;
   if (strategy === BackoffStrategy.EXPONENTIAL) {
     delay = baseDelaySeconds * Math.pow(factor, Math.max(0, attempt - 1));

@@ -20,3 +20,18 @@ export const MIN_LOCK_HEARTBEAT_SECONDS = 1;
 
 /** How often a graceful drain re-checks whether the last handler has finished. */
 export const DRAIN_POLL_SECONDS = 0.025;
+
+/**
+ * How long shutdown waits after aborting a handler before deciding it is not going to stop.
+ *
+ * A handler that observes `job.signal` settles its own row within a tick or two of the abort, and
+ * needs no lock released. Only what is still running after this window has its lock cut short so
+ * another instance can reclaim the job quickly.
+ */
+export const ABORT_GRACE_SECONDS = 0.25;
+
+/**
+ * The lock duration that *releases* a lock: a deadline in the past, so a reclaim sees the row as
+ * stalled immediately. `secondsToMs` accepts the negative value for exactly this reason.
+ */
+export const LOCK_RELEASE_SECONDS = -1;

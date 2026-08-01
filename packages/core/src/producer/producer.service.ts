@@ -114,10 +114,19 @@ export class ProducerService {
    * different operation, and each recurrence needs its own `addJob` so its result carries a
    * `scheduleId`. BEFORE_ADD/AFTER_ADD hooks still run per job, in order, exactly as they do for a
    * single add.
+   *
+   * **The batch is validated before any hook runs.** A hook is allowed to have a side effect (the
+   * documented use is enriching options, but nothing enforces purity), and the checks below reject
+   * the whole call — so running hooks first fired them for jobs that were never going to be
+   * inserted.
    */
   async addJobs<TData>(queue: string, jobs: Array<AddJobOptions<TData>>): Promise<AddJobResult[]> {
     const { registry, clock, driver, events, hooks } = this.runtime;
     if (!jobs.length) return [];
+
+    this.validateBatch(queue, jobs);
+    // One transaction has to be shared by every entry, so a batch cannot mix caller transactions.
+    const tx = jobs.find((opts) => opts.tx)?.tx;
 
     const prepared: Array<AddJobOptions<TData>> = [];
     for (const options of jobs) {
@@ -125,26 +134,9 @@ export class ProducerService {
         queue,
         options as AddJobOptions<unknown>,
       )) as AddJobOptions<TData>;
-      if (opts.schedule) this.rejectUnknownScheduleKeys(queue, opts.schedule);
-      if (opts.schedule?.startEverySeconds != null || opts.schedule?.cron != null) {
-        throw new InvalidOptionsError(
-          `addJobs on queue '${queue}' cannot create recurring jobs: one of the entries sets ` +
-            `'schedule.cron'/'schedule.startEverySeconds'. Add each recurrence with addJob, whose ` +
-            `result carries the scheduleId a batch insert has no place to return.`,
-          { queue },
-        );
-      }
+      // A hook may have introduced a recurrence, so the shape is checked again on what it returned.
+      this.rejectRecurring(queue, opts);
       prepared.push(opts);
-    }
-
-    // One transaction has to be shared by every entry, so a batch cannot mix caller transactions.
-    const tx = prepared.find((opts) => opts.tx)?.tx;
-    if (tx && prepared.some((opts) => opts.tx && opts.tx !== tx)) {
-      throw new InvalidOptionsError(
-        `addJobs on queue '${queue}' received more than one distinct 'tx'. A batch is one insert, ` +
-          `so every entry must share the same transaction (or none of them set one).`,
-        { queue },
-      );
     }
 
     const row = await registry.ensure(queue);
@@ -169,15 +161,48 @@ export class ProducerService {
       .map((record) => record.preferredInstanceKeyPattern);
     if (freshPatterns.length) this.announce(queue, freshPatterns, tx);
 
+    // Event then hook, per job — the same order `addJob` uses. Two sequential loops emitted every
+    // event before any hook ran, so a caller listening to both saw a different ordering from a batch
+    // than from a single add.
     for (const result of results) {
       events.emit(PortQueueEvent.JOB_ADDED, {
         jobId: result.jobId!,
         queue,
         deduplicated: result.deduplicated,
       });
+      await hooks.runAfterAdd(queue, result);
     }
-    for (const result of results) await hooks.runAfterAdd(queue, result);
     return results;
+  }
+
+  /**
+   * Reject a batch whose shape is wrong, before a single hook has run: an entry asking for a
+   * recurrence, or entries carrying different transactions.
+   */
+  private validateBatch<TData>(queue: string, jobs: Array<AddJobOptions<TData>>): void {
+    for (const opts of jobs) this.rejectRecurring(queue, opts);
+    const tx = jobs.find((opts) => opts.tx)?.tx;
+    if (tx && jobs.some((opts) => opts.tx && opts.tx !== tx)) {
+      throw new InvalidOptionsError(
+        `addJobs on queue '${queue}' received more than one distinct 'tx'. A batch is one insert, ` +
+          `so every entry must share the same transaction (or none of them set one).`,
+        { queue },
+      );
+    }
+  }
+
+  /** One entry's schedule keys: known, and not a recurrence (which `addJobs` cannot express). */
+  private rejectRecurring<TData>(queue: string, opts: AddJobOptions<TData>): void {
+    if (!opts.schedule) return;
+    this.rejectUnknownScheduleKeys(queue, opts.schedule);
+    if (opts.schedule.startEverySeconds != null || opts.schedule.cron != null) {
+      throw new InvalidOptionsError(
+        `addJobs on queue '${queue}' cannot create recurring jobs: one of the entries sets ` +
+          `'schedule.cron'/'schedule.startEverySeconds'. Add each recurrence with addJob, whose ` +
+          `result carries the scheduleId a batch insert has no place to return.`,
+        { queue },
+      );
+    }
   }
 
   /** Resolve one job's options into the row to insert. */

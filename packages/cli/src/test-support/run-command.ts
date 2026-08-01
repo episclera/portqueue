@@ -10,7 +10,7 @@
 import { setColorEnabled } from '../output';
 import { captureOutput } from './capture';
 import { makeFakePq, type FakePqCalls, type FakePqOverrides } from './fake-pq';
-import type { Command, Flags } from '../commands/types';
+import type { Command, Flags, Teardown } from '../commands/types';
 
 beforeEach(() => setColorEnabled(false));
 
@@ -18,11 +18,17 @@ export interface CommandRun {
   stdout: string;
   stderr: string;
   calls: FakePqCalls;
+  /** Teardowns the command registered, in the order the runner would call them. */
+  teardowns: Teardown[];
 }
 
 /**
  * Drive `command.run` with `flags`. `overrides` shapes what the fake client answers, so a test can
  * exercise the not-found, refused and partial paths without a database.
+ *
+ * The teardowns a command registers are collected rather than run, so a test can assert that a
+ * persistent command hands its server or interval over to be closed — the thing that used to be
+ * dropped on the floor.
  */
 export async function runCommand(
   command: Pick<Command, 'run'>,
@@ -30,8 +36,11 @@ export async function runCommand(
   overrides?: FakePqOverrides,
 ): Promise<CommandRun> {
   const fake = makeFakePq(overrides);
-  const output = await captureOutput(() => command.run({ pq: fake.pq, flags }));
-  return { ...output, calls: fake.calls };
+  const teardowns: Teardown[] = [];
+  const output = await captureOutput(() =>
+    command.run({ pq: fake.pq, flags, onExit: (fn) => void teardowns.unshift(fn) }),
+  );
+  return { ...output, calls: fake.calls, teardowns };
 }
 
 /** The fake client on its own, for the few assertions that need it before `run` is called. */

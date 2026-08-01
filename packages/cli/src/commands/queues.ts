@@ -1,5 +1,6 @@
-import { flagBool, flagNumber } from '../args';
+import { flagBool } from '../args';
 import { color, heading, printJson, table } from '../output';
+import { PAGE_USAGE, pageFlags, printMoreHint } from './helpers';
 import { CommandGroup, type Command } from './types';
 
 /** `portqueue queues [--limit <n> --offset <n>]` */
@@ -7,14 +8,9 @@ export const queuesCommand: Command = {
   name: 'queues',
   group: CommandGroup.Monitoring,
   summary: 'List queues with counts + paused state',
-  usage: '[--limit <n> --offset <n>]',
+  usage: PAGE_USAGE,
   async run({ pq, flags }) {
-    const limit = flagNumber(flags, 'limit');
-    const offset = flagNumber(flags, 'offset');
-    const page = await pq.getQueues({
-      ...(limit ? { limit } : {}),
-      ...(offset ? { offset } : {}),
-    });
+    const page = await pq.getQueues({ ...pageFlags(flags) });
     if (flagBool(flags, 'json')) return printJson(page);
     heading('Queues');
     table(
@@ -28,10 +24,6 @@ export const queuesCommand: Command = {
         q.acceptingPaused ? 'ALL' : q.processingPaused ? 'PROCESSING' : color('no', 'dim'),
       ]),
     );
-    // The page carries no "hasMore" flag — the next offset is past the end or it isn't.
-    const next = (offset ?? 0) + page.items.length;
-    if (next < page.total) {
-      process.stdout.write(color(`\n… more — use --offset ${next}\n`, 'dim'));
-    }
+    printMoreHint(page, pageFlags(flags).offset);
   },
 };

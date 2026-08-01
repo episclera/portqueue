@@ -33,5 +33,12 @@ export const DEFAULT_SAMPLE_INTERVAL_SECONDS = 2;
 /** How long a migration runner waits for another instance to finish migrating. */
 export const MIGRATION_WAIT_TIMEOUT_SECONDS = 30;
 
+/**
+ * Milliseconds → microseconds, for the one reading that is measured in microseconds: `cpuUsage()`.
+ * Deliberately *not* in `util/seconds` — that module owns the seconds↔milliseconds boundary the API
+ * invariant is about, and this is a different pair of units.
+ */
+export const MICROS_PER_MS = 1000;
+
 /** How often that wait re-reads the applied schema version. */
 export const MIGRATION_WAIT_POLL_SECONDS = 0.2;

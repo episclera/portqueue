@@ -259,7 +259,7 @@ export function JobDetailPage(): React.ReactElement {
    * that refusal has to keep the user on the page instead of sending them off with "Removed".
    */
   const remove = async (): Promise<void> => {
-    const result = await run({ kind: ActionKind.REMOVE, queue: j.queue, jobId: j.id }, undefined, {
+    const result = await run({ kind: ActionKind.REMOVE, jobId: j.id }, undefined, {
       silent: true,
     });
     if (!result) return;
@@ -276,9 +276,7 @@ export function JobDetailPage(): React.ReactElement {
       <Button
         icon={ACTIONS_CONFIG.retry.icon}
         disabled={!isFailed && j.status === JobStatus.ACTIVE}
-        onClick={() =>
-          void run({ kind: ActionKind.RETRY, queue: j.queue, jobId: j.id }, 'Retry queued')
-        }
+        onClick={() => void run({ kind: ActionKind.RETRY, jobId: j.id }, 'Retry queued')}
       >
         {ACTIONS_CONFIG.retry.label}
       </Button>
@@ -292,9 +290,7 @@ export function JobDetailPage(): React.ReactElement {
           // as if the dismiss button were the one that cancels the job.
           okText={ACTIONS_CONFIG.cancel.label}
           cancelText="Keep"
-          onConfirm={() =>
-            void run({ kind: ActionKind.CANCEL, queue: j.queue, jobId: j.id }, 'Cancelled')
-          }
+          onConfirm={() => void run({ kind: ActionKind.CANCEL, jobId: j.id }, 'Cancelled')}
         >
           <Button icon={ACTIONS_CONFIG.cancel.icon}>{ACTIONS_CONFIG.cancel.label}</Button>
         </Popconfirm>

@@ -7,7 +7,8 @@ import {
 import { JobStatus } from '../jobs/job-state.enum';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { HookPhase } from '../events/hooks';
-import { BackoffStrategy } from '../options/enums';
+import { BackoffStrategy, CancelOutcome } from '../options/enums';
+import { JobNotFoundError } from '../errors/errors';
 
 class NonRetryableError extends Error {
   constructor() {
@@ -135,9 +136,20 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
       data: {},
       schedule: { startAfterSeconds: 60 },
     });
-    const ok = await h.pq.cancelJob({ jobId: res.jobId! });
-    expect(ok).toBe(true);
+    const outcome = await h.pq.cancelJob({ jobId: res.jobId! });
+    expect(outcome).toBe(CancelOutcome.CANCELLED);
     expect((await h.pq.getJob({ jobId: res.jobId! }))?.status).toBe(JobStatus.CANCELLED);
+  });
+
+  it('reports a cancel it could only signal, and throws for a job that does not exist', async () => {
+    // The two answers a boolean used to collapse: "the row is CANCELLED" and "a handler was asked
+    // to stop and may well complete anyway".
+    await expect(h.pq.cancelJob({ jobId: 'no-such-job' })).rejects.toThrow(JobNotFoundError);
+
+    const res = await h.pq.addJob({ queue: 'cancel', data: {} });
+    await h.pq.cancelJob({ jobId: res.jobId! });
+    // Already CANCELLED: it exists, but there is nothing left to cancel.
+    expect(await h.pq.cancelJob({ jobId: res.jobId! })).toBe(CancelOutcome.NOT_CANCELLABLE);
   });
 
   it('cooperatively cancels a running job via job.signal', async () => {
@@ -159,7 +171,8 @@ describe.each(TEST_ENGINES)('feature coverage (%s)', (engine) => {
       async () => (await h.pq.getJob({ jobId: res.jobId! }))?.status === JobStatus.ACTIVE,
     );
     const signaled = await h.pq.cancelJob({ jobId: res.jobId! });
-    expect(signaled).toBe(true);
+    // Only signalled — the handler decides what the row becomes.
+    expect(signaled).toBe(CancelOutcome.SIGNALLED);
     await waitFor(() => aborted);
   });
 

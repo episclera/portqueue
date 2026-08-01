@@ -66,14 +66,20 @@ export function useAction(): ActionRunner {
     ): Promise<ActionResultDto | null> => {
       const result = await run(body, undefined, { silent: true });
       if (!result) return null;
-      const { affected = 0, requested = 0 } = result;
+      const { affected = 0, requested = 0, signalled = 0 } = result;
       const noun = `${labels.noun}${affected === 1 ? '' : 's'}`;
+      // Jobs running in the dashboard's own process were only asked to stop, so they are named
+      // separately — counting them as cancelled is how a toast came to say "Cancelled 3 jobs" for
+      // three jobs that all completed normally.
+      const asked = signalled
+        ? ` ${signalled} running ${signalled === 1 ? 'job was' : 'jobs were'} asked to stop.`
+        : '';
       // A shortfall is normal rather than an error: a row may have finished, vanished, or been an
       // ACTIVE job a removal refuses. Naming both numbers is more honest than claiming all N.
-      if (requested && affected < requested) {
-        toast.info(`${labels.verb} ${affected} of ${requested} ${labels.noun}s.`);
+      if (requested && affected + signalled < requested) {
+        toast.info(`${labels.verb} ${affected} of ${requested} ${labels.noun}s.${asked}`);
       } else {
-        toast.success(`${labels.verb} ${affected} ${noun}.`);
+        toast.success(`${labels.verb} ${affected} ${noun}.${asked}`);
       }
       return result;
     },

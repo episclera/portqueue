@@ -123,7 +123,7 @@ export function ScheduleDetailPage(): React.ReactElement {
   /** Remove the definition, then leave for the list — this page's record no longer exists. */
   const remove = async (): Promise<void> => {
     const result = await run(
-      { kind: ActionKind.REMOVE_SCHEDULE, queue: s.queue, scheduleId: s.scheduleId },
+      { kind: ActionKind.REMOVE_SCHEDULE, scheduleId: s.scheduleId },
       'Schedule removed',
     );
     if (result) history.push('/schedules');
@@ -142,7 +142,6 @@ export function ScheduleDetailPage(): React.ReactElement {
             void run(
               {
                 kind: ActionKind.SET_SCHEDULE_ENABLED,
-                queue: s.queue,
                 scheduleId: s.scheduleId,
                 enabled: false,
               },
@@ -159,7 +158,6 @@ export function ScheduleDetailPage(): React.ReactElement {
             void run(
               {
                 kind: ActionKind.SET_SCHEDULE_ENABLED,
-                queue: s.queue,
                 scheduleId: s.scheduleId,
                 enabled: true,
               },

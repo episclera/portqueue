@@ -8,7 +8,11 @@ describe('purgeCommand', () => {
     // queue on the first try.
     const fake = makeFakePq();
     await expect(
-      purgeCommand.run({ pq: fake.pq, flags: { queue: 'emails', status: 'failed' } }),
+      purgeCommand.run({
+        pq: fake.pq,
+        onExit: () => {},
+        flags: { queue: 'emails', status: 'failed' },
+      }),
     ).rejects.toThrow(/pass --yes/);
   });
 

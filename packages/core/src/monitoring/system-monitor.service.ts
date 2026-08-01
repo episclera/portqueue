@@ -3,6 +3,8 @@ import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { cpuUsage } from 'node:process';
 import { getHeapStatistics } from 'node:v8';
 import { PortQueueEvent } from '../events/event-name.enum';
+import { secondsToMs } from '../util/seconds';
+import { DEFAULT_SAMPLE_INTERVAL_SECONDS, MICROS_PER_MS } from '../constants';
 import type { SystemLimiterOptions } from '../options/common';
 import type { EventBusService } from '../events/event-bus.service';
 import type { Logger } from '../logging/logger.interface';
@@ -104,8 +106,13 @@ export class SystemMonitorService {
       this.histogram = monitorEventLoopDelay({ resolution: 20 });
       this.histogram.enable();
     }
-    const intervalSeconds = this.limiter?.sampleIntervalSeconds ?? 2;
-    this.timer = setInterval(() => this.sample(), intervalSeconds * 1000);
+    this.timer = setInterval(
+      () => this.sample(),
+      secondsToMs(
+        this.limiter?.sampleIntervalSeconds ?? DEFAULT_SAMPLE_INTERVAL_SECONDS,
+        'systemLimiter.sampleIntervalSeconds',
+      ),
+    );
     this.timer.unref?.();
     // Take one sample immediately so the first heartbeat has real numbers to persist.
     this.sample();
@@ -157,7 +164,9 @@ export class SystemMonitorService {
     // leave the microseconds between them out of the next window.
     const now = performance.now();
     const current = cpuUsage();
-    const elapsedMicros = (now - this.lastSampleAt) * 1000;
+    // Milliseconds to *microseconds*, to match what `cpuUsage()` reports — not the seconds↔ms
+    // conversion the seconds invariant is about, so `MICROS_PER_MS` rather than `secondsToMs`.
+    const elapsedMicros = (now - this.lastSampleAt) * MICROS_PER_MS;
     const usedMicros = current.user - this.lastCpu.user + (current.system - this.lastCpu.system);
     this.lastCpu = current;
     this.lastSampleAt = now;

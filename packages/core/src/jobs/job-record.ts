@@ -26,6 +26,11 @@ export interface JobRecord {
   cancelledAt: number | null;
   expiredAt: number | null;
   lockedUntil: number | null;
+  /**
+   * The token the claim that owns this row wrote, or null when the row is not claimed. Core hands it
+   * back on every completion so a run whose claim was lost cannot overwrite the run that took it.
+   */
+  lockToken: string | null;
   /** A regex (source string) matching the instance keys this job may run on, or null for any. */
   preferredInstanceKeyPattern: string | null;
   /** The instance key that actually claimed/processed this job, or null when the process is unnamed. */

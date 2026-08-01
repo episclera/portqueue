@@ -1,6 +1,7 @@
-import { flagBool, flagNumber, flagString } from '../args';
+import { flagBool, flagString } from '../args';
 import { CliError } from '../errors';
 import { color, heading, printJson, relativeTime, table } from '../output';
+import { PAGE_USAGE, pageFlags, printMoreHint } from './helpers';
 import { CommandGroup, type Command } from './types';
 import type { InstanceInfo } from '@portqueue/core';
 
@@ -34,14 +35,9 @@ export const instancesCommand: Command = {
   name: 'instances',
   group: CommandGroup.Monitoring,
   summary: 'List instances with liveness, process health and jobs processed',
-  usage: '[--limit <n> --offset <n>]',
+  usage: PAGE_USAGE,
   async run({ pq, flags }) {
-    const limit = flagNumber(flags, 'limit');
-    const offset = flagNumber(flags, 'offset');
-    const page = await pq.getInstances({
-      ...(limit ? { limit } : {}),
-      ...(offset ? { offset } : {}),
-    });
+    const page = await pq.getInstances({ ...pageFlags(flags) });
     if (flagBool(flags, 'json')) return printJson(page);
     heading('Instances');
     table(
@@ -58,11 +54,7 @@ export const instancesCommand: Command = {
         relativeTime(i.lastSeenAt),
       ]),
     );
-    // The page carries no "hasMore" flag — the next offset is past the end or it isn't.
-    const next = (offset ?? 0) + page.items.length;
-    if (next < page.total) {
-      process.stdout.write(color(`\n… more — use --offset ${next}\n`, 'dim'));
-    }
+    printMoreHint(page, pageFlags(flags).offset);
   },
 };
 

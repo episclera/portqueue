@@ -2,21 +2,31 @@ import { DriverContext } from '../drivers/driver-context';
 import { JobStatus } from '../jobs/job-state.enum';
 import { BackoffStrategy } from '../options/enums';
 import { DriverCapability } from '../drivers/driver-capabilities';
+import { MAX_BATCH_IDS } from '../constants';
 import type { Driver } from '../drivers/driver.interface';
 import type { NewJobRecord } from '../jobs/job-record';
 
 /**
  * Driver conformance kit. A parameterized suite that takes a `Driver` factory and asserts the
- * contract every driver has to keep: claim atomicity and ordering, the visibility timeout, insert
- * semantics, tool-managed idempotency and singleton dedup, transactional enqueue, schedule dedup,
- * instance-affinity claiming, instance liveness — and the guards core relies on that nothing used to
- * check: `requeueJob`/`removeJob`/`cancelJob` refusing an ACTIVE row, `expireDueJobs`,
- * `deleteFinishedJobs` (including per-row retention statuses), `advanceSchedule`'s guarded claim, the
- * `search` filter, and agreement between every list page and its `count*`.
+ * contract every driver has to keep — this is the contract, not a smoke test:
+ *
+ * - **Claiming**: atomicity under concurrent claimers, priority/`start_after` order, the visibility
+ *   timeout and its reclaim, instance affinity, and a fresh `lock_token` per claim.
+ * - **Settling**: the fence every completion is guarded on — a `completeJob`/`failJob`/`retryJob`
+ *   whose claim was lost must be refused rather than overwrite the run that took the row — and
+ *   `extendLock` reporting false once a lock has lapsed, which the heartbeat's abort path depends on.
+ * - **Producing**: insert semantics, tool-managed idempotency and singleton dedup **including two
+ *   concurrent identical adds**, transactional enqueue, schedule dedup.
+ * - **Guards core relies on**: `requeueJob`/`removeJob`/`cancelJob` refusing an ACTIVE row, a requeue
+ *   clearing every marker of the job's previous life, bounded `expireDueJobs`/`reclaimStalledJobs`,
+ *   `deleteFinishedJobs` with per-row retention statuses, `advanceSchedule`'s guarded claim,
+ *   `setScheduleEnabled`, the instance reads and their grouped counts.
+ * - **Reads**: the `search` filter in SQL, and agreement between every list page and its `count*`.
+ * - **Limits**: a batch at the id cap works, and one past it is chunked rather than sent whole.
  *
  * Shipped from `@portqueue/core/conformance` so custom-driver authors validate the same way. PGLite
- * and SQLite run it in CI; MySQL and Oracle are validated with it by hand against a real server (see
- * the testing note in CLAUDE.md).
+ * and SQLite run it in CI; MySQL and Oracle are validated with it by hand against a real server — see
+ * `packages/core/DRIVER-VERIFICATION.md` for how, and for when each was last run.
  */
 export interface ConformanceOptions {
   name: string;
@@ -127,16 +137,143 @@ export function runConformance(options: ConformanceOptions): void {
 
     it('completes a job', async () => {
       const inserted = await driver.insertJob({ job: newJob(queueName, now) });
-      await driver.claimJobs({
+      const [claimed] = await driver.claimJobs({
         queueName,
         limit: 1,
         lockDurationSeconds: 30,
         now: now + 1,
       });
-      await driver.completeJob({ jobId: inserted.id, returnValue: { ok: true }, now: now + 2 });
+      const settled = await driver.completeJob({
+        jobId: inserted.id,
+        returnValue: { ok: true },
+        now: now + 2,
+        lockToken: claimed?.lockToken ?? null,
+      });
+      expect(settled).toBe(true);
       const record = await driver.getJob({ jobId: inserted.id });
       expect(record?.status).toBe(JobStatus.COMPLETED);
       expect(record?.returnValue).toEqual({ ok: true });
+    });
+
+    it('stamps a fresh lock token on every claim', async () => {
+      // The token is what fences a completion to the claim that produced it, so two claims of the
+      // same row must never share one.
+      await driver.insertJob({ job: newJob(queueName, now) });
+      const [first] = await driver.claimJobs({
+        queueName,
+        limit: 1,
+        lockDurationSeconds: 1,
+        now,
+      });
+      expect(first?.lockToken).toBeTruthy();
+      await driver.reclaimStalledJobs({ now: now + 5000, limit: 10 });
+      const [second] = await driver.claimJobs({
+        queueName,
+        limit: 1,
+        lockDurationSeconds: 30,
+        now: now + 5001,
+      });
+      expect(second?.lockToken).toBeTruthy();
+      expect(second?.lockToken).not.toBe(first?.lockToken);
+    });
+
+    it('refuses a completion after the lock lapsed, rather than overwriting the re-claim', async () => {
+      // The double-run bug this closes: a handler that ignored its abort signal finishes after its
+      // lock has been reclaimed and a second worker has taken the row. Its outcome must not land.
+      const inserted = await driver.insertJob({ job: newJob(queueName, now) });
+      const [first] = await driver.claimJobs({
+        queueName,
+        limit: 1,
+        lockDurationSeconds: 1,
+        now,
+      });
+      await driver.reclaimStalledJobs({ now: now + 5000, limit: 10 });
+      const [second] = await driver.claimJobs({
+        queueName,
+        limit: 1,
+        lockDurationSeconds: 30,
+        now: now + 5001,
+      });
+
+      // The first run finishes late and tries to settle the row.
+      const stale = await driver.completeJob({
+        jobId: inserted.id,
+        returnValue: { from: 'first' },
+        now: now + 5002,
+        lockToken: first?.lockToken ?? null,
+      });
+      expect(stale).toBe(false);
+      const midway = await driver.getJob({ jobId: inserted.id });
+      expect(midway?.status).toBe(JobStatus.ACTIVE);
+      expect(midway?.returnValue).toBeNull();
+
+      // The claim that actually owns the row still settles it.
+      const settled = await driver.completeJob({
+        jobId: inserted.id,
+        returnValue: { from: 'second' },
+        now: now + 5003,
+        lockToken: second?.lockToken ?? null,
+      });
+      expect(settled).toBe(true);
+      const finished = await driver.getJob({ jobId: inserted.id });
+      expect(finished?.status).toBe(JobStatus.COMPLETED);
+      expect(finished?.returnValue).toEqual({ from: 'second' });
+    });
+
+    it('refuses to fail or retry a job whose claim was lost', async () => {
+      const stale = await driver.insertJob({ job: newJob(queueName, now) });
+      const [first] = await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 1, now });
+      await driver.reclaimStalledJobs({ now: now + 5000, limit: 10 });
+
+      expect(
+        await driver.failJob({
+          jobId: stale.id,
+          lastError: 'late',
+          now: now + 5001,
+          lockToken: first?.lockToken ?? null,
+        }),
+      ).toBe(false);
+      expect(
+        await driver.retryJob({
+          jobId: stale.id,
+          nextRunAt: now + 6000,
+          retryAttempt: 1,
+          lastError: 'late',
+          now: now + 5001,
+          lockToken: first?.lockToken ?? null,
+        }),
+      ).toBe(false);
+      // Still PENDING from the reclaim — neither late write touched it.
+      expect((await driver.getJob({ jobId: stale.id }))?.status).toBe(JobStatus.PENDING);
+    });
+
+    it('reports false from extendLock once the claim is gone', async () => {
+      // The heartbeat's abort path depends on this: a lock it can no longer extend means the job is
+      // running elsewhere, and the local handler must be told to stop.
+      const inserted = await driver.insertJob({ job: newJob(queueName, now) });
+      const [claimed] = await driver.claimJobs({
+        queueName,
+        limit: 1,
+        lockDurationSeconds: 1,
+        now,
+      });
+      expect(
+        await driver.extendLock({
+          jobId: inserted.id,
+          lockDurationSeconds: 30,
+          now: now + 1,
+          lockToken: claimed?.lockToken ?? null,
+        }),
+      ).toBe(true);
+      await driver.reclaimStalledJobs({ now: now + 60_000, limit: 10 });
+      expect(
+        await driver.extendLock({
+          jobId: inserted.id,
+          lockDurationSeconds: 30,
+          now: now + 60_001,
+          lockToken: claimed?.lockToken ?? null,
+        }),
+      ).toBe(false);
     });
 
     it('reclaims stalled jobs after the visibility timeout', async () => {
@@ -159,6 +296,31 @@ export function runConformance(options: ConformanceOptions): void {
       expect(b.deduplicated).toBe(true);
       expect(b.id).toBe(a.id);
       expect(b.deduplicationReason).toBe('IDEMPOTENCY');
+    });
+
+    it('deduplicates two concurrent identical adds, not just sequential ones', async () => {
+      // The race the per-queue dedup lock closes: without it both calls read no row under
+      // READ COMMITTED and both insert, so `idempotencyKey` quietly stopped meaning anything. One of
+      // the two must come back deduplicated, and both must name the same row.
+      const add = () =>
+        driver.insertJob({ job: newJob(queueName, now, { idempotencyKey: 'concurrent' }) });
+      const [first, second] = await Promise.all([add(), add()]);
+
+      expect(first.id).toBe(second.id);
+      expect([first.deduplicated, second.deduplicated].filter(Boolean)).toHaveLength(1);
+      const page = await driver.getJobs({ queueName, limit: 100, offset: 0 });
+      expect(page.filter((j) => j.idempotencyKey === 'concurrent')).toHaveLength(1);
+    });
+
+    it('deduplicates two concurrent singleton adds while the slot is held', async () => {
+      const add = () =>
+        driver.insertJob({ job: newJob(queueName, now, { singletonKey: 'only-one' }) });
+      const [first, second] = await Promise.all([add(), add()]);
+
+      expect(first.id).toBe(second.id);
+      expect([first.deduplicated, second.deduplicated].filter(Boolean)).toHaveLength(1);
+      const page = await driver.getJobs({ queueName, limit: 100, offset: 0 });
+      expect(page.filter((j) => j.singletonKey === 'only-one')).toHaveLength(1);
     });
 
     it('allows identical schedules to coexist and dedups by idempotency key', async () => {
@@ -253,6 +415,48 @@ export function runConformance(options: ConformanceOptions): void {
       expect((await driver.getInstance({ instanceKey: 'inst-b' }))?.processingPaused).toBe(true);
       await driver.setInstancePaused({ instanceKey: 'inst-b', processingPaused: false, now });
       expect((await driver.getInstance({ instanceKey: 'inst-b' }))?.processingPaused).toBe(false);
+    });
+
+    it('answers null for an instance that does not exist, and deletes one that does', async () => {
+      // The instance page reads by key, and the dashboard's "tidy away a dead instance" action
+      // deletes by key. Both need a definite answer for a key that names nothing.
+      expect(await driver.getInstance({ instanceKey: 'never-seen' })).toBe(null);
+      expect(await driver.deleteInstance({ instanceKey: 'never-seen' })).toBe(false);
+
+      await driver.upsertInstance({ instanceKey: 'inst-gone', now });
+      expect(await driver.deleteInstance({ instanceKey: 'inst-gone' })).toBe(true);
+      expect(await driver.getInstance({ instanceKey: 'inst-gone' })).toBe(null);
+      // Job rows record the instance key as a plain string, so a removal never touches them.
+      expect(await driver.deleteInstance({ instanceKey: 'inst-gone' })).toBe(false);
+    });
+
+    it('counts jobs by status per instance, in one grouped query', async () => {
+      // What the instances list renders. A key with no jobs must come back zeroed rather than absent,
+      // so the page does not have to distinguish "none" from "unknown".
+      const mine = await driver.insertJob({ job: newJob(queueName, now) });
+      await driver.insertJob({ job: newJob(queueName, now) });
+      const [claimed] = await driver.claimJobs({
+        queueName,
+        limit: 1,
+        lockDurationSeconds: 60,
+        now: now + 1,
+        instanceKey: 'counter-1',
+      });
+      await driver.completeJob({
+        jobId: mine.id,
+        now: now + 2,
+        lockToken: claimed?.lockToken ?? null,
+      });
+
+      const counts = await driver.countJobsByStatusPerInstance({
+        instanceKeys: ['counter-1', 'counter-idle'],
+      });
+      expect(counts['counter-1']?.[JobStatus.COMPLETED]).toBe(1);
+      expect(counts['counter-idle']).toEqual(
+        expect.objectContaining({ [JobStatus.COMPLETED]: 0, [JobStatus.PENDING]: 0 }),
+      );
+      // The unclaimed job belongs to no instance, so it is in nobody's counts.
+      expect(counts['counter-1']?.[JobStatus.PENDING]).toBe(0);
     });
 
     it('only lets a matching instance claim a job with a preferred pattern', async () => {
@@ -384,6 +588,41 @@ export function runConformance(options: ConformanceOptions): void {
       expect(await driver.requeueJob({ jobId: 'missing', now: now + 5 })).toBe(null);
     });
 
+    it('clears every marker of a previous life when it re-arms a job', async () => {
+      // A requeued job is starting over. Leaving `stalled_at`/`retried_at` set made the dashboard
+      // show a "Stalled" and "Retried" marker from a previous run beside a PENDING status and a
+      // zeroed attempt counter.
+      const job = await driver.insertJob({ job: newJob(queueName, now) });
+      await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 1, now });
+      await driver.reclaimStalledJobs({ now: now + 5000, limit: 10 }); // stamps stalled_at
+      const [claimed] = await driver.claimJobs({
+        queueName,
+        limit: 1,
+        lockDurationSeconds: 60,
+        now: now + 5001,
+      });
+      await driver.retryJob({
+        jobId: job.id,
+        nextRunAt: now + 6000,
+        retryAttempt: 1,
+        lastError: 'boom',
+        now: now + 5002,
+        lockToken: claimed?.lockToken ?? null,
+      }); // stamps retried_at
+      const before = await driver.getJob({ jobId: job.id });
+      expect(before?.stalledAt).not.toBe(null);
+      expect(before?.retriedAt).not.toBe(null);
+
+      await driver.requeueJob({ jobId: job.id, now: now + 7000 });
+      const after = await driver.getJob({ jobId: job.id });
+      expect(after?.status).toBe(JobStatus.PENDING);
+      expect(after?.stalledAt).toBe(null);
+      expect(after?.retriedAt).toBe(null);
+      expect(after?.retryAttempt).toBe(0);
+      expect(after?.lockedUntil).toBe(null);
+      expect(after?.lockToken).toBe(null);
+    });
+
     it('refuses to remove an ACTIVE job and returns the queue of one it removed', async () => {
       const job = await driver.insertJob({ job: newJob(queueName, now) });
       await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 60, now: now + 1 });
@@ -424,6 +663,25 @@ export function runConformance(options: ConformanceOptions): void {
 
       const removed = await driver.removeJobs({ jobIds: [settled.id, active.id, 'missing'] });
       expect(removed.map((r) => r.jobId)).toEqual([settled.id]);
+    });
+
+    it('survives a batch at the id cap rather than overflowing a statement', async () => {
+      // Every engine limits the expressions in an `IN (...)` list — Oracle at 1000, which is why
+      // `MAX_BATCH_IDS` is 1000 everywhere. A batch right at the cap has to work, and one past it
+      // has to be chunked rather than sent whole (which raised ORA-01795 and blew past the
+      // parameter index on the others).
+      const real = await driver.insertJob({ job: newJob(queueName, now) });
+      const padding = Array.from({ length: MAX_BATCH_IDS - 1 }, (_, i) => `absent-${i}`);
+
+      const atCap = await driver.removeJobs({ jobIds: [real.id, ...padding] });
+      expect(atCap.map((r) => r.jobId)).toEqual([real.id]);
+
+      // Past the cap: the driver chunks, so this is still one call that answers correctly.
+      const second = await driver.insertJob({ job: newJob(queueName, now) });
+      const overCap = await driver.removeJobs({
+        jobIds: [second.id, ...padding, ...padding.map((p) => `${p}-b`)],
+      });
+      expect(overCap.map((r) => r.jobId)).toEqual([second.id]);
     });
 
     // --- Expiry ---
@@ -599,6 +857,53 @@ export function runConformance(options: ConformanceOptions): void {
       expect(await driver.getSchedule({ scheduleId: a.id })).toBe(null);
       // An unknown id is skipped, not an error.
       expect(await driver.deleteSchedule({ scheduleId: 'missing' })).toBe(null);
+    });
+
+    it('arms and disarms a schedule without deleting it, returning its ref', async () => {
+      // The dashboard's enable/disable toggle. The ref is what lets it emit an event naming the
+      // schedule's queue without reading the row back.
+      const schedule = await driver.insertSchedule({
+        schedule: {
+          queueName,
+          cron: null,
+          everySeconds: 60,
+          timezone: null,
+          data: {},
+          priority: null,
+          retryMaxAttempts: null,
+          retryDelaySeconds: null,
+          nextRunAt: now,
+          enabled: true,
+          idempotencyKey: null,
+          jobOptions: null,
+        },
+      });
+
+      const disabled = await driver.setScheduleEnabled({
+        scheduleId: schedule.id,
+        enabled: false,
+        now: now + 1,
+      });
+      expect(disabled).toEqual({ scheduleId: schedule.id, queueName });
+      expect((await driver.getSchedule({ scheduleId: schedule.id }))?.enabled).toBe(false);
+      // A disarmed schedule is not due, however far past its next run the clock is.
+      const due = await driver.getDueSchedules({ now: now + 60_000, limit: 10 });
+      expect(due.map((s) => s.id)).not.toContain(schedule.id);
+
+      const rearmed = await driver.setScheduleEnabled({
+        scheduleId: schedule.id,
+        enabled: true,
+        now: now + 2,
+      });
+      expect(rearmed).toEqual({ scheduleId: schedule.id, queueName });
+      expect(
+        (await driver.getDueSchedules({ now: now + 60_000, limit: 10 })).map((s) => s.id),
+      ).toContain(schedule.id);
+
+      // An unknown id changes nothing and says so, so a stale toggle is not an error.
+      expect(await driver.setScheduleEnabled({ scheduleId: 'missing', enabled: false, now })).toBe(
+        null,
+      );
     });
 
     // --- Reads: filters, search and page/count agreement ---

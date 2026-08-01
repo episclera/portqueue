@@ -16,14 +16,10 @@
  */
 import { PortQueueEvent } from '../events/event-name.enum';
 import { InvalidOptionsError } from '../errors/errors';
+import { assertBatchIds } from '../util/batch-ids';
+import { pageWindow } from '../monitoring/stats.service';
+import { DASHBOARD_MAX_PAGE_LIMIT, DEFAULT_PAGE_LIMIT } from '../constants';
 import {
-  instanceStaleAfterMs,
-  pageWindow,
-  toInstanceInfo,
-  toQueueInfo,
-} from '../monitoring/stats.service';
-import {
-  DASHBOARD_MAX_LIMIT,
   JobBatchAction,
   type BatchResult,
   type DashboardStats,
@@ -76,56 +72,21 @@ export class DashboardService {
   // --- Paged lists -------------------------------------------------------------------------
 
   /**
-   * A page of queues with their per-status counts. Filtering and paging both happen in SQL; the
-   * counts come from a single grouped query over just this page's queue names, so the cost is three
-   * queries per page rather than one per queue.
+   * A page of queues with their per-status counts.
+   *
+   * The public read already narrows by name and pause state in SQL and counts the whole page in one
+   * grouped query, so this only tightens the page ceiling: a dashboard table never shows more than
+   * {@link DASHBOARD_MAX_PAGE_LIMIT} rows, and a crafted `limit` must not be able to ask for the
+   * table. Reusing the public read is what the facade rule allows and what keeps the two from
+   * drifting — they were byte-identical bodies over the same driver calls.
    */
-  async getQueues(query: DashboardQueuesQuery = {}): Promise<Page<QueueInfo>> {
-    const { limit, offset } = pageWindow(query, DASHBOARD_MAX_LIMIT);
-    const filter = {
-      ...(query.search ? { search: query.search } : {}),
-      ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
-    };
-    const [rows, total] = await Promise.all([
-      this.runtime.driver.listQueues({ ...filter, limit, offset }),
-      this.runtime.driver.countQueues(filter),
-    ]);
-    if (!rows.length) return { items: [], total };
-    const counts = await this.runtime.driver.countJobsByStatusPerQueue({
-      queueNames: rows.map((r) => r.name),
-    });
-    return {
-      items: rows.map((row) =>
-        // `inUse` is this client's own registry state and a headless client declares nothing, so it
-        // is always false here. The dashboard does not surface it — see DashboardQueuesQuery.
-        toQueueInfo(row, counts[row.name], this.runtime.registry.isRegistered(row.name)),
-      ),
-      total,
-    };
+  getQueues(query: DashboardQueuesQuery = {}): Promise<Page<QueueInfo>> {
+    return this.reads.getQueues({ ...query, ...pageWindow(query, DASHBOARD_MAX_PAGE_LIMIT) });
   }
 
-  /** A page of instances with liveness and per-instance job attribution. */
-  async getInstances(query: DashboardInstancesQuery = {}): Promise<Page<InstanceInfo>> {
-    const { limit, offset } = pageWindow(query, DASHBOARD_MAX_LIMIT);
-    const seenSince = this.runtime.clock.now() - instanceStaleAfterMs(this.runtime.options);
-    const filter = {
-      ...(query.search ? { search: query.search } : {}),
-      ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
-      // The liveness cutoff is computed here; the driver only compares against it.
-      ...(query.alive !== undefined ? { alive: query.alive, seenSince } : {}),
-    };
-    const [rows, total] = await Promise.all([
-      this.runtime.driver.listInstances({ ...filter, limit, offset }),
-      this.runtime.driver.countInstances(filter),
-    ]);
-    if (!rows.length) return { items: [], total };
-    const counts = await this.runtime.driver.countJobsByStatusPerInstance({
-      instanceKeys: rows.map((r) => r.instanceKey),
-    });
-    return {
-      items: rows.map((row) => toInstanceInfo(row, counts[row.instanceKey], seenSince)),
-      total,
-    };
+  /** A page of instances with liveness and per-instance job attribution. Clamped like the queues. */
+  getInstances(query: DashboardInstancesQuery = {}): Promise<Page<InstanceInfo>> {
+    return this.reads.getInstances({ ...query, ...pageWindow(query, DASHBOARD_MAX_PAGE_LIMIT) });
   }
 
   /**
@@ -142,7 +103,7 @@ export class DashboardService {
    * `pq.getSchedules` uses, plus the free-text filter only this table offers.
    */
   async getSchedules(query: DashboardSchedulesQuery = {}): Promise<Page<ScheduleInfo>> {
-    const { limit, offset } = pageWindow(query, DASHBOARD_MAX_LIMIT);
+    const { limit, offset } = pageWindow(query, DASHBOARD_MAX_PAGE_LIMIT);
     if (!query.search) {
       return this.producer.getSchedules({
         ...(query.queue ? { queue: query.queue } : {}),
@@ -208,7 +169,10 @@ export class DashboardService {
     return this.reads.getJobs<TData>({
       ...base,
       ...(term ? { search: term } : {}),
-      limit: Math.min(Math.max(Math.trunc(base.limit ?? 50), 1), DASHBOARD_MAX_LIMIT),
+      limit: Math.min(
+        Math.max(Math.trunc(base.limit ?? DEFAULT_PAGE_LIMIT), 1),
+        DASHBOARD_MAX_PAGE_LIMIT,
+      ),
     });
   }
 
@@ -227,13 +191,10 @@ export class DashboardService {
    * cancelled by firing its handler's `AbortSignal`, which no statement can undo, so those fire only
    * after the write has landed.
    */
-  async runJobBatch(options: {
-    queue: string;
-    jobIds: string[];
-    action: JobBatchAction;
-  }): Promise<BatchResult> {
-    const { queue, jobIds, action } = options;
+  async runJobBatch(options: { jobIds: string[]; action: JobBatchAction }): Promise<BatchResult> {
+    const { jobIds, action } = options;
     if (!jobIds.length) return { affected: 0, requested: 0 };
+    assertBatchIds(jobIds, 'runJobBatch({ jobIds })');
 
     const now = this.runtime.clock.now();
     const driver = this.runtime.driver;
@@ -241,7 +202,7 @@ export class DashboardService {
     switch (action) {
       case JobBatchAction.REMOVE: {
         const removed = await driver.removeJobs({ jobIds });
-        this.emitPerJob(PortQueueEvent.JOB_REMOVED, removed, queue);
+        this.emitPerJob(PortQueueEvent.JOB_REMOVED, removed);
         return { affected: removed.length, requested: jobIds.length };
       }
       case JobBatchAction.RETRY: {
@@ -258,20 +219,23 @@ export class DashboardService {
         return { affected: requeued.length, requested: jobIds.length };
       }
       case JobBatchAction.CANCEL: {
-        // Jobs running here settle via their own signal; the rest are cancelled in one statement.
-        const locallyRunning = jobIds.filter((id) => this.isRunningHere(id));
-        const remaining = jobIds.filter((id) => !locallyRunning.includes(id));
+        // Jobs running here can only be *asked* to stop — their handler owns the row's outcome — so
+        // they are signalled and counted apart. Everything else is cancelled in one statement.
+        //
+        // No `JOB_CANCELLED` is emitted for a signalled job: cancellation is cooperative, and a
+        // handler that ignores `job.signal` completes normally. Emitting it here told every listener
+        // (and the dashboard's own toast) that three jobs had been cancelled when none had.
+        const running = new Set(jobIds.filter((id) => this.isRunningHere(id)));
+        const remaining = jobIds.filter((id) => !running.has(id));
         const cancelled = remaining.length
           ? await driver.cancelJobs({ jobIds: remaining, now })
           : [];
-        for (const jobId of locallyRunning) this.runtime.cancelRunning?.(jobId);
-        this.emitPerJob(PortQueueEvent.JOB_CANCELLED, cancelled, queue);
-        for (const jobId of locallyRunning) {
-          this.runtime.events.emit(PortQueueEvent.JOB_CANCELLED, { jobId, queue });
-        }
+        for (const jobId of running) this.runtime.cancelRunning?.(jobId);
+        this.emitPerJob(PortQueueEvent.JOB_CANCELLED, cancelled);
         return {
-          affected: cancelled.length + locallyRunning.length,
+          affected: cancelled.length,
           requested: jobIds.length,
+          ...(running.size ? { signalled: running.size } : {}),
         };
       }
       default:
@@ -279,17 +243,19 @@ export class DashboardService {
     }
   }
 
-  /** Emit one event per affected job, naming the queue the row actually belongs to. */
+  /**
+   * Emit one event per affected job, naming the queue the row actually belongs to.
+   *
+   * The ref comes from the statement that changed the row, so the queue is the row's own — which is
+   * why a batch needs no `queue` argument, and why one request can carry a selection that spans
+   * queues without any event naming the wrong one.
+   */
   private emitPerJob(
     event: PortQueueEvent.JOB_REMOVED | PortQueueEvent.JOB_CANCELLED,
     refs: JobRef[],
-    fallbackQueue: string,
   ): void {
     for (const ref of refs) {
-      this.runtime.events.emit(event, {
-        jobId: ref.jobId,
-        queue: ref.queueName || fallbackQueue,
-      });
+      this.runtime.events.emit(event, { jobId: ref.jobId, queue: ref.queueName });
     }
   }
 
@@ -301,6 +267,7 @@ export class DashboardService {
   async removeSchedules(options: { scheduleIds: string[] }): Promise<BatchResult> {
     const { scheduleIds } = options;
     if (!scheduleIds.length) return { affected: 0, requested: 0 };
+    assertBatchIds(scheduleIds, 'removeSchedules({ scheduleIds })');
     const removed = await this.runtime.driver.deleteSchedules({ scheduleIds });
     for (const ref of removed) {
       this.runtime.events.emit(PortQueueEvent.SCHEDULE_REMOVED, {

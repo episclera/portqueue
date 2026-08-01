@@ -37,9 +37,18 @@ export interface Harness {
   requests: CapturedRequest[];
   /** Only the mutations, in order — what the action tests assert on. */
   posts: CapturedRequest[];
-  /** The body of the most recent mutation. */
+  /**
+   * The most recent mutation as one object: the `kind` taken from the endpoint it posted to, plus
+   * the body. Each action has its own URL, so this is what the client actually asked for.
+   */
   lastAction: () => unknown;
   renderApp: (hash: string) => void;
+}
+
+/** The action a mutation URL names — the segment after `/actions/`. */
+function actionKindOf(url: string): string | undefined {
+  const found = /\/actions\/([^/?]+)/.exec(url);
+  return found ? decodeURIComponent(found[1]!) : undefined;
 }
 
 /** Longest-match lookup, so `/jobs/job-1` wins over `/jobs`. */
@@ -109,7 +118,17 @@ export function createHarness(options: StubOptions = {}): Harness {
     );
   };
 
-  return { requests, posts, lastAction: () => posts.at(-1)?.body, renderApp };
+  return {
+    requests,
+    posts,
+    lastAction: () => {
+      const last = posts.at(-1);
+      if (!last) return undefined;
+      const kind = actionKindOf(last.url);
+      return { ...(kind ? { kind } : {}), ...(last.body as Record<string, unknown>) };
+    },
+    renderApp,
+  };
 }
 
 /** A page DTO wrapper, so fixtures read as the API's actual shape. */

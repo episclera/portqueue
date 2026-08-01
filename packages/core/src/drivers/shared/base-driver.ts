@@ -1,5 +1,5 @@
 import { BackoffStrategy } from '../../options/enums';
-import { JobStatus } from '../../jobs/job-state.enum';
+import { emptyStatusCounts, JobStatus } from '../../jobs/job-state.enum';
 import { DriverCapability, type DriverCapabilitySet } from '../driver-capabilities';
 import { DriverContext } from '../driver-context';
 import { InstanceColumn, JobColumn, QueueColumn, ScheduleColumn, TableName } from '../table-names';
@@ -13,7 +13,9 @@ import {
   AFFINITY_PAGE_FACTOR,
   AFFINITY_PAGE_MAX,
   AFFINITY_PAGE_MIN_HEADROOM,
+  MAX_BATCH_IDS,
 } from '../../constants';
+
 import type {
   InstanceRow,
   JobRecord,
@@ -24,6 +26,13 @@ import type {
 } from '../../jobs/job-record';
 import type { PageWindow } from '../driver.interface';
 import type { TransactionHandle, TxQueryResult } from '../../tx/transaction-handle';
+
+/**
+ * Binds a statement carrying an id list needs *besides* the list — a status guard, a timestamp, a
+ * queue name. Small and fixed; the point is only that a chunk sized to the whole bind budget would
+ * leave no room for them.
+ */
+const IN_LIST_BIND_HEADROOM = 16;
 
 /** A raw query result, normalized across every client library. */
 export interface RawResult {
@@ -61,6 +70,7 @@ export const JOB_COLUMNS: readonly JobColumn[] = [
   JobColumn.CANCELLED_AT,
   JobColumn.EXPIRED_AT,
   JobColumn.LOCKED_UNTIL,
+  JobColumn.LOCK_TOKEN,
   JobColumn.PREFERRED_INSTANCE_KEY_PATTERN,
   JobColumn.PROCESSED_ON_INSTANCE_KEY,
   JobColumn.RETRY_ATTEMPT,
@@ -130,6 +140,15 @@ export abstract class BaseDriver {
    * A driver whose engine is tighter — Oracle's `INSERT ALL` — lowers it.
    */
   protected readonly maxBindParams: number = 30_000;
+
+  /**
+   * The most expressions this engine allows in one `IN (...)` list.
+   *
+   * A separate limit from {@link maxBindParams}, and on Oracle a much tighter one — 1000 expressions,
+   * whatever the bind budget — which is why {@link MAX_BATCH_IDS} caps a batch at that number for
+   * every engine. A driver whose engine is tighter still lowers this.
+   */
+  protected readonly maxInListItems: number = MAX_BATCH_IDS;
 
   protected constructor(options: {
     tablePrefix?: string;
@@ -239,6 +258,47 @@ export abstract class BaseDriver {
     return chunks;
   }
 
+  /**
+   * Split a key list so no single statement's `IN (...)` exceeds what the engine allows — both its
+   * `IN`-list ceiling and its bound-parameter budget, with headroom for the handful of other binds a
+   * statement carries beside the list.
+   *
+   * Every by-id batch goes through this. `MAX_BATCH_IDS` already refuses a *call* larger than the
+   * tightest engine's `IN` limit, so a public batch is always one chunk; this is what keeps an
+   * internal caller (or a driver with a lower ceiling) from emitting a statement the engine rejects —
+   * `removeJobs` with 1001 ids used to raise ORA-01795 on Oracle and to blow past the parameter
+   * index on Postgres and SQLite at a few tens of thousands.
+   */
+  protected chunkIds<T>(keys: readonly T[]): T[][] {
+    const perChunk = Math.max(
+      1,
+      Math.min(this.maxInListItems, this.maxBindParams - IN_LIST_BIND_HEADROOM),
+    );
+    if (keys.length <= perChunk) return [[...keys]];
+    const chunks: T[][] = [];
+    for (let i = 0; i < keys.length; i += perChunk) chunks.push([...keys.slice(i, i + perChunk)]);
+    return chunks;
+  }
+
+  /**
+   * Run one statement per {@link chunkIds} chunk and concatenate what each returned.
+   *
+   * A single chunk — the case every capped public batch takes — runs exactly the statement it would
+   * have without chunking, so nothing is paid for the guard. Several chunks are several statements:
+   * inside the caller's transaction when there is one, and otherwise each atomic on its own, which
+   * is the same trade every bounded sweep in the tool makes.
+   */
+  protected async overIdChunks<K, R>(
+    keys: readonly K[],
+    perChunk: (chunk: K[]) => Promise<R[]>,
+  ): Promise<R[]> {
+    const chunks = this.chunkIds(keys);
+    if (chunks.length === 1) return perChunk(chunks[0]!);
+    const out: R[] = [];
+    for (const chunk of chunks) out.push(...(await perChunk(chunk)));
+    return out;
+  }
+
   // --- Value conversion ---
 
   protected toJson(value: unknown): string | null {
@@ -285,27 +345,31 @@ export abstract class BaseDriver {
   }
 
   /**
-   * A bound `LIKE` pattern for a case-insensitive substring search. The term is lower-cased (the
-   * column is too, at the query site) and `%`/`_`/`!` are escaped with `!` — declared by the
-   * query's own `ESCAPE '!'` — so a user typing `100%` searches for that text rather than matching
-   * everything. Still a bound parameter: nothing here is interpolated into SQL.
+   * A bound pattern for a case-insensitive substring search. `%`/`_`/`!` are escaped with `!` —
+   * declared by the query's own `ESCAPE '!'` — so a user typing `100%` searches for that text rather
+   * than matching everything. Still a bound parameter: nothing here is interpolated into SQL.
+   *
+   * The term is lower-cased for the engines whose query site lower-cases the column too; Postgres and
+   * PGLite use `ILIKE`, where the case folding is the operator's job and this is already inert.
+   *
+   * **A free-text search is a scan, and no index is declared for one.** The pattern has a leading
+   * wildcard, which no B-tree can serve on any engine here — not even over a functional
+   * `LOWER(column)` index — so declaring one would suggest a speed-up that cannot happen. What bounds
+   * the cost is the `LIMIT` every search read carries, and the fact that only an operator triaging in
+   * the dashboard or CLI ever issues one.
    */
   protected likePattern(term: string): string {
     const escaped = term.toLowerCase().replace(/[!%_]/g, (ch) => `!${ch}`);
     return `%${escaped}%`;
   }
 
-  /** A zeroed status breakdown, for a key a grouped count query returned nothing for. */
+  /**
+   * A zeroed status breakdown, for a key a grouped count query returned nothing for. Delegates to
+   * the one definition in `jobs/job-state.enum` — this used to be a second copy of the same object
+   * literal, and a new status would have had to be remembered in both.
+   */
   protected emptyStatusCounts(): Record<JobStatus, number> {
-    return {
-      [JobStatus.PENDING]: 0,
-      [JobStatus.ACTIVE]: 0,
-      [JobStatus.COMPLETED]: 0,
-      [JobStatus.FAILED]: 0,
-      [JobStatus.RETRY]: 0,
-      [JobStatus.CANCELLED]: 0,
-      [JobStatus.EXPIRED]: 0,
-    };
+    return emptyStatusCounts();
   }
 
   // --- Row → record mapping ---
@@ -330,6 +394,7 @@ export abstract class BaseDriver {
       cancelledAt: this.numOrNull(row[JobColumn.CANCELLED_AT]),
       expiredAt: this.numOrNull(row[JobColumn.EXPIRED_AT]),
       lockedUntil: this.numOrNull(row[JobColumn.LOCKED_UNTIL]),
+      lockToken: this.strOrNull(row[JobColumn.LOCK_TOKEN]),
       preferredInstanceKeyPattern: this.strOrNull(row[JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]),
       processedOnInstanceKey: this.strOrNull(row[JobColumn.PROCESSED_ON_INSTANCE_KEY]),
       retryAttempt: Number(row[JobColumn.RETRY_ATTEMPT]),
@@ -435,6 +500,7 @@ export abstract class BaseDriver {
         null, // cancelled_at
         null, // expired_at
         null, // locked_until
+        null, // lock_token (written at claim time)
         job.preferredInstanceKeyPattern,
         null, // processed_on_instance_key (set at claim time)
         job.retryAttempt,

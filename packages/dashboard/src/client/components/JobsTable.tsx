@@ -14,7 +14,7 @@ import { StatusTag, Table, Tooltip } from '@portqueue/ui';
 import type { DropdownItem, TableColumn } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums';
 import { ActionKind, type JobDto, type JobPageDto } from '../../shared/dto';
-import { api } from '../queries/api';
+import { api, config } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
@@ -150,27 +150,21 @@ export function JobsTable({
             icon={ACTIONS_CONFIG.retry.icon}
             label={ACTIONS_CONFIG.retry.label}
             disabled={r.status === JobStatus.ACTIVE}
-            onClick={() =>
-              void run({ kind: ActionKind.RETRY, queue: r.queue, jobId: r.id }, 'Retry queued')
-            }
+            onClick={() => void run({ kind: ActionKind.RETRY, jobId: r.id }, 'Retry queued')}
           />
           <RowAction
             icon={ACTIONS_CONFIG.cancel.icon}
             label={ACTIONS_CONFIG.cancel.label}
             disabled={!CANCELLABLE.includes(r.status as JobStatus)}
             confirm={{ title: 'Cancel this job?' }}
-            onClick={() =>
-              void run({ kind: ActionKind.CANCEL, queue: r.queue, jobId: r.id }, 'Cancelled')
-            }
+            onClick={() => void run({ kind: ActionKind.CANCEL, jobId: r.id }, 'Cancelled')}
           />
           <RowAction
             danger
             icon={ACTIONS_CONFIG.remove.icon}
             label={ACTIONS_CONFIG.remove.label}
             confirm={{ title: 'Remove this job permanently?' }}
-            onClick={() =>
-              void run({ kind: ActionKind.REMOVE, queue: r.queue, jobId: r.id }, 'Removed')
-            }
+            onClick={() => void run({ kind: ActionKind.REMOVE, jobId: r.id }, 'Removed')}
           />
         </RowActions>
       ),
@@ -178,20 +172,16 @@ export function JobsTable({
   ];
 
   /**
-   * Every bulk action is one request carrying every id, applied in a single server-side
-   * transaction. A batch that spans queues is grouped by queue, since each action names one.
+   * One request for the whole selection, applied in a single server-side transaction, reported in a
+   * single toast.
+   *
+   * A selection spanning queues used to be grouped by queue and sent as one request *per queue*,
+   * each with its own toast — so a failure on the second queue left the first queue's jobs already
+   * removed, with a success toast and an error toast side by side. A job id identifies a row on its
+   * own, so the queue was never needed to act on it.
    */
   const runBulk = async (kind: ActionKind, verb: string): Promise<void> => {
-    const byQueue = new Map<string, string[]>();
-    for (const row of rows) {
-      if (!selected.includes(row.id)) continue;
-      const list = byQueue.get(row.queue) ?? [];
-      list.push(row.id);
-      byQueue.set(row.queue, list);
-    }
-    for (const [queueName, jobIds] of byQueue) {
-      await runBatch({ kind, queue: queueName, jobIds }, { verb, noun: 'job' });
-    }
+    await runBatch({ kind, jobIds: [...selected] }, { verb, noun: 'job' });
     setSelected([]);
   };
 
@@ -257,7 +247,15 @@ export function JobsTable({
               />
             )
           }
-          rowSelection={{ selectedKeys: selected, onChange: setSelected }}
+          rowSelection={{
+            selectedKeys: selected,
+            onChange: setSelected,
+            // A bulk action is one statement, and the smallest engine limit on the ids one statement
+            // can bind is everyone's limit. The server refuses more too; this is the same number,
+            // delivered with the page rather than copied into the client.
+            maxSelected: config.maxBatchIds,
+            maxSelectedHint: `You can act on ${config.maxBatchIds} jobs at a time — the limit is what one database statement can carry. Clear a selection to pick another.`,
+          }}
         />
       </TableCard>
 

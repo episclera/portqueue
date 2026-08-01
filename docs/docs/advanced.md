@@ -81,13 +81,27 @@ caller's transaction. The interface groups its methods by concern:
   or a permissions error has to surface, because reading it as "never migrated" would start a full
   migration run against a database that may already be migrated.
 - `applyMigration({ migration: MigrationStep }): Promise<void>` — run the step's statements **and**
-  record its version in one transaction, so a crash between the two can't leave an applied-but-
-  unrecorded migration.
+  record its version, in one transaction **wherever the engine allows it**. Postgres, PGLite and
+  SQLite run DDL transactionally, so a crash between the two cannot leave an applied-but-unrecorded
+  migration there. MySQL and Oracle commit each DDL statement implicitly and no transaction can span
+  them: those drivers run the statements first and record the version after, so an interruption leaves
+  the schema reading one version behind and the step is re-run on the next start. **Write every
+  migration to be idempotent** (`IF NOT EXISTS`, `MERGE`, a guarded `CREATE INDEX`) — the runner reads
+  the version back before attempting the next step, so a step that ran without being recorded is
+  reported rather than carried forward, but only idempotent DDL survives the re-run.
+
+  Concurrency follows the same shape: where the engine has a named lock (`pg_try_advisory_lock`,
+  MySQL's `GET_LOCK`) one instance migrates and the rest wait. Where it does not — Oracle, SQLite,
+  PGLite — every instance applies, which is safe for idempotent DDL. For a multi-instance Oracle
+  deployment, run `portqueue migrate` once before starting workers.
 
 **Producing**
 
 - `insertJob({ job, tx? }): Promise<InsertedJobRow>`
-- `insertJobs({ jobs, tx? }): Promise<InsertedJobRow[]>`
+- `insertJobs({ jobs, tx? }): Promise<InsertedJobRow[]>` — the dedup lookup and the insert share a
+  transaction, and a batch carrying an `idempotencyKey` or `singletonKey` must first take a lock every
+  other producer on that queue also takes (a row lock on the queue row, or the engine's own write lock
+  where it has one). Without it two concurrent adds of the same key both see no row and both insert.
 - `insertSchedule({ schedule, tx? }): Promise<ScheduleRow>`
 - `findJobByIdempotencyKey({ queueName, idempotencyKey, tx? }): Promise<InsertedJobRow | null>`
 - `findScheduleByIdempotencyKey({ queueName, idempotencyKey, tx? }): Promise<ScheduleRow | null>`
@@ -102,11 +116,21 @@ engine, a deadlock).
 
 **Claiming & completing (hot path)**
 
-- `claimJobs({ queueName, limit, lockDurationSeconds, now, instanceKey? }): Promise<JobRecord[]>`
-- `extendLock({ jobId, lockDurationSeconds, now }): Promise<boolean>`
-- `completeJob({ jobId, returnValue?, now, tx? }): Promise<void>`
-- `retryJob({ jobId, nextRunAt, retryAttempt, lastError, now }): Promise<void>`
-- `failJob({ jobId, lastError, now }): Promise<void>`
+- `claimJobs({ queueName, limit, lockDurationSeconds, now, instanceKey? }): Promise<JobRecord[]>` —
+  every claimed row must also carry a **fresh `lock_token`**, returned on the record. That token is the
+  fence below.
+- `extendLock({ jobId, lockDurationSeconds, now, lockToken? }): Promise<boolean>` — false when the row
+  is no longer this claim's to extend. A negative `lockDurationSeconds` releases the lock.
+- `completeJob({ jobId, returnValue?, now, lockToken?, tx? }): Promise<boolean>`
+- `retryJob({ jobId, nextRunAt, retryAttempt, lastError, now, lockToken? }): Promise<boolean>`
+- `failJob({ jobId, lastError, now, lockToken? }): Promise<boolean>`
+
+  The three settle methods must be **guarded on the claim** — `status = ACTIVE`, and the `lockToken`
+  when one is given — and must report whether the row was actually settled. Status alone is not
+  enough: a lapsed lock is reclaimed and the row claimed again, so it reads `ACTIVE` once more, and a
+  handler from the first run that ignored its abort signal would otherwise write its outcome over the
+  second run's. A `false` tells core the claim was lost, and it emits `LockLostError` on the `ERROR`
+  event instead of reporting the job as finished.
 - `reclaimStalledJobs({ queueName?, limit, now }): Promise<StalledJobRef[]>` — bounded, and returns
   refs rather than whole rows: the caller needs the id, the queue to wake, and who was holding the job.
 - `expireDueJobs({ queueName?, limit, now }): Promise<JobRef[]>` — bounded the same way; the caller
@@ -138,7 +162,9 @@ engine, a deadlock).
 - `cancelJob({ jobId, now, tx? }): Promise<JobRef | null>` — only a `PENDING`/`RETRY` row is cancellable.
 - `cancelJobs({ jobIds, now, tx? }): Promise<JobRef[]>`
 - `removeJob({ jobId, tx? }): Promise<JobRef | null>` — never removes an `ACTIVE` row.
-- `removeJobs({ jobIds, tx? }): Promise<JobRef[]>` — same guard, one statement.
+- `removeJobs({ jobIds, tx? }): Promise<JobRef[]>` — same guard, one statement. Every by-id batch must
+  chunk its ids so a single statement cannot exceed what the engine allows in an `IN (...)` list —
+  `BaseDriver.chunkIds`/`overIdChunks` do this from `maxInListItems` and `maxBindParams`.
 - `removeJobsByStatus({ queueName, statuses, tx? }): Promise<number>`
 
 **Queue control**

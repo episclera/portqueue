@@ -6,6 +6,7 @@
  * fake that stops proving anything.
  */
 import { createRouter } from '../server/api/routes';
+import { REQUESTED_WITH_HEADER, REQUESTED_WITH_MARKER } from '../shared/constants';
 import type { JobBatchAction, PortQueue } from '@portqueue/core';
 import type { DashboardClient } from '../server/client';
 import type { ActionRequestDto, ActionResultDto } from '../shared/dto';
@@ -29,7 +30,7 @@ export function failingClient(error: Error): DashboardClient {
 
 /** What the fake recorded about the calls a route made. */
 export interface Recorded {
-  batches: { queue: string; jobIds: string[]; action: JobBatchAction }[];
+  batches: { jobIds: string[]; action: JobBatchAction }[];
   scheduleRemovals: string[][];
   scheduleToggles: { scheduleId: string; enabled: boolean }[];
   adds: unknown[];
@@ -38,7 +39,7 @@ export interface Recorded {
 }
 
 export interface FakePqOverrides {
-  batchResult?: { affected: number; requested: number };
+  batchResult?: { affected: number; requested: number; signalled?: number };
   scheduleEnabled?: boolean;
   schedulesRemoved?: { affected: number; requested: number };
   /** Make the named method throw, so a test can drive core's refusal paths. */
@@ -65,7 +66,7 @@ export function fakePq(over: FakePqOverrides = {}): { pq: PortQueue; rec: Record
 
   const pq = {
     _dashboard: {
-      runJobBatch: async (opts: { queue: string; jobIds: string[]; action: JobBatchAction }) => {
+      runJobBatch: async (opts: { jobIds: string[]; action: JobBatchAction }) => {
         rec.batches.push(opts);
         return over.batchResult ?? { affected: opts.jobIds.length, requested: opts.jobIds.length };
       },
@@ -104,33 +105,57 @@ export interface ActionResponse {
   body: ActionResultDto & { error?: string };
 }
 
-/** POST a mutation to `/api/actions` and parse the reply. */
+/**
+ * POST a mutation to its own endpoint (`/api/actions/<kind>`) and parse the reply.
+ *
+ * The `kind` is split out of the object exactly as the client's `api.action` does, so a test writes
+ * the mutation as one literal and still exercises the real routing.
+ */
 export async function postAction(
   pq: PortQueue,
-  action: ActionRequestDto | Record<string, unknown>,
+  action: (ActionRequestDto | Record<string, unknown>) & { kind: string },
 ): Promise<ActionResponse> {
-  return postRaw(pq, JSON.stringify(action));
+  const { kind, ...payload } = action;
+  return postRaw(pq, kind, JSON.stringify(payload));
 }
 
-/** POST an arbitrary (possibly malformed) body to `/api/actions`. */
-export async function postRaw(pq: PortQueue, body: string | undefined): Promise<ActionResponse> {
+/** POST an arbitrary (possibly malformed) body to one action's endpoint. */
+export async function postRaw(
+  pq: PortQueue,
+  kind: string,
+  body: string | undefined,
+): Promise<ActionResponse> {
   const router = createRouter({ client: stubClient(pq), basePath: BASE_PATH });
   const res = await router.handle({
     method: 'POST',
-    url: `${BASE_PATH}/api/actions`,
+    url: `${BASE_PATH}/api/actions/${encodeURIComponent(kind)}`,
     body,
-    headers: {},
+    headers: { [REQUESTED_WITH_HEADER]: REQUESTED_WITH_MARKER },
   });
   return { status: res.status, body: JSON.parse(res.body) as ActionResultDto };
 }
 
-/** Drive one request through the router, whatever its method or path. */
+/**
+ * Drive one request through the router, whatever its method or path. Mutations carry the
+ * same-origin marker unless the caller passes its own headers — a test for the CSRF guard says so
+ * explicitly by passing `headers: {}`.
+ */
 export function request(
   client: DashboardClient,
-  input: { method: string; url: string; body?: string },
+  input: {
+    method: string;
+    url: string;
+    body?: string;
+    headers?: Record<string, string | string[] | undefined>;
+  },
 ): Promise<{ status: number; body: string }> {
   const router = createRouter({ client, basePath: BASE_PATH });
   return router
-    .handle({ method: input.method, url: input.url, body: input.body, headers: {} })
+    .handle({
+      method: input.method,
+      url: input.url,
+      body: input.body,
+      headers: input.headers ?? { [REQUESTED_WITH_HEADER]: REQUESTED_WITH_MARKER },
+    })
     .then((res) => ({ status: res.status, body: res.body }));
 }

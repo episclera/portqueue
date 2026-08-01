@@ -85,12 +85,16 @@ export class ClientLifecycleService {
     // 4. Scheduler + retention + monitor, driven by one coordinated tick.
     this.scheduler = new SchedulerService(this.runtime);
     this.retention = new RetentionService(this.runtime);
-    // Always monitor: the instance heartbeat persists these metrics, so they are not optional.
-    // `systemLimiter` only decides whether a breached threshold also pauses claiming.
-    this.monitor = new SystemMonitorService(options.systemLimiter, events, logger, () =>
-      this.runtime.wakeup.signalAll(),
-    );
-    this.monitor.start();
+    // Only sample when something consumes the numbers: the instance heartbeat persists them (so a
+    // named client always monitors), and a `systemLimiter` throttles on them. With neither, nobody
+    // ever reads a sample and the process was still paying a `setInterval` plus `cpuUsage()` and
+    // `getHeapStatistics()` every couple of seconds.
+    if (this.runtime.instanceKey || options.systemLimiter) {
+      this.monitor = new SystemMonitorService(options.systemLimiter, events, logger, () =>
+        this.runtime.wakeup.signalAll(),
+      );
+      this.monitor.start();
+    }
     this.tickTimer = setInterval(
       () => this.runtime.background.run(() => this.tick()),
       secondsToMs(tickIntervalSeconds, 'tickIntervalSeconds'),

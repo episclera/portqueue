@@ -132,6 +132,24 @@ export class QueueNotFoundError extends PortQueueError {
   }
 }
 
+/**
+ * Thrown by {@link PortQueue.cancelJob} for an id that names no row.
+ *
+ * The one place a missing job is an error rather than a return value. `cancelJob` answers with what
+ * it *did* — cancelled the row, or only signalled a running handler — and "there was nothing to
+ * cancel" is not one of those answers. Every other by-id operation still reports a stale id as
+ * `null`/`false`, so a batch can skip it.
+ */
+export class JobNotFoundError extends PortQueueError {
+  constructor(jobId: string) {
+    super(
+      `Job '${jobId}' does not exist, so there was nothing to cancel. Its row may have been ` +
+        `removed, or deleted by retention.`,
+      { code: PortQueueErrorCode.JOB_NOT_FOUND, context: { jobId } },
+    );
+  }
+}
+
 export class QueuePausedError extends PortQueueError {
   constructor(queue: string) {
     super(
@@ -169,6 +187,25 @@ export class ShutdownTimeoutError extends PortQueueError {
     super(
       `Graceful shutdown timed out after ${timeoutSeconds}s; in-flight handlers were aborted and their locks released for reclaim.`,
       { code: PortQueueErrorCode.SHUTDOWN_TIMEOUT },
+    );
+  }
+}
+
+/**
+ * A handler finished, but the job's row was no longer its to settle: the lock had lapsed and another
+ * worker reclaimed the row, so the outcome was refused rather than written over the new run's.
+ *
+ * Surfaced on the `ERROR` event, never thrown at a caller — the handler itself did nothing wrong,
+ * and the job is already running (or has already run) somewhere else. Seeing this repeatedly means
+ * handlers are outliving their `lockDurationSeconds`.
+ */
+export class LockLostError extends PortQueueError {
+  constructor(jobId: string, queue: string) {
+    super(
+      `Job '${jobId}' on queue '${queue}' finished after its claim was lost, so its outcome was not ` +
+        `recorded — another worker had already reclaimed the row. Raise \`lockDurationSeconds\` for ` +
+        `this queue, or make the handler observe \`job.signal\`.`,
+      { code: PortQueueErrorCode.LOCK_LOST, context: { jobId, queue } },
     );
   }
 }

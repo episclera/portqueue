@@ -10,6 +10,8 @@ export type { Job, JobHandler } from './jobs/job';
 export { JobStatus } from './jobs/job-state.enum';
 export {
   BackoffStrategy,
+  CancelOutcome,
+  FailureDetail,
   PauseMode,
   DeduplicationReason,
   MigrationMode,
@@ -46,6 +48,16 @@ export type {
 
 // Defaults — every value the tool applies when a caller names none, in one place.
 export * from './constants';
+
+// The seconds↔milliseconds converters. Exported because the invariant is repo-wide: `util/seconds`
+// is the only place the two units meet, and the dashboard and CLI have timers too.
+export {
+  secondsToMs,
+  wholeSeconds,
+  wholeSecondsToMs,
+  msToSeconds,
+  MS_PER_SECOND,
+} from './util/seconds';
 
 // Result & snapshot types
 export type {
@@ -116,6 +128,8 @@ export {
   MigrationFailedError,
   DriverConnectionError,
   DriverQueryError,
+  JobNotFoundError,
+  LockLostError,
   QueueNotFoundError,
   QueuePausedError,
   QueueInUseError,

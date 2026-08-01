@@ -2,7 +2,7 @@
 import { rewriteAssetUrls, safeResolve, serializeConfig, serveAsset } from './assets';
 import type { DashboardConfigDto } from '../shared/dto';
 
-const config: DashboardConfigDto = { basePath: '/portqueue' };
+const config: DashboardConfigDto = { basePath: '/portqueue', maxBatchIds: 1000 };
 
 // In tests the module resolves to src/server/, so no built client bundle is present:
 // serveAsset falls back to the inline shell for navigations and 404s for asset paths.
@@ -49,7 +49,7 @@ describe('serveAsset (no built client)', () => {
 describe('serializeConfig', () => {
   it('escapes `<` so a value cannot close the script element', () => {
     const basePath = '</script><script>alert(1)</script>';
-    const out = serializeConfig({ basePath });
+    const out = serializeConfig({ ...config, basePath });
     expect(out).not.toContain('</script>');
     expect(out).toContain('\\u003c');
     // Still valid JSON: the escapes sit inside the string literal, not around it.
@@ -57,7 +57,7 @@ describe('serializeConfig', () => {
   });
 
   it('escapes the line terminators that are legal in JSON but not in JS source', () => {
-    const out = serializeConfig({ basePath: 'a\u2028b\u2029c' });
+    const out = serializeConfig({ ...config, basePath: 'a\u2028b\u2029c' });
     expect(out).toContain('\\u2028');
     expect(out).toContain('\\u2029');
   });

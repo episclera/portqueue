@@ -9,6 +9,7 @@
  */
 import axios, { type AxiosInstance } from 'axios';
 import type {
+  ActionPayloadDto,
   ActionRequestDto,
   ActionResultDto,
   DashboardConfigDto,
@@ -29,8 +30,12 @@ declare global {
   }
 }
 
+/**
+ * The runtime config the server injected into the shell. The fallback is only for a dev build served
+ * without the shell — a real page always carries the injected object.
+ */
 export const config: DashboardConfigDto = (typeof window !== 'undefined' &&
-  window.__PORTQUEUE_DASHBOARD__) || { basePath: '/portqueue' };
+  window.__PORTQUEUE_DASHBOARD__) || { basePath: '/portqueue', maxBatchIds: 1000 };
 
 /** The axios client. Exported so tests can stub its adapter. */
 export const http: AxiosInstance = axios.create({
@@ -117,8 +122,15 @@ export const api = {
   getInstance: (instanceKey: string) =>
     get<InstanceDto>(`/instances/${encodeURIComponent(instanceKey)}`),
 
-  action: async (body: ActionRequestDto): Promise<ActionResultDto> => {
-    const res = await http.post<ActionResultDto>('/actions', body);
+  /**
+   * Fire a mutation. `kind` names the endpoint (`POST /api/actions/<kind>`) and the rest of the
+   * object is the body — so the URL, not a body field, decides which mutation runs.
+   */
+  action: async ({ kind, ...payload }: ActionRequestDto): Promise<ActionResultDto> => {
+    const res = await http.post<ActionResultDto>(
+      `/actions/${encodeURIComponent(kind)}`,
+      payload satisfies ActionPayloadDto,
+    );
     return res.data;
   },
 };

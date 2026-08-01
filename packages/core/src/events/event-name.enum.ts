@@ -42,6 +42,7 @@ export enum PortQueueEvent {
 export type ErrorSource =
   | 'claim'
   | 'execution'
+  | 'completion'
   | 'scheduler'
   | 'retention'
   | 'subscriber'

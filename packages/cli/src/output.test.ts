@@ -62,6 +62,10 @@ describe('writers', () => {
   });
 });
 
+/** Matches an ANSI colour sequence. Built rather than written literally, so the escape character
+ *  does not sit inside a regex literal (which `no-control-regex` refuses, for good reason). */
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+
 describe('table', () => {
   it('aligns columns and prints a header + rows', async () => {
     const { stdout } = await captureOutput(() =>
@@ -78,6 +82,43 @@ describe('table', () => {
     expect(lines[0]).toContain('Count');
     expect(lines[1]).toContain('emails');
     expect(lines[2]).toContain('sms');
+  });
+
+  it('measures a coloured cell by its visible width, not its escape codes', async () => {
+    // The width maths has to ignore ANSI, or a coloured status (every status column is coloured)
+    // pads by ~9 invisible characters and the column after it walks right.
+    setColorEnabled(true);
+    try {
+      const { stdout } = await captureOutput(() =>
+        table(
+          ['Status', 'Count'],
+          [
+            [color('FAILED', 'red'), '1'],
+            ['PENDING', '2'],
+          ],
+        ),
+      );
+      const lines = stdout.trimEnd().split('\n');
+      const visible = (line: string): string => line.replace(ANSI, '');
+      // `PENDING` is the widest cell, so both counts start at the same visible column.
+      expect(visible(lines[1]!).indexOf('1')).toBe(visible(lines[2]!).indexOf('2'));
+    } finally {
+      setColorEnabled(false);
+    }
+  });
+
+  it('pads a row that is shorter than the header rather than throwing', async () => {
+    const { stdout } = await captureOutput(() => table(['A', 'B'], [['only']]));
+    expect(stdout).toContain('only');
+  });
+
+  it('sizes a column by its widest cell, header included', async () => {
+    const { stdout } = await captureOutput(() =>
+      table(['Q', 'N'], [['a-very-long-queue-name', '1']]),
+    );
+    const lines = stdout.trimEnd().split('\n');
+    // The header's second column sits past the longest value in the first.
+    expect(lines[0]!.indexOf('N')).toBe('a-very-long-queue-name'.length + 2);
   });
 });
 

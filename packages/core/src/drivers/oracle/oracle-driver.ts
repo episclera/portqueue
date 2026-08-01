@@ -23,7 +23,8 @@ import {
   type Row,
   type Session,
 } from '../shared/base-driver';
-import { retentionStatusPattern } from '../shared/retention-statuses';
+import { retentionStatusBit } from '../shared/retention-statuses';
+import { MS_PER_SECOND } from '../../util/seconds';
 import { toMigrationSteps } from '../shared/migration';
 import { ORACLE_MIGRATIONS } from './migrations';
 import type {
@@ -133,6 +134,14 @@ export class OracleDriver extends BaseDriver implements Driver {
    * text as fast as it grows the bind list. Held well under the shared floor to keep the SQL sane.
    */
   protected override readonly maxBindParams = 4_000;
+
+  /**
+   * Oracle's own hard limit on the expressions in an `IN (...)` list — 1000, regardless of the bind
+   * budget above. Stated explicitly here even though it equals the shared default, because that
+   * default *is* this number: `MAX_BATCH_IDS` takes Oracle's ceiling as everyone's so a batch that
+   * works on Postgres cannot raise ORA-01795 here.
+   */
+  protected override readonly maxInListItems = 1_000;
 
   private pool: OraclePool | null = null;
   private readonly options: OracleDriverOptions;
@@ -306,6 +315,16 @@ export class OracleDriver extends BaseDriver implements Driver {
    * between the DDL and the version row leaves a schema the next run re-applies as a no-op and then
    * records. The version insert is guarded on its own absence for the same reason.
    */
+  /**
+   * Apply one step, then record it — **not** in one transaction, and it cannot be: Oracle commits each DDL statement implicitly, so no transaction can span them. A `BEGIN`
+   * around them would be silently discarded at the first `CREATE TABLE`.
+   *
+   * What holds instead: every statement in this engine's migrations is idempotent, so an
+   * interruption between the DDL and the version insert is repaired by re-running the step, and the
+   * shared `MigrationRunner` reads the version back before it attempts the next one rather than
+   * assuming this landed. The DDL runs *first* on purpose — a version recorded for statements that
+   * never ran would make the next start skip them for good.
+   */
   async applyMigration(options: { migration: MigrationStep }): Promise<void> {
     const statements = options.migration.statements(this.context);
     for (const sql of statements) await this.execute(sql, []);
@@ -342,6 +361,7 @@ export class OracleDriver extends BaseDriver implements Driver {
     const { jobs, tx } = options;
     if (!jobs.length) return [];
     return this.inTx(tx, async (run) => {
+      await this.lockQueuesForDedup(run, jobs);
       const deduped = await this.findDeduplicated(jobs, run);
       const results = new Array<InsertedJobRow | undefined>(jobs.length);
       const fresh: Array<{ index: number; id: string; values: unknown[] }> = [];
@@ -393,6 +413,36 @@ export class OracleDriver extends BaseDriver implements Driver {
    * rather than two per job. No unique index enforces either key — dedup lives in code so every
    * engine behaves identically and a duplicate returns the existing job instead of raising.
    */
+  /**
+   * Serialize the dedup-lookup-then-insert pair against another producer's, per queue.
+   *
+   * Only called when a batch actually carries an idempotency or singleton key. Without it the pair is
+   * a read-then-write under `READ COMMITTED`: two concurrent `addJob`s with the same key both see no
+   * row and both insert, and the dedup silently fails. Locking the **queue row** — which every keyed
+   * insert on that queue must take — closes it with no schema change and no uniqueness constraint
+   * that a singleton's status predicate could not express anyway. A queue with no keyed jobs never
+   * pays for it, and a queue whose row does not exist yet locks nothing, which is no worse than
+   * before.
+   */
+  private async lockQueuesForDedup(
+    run: (sql: string, params: readonly unknown[]) => Promise<RawResult>,
+    jobs: NewJobRecord[],
+  ): Promise<void> {
+    const names = [
+      ...new Set(
+        jobs.flatMap((j) =>
+          j.idempotencyKey != null || j.singletonKey != null ? [j.queueName] : [],
+        ),
+      ),
+    ].sort(); // a stable order, so two batches over the same queues cannot deadlock each other
+    if (!names.length) return;
+    await run(
+      `SELECT ${QueueColumn.NAME} FROM ${this.t(TableName.QUEUE)} ` +
+        `WHERE ${QueueColumn.NAME} IN (${this.phList(names.length)}) FOR UPDATE`,
+      names,
+    );
+  }
+
   private async findDeduplicated(
     jobs: NewJobRecord[],
     run: (sql: string, params: readonly unknown[]) => Promise<RawResult>,
@@ -525,21 +575,25 @@ export class OracleDriver extends BaseDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<ScheduleRef[]> {
     if (!options.scheduleIds.length) return [];
-    // No row-set RETURNING: lock and read the rows, then delete exactly those ids.
-    return this.inTx(options.tx, async (run) => {
-      const sel = await run(
-        `SELECT ${ScheduleColumn.ID}, ${ScheduleColumn.QUEUE_NAME} FROM ${this.t(TableName.SCHEDULE)} ` +
-          `WHERE ${ScheduleColumn.ID} IN (${this.phList(options.scheduleIds.length)}) FOR UPDATE`,
-        options.scheduleIds,
-      );
-      const refs = sel.rows.map((r) => this.mapScheduleRef(r));
-      if (!refs.length) return [];
-      const ids = refs.map((r) => r.scheduleId);
-      await run(
-        `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} IN (${this.phList(ids.length)})`,
-        ids,
-      );
-      return refs;
+    // Chunked so one statement can never carry more ids than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.scheduleIds, async (scheduleIds) => {
+      // No row-set RETURNING: lock and read the rows, then delete exactly those ids.
+      return this.inTx(options.tx, async (run) => {
+        const sel = await run(
+          `SELECT ${ScheduleColumn.ID}, ${ScheduleColumn.QUEUE_NAME} FROM ${this.t(TableName.SCHEDULE)} ` +
+            `WHERE ${ScheduleColumn.ID} IN (${this.phList(scheduleIds.length)}) FOR UPDATE`,
+          scheduleIds,
+        );
+        const refs = sel.rows.map((r) => this.mapScheduleRef(r));
+        if (!refs.length) return [];
+        const ids = refs.map((r) => r.scheduleId);
+        await run(
+          `DELETE FROM ${this.t(TableName.SCHEDULE)} WHERE ${ScheduleColumn.ID} IN (${this.phList(ids.length)})`,
+          ids,
+        );
+        return refs;
+      });
     });
   }
 
@@ -575,6 +629,9 @@ export class OracleDriver extends BaseDriver implements Driver {
   }): Promise<JobRecord[]> {
     const { queueName, limit, lockDurationSeconds, now, instanceKey } = options;
     const lockedUntil = this.lockDeadline(now, lockDurationSeconds);
+    // One token per claim call: every row this claim takes carries it, and every completion is
+    // fenced on it (see `claimFence`). A later claim of the same row writes a different one.
+    const lockToken = this.newId();
 
     // Select claimable ids highest-priority-first, locking them for the transaction with SKIP
     // LOCKED so concurrent claimers never contend, then update exactly those and read them back —
@@ -614,43 +671,62 @@ export class OracleDriver extends BaseDriver implements Driver {
       }
       if (ids.length === 0) return [];
 
-      const head = [JobStatus.ACTIVE, now, lockedUntil, instanceKey ?? null, now];
+      const head = [JobStatus.ACTIVE, now, lockedUntil, lockToken, instanceKey ?? null, now];
       await this.execute(
         `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STARTED_AT} = ${this.ph(1)}, ` +
-          `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(3)}, ` +
-          `${JobColumn.UPDATED_AT} = ${this.ph(4)} ` +
+          `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.LOCK_TOKEN} = ${this.ph(3)}, ` +
+          `${JobColumn.PROCESSED_ON_INSTANCE_KEY} = ${this.ph(4)}, ${JobColumn.UPDATED_AT} = ${this.ph(5)} ` +
           `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, head.length)}) ` +
           `AND ${JobColumn.STATUS} IN (${this.ph(head.length + ids.length)}, ${this.ph(head.length + ids.length + 1)})`,
         [...head, ...ids, JobStatus.PENDING, JobStatus.RETRY],
         session,
       );
-      // Read back only the rows this call actually claimed: same ids, ACTIVE, and holding *our*
-      // lock deadline — so a row another claimer took first is excluded.
+      // Read back only the rows this call actually claimed: the ones carrying *this* claim's token.
+      // A row another claimer took first has a token of its own and is excluded.
       const res = await this.execute(
         `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ` +
-          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length)}) AND ${JobColumn.STATUS} = ${this.ph(ids.length)} ` +
-          `AND ${JobColumn.LOCKED_UNTIL} = ${this.ph(ids.length + 1)}`,
-        [...ids, JobStatus.ACTIVE, lockedUntil],
+          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length)}) AND ${JobColumn.LOCK_TOKEN} = ${this.ph(ids.length)}`,
+        [...ids, lockToken],
         session,
       );
       return this.sortClaimed(res.rows.map((r) => this.mapJob(r)));
     });
   }
 
+  /**
+   * The fence a completion is guarded on: the row must still be `ACTIVE` and, when the caller names
+   * the claim it is settling, still carry that claim's token.
+   *
+   * Status alone is not enough. A lapsed lock is reclaimed and the row claimed again, so it reads
+   * `ACTIVE` once more — and a handler from the first run that ignored its abort signal would write
+   * its outcome over the second run's. The token identifies the claim itself, so a stale completion
+   * matches nothing and reports "not settled" instead.
+   */
+  private claimFence(params: unknown[], lockToken: string | null | undefined): string {
+    let sql = ` AND ${JobColumn.STATUS} = ${this.ph(params.length)}`;
+    params.push(JobStatus.ACTIVE);
+    if (lockToken != null) {
+      sql += ` AND ${JobColumn.LOCK_TOKEN} = ${this.ph(params.length)}`;
+      params.push(lockToken);
+    }
+    return sql;
+  }
+
   async extendLock(options: {
     jobId: string;
     lockDurationSeconds: number;
     now: number;
+    lockToken?: string | null;
   }): Promise<boolean> {
+    const params: unknown[] = [
+      this.lockDeadline(options.now, options.lockDurationSeconds),
+      options.now,
+      options.jobId,
+    ];
     const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.LOCKED_UNTIL} = ${this.ph(0)}, ${JobColumn.UPDATED_AT} = ${this.ph(1)} ` +
-        `WHERE ${JobColumn.ID} = ${this.ph(2)} AND ${JobColumn.STATUS} = ${this.ph(3)}`,
-      [
-        this.lockDeadline(options.now, options.lockDurationSeconds),
-        options.now,
-        options.jobId,
-        JobStatus.ACTIVE,
-      ],
+        `WHERE ${JobColumn.ID} = ${this.ph(2)}${this.claimFence(params, options.lockToken)}`,
+      params,
     );
     return res.rowCount > 0;
   }
@@ -659,21 +735,24 @@ export class OracleDriver extends BaseDriver implements Driver {
     jobId: string;
     returnValue?: unknown;
     now: number;
+    lockToken?: string | null;
     tx?: TransactionHandle;
-  }): Promise<void> {
-    await this.runMaybeTx(
+  }): Promise<boolean> {
+    const params: unknown[] = [
+      JobStatus.COMPLETED,
+      this.toJson(options.returnValue),
+      options.now,
+      options.now,
+      options.jobId,
+    ];
+    const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETURN_VALUE} = ${this.ph(1)}, ` +
-        `${JobColumn.COMPLETED_AT} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
-        `WHERE ${JobColumn.ID} = ${this.ph(4)}`,
-      [
-        JobStatus.COMPLETED,
-        this.toJson(options.returnValue),
-        options.now,
-        options.now,
-        options.jobId,
-      ],
+        `${JobColumn.COMPLETED_AT} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(4)}${this.claimFence(params, options.lockToken)}`,
+      params,
       options.tx,
     );
+    return res.rowCount > 0;
   }
 
   async retryJob(options: {
@@ -682,30 +761,47 @@ export class OracleDriver extends BaseDriver implements Driver {
     retryAttempt: number;
     lastError: string;
     now: number;
-  }): Promise<void> {
-    await this.runMaybeTx(
+    lockToken?: string | null;
+  }): Promise<boolean> {
+    const params: unknown[] = [
+      JobStatus.RETRY,
+      options.retryAttempt,
+      options.nextRunAt,
+      options.now,
+      options.lastError,
+      options.now,
+      options.jobId,
+    ];
+    const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = ${this.ph(1)}, ` +
         `${JobColumn.START_AFTER} = ${this.ph(2)}, ${JobColumn.RETRIED_AT} = ${this.ph(3)}, ${JobColumn.FAILURE_MESSAGE} = ${this.ph(4)}, ` +
-        `${JobColumn.UPDATED_AT} = ${this.ph(5)}, ${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} = ${this.ph(6)}`,
-      [
-        JobStatus.RETRY,
-        options.retryAttempt,
-        options.nextRunAt,
-        options.now,
-        options.lastError,
-        options.now,
-        options.jobId,
-      ],
+        `${JobColumn.UPDATED_AT} = ${this.ph(5)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(6)}${this.claimFence(params, options.lockToken)}`,
+      params,
     );
+    return res.rowCount > 0;
   }
 
-  async failJob(options: { jobId: string; lastError: string; now: number }): Promise<void> {
-    await this.runMaybeTx(
+  async failJob(options: {
+    jobId: string;
+    lastError: string;
+    now: number;
+    lockToken?: string | null;
+  }): Promise<boolean> {
+    const params: unknown[] = [
+      JobStatus.FAILED,
+      options.now,
+      options.lastError,
+      options.now,
+      options.jobId,
+    ];
+    const res = await this.runMaybeTx(
       `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.FAILED_AT} = ${this.ph(1)}, ` +
-        `${JobColumn.FAILURE_MESSAGE} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
-        `WHERE ${JobColumn.ID} = ${this.ph(4)}`,
-      [JobStatus.FAILED, options.now, options.lastError, options.now, options.jobId],
+        `${JobColumn.FAILURE_MESSAGE} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+        `WHERE ${JobColumn.ID} = ${this.ph(4)}${this.claimFence(params, options.lockToken)}`,
+      params,
     );
+    return res.rowCount > 0;
   }
 
   async reclaimStalledJobs(options: {
@@ -738,7 +834,7 @@ export class OracleDriver extends BaseDriver implements Driver {
       const ids = refs.map((r) => r.jobId);
       await this.execute(
         `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STALLED_AT} = ${this.ph(1)}, ` +
-          `${JobColumn.LOCKED_UNTIL} = NULL WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 2)})`,
+          `${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 2)})`,
         [JobStatus.PENDING, options.now, ...ids],
         session,
       );
@@ -772,7 +868,7 @@ export class OracleDriver extends BaseDriver implements Driver {
       const ids = refs.map((r) => r.jobId);
       await this.execute(
         `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.EXPIRED_AT} = ${this.ph(1)}, ` +
-          `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
+          `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
           `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 3)})`,
         [JobStatus.EXPIRED, options.now, options.now, ...ids],
         session,
@@ -800,29 +896,33 @@ export class OracleDriver extends BaseDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<RequeuedJobRef[]> {
     if (!options.jobIds.length) return [];
-    // Guarded on `status != ACTIVE`. Re-arming a running job would clear its lock and let a second
-    // worker claim it while the first handler is still going. An ACTIVE or missing id is simply not
-    // re-armed, so a batch never fails on one stale id.
-    return this.inTx(options.tx, async (run) => {
-      const sel = await run(
-        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
-          `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
-          `AND ${JobColumn.STATUS} <> ${this.ph(options.jobIds.length)} FOR UPDATE`,
-        [...options.jobIds, JobStatus.ACTIVE],
-      );
-      if (!sel.rows.length) return [];
-      const refs = sel.rows.map((r) => this.mapJobRef(r));
-      const ids = refs.map((r) => r.jobId);
-      const head: unknown[] = [JobStatus.PENDING, options.now, options.now];
-      await run(
-        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = 0, ` +
-          `${JobColumn.START_AFTER} = ${this.ph(1)}, ${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ` +
-          `${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ` +
-          `${JobColumn.EXPIRED_AT} = NULL, ${JobColumn.RETURN_VALUE} = NULL, ${JobColumn.LOCKED_UNTIL} = NULL, ` +
-          `${JobColumn.UPDATED_AT} = ${this.ph(2)} WHERE ${JobColumn.ID} IN (${this.phList(ids.length, head.length)})`,
-        [...head, ...ids],
-      );
-      return refs.map((ref) => ({ ...ref, status: JobStatus.PENDING, startAfter: options.now }));
+    // Chunked so one statement can never carry more ids than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.jobIds, async (jobIds) => {
+      // Guarded on `status != ACTIVE`. Re-arming a running job would clear its lock and let a second
+      // worker claim it while the first handler is still going. An ACTIVE or missing id is simply not
+      // re-armed, so a batch never fails on one stale id.
+      return this.inTx(options.tx, async (run) => {
+        const sel = await run(
+          `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+            `WHERE ${JobColumn.ID} IN (${this.phList(jobIds.length)}) ` +
+            `AND ${JobColumn.STATUS} <> ${this.ph(jobIds.length)} FOR UPDATE`,
+          [...jobIds, JobStatus.ACTIVE],
+        );
+        if (!sel.rows.length) return [];
+        const refs = sel.rows.map((r) => this.mapJobRef(r));
+        const ids = refs.map((r) => r.jobId);
+        const head: unknown[] = [JobStatus.PENDING, options.now, options.now];
+        await run(
+          `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETRY_ATTEMPT} = 0, ` +
+            `${JobColumn.START_AFTER} = ${this.ph(1)}, ${JobColumn.FAILED_AT} = NULL, ${JobColumn.FAILURE_MESSAGE} = NULL, ` +
+            `${JobColumn.COMPLETED_AT} = NULL, ${JobColumn.STARTED_AT} = NULL, ${JobColumn.CANCELLED_AT} = NULL, ` +
+            `${JobColumn.EXPIRED_AT} = NULL, ${JobColumn.RETURN_VALUE} = NULL, ${JobColumn.RETRIED_AT} = NULL, ${JobColumn.STALLED_AT} = NULL, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL, ` +
+            `${JobColumn.UPDATED_AT} = ${this.ph(2)} WHERE ${JobColumn.ID} IN (${this.phList(ids.length, head.length)})`,
+          [...head, ...ids],
+        );
+        return refs.map((ref) => ({ ...ref, status: JobStatus.PENDING, startAfter: options.now }));
+      });
     });
   }
 
@@ -938,15 +1038,20 @@ export class OracleDriver extends BaseDriver implements Driver {
     const out: Record<string, Record<JobStatus, number>> = {};
     for (const key of keys) out[key] = this.emptyStatusCounts();
     if (!keys.length) return out;
-    const res = await this.runMaybeTx(
-      `SELECT ${keyColumn}, ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ` +
-        `WHERE ${keyColumn} IN (${this.phList(keys.length)}) GROUP BY ${keyColumn}, ${JobColumn.STATUS}`,
-      keys,
-    );
-    for (const row of res.rows) {
-      const bucket = out[String(row[keyColumn])];
-      if (bucket) bucket[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
-    }
+    // Chunked like every other key list: the instances page can ask about more keys than an engine
+    // will take in one `IN (...)`, and each chunk fills its own share of the same result.
+    await this.overIdChunks(keys, async (chunk) => {
+      const res = await this.runMaybeTx(
+        `SELECT ${keyColumn}, ${JobColumn.STATUS}, COUNT(*) AS c FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${keyColumn} IN (${this.phList(chunk.length)}) GROUP BY ${keyColumn}, ${JobColumn.STATUS}`,
+        chunk,
+      );
+      for (const row of res.rows) {
+        const bucket = out[String(row[keyColumn])];
+        if (bucket) bucket[row[JobColumn.STATUS] as JobStatus] = Number(row.c);
+      }
+      return res.rows;
+    });
     return out;
   }
 
@@ -1093,23 +1198,27 @@ export class OracleDriver extends BaseDriver implements Driver {
     tx?: TransactionHandle;
   }): Promise<JobRef[]> {
     if (!options.jobIds.length) return [];
-    return this.inTx(options.tx, async (run) => {
-      const sel = await run(
-        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
-          `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
-          `AND ${JobColumn.STATUS} IN (${this.phList(2, options.jobIds.length)}) FOR UPDATE`,
-        [...options.jobIds, JobStatus.PENDING, JobStatus.RETRY],
-      );
-      if (!sel.rows.length) return [];
-      const refs = sel.rows.map((r) => this.mapJobRef(r));
-      const ids = refs.map((r) => r.jobId);
-      await run(
-        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.CANCELLED_AT} = ${this.ph(1)}, ` +
-          `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL ` +
-          `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 3)})`,
-        [JobStatus.CANCELLED, options.now, options.now, ...ids],
-      );
-      return refs;
+    // Chunked so one statement can never carry more ids than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.jobIds, async (jobIds) => {
+      return this.inTx(options.tx, async (run) => {
+        const sel = await run(
+          `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+            `WHERE ${JobColumn.ID} IN (${this.phList(jobIds.length)}) ` +
+            `AND ${JobColumn.STATUS} IN (${this.phList(2, jobIds.length)}) FOR UPDATE`,
+          [...jobIds, JobStatus.PENDING, JobStatus.RETRY],
+        );
+        if (!sel.rows.length) return [];
+        const refs = sel.rows.map((r) => this.mapJobRef(r));
+        const ids = refs.map((r) => r.jobId);
+        await run(
+          `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.CANCELLED_AT} = ${this.ph(1)}, ` +
+            `${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+            `WHERE ${JobColumn.ID} IN (${this.phList(ids.length, 3)})`,
+          [JobStatus.CANCELLED, options.now, options.now, ...ids],
+        );
+        return refs;
+      });
     });
   }
 
@@ -1123,23 +1232,27 @@ export class OracleDriver extends BaseDriver implements Driver {
 
   async removeJobs(options: { jobIds: string[]; tx?: TransactionHandle }): Promise<JobRef[]> {
     if (!options.jobIds.length) return [];
-    // Never delete a running job — an ACTIVE row belongs to a live handler, so it is skipped and
-    // simply absent from the result; cancel it first.
-    return this.inTx(options.tx, async (run) => {
-      const sel = await run(
-        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
-          `WHERE ${JobColumn.ID} IN (${this.phList(options.jobIds.length)}) ` +
-          `AND ${JobColumn.STATUS} <> ${this.ph(options.jobIds.length)} FOR UPDATE`,
-        [...options.jobIds, JobStatus.ACTIVE],
-      );
-      if (!sel.rows.length) return [];
-      const refs = sel.rows.map((r) => this.mapJobRef(r));
-      const ids = refs.map((r) => r.jobId);
-      await run(
-        `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${this.phList(ids.length)})`,
-        ids,
-      );
-      return refs;
+    // Chunked so one statement can never carry more ids than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.jobIds, async (jobIds) => {
+      // Never delete a running job — an ACTIVE row belongs to a live handler, so it is skipped and
+      // simply absent from the result; cancel it first.
+      return this.inTx(options.tx, async (run) => {
+        const sel = await run(
+          `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+            `WHERE ${JobColumn.ID} IN (${this.phList(jobIds.length)}) ` +
+            `AND ${JobColumn.STATUS} <> ${this.ph(jobIds.length)} FOR UPDATE`,
+          [...jobIds, JobStatus.ACTIVE],
+        );
+        if (!sel.rows.length) return [];
+        const refs = sel.rows.map((r) => this.mapJobRef(r));
+        const ids = refs.map((r) => r.jobId);
+        await run(
+          `DELETE FROM ${this.t(TableName.JOB)} WHERE ${JobColumn.ID} IN (${this.phList(ids.length)})`,
+          ids,
+        );
+        return refs;
+      });
     });
   }
 
@@ -1398,11 +1511,13 @@ export class OracleDriver extends BaseDriver implements Driver {
   private retentionWhere(olderThan: number, params: unknown[]): string {
     const statusPh = this.phList(FINISHED_STATUSES.length, params.length);
     params.push(...FINISHED_STATUSES);
+    // One integer test per status rather than a leading-wildcard `LIKE`: the old encoding could not
+    // use an index and cost four pattern matches per candidate row.
     const scoped = FINISHED_STATUSES.map((status) => {
       const clause =
         `(${JobColumn.STATUS} = ${this.ph(params.length)} AND ` +
-        `${JobColumn.RETENTION_STATUSES} LIKE ${this.ph(params.length + 1)})`;
-      params.push(status, retentionStatusPattern(status));
+        `BITAND(${JobColumn.RETENTION_STATUSES}, ${this.ph(params.length + 1)}) <> 0)`;
+      params.push(status, retentionStatusBit(status));
       return clause;
     });
     const cutoffPh = this.ph(params.length);
@@ -1412,7 +1527,7 @@ export class OracleDriver extends BaseDriver implements Driver {
       `AND ${JobColumn.STATUS} IN (${statusPh}) ` +
       `AND (${JobColumn.RETENTION_STATUSES} IS NULL OR ${scoped.join(' OR ')}) ` +
       `AND (COALESCE(${JobColumn.COMPLETED_AT}, ${JobColumn.FAILED_AT}, ${JobColumn.CANCELLED_AT}, ` +
-      `${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_SECONDS} * 1000) <= ${cutoffPh}`
+      `${JobColumn.EXPIRED_AT}, ${JobColumn.UPDATED_AT}) + ${JobColumn.RETENTION_TTL_SECONDS} * ${MS_PER_SECOND}) <= ${cutoffPh}`
     );
   }
 

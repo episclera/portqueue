@@ -18,11 +18,16 @@ export const removeCommand: Command = {
       );
     }
     if (id) {
+      // Act first: `removeJob` refuses an unknown id and a running one on its own, so a read up
+      // front is a wasted round trip on the happy path.
+      if (await pq.removeJob({ jobId: id })) {
+        success(`Removed job ${id}.`);
+        return;
+      }
+      // One read, only to name the reason it refused.
       const snap = await pq.getJob({ jobId: id });
       if (!snap) throw new CliError(`Job '${id}' not found.`);
-      const ok = await pq.removeJob({ jobId: id });
-      if (ok) success(`Removed job ${id}.`);
-      else warn(`Job ${id} not removed (it is running — cancel it first).`);
+      warn(`Job ${id} is ${snap.status} and was not removed (cancel it first).`);
     } else {
       // Removal is by id alone: the schedule row carries its own queue, so `--queue` is not needed.
       const ok = await pq.removeSchedule({ scheduleId: scheduleId! });

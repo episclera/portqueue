@@ -40,7 +40,6 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
     const ids = await seed('batched', 3);
 
     const result = await h.pq._dashboard.runJobBatch({
-      queue: 'batched',
       jobIds: ids,
       action: JobBatchAction.RETRY,
     });
@@ -72,7 +71,6 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
     await waitForStatus(h, jobId, JobStatus.FAILED);
 
     await h.pq._dashboard.runJobBatch({
-      queue: 'batched',
       jobIds: [jobId],
       action: JobBatchAction.RETRY,
     });
@@ -89,7 +87,6 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
   it('removes a batch in one statement', async () => {
     const ids = await seed('batched', 3);
     const result = await h.pq._dashboard.runJobBatch({
-      queue: 'batched',
       jobIds: ids,
       action: JobBatchAction.REMOVE,
     });
@@ -100,7 +97,6 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
   it('cancels a batch of pending jobs', async () => {
     const ids = await seed('batched', 2);
     const result = await h.pq._dashboard.runJobBatch({
-      queue: 'batched',
       jobIds: ids,
       action: JobBatchAction.CANCEL,
     });
@@ -114,7 +110,6 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
     // transaction, so one already-removed job undid every other retry in the batch.
     const ids = await seed('batched', 3);
     const result = await h.pq._dashboard.runJobBatch({
-      queue: 'batched',
       jobIds: [...ids, 'no-such-job'],
       action: JobBatchAction.RETRY,
     });
@@ -137,7 +132,6 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
     const idle = ids.find((id) => id !== active.id)!;
 
     const retried = await h.pq._dashboard.runJobBatch({
-      queue: 'batched',
       jobIds: ids,
       action: JobBatchAction.RETRY,
     });
@@ -145,7 +139,6 @@ describe.each(TEST_ENGINES)('dashboard job batch (%s)', (engine) => {
     expect((await h.pq.getJob({ jobId: active.id }))!.status).toBe(JobStatus.ACTIVE);
 
     const removed = await h.pq._dashboard.runJobBatch({
-      queue: 'batched',
       jobIds: ids,
       action: JobBatchAction.REMOVE,
     });

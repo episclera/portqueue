@@ -53,6 +53,7 @@ function v1(names: MigrationNames): string[] {
       cancelled_at INTEGER,
       expired_at INTEGER,
       locked_until INTEGER,
+      lock_token TEXT,
       preferred_instance_key_pattern TEXT,
       processed_on_instance_key TEXT,
       retry_attempt INTEGER NOT NULL DEFAULT 0,
@@ -64,7 +65,7 @@ function v1(names: MigrationNames): string[] {
       retry_jitter INTEGER NOT NULL DEFAULT 0,
       failure_message TEXT,
       retention_ttl_seconds INTEGER,
-      retention_statuses TEXT,
+      retention_statuses INTEGER,
       idempotency_key TEXT,
       schedule_id TEXT,
       singleton_key TEXT

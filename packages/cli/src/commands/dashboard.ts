@@ -16,7 +16,7 @@ export const dashboardCommand: Command = {
   summary: 'Serve the web dashboard',
   usage: '--port <n> --root-user <u> --root-password <p> [--host <h> --base-path <p>]',
   persistent: true,
-  async run({ pq, flags }) {
+  async run({ pq, flags, onExit }) {
     const port = flagNumber(flags, 'port') ?? DEFAULT_PORT;
     const user = flagString(flags, 'root-user') ?? process.env.PORTQUEUE_ROOT_USER;
     const password = flagString(flags, 'root-password') ?? process.env.PORTQUEUE_ROOT_PASSWORD;
@@ -35,6 +35,8 @@ export const dashboardCommand: Command = {
       driver: pq._cli.driver,
       ...(basePath ? { basePath } : {}),
     });
+    // Registered the moment it exists, so an error later in this function still releases it.
+    onExit(() => dashboard.close());
 
     // The dashboard package ships no auth of its own — protecting the mount belongs to whatever
     // sits in front of it. `portqueue dashboard` opens the port itself, so the guard is here.
@@ -47,11 +49,22 @@ export const dashboardCommand: Command = {
         res.end('Not found');
       }
     });
+    // Before `listen`: a bound port must never outlive the command, and it used to — an error after
+    // this point left the server serving 503s from a mount whose client had disconnected.
+    onExit(
+      () =>
+        new Promise<void>((resolve) => {
+          server.close(() => resolve());
+          // Idle keep-alive sockets would otherwise hold `close` open until they time out.
+          server.closeIdleConnections?.();
+        }),
+    );
     const host = flagString(flags, 'host') ?? DEFAULT_HOST;
     await new Promise<void>((resolve) => server.listen(port, host, resolve));
     success(
       `Dashboard serving at http://${host}:${port}${basePath ?? DEFAULT_BASE_PATH} (basic auth).`,
     );
+    // Held open until a stop signal; the runner closes the server, the dashboard and the client.
     await new Promise(() => {});
   },
 };

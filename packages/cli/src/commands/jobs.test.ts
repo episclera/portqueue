@@ -25,8 +25,8 @@ describe('jobCommand', () => {
     // A by-id read answers `null`, and the CLI has to turn that into an actionable message rather
     // than printing an empty detail view.
     const fake = makeFakePq({ job: null });
-    await expect(jobCommand.run({ pq: fake.pq, flags: { id: 'missing' } })).rejects.toThrow(
-      /not found/,
-    );
+    await expect(
+      jobCommand.run({ pq: fake.pq, onExit: () => {}, flags: { id: 'missing' } }),
+    ).rejects.toThrow(/not found/);
   });
 });

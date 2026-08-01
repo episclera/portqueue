@@ -26,9 +26,13 @@ export interface Subscription {
 
 /**
  * One schema version's worth of DDL. `statements(context)` resolves the engine's own authored SQL
- * against the live storage layout; the driver's {@link Driver.applyMigration} runs those statements
- * **and** records the version in a single transaction, so a crash can never leave an
- * applied-but-unrecorded migration. Identified by `version` alone — there is no checksum.
+ * against the live storage layout. Identified by `version` alone — there is no checksum.
+ *
+ * **Every step's statements must be idempotent** — `IF NOT EXISTS`, `MERGE`, a PL/SQL-guarded
+ * `CREATE INDEX` — because on MySQL and Oracle DDL commits implicitly, so {@link
+ * Driver.applyMigration} cannot wrap the statements and the version insert in one transaction there
+ * (see its doc). A step interrupted on those engines is re-run, and only idempotent DDL survives
+ * that.
  */
 export interface MigrationStep {
   version: number;
@@ -154,7 +158,17 @@ export interface Driver {
    * full migration run.
    */
   getSchemaVersion(): Promise<number | null>;
-  /** Apply one step's DDL and record its version, both in a single transaction. */
+  /**
+   * Apply one step's DDL and record its version.
+   *
+   * **In one transaction wherever the engine allows it** — Postgres, PGLite and SQLite all run DDL
+   * transactionally, so a crash there cannot leave an applied-but-unrecorded migration. MySQL and
+   * Oracle commit each DDL statement implicitly and no transaction can span them: those drivers run
+   * the statements and then record the version, in that order, so an interruption leaves the schema
+   * reading one version behind and the (idempotent) statements are re-run on the next start. The
+   * shared `MigrationRunner` confirms the version was recorded before it attempts the next step, so
+   * this is reported rather than silently carried forward.
+   */
   applyMigration(options: { migration: MigrationStep }): Promise<void>;
 
   // Producing
@@ -163,6 +177,14 @@ export interface Driver {
    * Insert many jobs. A real batch: one multi-row `INSERT` (and, when dedup keys are set, one
    * grouped pre-insert lookup) rather than a loop over {@link insertJob}. Results come back in the
    * order the jobs were given.
+   *
+   * **Dedup is a read-then-write, and it holds under concurrency.** The lookup and the insert share a
+   * transaction, and a batch carrying an `idempotencyKey` or a `singletonKey` first takes a lock the
+   * other producers on that queue must also take — a row lock on the queue row on the engines with
+   * row locks, SQLite's database-wide write lock on SQLite. Without that, two concurrent adds of the
+   * same key both saw no row and both inserted. There is deliberately still no unique constraint:
+   * singleton dedup is scoped to the statuses that hold the slot, which no portable constraint can
+   * express, and a dedup must return the existing job rather than surface as a violation.
    */
   insertJobs(options: { jobs: NewJobRecord[]; tx?: TransactionHandle }): Promise<InsertedJobRow[]>;
   /**
@@ -212,6 +234,10 @@ export interface Driver {
    * that lock lapses. Implementations either take `FOR UPDATE SKIP LOCKED` over the candidate set
    * or guard the `UPDATE` on the pre-claim status, never both-optional.
    *
+   * Every claimed row also carries a fresh `lock_token` identifying **this** claim, returned on the
+   * record. Core hands it back on every completion, so a run whose claim was lost cannot write over
+   * the run that took it.
+   *
    * `processingPaused` on the queue row is honoured here rather than by the caller, so the hot path
    * costs one query instead of a pause read plus a claim.
    */
@@ -224,26 +250,47 @@ export interface Driver {
     /** This instance's multi-instance key, or null when the process is unnamed. */
     instanceKey?: string | null;
   }): Promise<JobRecord[]>;
-  /** Push a claimed job's lock out by `lockDurationSeconds` seconds; a negative value releases it. */
+  /**
+   * Push a claimed job's lock out by `lockDurationSeconds` seconds; a negative value releases it.
+   * Returns false when the row was no longer this claim's to extend.
+   */
   extendLock(options: {
     jobId: string;
     lockDurationSeconds: number;
     now: number;
+    /** The token the claim wrote. Given, the extension only applies while that claim still holds it. */
+    lockToken?: string | null;
   }): Promise<boolean>;
+  /**
+   * Settle a claimed job as `COMPLETED`.
+   *
+   * Guarded on the claim (`ACTIVE`, and the `lockToken` when one is given) and returns whether the
+   * row was actually settled. A `false` means the claim had been lost — the lock lapsed, another
+   * worker reclaimed the row — and this run's outcome must not be reported as the job's.
+   */
   completeJob(options: {
     jobId: string;
     returnValue?: unknown;
     now: number;
+    lockToken?: string | null;
     tx?: TransactionHandle;
-  }): Promise<void>;
+  }): Promise<boolean>;
+  /** Arm a claimed job for another attempt. Guarded and reported like {@link completeJob}. */
   retryJob(options: {
     jobId: string;
     nextRunAt: number;
     retryAttempt: number;
     lastError: string;
     now: number;
-  }): Promise<void>;
-  failJob(options: { jobId: string; lastError: string; now: number }): Promise<void>;
+    lockToken?: string | null;
+  }): Promise<boolean>;
+  /** Settle a claimed job as `FAILED`. Guarded and reported like {@link completeJob}. */
+  failJob(options: {
+    jobId: string;
+    lastError: string;
+    now: number;
+    lockToken?: string | null;
+  }): Promise<boolean>;
   /**
    * Return up to `limit` `ACTIVE` jobs whose lock has lapsed to `PENDING`. Bounded and looped by
    * the caller: an unbounded sweep over a large backlog would transfer every column of every row

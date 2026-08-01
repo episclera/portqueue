@@ -7,6 +7,7 @@
  *
  * The dashboard has no authentication of its own — see `api/routes.ts` and the dashboard docs.
  */
+import { MAX_BATCH_IDS } from '@portqueue/core';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createRouter, type HandlerInput } from './api/routes';
 import { hasBuiltClient, serveAsset } from './assets';
@@ -43,7 +44,7 @@ export function createEngine(
   options: DashboardOptions & { client?: DashboardClient },
 ): DashboardEngine {
   const basePath = normalizeBase(options.basePath ?? '/portqueue');
-  const config: DashboardConfigDto = { basePath };
+  const config: DashboardConfigDto = { basePath, maxBatchIds: MAX_BATCH_IDS };
   const logger = options.logger ?? console;
   // The client is injectable so a test can drive the router without a driver; production always
   // builds it from the driver the host supplied.
@@ -64,10 +65,15 @@ export function createEngine(
     }
   });
 
+  /**
+   * Whether a URL falls under the mount. The query string is stripped first, so this compares paths
+   * — `/portqueue` exactly, or something below it. There is no third `basePath?` case: after the
+   * split, a path cannot contain a `?`.
+   */
   function owns(url: string | undefined): boolean {
     if (!url) return false;
     const path = url.split('?')[0] ?? '';
-    return path === basePath || path.startsWith(`${basePath}/`) || path.startsWith(`${basePath}?`);
+    return path === basePath || path.startsWith(`${basePath}/`);
   }
 
   function relPath(url: string): string {

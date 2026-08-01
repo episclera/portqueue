@@ -10,6 +10,18 @@ export const DEFAULT_NAMESPACE = 'portqueue';
 export const DEFAULT_MAX_IDENTIFIER_LEN = 63;
 
 /**
+ * The most ids one batch call may carry — `addJobs`, `requeueJobs`, `cancelJobs`, `removeJobs`,
+ * `deleteSchedules`, and the dashboard's bulk actions.
+ *
+ * Oracle caps the expressions in an `IN` list at 1000 and is the lowest of the engines here, so its
+ * limit is everyone's: a 1001-id batch that works on Postgres and raises ORA-01795 on Oracle is a
+ * portability bug the tool refuses up front rather than one a caller discovers in production. It is
+ * a cap on what a single *call* may ask for — a set that still needs several statements (an insert
+ * binds ~25 values per job) is chunked by `BaseDriver.chunkForBind` underneath.
+ */
+export const MAX_BATCH_IDS = 1000;
+
+/**
  * How far the multi-instance claim path scans for affinity-matching candidates in one pass, as a
  * multiple of the requested batch (clamped by {@link AFFINITY_PAGE_MIN_HEADROOM} and
  * {@link AFFINITY_PAGE_MAX}). Affinity is a regex, which portable SQL cannot evaluate, so

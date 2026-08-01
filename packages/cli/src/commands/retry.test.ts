@@ -19,8 +19,9 @@ describe('retryCommand', () => {
   });
 
   it('throws when the id matches nothing', async () => {
-    await expect(runCommand(retryCommand, { id: 'nope' }, { job: null })).rejects.toThrow(
-      /not found/,
-    );
+    // The read only happens because the write was refused, and only to explain why.
+    await expect(
+      runCommand(retryCommand, { id: 'nope' }, { retryResult: null, job: null }),
+    ).rejects.toThrow(/not found/);
   });
 });

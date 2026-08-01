@@ -1,5 +1,4 @@
-import { flagString } from '../args';
-import { CliError } from '../errors';
+import { CancelOutcome } from '@portqueue/core';
 import { success, warn } from '../output';
 import { requireFlag } from './helpers';
 import { CommandGroup, type Command } from './types';
@@ -8,13 +7,26 @@ import { CommandGroup, type Command } from './types';
 export const cancelCommand: Command = {
   name: 'cancel',
   group: CommandGroup.Actions,
-  summary: 'Cancel a pending or active job',
+  summary: 'Cancel a pending job, or ask a running one to stop',
   usage: '--id <jobId>',
   async run({ pq, flags }) {
-    const snap = await pq.getJob({ jobId: requireFlag(flags, 'id') });
-    if (!snap) throw new CliError(`Job '${flagString(flags, 'id')}' not found.`);
-    const ok = await pq.cancelJob({ jobId: snap.id });
-    if (ok) success(`Cancelled job ${snap.id}.`);
-    else warn(`Job ${snap.id} could not be cancelled (already running or finished).`);
+    const jobId = requireFlag(flags, 'id');
+    // No read first: `cancelJob` throws for an id that names nothing and otherwise reports exactly
+    // what it did, so a pre-read would only add a round trip — and a window in which the status
+    // could change, making the message wrong.
+    switch (await pq.cancelJob({ jobId })) {
+      case CancelOutcome.CANCELLED:
+        success(`Cancelled job ${jobId}.`);
+        break;
+      case CancelOutcome.SIGNALLED:
+        // Worth saying plainly rather than reporting a success: the handler may finish anyway.
+        warn(
+          `Job ${jobId} is running in this process and was asked to stop. It only stops if its ` +
+            `handler observes job.signal — check the job to see what it became.`,
+        );
+        break;
+      default:
+        warn(`Job ${jobId} could not be cancelled (already finished, or running elsewhere).`);
+    }
   },
 };

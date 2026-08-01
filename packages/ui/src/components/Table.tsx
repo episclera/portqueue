@@ -1,6 +1,7 @@
 import React from 'react';
 import styled, { css } from 'styled-components';
 import { Checkbox } from './Checkbox';
+import { Tooltip } from './Tooltip';
 import { EmptyIcon } from '../icons';
 
 export type TableAlign = 'left' | 'right' | 'center';
@@ -32,6 +33,15 @@ export interface TableColumn<T> {
 export interface TableRowSelection {
   selectedKeys: string[];
   onChange: (keys: string[]) => void;
+  /**
+   * Ceiling on how many rows may be selected at once. At the ceiling, every unselected checkbox
+   * (and select-all) is disabled and says why — clearing one frees a slot. This exists because a
+   * bulk action is one statement over the whole set, and every engine has a limit on how many ids
+   * one statement can bind; the smallest of them is the limit for all of them.
+   */
+  maxSelected?: number;
+  /** Tooltip shown on a checkbox disabled by {@link maxSelected}. */
+  maxSelectedHint?: string;
 }
 
 export interface TableProps<T> {
@@ -153,6 +163,15 @@ function withSelectionColumn<T>(
   const pageKeys = data.map(rowKey);
   const allSelected =
     pageKeys.length > 0 && pageKeys.every((k) => selection.selectedKeys.includes(k));
+  const max = selection.maxSelected;
+  const hint = selection.maxSelectedHint ?? `Selection is limited to ${String(max)} rows.`;
+  const atCeiling = max !== undefined && selection.selectedKeys.length >= max;
+  // Selecting the rest of this page would pass the ceiling, so the header checkbox is refused too
+  // rather than silently selecting a prefix.
+  const allWouldExceed =
+    max !== undefined &&
+    new Set([...selection.selectedKeys, ...pageKeys]).size > max &&
+    !allSelected;
 
   const toggleAll = (): void => {
     selection.onChange(
@@ -173,27 +192,43 @@ function withSelectionColumn<T>(
   const selectColumn: TableColumn<T> = {
     key: '__select',
     width: 44,
-    title: (
+    title: maybeHinted(
       <Checkbox
         checked={allSelected}
-        disabled={pageKeys.length === 0}
+        disabled={pageKeys.length === 0 || allWouldExceed}
         onChange={toggleAll}
         aria-label={allSelected ? 'Clear selection' : 'Select all rows'}
-      />
+      />,
+      allWouldExceed ? hint : undefined,
     ),
     render: (row) => {
       const key = rowKey(row);
-      return (
+      const checked = selection.selectedKeys.includes(key);
+      // Only *adding* is blocked: an operator at the ceiling must still be able to deselect.
+      const blocked = atCeiling && !checked;
+      return maybeHinted(
         <Checkbox
-          checked={selection.selectedKeys.includes(key)}
+          checked={checked}
+          disabled={blocked}
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleRow(key)}
           aria-label={`Select row ${key}`}
-        />
+        />,
+        blocked ? hint : undefined,
       );
     },
   };
   return [selectColumn, ...columns];
+}
+
+/** Wrap a node in a tooltip only when there is something to explain. */
+function maybeHinted(node: React.ReactElement, hint: string | undefined): React.ReactNode {
+  if (!hint) return node;
+  return (
+    <Tooltip title={hint} placement="bottom">
+      <span>{node}</span>
+    </Tooltip>
+  );
 }
 
 /** Bespoke generic data table — column-driven, with optional row click, selection and empty state. */

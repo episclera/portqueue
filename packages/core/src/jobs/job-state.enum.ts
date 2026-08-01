@@ -36,3 +36,22 @@ export const ACTIVE_STATUSES: readonly JobStatus[] = [
   JobStatus.ACTIVE,
   JobStatus.RETRY,
 ];
+
+/**
+ * A zeroed count per status — the shape every "jobs by status" answer takes.
+ *
+ * Defined beside the enum because it *is* the enum's shape: a new status has to appear here, and one
+ * definition is what makes that automatic for the drivers' grouped counts and the read service alike
+ * (they used to hold identical copies of this literal).
+ */
+export function emptyStatusCounts(): Record<JobStatus, number> {
+  return {
+    [JobStatus.PENDING]: 0,
+    [JobStatus.ACTIVE]: 0,
+    [JobStatus.COMPLETED]: 0,
+    [JobStatus.FAILED]: 0,
+    [JobStatus.RETRY]: 0,
+    [JobStatus.CANCELLED]: 0,
+    [JobStatus.EXPIRED]: 0,
+  };
+}

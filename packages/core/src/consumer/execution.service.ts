@@ -4,6 +4,7 @@ import { LOCK_HEARTBEATS_PER_WINDOW, MIN_LOCK_HEARTBEAT_SECONDS } from '../const
 import type { Job, JobHandler } from '../jobs/job';
 import type { JobRecord } from '../jobs/job-record';
 import type { ErrorClass } from '../options/queue-options';
+import type { FailureDetail } from '../options/enums';
 import type { Runtime } from '../client/runtime';
 import type { CompletionService } from './completion.service';
 
@@ -12,6 +13,15 @@ export interface ExecutionConfig {
   handler: JobHandler;
   dontAutoretryFor: Array<ErrorClass | string>;
   lockDurationSeconds: number;
+  /** How much of a failure this queue stores on the row — passed through to the completion. */
+  failureDetail: FailureDetail;
+}
+
+/** One in-flight handler: how to abort it, and which claim it is running under. */
+export interface ActiveExecution {
+  controller: AbortController;
+  /** The claim's fence token, so a lock this process releases names the claim it is releasing. */
+  lockToken: string | null;
 }
 
 /**
@@ -20,8 +30,8 @@ export interface ExecutionConfig {
  * extends the lock and an AbortSignal fired on shutdown/cooperative-cancel.
  */
 export class ExecutionService {
-  /** Active jobs on this instance → their abort controllers (for cancel/shutdown). */
-  readonly active = new Map<string, AbortController>();
+  /** Active jobs on this instance → their controller and claim token (for cancel/shutdown). */
+  readonly active = new Map<string, ActiveExecution>();
 
   constructor(
     private readonly runtime: Runtime,
@@ -32,7 +42,7 @@ export class ExecutionService {
   async run(record: JobRecord): Promise<void> {
     const startTs = this.runtime.clock.now();
     const controller = new AbortController();
-    this.active.set(record.id, controller);
+    this.active.set(record.id, { controller, lockToken: record.lockToken });
     const queueName = this.config.queueName;
 
     this.runtime.events.emit(PortQueueEvent.JOB_ACTIVE, {
@@ -43,7 +53,7 @@ export class ExecutionService {
     });
 
     const job = this.buildJob(record, controller.signal);
-    const heartbeat = this.startHeartbeat(record.id, controller);
+    const heartbeat = this.startHeartbeat(record, controller);
 
     try {
       await this.runtime.hooks.runBeforeProcess(queueName, job);
@@ -56,6 +66,7 @@ export class ExecutionService {
         queueName,
         err,
         this.config.dontAutoretryFor,
+        this.config.failureDetail,
       );
       await this.runtime.hooks.runAfterProcess(queueName, job, outcome).catch(() => undefined);
     } finally {
@@ -84,12 +95,13 @@ export class ExecutionService {
           jobId: record.id,
           lockDurationSeconds: options.bySeconds ?? lockDurationSeconds,
           now: runtime.clock.now(),
+          lockToken: record.lockToken,
         });
       },
     };
   }
 
-  private startHeartbeat(jobId: string, controller: AbortController): NodeJS.Timeout {
+  private startHeartbeat(record: JobRecord, controller: AbortController): NodeJS.Timeout {
     // Beat at a fraction of the lock window, never faster than the floor, so a lock is renewed
     // several times before it could lapse.
     const intervalMs = Math.max(
@@ -102,9 +114,10 @@ export class ExecutionService {
     const timer = setInterval(async () => {
       try {
         const held = await this.runtime.driver.extendLock({
-          jobId,
+          jobId: record.id,
           lockDurationSeconds: this.config.lockDurationSeconds,
           now: this.runtime.clock.now(),
+          lockToken: record.lockToken,
         });
         if (!held && !controller.signal.aborted) controller.abort();
       } catch {

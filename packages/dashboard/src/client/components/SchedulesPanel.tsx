@@ -138,7 +138,6 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
                 void run(
                   {
                     kind: ActionKind.SET_SCHEDULE_ENABLED,
-                    queue: r.queue,
                     scheduleId: r.scheduleId,
                     enabled: false,
                   },
@@ -154,7 +153,6 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
                 void run(
                   {
                     kind: ActionKind.SET_SCHEDULE_ENABLED,
-                    queue: r.queue,
                     scheduleId: r.scheduleId,
                     enabled: true,
                   },
@@ -170,7 +168,7 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
             confirm={{ title: 'Remove this schedule?' }}
             onClick={() =>
               void run(
-                { kind: ActionKind.REMOVE_SCHEDULE, queue: r.queue, scheduleId: r.scheduleId },
+                { kind: ActionKind.REMOVE_SCHEDULE, scheduleId: r.scheduleId },
                 'Schedule removed',
               )
             }

@@ -1,4 +1,4 @@
-import { JobStatus } from '@portqueue/core';
+import { JobStatus, msToSeconds } from '@portqueue/core';
 
 const NO_COLOR = Boolean(process.env.NO_COLOR) || !process.stdout.isTTY;
 
@@ -87,7 +87,7 @@ export function relativeTime(date: Date | null | undefined, now = Date.now()): s
   if (!date) return color('—', 'gray');
   const diff = date.getTime() - now;
   const abs = Math.abs(diff);
-  const s = Math.round(abs / 1000);
+  const s = Math.round(msToSeconds(abs));
   const unit =
     s < 60
       ? `${s}s`

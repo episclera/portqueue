@@ -16,9 +16,16 @@ import { InvalidOptionsError } from '../errors/errors';
  * There is no inline `* 1000` anywhere else in the codebase.
  */
 
+/**
+ * The one conversion factor. Named so the literal `1000` never floats free — including inside a
+ * driver's SQL, where a per-row `retention_ttl_seconds` has to be scaled by the engine because the
+ * value is a column rather than a bind.
+ */
+export const MS_PER_SECOND = 1000;
+
 /** Multiply a validated whole-second duration into milliseconds. */
 export function wholeSecondsToMs(seconds: number, option: string): number {
-  return wholeSeconds(seconds, option) * 1000;
+  return wholeSeconds(seconds, option) * MS_PER_SECOND;
 }
 
 /** Validate a whole-second duration and return it unchanged. */
@@ -47,7 +54,7 @@ export function secondsToMs(seconds: number, option: string): number {
         `seconds. PortQueue takes every duration in seconds — pass 0.2 for 200 ms, not '200ms'.`,
     );
   }
-  return seconds * 1000;
+  return seconds * MS_PER_SECOND;
 }
 
 /**
@@ -55,5 +62,5 @@ export function secondsToMs(seconds: number, option: string): number {
  * something took. Keeps the `/ 1000` beside the `* 1000` rather than inline at the event site.
  */
 export function msToSeconds(ms: number): number {
-  return ms / 1000;
+  return ms / MS_PER_SECOND;
 }

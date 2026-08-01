@@ -40,11 +40,18 @@ in three sections, and no section at all when there is nothing to put in it.
   seconds), `secondsToMs` (the fractional-tolerant one, for the loop cadences the invariant exempts —
   and the only one that accepts a negative value, because `extendLock` releases a lock by pushing its
   deadline into the past), and `msToSeconds` for reporting a duration back.
-- **Every default lives in `constants/`, never inline.** `packages/core/src/constants/` holds one file
-  per scope (`time`, `worker`, `paging`, `maintenance`, `job`, `storage`) and every use site imports
-  from it. A caller-overridable default is `DEFAULT_*`; a fixed internal bound (a batch size, a scan
-  cap, a multiplier) is unprefixed SCREAMING_CASE. This exists because the heartbeat window used to be
-  a literal `15` and a literal `× 3` in four separate files, which is three chances to drift.
+- **`constants/` is the source of truth for every default; never inline one.**
+  `packages/core/src/constants/` holds one file per scope (`time`, `worker`, `paging`, `maintenance`,
+  `job`, `storage`) and every use site imports from it — including `@portqueue/dashboard` and
+  `@portqueue/cli`, which reach them through the barrel. A caller-overridable default is `DEFAULT_*`;
+  a fixed internal bound (a batch size, a scan cap, a multiplier) is unprefixed SCREAMING_CASE. This
+  exists because the heartbeat window used to be a literal `15` and a literal `× 3` in four separate
+  files, which is three chances to drift. Two consequences, both of which have gone wrong here: a
+  constant that exists must be **used** — `DEFAULT_SAMPLE_INTERVAL_SECONDS` and
+  `DEFAULT_BACKOFF_FACTOR` each sat unimported next to a hard-coded copy of themselves — and a value
+  the browser needs is **delivered**, not duplicated: the SPA cannot import from core (it would drag
+  `node:os` and friends into the bundle), so `MAX_BATCH_IDS` reaches it through the injected
+  `DashboardConfigDto`.
 - **A duration that reaches the database is a *whole* number of seconds.** That is every option
   describing a job's own timing — `expireInSeconds`, `retry.delaySeconds`,
   `retry.backoff.maxDelaySeconds`, `retention.ttlSeconds`, `schedule.startAfterSeconds`,
@@ -126,15 +133,36 @@ in three sections, and no section at all when there is nothing to put in it.
   (`{ jobId, queueName }` / `{ scheduleId, queueName }`), not a boolean: the caller needs the queue
   name to emit its event and wake the right worker, and reading it back afterwards is a second round
   trip — or, on a single-connection engine, a deadlock.
-- **A batch is one statement.** Anything that acts on a set of ids — `addJobs`, `requeueJobs`,
-  `cancelJobs`, `removeJobs`, `deleteSchedules`, the dashboard's bulk actions — hands the whole set to
-  one driver call. Never loop a single-id method inside a transaction: the cost is linear in the ids
-  and one stale id rolls back everything beside it. A batch skips what it refuses (a missing id, an
-  `ACTIVE` row) rather than failing. Chunk by `BaseDriver.chunkForBind` so a statement can't exceed
-  the engine's bound-parameter limit.
+- **A batch is one statement, and it is capped at `MAX_BATCH_IDS`.** Anything that acts on a set of
+  ids — `addJobs`, `requeueJobs`, `cancelJobs`, `removeJobs`, `deleteSchedules`, the dashboard's bulk
+  actions — hands the whole set to one driver call. **A plural method never loops its singular twin**;
+  the delegation runs the other way (`removeJob` calls `removeJobs` with one id), because the cost of
+  a loop is linear in the ids and one stale id rolls back everything beside it. A batch skips what it
+  refuses (a missing id, an `ACTIVE` row) rather than failing.
+  Two limits, and they are different: `chunkForBind` keeps a multi-row insert inside the engine's
+  bound-parameter budget, and `chunkIds`/`overIdChunks` keep an id list inside `maxInListItems` — the
+  engine's ceiling on `IN (...)` expressions, which on Oracle is 1000 whatever the bind budget says.
+  `MAX_BATCH_IDS` takes Oracle's ceiling as **everyone's** and every public id-taking method rejects
+  more up front (`assertBatchIds`), so a 1001-id batch cannot work on Postgres and raise ORA-01795 on
+  Oracle. The dashboard's tables stop a selection growing past the same number and say why.
 - **A running job is untouchable.** `requeueJob`, `removeJob` and `cancelJob` all refuse an `ACTIVE`
   row and report "nothing done" rather than acting. Re-arming a running job clears its lock, so a
   second worker claims it and the same job runs twice concurrently.
+- **A completion is fenced to the claim that produced it.** Every claim stamps a fresh `lock_token` on
+  its rows and returns it on the record; `completeJob`, `failJob`, `retryJob` and `extendLock` are
+  guarded on that token (plus `status = ACTIVE`) and **return whether the row was actually settled**.
+  `status` alone is not a fence: a lapsed lock is reclaimed, the row is claimed again and reads
+  `ACTIVE` once more, so a handler from the first run — one that ignored `job.signal`, which is the
+  common shape for short work — would write its outcome over the second run's. A refused settle raises
+  `LockLostError` on the `ERROR` event and emits **no** lifecycle event, because this run's outcome is
+  no longer the job's. Shutdown obeys the same logic: abort first, and release only the locks of
+  handlers that did not stop, so a handler about to finish settles its own row.
+- **Dedup holds under concurrency, and not with a unique constraint.** The dedup lookup and the insert
+  share a transaction, *and* a keyed batch first takes a lock every other producer on that queue must
+  also take (a row lock on the queue row; SQLite's database-wide write lock does it for free). Two
+  concurrent adds of one `idempotencyKey` used to both see no row and both insert. There is still no
+  unique index: singleton dedup is scoped to the statuses that hold the slot, which no portable
+  constraint expresses, and a dedup must return the existing job rather than surface as a violation.
 - **Filter, page and count in the database.** No read may fetch a table into the process and filter
   there — that includes free-text search, which is a `LIKE` in SQL across the fields an operator
   triages by. A list's `total` is a `COUNT` over the same predicate, so a page and its total can never
@@ -182,6 +210,12 @@ in three sections, and no section at all when there is nothing to put in it.
   Nothing beyond the primary keys is a *uniqueness* constraint: idempotency and singleton dedup stay
   enforced in driver code, so behaviour is identical on an engine that could not honour one — and a
   dedup returns the existing job rather than surfacing as a constraint violation.
+  **And no index for a predicate that cannot use one.** A free-text search is
+  `LIKE '%term%'`/`ILIKE`, and a leading wildcard is unindexable on every engine here — even over a
+  functional `LOWER(column)` index — so none is declared and the `LIMIT` is what bounds the cost. Where
+  a predicate *can* be made indexable, make it: `retention_statuses` is a bitmask integer tested with
+  `&` (`BITAND` on Oracle) precisely because it used to be a token list matched with four `OR`ed
+  leading-wildcard `LIKE`s per candidate row.
 - **`schema` is honoured, not merely accepted.** `TableNames` gives three name forms and they are not
   interchangeable: `qualified()` is what every query site uses, `bare()` is unqualified, and
   `derived()` names an index or constraint the engine files inside the table's own schema. A driver
@@ -215,6 +249,13 @@ in three sections, and no section at all when there is nothing to put in it.
     reason: adding an endpoint is adding a file and one line, never extending a conditional chain.
     Shared plumbing sits beside them (`api/http.ts` for the reply helpers, `api/params.ts` for
     query-string parsing, `routes/actions/validate.ts` for field checks).
+    **One endpoint per operation**: a mutation is `POST /api/actions/<ActionKind>` and the kind is the
+    URL segment, not a body field — one endpoint dispatching twelve operations from its payload was
+    both harder to protect and harder to read in a log. And **every mutation must carry the
+    `x-requested-with` marker** (`assertSameOrigin` in `routes/index.ts`): a cross-origin page cannot
+    set a custom header without a preflight the mount never answers, which is what stops another site
+    purging a queue with an operator's cookies. It needs no host configuration, and it is not
+    authentication — protecting the mount is still the host's middleware's job.
   - `src/client/`, `src/shared/` — the SPA and the wire DTOs it shares with the server.
 - `packages/cli` → `@portqueue/cli`
   - `src/commands/` — **one file per command, with its test beside it**. `commands/index.ts` is the
@@ -237,11 +278,17 @@ in three sections, and no section at all when there is nothing to put in it.
 - **Automated coverage runs on PGLite and SQLite only.** They are in-process, so the whole suite —
   including the conformance kit — runs with no external service. PGLite exercises the Postgres SQL by
   inheritance, so Postgres is covered in practice too.
-- **MySQL and Oracle are verified by hand**, by running `runConformance({ createDriver })` against a
-  real server (`npm run db:mysql:up` / `npm run db:oracle:up` start one). Their SQL is authored in
-  their own dialects and cannot be exercised by an in-process engine, so a change to either driver is
-  not done until the kit has been run against it. Say so in the change report when you touch one.
+- **MySQL and Oracle are verified by hand**, with `npm run test:mysql` / `npm run test:oracle` against
+  a real server (`npm run db:mysql:up` / `npm run db:oracle:up` start one). Those run the same
+  conformance kit via `src/conformance/manual.test.ts`, which skips an engine whose connection
+  variables are unset. Their SQL is authored in their own dialects and cannot be exercised by an
+  in-process engine, so **a change to either driver is not done until the kit has been run against
+  it** — record the run in `packages/core/DRIVER-VERIFICATION.md` and say so in the change report.
+  A `v1` change means dropping the dev database first: `v1` is `IF NOT EXISTS`-guarded, so it will not
+  reshape a table that already exists.
 - The conformance kit is the contract, not a smoke test: it pins the guards core depends on
-  (`requeueJob`/`removeJob`/`cancelJob` refusing an `ACTIVE` row, bounded expiry and reclaim,
-  per-row retention statuses, `advanceSchedule`'s guarded claim, the `search` filter, and agreement
-  between every list page and its `count*`). A new driver method needs a case there.
+  (`requeueJob`/`removeJob`/`cancelJob` refusing an `ACTIVE` row, the claim fence refusing a
+  settle whose `lockToken` is stale, bounded expiry and reclaim, per-row retention statuses,
+  `advanceSchedule`'s guarded claim, `setScheduleEnabled`, dedup under *concurrent* adds, the `search`
+  filter, agreement between every list page and its `count*`, and a batch at the id cap). A new driver
+  method needs a case there.

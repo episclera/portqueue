@@ -258,6 +258,14 @@ the same session, SSO or API-key check that protects the rest of your admin surf
 runs first and can end the response works; the dashboard only ever sees what got past it. Shipping a
 second, weaker mechanism alongside yours would only invite people to rely on it.
 
+One thing the mount does bring itself: a **mutation is refused unless it carries the
+`x-requested-with: portqueue-dashboard` header** the SPA sends. A browser cannot set a custom header
+cross-origin without a preflight this mount never answers, so another page an operator visits cannot
+pause a queue with their session — which matters precisely because your middleware is what a browser
+replays cookies and Basic credentials to. It is not authentication, and there is nothing to configure;
+if you script against the JSON API yourself, send that header on anything that writes. Reads need
+nothing.
+
 No auth layer to reuse? HTTP Basic in front of the mount is enough for an internal tool —
 [`basic-auth`](https://www.npmjs.com/package/basic-auth) parses the header and its README has the
 middleware; compare the credentials with `timingSafeEqual` from `node:crypto`, terminate TLS in front
