@@ -1,5 +1,5 @@
 /**
- * Server library build (build_plan/12.2). Emits ESM + CJS + .d.ts for the middleware surface
+ * Server library build. Emits ESM + CJS + .d.ts for the middleware surface
  * only. Externalizes react/react-dom (client-only), @portqueue/core (peer), and node builtins.
  * The client SPA is built separately by vite.client.config.ts into ./client-dist.
  */

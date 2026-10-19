@@ -3,7 +3,7 @@ import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import sidebars from './sidebars';
 
-// Brand tokens mirrored from `@portqueue/ui` (build_plan/14 — tokens.ts).
+// Brand tokens mirrored from `@portqueue/ui` (`tokens.ts`).
 // Kept in sync manually here so the docs chrome (Infima) matches the dashboard
 // without pulling the AntD/CSS-in-JS package into the static Docusaurus config.
 const REPO_URL = 'https://github.com/episclera/portqueue';
@@ -62,7 +62,7 @@ const config: Config = {
     'A horizontally scalable, fault-tolerant, database-agnostic, performance-focused queue implementation.',
   favicon: 'img/favicon.svg',
 
-  // GitHub Pages deployment (build_plan/15.10). Adjust `url` to the real Pages domain.
+  // GitHub Pages deployment.
   url: 'https://episclera.github.io',
   baseUrl: '/portqueue/',
   organizationName: 'episclera',
@@ -161,7 +161,7 @@ const config: Config = {
       },
       { property: 'og:type', content: 'website' },
     ],
-    // Follow system preference on first load (build_plan/14.4).
+    // Follow system preference on first load.
     colorMode: {
       defaultMode: 'light',
       respectPrefersColorScheme: true,
@@ -186,7 +186,7 @@ const config: Config = {
       ],
     },
     footer: {
-      // Light-color footer (build_plan/15.3) — styled via custom.css.
+      // Light-color footer — styled via custom.css.
       style: 'light',
       links: [
         {

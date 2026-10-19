@@ -9,7 +9,7 @@
   box-sizing: border-box;
 }
 
-/* Soft, content-first surfaces over hard borders (build_plan/14.1a). */
+/* Soft, content-first surfaces over hard borders. */
 .pq-surface {
   border-radius: var(--pq-radius-lg);
   box-shadow: var(--pq-shadow-md);

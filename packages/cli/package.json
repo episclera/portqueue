@@ -3,6 +3,19 @@
   "version": "0.1.0",
   "description": "Command-line tool for monitoring and operating PortQueue, and serving the dashboard.",
   "license": "MIT",
+  "homepage": "https://episclera.github.io/portqueue",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/episclera/portqueue.git",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "queue",
+    "job-queue",
+    "cli",
+    "monitoring",
+    "dashboard"
+  ],
   "type": "module",
   "engines": {
     "node": ">=20.11.0"

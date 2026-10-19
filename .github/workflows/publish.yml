@@ -1,6 +1,6 @@
 name: publish
 
-# Publish the public packages to npm on main, driven by Changesets (build_plan/17.1/17.2).
+# Publish the public packages to npm on main, driven by Changesets.
 # The changelog/version commit is created by the changesets action and does NOT re-trigger
 # this workflow into a publish loop (the release PR flow separates version from publish).
 on:

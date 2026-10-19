@@ -8,7 +8,7 @@ import dts from 'vite-plugin-dts';
 // empty browser stub and the module blows up at import time.
 const nodeBuiltins = builtinModules.flatMap((name) => [name, `node:${name}`]);
 
-// Library build (build_plan/01.3). Emits ESM + CJS + .d.ts. Each driver is its own
+// Library build. Emits ESM + CJS + .d.ts. Each driver is its own
 // entry so importing one driver never pulls in another engine's peer client.
 const entries = {
   index: resolve(__dirname, 'src/index.ts'),

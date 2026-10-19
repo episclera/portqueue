@@ -1,4 +1,4 @@
-# Static image conventions & placeholders (build_plan/14.7)
+# Static image conventions & placeholders
 
 Real binary assets are dropped in here later by the owner. Until then we follow
 the **placeholder convention**: where an image is needed but not yet available
@@ -9,7 +9,7 @@ the intended alt text** so the spot is obvious and the alt text is already writt
 
 - `logo.svg` — the AI-authored PortQueue mark (also used in the navbar). Lightweight,
   theme-friendly, favicon-derivable. Concept: ordered/aligned queue units flowing
-  through a rounded "port" gateway (build_plan/14.5).
+  through a rounded "port" gateway.
 - `favicon.svg` — derived from the mark.
 
 ## Pending assets (owner to supply)

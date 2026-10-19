@@ -3,6 +3,26 @@
   "version": "0.1.0",
   "description": "A horizontally scalable, fault-tolerant, database-agnostic, performance-focused queue implementation.",
   "license": "MIT",
+  "homepage": "https://episclera.github.io/portqueue",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/episclera/portqueue.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "queue",
+    "job-queue",
+    "background-jobs",
+    "worker",
+    "scheduler",
+    "cron",
+    "postgres",
+    "mysql",
+    "oracle",
+    "sqlite",
+    "pglite",
+    "typescript"
+  ],
   "type": "module",
   "engines": {
     "node": ">=20.11.0"

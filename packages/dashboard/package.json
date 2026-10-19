@@ -3,6 +3,22 @@
   "version": "0.1.0",
   "description": "Self-hostable React dashboard middleware for PortQueue.",
   "license": "MIT",
+  "homepage": "https://episclera.github.io/portqueue",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/episclera/portqueue.git",
+    "directory": "packages/dashboard"
+  },
+  "keywords": [
+    "queue",
+    "job-queue",
+    "dashboard",
+    "monitoring",
+    "express",
+    "koa",
+    "fastify",
+    "nestjs"
+  ],
   "type": "module",
   "engines": {
     "node": ">=20.11.0"

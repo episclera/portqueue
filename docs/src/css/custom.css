@@ -264,7 +264,7 @@ article a:not(.card):not(.button):not(.pagination-nav__link),
   font-weight: 600;
 }
 
-/* Respect reduced motion (build_plan/14.1a). */
+/* Respect reduced motion. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

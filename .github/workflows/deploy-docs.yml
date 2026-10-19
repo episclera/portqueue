@@ -1,6 +1,6 @@
 name: deploy-docs
 
-# Build the Docusaurus site and publish to GitHub Pages on main only (build_plan/17.1).
+# Build the Docusaurus site and publish to GitHub Pages on main only.
 on:
   push:
     branches: [main]

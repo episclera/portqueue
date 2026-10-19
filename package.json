@@ -26,7 +26,7 @@
     "version": "changeset version",
     "release": "npm run build && changeset publish",
     "setup": "bash scripts/dev/setup.sh",
-    "cli": "bash scripts/cli/run.sh",
+    "cli": "bash scripts/cli/sqlite.sh",
     "dev:docs": "bash scripts/dev/start-docs.sh",
     "db:pg:up": "bash scripts/dev/db/start-postgres.sh",
     "db:pg:down": "bash scripts/dev/db/stop-postgres.sh",

@@ -1,4 +1,4 @@
-/** Conventional commits — the changelog tooling derives from these (build_plan/17). */
+/** Conventional commits — the changelog tooling derives from these. */
 export default {
   extends: ['@commitlint/config-conventional'],
 };

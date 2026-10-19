@@ -1,7 +1,7 @@
 import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
 
 /**
- * Sidebar ordered by priority (build_plan/15.6). Split into meaningful sections;
+ * Sidebar ordered by priority. Split into meaningful sections;
  * never a flat list. Ids map to files under docs/.
  */
 const sidebars: SidebarsConfig = {

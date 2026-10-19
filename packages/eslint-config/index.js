@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 /**
- * Shared flat ESLint base for every PortQueue workspace (build_plan/01.5).
+ * Shared flat ESLint base for every PortQueue workspace.
  * Each workspace re-exports this and layers local overrides.
  */
 export default tseslint.config(
@@ -19,7 +19,7 @@ export default tseslint.config(
     },
   },
   {
-    // Relax `no-explicit-any` in tests (build_plan/01.5).
+    // Relax `no-explicit-any` in tests.
     files: ['**/*.test.ts', '**/__tests__/**', '**/test-utils/**'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'warn',
