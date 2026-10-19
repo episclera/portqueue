@@ -25,9 +25,11 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
+      # Build first: the workspace packages are symlinked from this checkout, and core/dashboard
+      # expose their types from dist/, so lint and tests type-check against the code just built.
+      - run: npm run build
       - run: npm run lint
       - run: npm test
-      - run: npm run build
       # Creates/updates the release PR, or publishes when the release PR is merged.
       - uses: changesets/action@v1
         with:

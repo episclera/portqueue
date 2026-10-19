@@ -14,7 +14,7 @@
     "docs"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build -w @portqueue/core && npm run build -w @portqueue/dashboard && npm run build -w @portqueue/cli && npm run build -w @portqueue/ui && npm run build -w @portqueue/docs",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:core": "npm run test --workspace @portqueue/core",
