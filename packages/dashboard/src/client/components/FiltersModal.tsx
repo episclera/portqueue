@@ -8,8 +8,8 @@
  * comma-separated list, so a hand-written link with several values keeps working.
  */
 import React, { useEffect, useState } from 'react';
-import styled from 'styled-components';
 import { Button, Inline, Modal, Select, Stack, Text } from '@portqueue/ui';
+import styles from './FiltersModal.module.css';
 
 export interface FilterOption {
   label: string;
@@ -29,20 +29,6 @@ export interface FiltersModalProps {
   values: Record<string, string[] | undefined>;
   onApply: (values: Record<string, string[]>) => void;
 }
-
-const Group = styled.fieldset`
-  margin: 0;
-  padding: 0;
-  border: none;
-`;
-
-const GroupLabel = styled.legend`
-  padding: 0;
-  margin-bottom: ${(p) => p.theme.space(2)};
-  font-size: 13px;
-  font-weight: 600;
-  color: ${(p) => p.theme.color.text};
-`;
 
 const ANY = '__any';
 
@@ -98,10 +84,10 @@ export function FiltersModal({
   return (
     <Modal open={open} onClose={onClose} title="Filters" footer={footer}>
       <Stack gap={5}>
-        {defs.length === 0 ? <Text $tone="muted">No filters available.</Text> : null}
+        {defs.length === 0 ? <Text tone="muted">No filters available.</Text> : null}
         {defs.map((def) => (
-          <Group key={def.key}>
-            <GroupLabel>{def.label}</GroupLabel>
+          <fieldset key={def.key} className={styles.group}>
+            <legend className={styles.groupLabel}>{def.label}</legend>
             <Select<string>
               block
               value={draft[def.key]?.[0] ?? ANY}
@@ -113,7 +99,7 @@ export function FiltersModal({
                 ...def.options.map((o) => ({ label: o.label, value: o.value })),
               ]}
             />
-          </Group>
+          </fieldset>
         ))}
       </Stack>
     </Modal>

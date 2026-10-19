@@ -28,7 +28,7 @@ const Details = ({ error }: { error: Error }): React.ReactElement => (
         title="Something went wrong rendering this page"
         message={error.message || 'An unexpected error occurred.'}
       />
-      <Text $tone="muted" $small>
+      <Text tone="muted" small>
         The dashboard itself failed here — your queues and jobs are unaffected. Reloading usually
         clears it; if it happens consistently, the browser console has the full stack trace.
       </Text>

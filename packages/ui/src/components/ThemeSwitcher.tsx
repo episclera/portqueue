@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useTheme } from 'styled-components';
 import { IconButton } from './IconButton';
+import { useTheme } from '../providers/ThemeProvider';
 import { DarkModeIcon, LightModeIcon } from '../icons';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -17,7 +17,7 @@ const STORAGE_KEY = 'portqueue-theme';
  */
 export function ThemeSwitcher({ onChange }: ThemeSwitcherProps): React.ReactElement {
   const theme = useTheme();
-  const dark = theme?.mode === 'dark';
+  const dark = theme.mode === 'dark';
   const next: ThemeMode = dark ? 'light' : 'dark';
   return (
     <IconButton

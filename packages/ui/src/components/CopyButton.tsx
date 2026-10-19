@@ -1,8 +1,8 @@
 import React from 'react';
-import styled from 'styled-components';
 import { Button, type ButtonSize, type ButtonVariant } from './Button';
 import { Tooltip } from './Tooltip';
 import { CheckIcon, CopyIcon } from '../icons';
+import styles from './CopyButton.module.css';
 
 export interface CopyButtonProps {
   /** The text placed on the clipboard. */
@@ -13,28 +13,12 @@ export interface CopyButtonProps {
   variant?: ButtonVariant;
   /** Show the label beside the icon instead of an icon-only control. */
   showLabel?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
 /** How long the confirmation holds before the button returns to its resting state. */
 const CONFIRM_MS = 1000;
-
-/** The tick is the one place a success colour appears on an otherwise quiet control. */
-const Confirmed = styled(CheckIcon)`
-  color: ${(p) => p.theme.color.success};
-`;
-
-/** Off-screen but readable by assistive tech — `display: none` would not be announced. */
-const VisuallyHidden = styled.span`
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-`;
 
 type State = 'idle' | 'copied' | 'failed';
 
@@ -62,6 +46,8 @@ export function CopyButton({
   size = 'sm',
   variant = 'text',
   showLabel = false,
+  className,
+  style,
 }: CopyButtonProps): React.ReactElement {
   const [state, setState] = React.useState<State>('idle');
   const timer = React.useRef<ReturnType<typeof setTimeout>>();
@@ -88,13 +74,17 @@ export function CopyButton({
       <Button
         size={size}
         variant={variant}
-        icon={state === 'copied' ? <Confirmed /> : <CopyIcon />}
+        className={className}
+        style={style}
+        icon={state === 'copied' ? <CheckIcon className={styles.confirmed} /> : <CopyIcon />}
         onClick={() => void copy()}
         aria-label={title}
       >
         {showLabel ? (state === 'copied' ? 'Copied' : 'Copy') : null}
         {/* Announced on change; empty while idle so it stays silent until something happens. */}
-        <VisuallyHidden role="status">{state === 'idle' ? '' : title}</VisuallyHidden>
+        <span className={styles.visuallyHidden} role="status">
+          {state === 'idle' ? '' : title}
+        </span>
       </Button>
     </Tooltip>
   );

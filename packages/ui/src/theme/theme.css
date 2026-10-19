@@ -1,0 +1,99 @@
+/*
+ * The PortQueue theme as CSS custom properties — what every `@portqueue/ui` component's CSS
+ * Module reads. Values mirror `tokens.ts` (the palette's source of truth, which JS still reads for
+ * the status colours) and must be kept in step with it by hand: a CSS file cannot import a TS one.
+ *
+ * Light is the default on `:root`; `ThemeProvider` sets `data-pq-theme` on `<html>` so dark
+ * overrides apply to the whole document — including the body portals modals, menus and tooltips
+ * render into, which a theme scoped to a wrapper element would miss.
+ *
+ * Two things cannot be variables and are written as literals at their use sites:
+ * - **spacing** is a 4px scale (`space(n)` was `n * 4px`), so `space(3)` is `12px`;
+ * - **breakpoints** (xs 480, sm 640, md 768, lg 1024, xl 1280) — `@media` cannot read `var()`.
+ */
+
+:root,
+html[data-pq-theme='light'] {
+  --pq-color-brand: #a9d8b8;
+  --pq-color-brand-hover: #6fa184;
+  /* Primary-button fill + its hover: the lighter green darkening on hover in light mode. */
+  --pq-color-brand-solid: #a9d8b8;
+  --pq-color-brand-solid-hover: #6fa184;
+  /* Interactive text: the darker green, for AA contrast on light surfaces. */
+  --pq-color-link: #6fa184;
+  --pq-color-accent: #8fb8d8;
+  --pq-color-bg: #f2f3f1;
+  --pq-color-surface: #ffffff;
+  --pq-color-surface-alt: #dde3de;
+  --pq-color-text: #1b1f1d;
+  --pq-color-text-muted: rgba(27, 31, 29, 0.68);
+  --pq-color-text-faint: rgba(27, 31, 29, 0.5);
+  --pq-color-border: #dde3de;
+  --pq-color-border-strong: #c9d1cb;
+  /* Foreground on a brand/semantic fill — always the near-black text, never white. */
+  --pq-color-on-brand: #1b1f1d;
+  --pq-color-danger: #d98a8a;
+  --pq-color-danger-hover: #b5645f;
+  --pq-color-success: #a9d8b8;
+  --pq-color-warning: #e0ae72;
+  --pq-color-warning-hover: #c68a4e;
+  --pq-color-info: #8fb8d8;
+
+  --pq-color-status-pending: #8a908c;
+  --pq-color-status-active: #5b87a8;
+  --pq-color-status-completed: #6fa184;
+  --pq-color-status-failed: #b5645f;
+  --pq-color-status-retry: #c68a4e;
+  --pq-color-status-cancelled: #9aa09c;
+  --pq-color-status-expired: #9aa09c;
+  --pq-color-status-stalled: #9a7aa0;
+
+  --pq-radius-sm: 6px;
+  --pq-radius-md: 10px;
+  --pq-radius-lg: 16px;
+  --pq-radius-pill: 999px;
+
+  --pq-shadow-sm: 0 1px 2px rgba(27, 31, 29, 0.05), 0 1px 3px rgba(27, 31, 29, 0.08);
+  --pq-shadow-md: 0 4px 12px rgba(27, 31, 29, 0.07), 0 2px 6px rgba(27, 31, 29, 0.05);
+  --pq-shadow-lg: 0 12px 32px rgba(27, 31, 29, 0.1), 0 6px 16px rgba(27, 31, 29, 0.07);
+
+  --pq-motion-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --pq-motion-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --pq-motion-slow: 320ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Stacking order for floating layers, all rendered into a body portal (see tokens.ts). */
+  --pq-z-header: 100;
+  --pq-z-drawer: 200;
+  --pq-z-modal: 1000;
+  --pq-z-popover: 1100;
+  --pq-z-dropdown: 1200;
+  --pq-z-select: 1300;
+  --pq-z-toast: 1400;
+  --pq-z-tooltip: 1500;
+
+  --pq-font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Inter',
+    system-ui, sans-serif;
+  --pq-font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --pq-font-mono:
+    'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+
+  color-scheme: light;
+}
+
+html[data-pq-theme='dark'] {
+  /* The darker green fills on dark surfaces and lightens on hover; links take the lighter one. */
+  --pq-color-brand-solid: #6fa184;
+  --pq-color-brand-solid-hover: #a9d8b8;
+  --pq-color-link: #a9d8b8;
+  --pq-color-bg: #171a19;
+  --pq-color-surface: #1f2422;
+  --pq-color-surface-alt: #272d2a;
+  --pq-color-text: #edefec;
+  --pq-color-text-muted: rgba(237, 239, 236, 0.68);
+  --pq-color-text-faint: rgba(237, 239, 236, 0.5);
+  --pq-color-border: #2c332f;
+  --pq-color-border-strong: #3a423d;
+
+  color-scheme: dark;
+}

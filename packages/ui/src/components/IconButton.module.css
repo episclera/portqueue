@@ -1,0 +1,20 @@
+/*
+ * The class is doubled to outrank `Button`'s own single-class rules (padding, font size), which
+ * would otherwise win or lose on stylesheet order alone.
+ */
+.iconButton.iconButton {
+  padding: 0;
+  font-size: 14px;
+}
+
+.iconButton.sm {
+  width: 30px;
+}
+
+.iconButton.md {
+  width: 38px;
+}
+
+.iconButton.lg {
+  width: 46px;
+}

@@ -1,0 +1,52 @@
+/*
+ * The scroller itself. `overscroll-behavior-x: contain` keeps a trackpad swipe that reaches the
+ * end of the table from turning into a browser back-navigation.
+ */
+.viewport {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.root {
+  position: relative;
+  /* The fades are painted over the scroller, so it defines their containing block. */
+  isolation: isolate;
+}
+
+/*
+ * A fade over the clipped edge, hinting at the columns past it. Pointer-events are off so it
+ * never eats a click on the row beneath, and it is hidden from assistive tech — a screen-reader
+ * user is not scrolling pixels. `sticky`-free by design: an absolutely positioned overlay on the
+ * *wrapper* stays put while the content under it moves.
+ */
+.fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity var(--pq-motion-fast);
+}
+
+.visible {
+  opacity: 1;
+}
+
+.left {
+  left: 0;
+  background: linear-gradient(to right, var(--pq-color-surface), transparent);
+}
+
+.right {
+  right: 0;
+  background: linear-gradient(to left, var(--pq-color-surface), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade {
+    transition: none;
+  }
+}

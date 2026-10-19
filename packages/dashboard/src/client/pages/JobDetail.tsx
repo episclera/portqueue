@@ -29,7 +29,7 @@ import {
   Title,
   useToast,
 } from '@portqueue/ui';
-import styled from 'styled-components';
+import clsx from 'clsx';
 import { JobStatus } from '../queries/enums';
 import type { JobDto } from '../../shared/dto';
 import { ActionKind } from '../../shared/dto';
@@ -42,6 +42,7 @@ import { AddJobForm } from '../components/AddJobForm';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
 import { truncate } from '../components/format';
+import styles from './JobDetail.module.css';
 
 /**
  * Statuses a job can never leave. Everything else — PENDING, ACTIVE, RETRY — can still change
@@ -53,63 +54,6 @@ const TERMINAL: string[] = [
   JobStatus.CANCELLED,
   JobStatus.EXPIRED,
 ];
-
-const MonoTitle = styled(Title)`
-  font-family: ${(p) => p.theme.font.mono};
-`;
-
-const DescGrid = styled.dl`
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: ${(p) => p.theme.space(3)};
-  margin: 0;
-  @media (min-width: 480px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-`;
-
-const DescLabel = styled.dt`
-  font-size: 12px;
-  color: ${(p) => p.theme.color.textMuted};
-  margin-bottom: 2px;
-`;
-
-const DescValue = styled.dd`
-  margin: 0;
-  font-size: 14px;
-  color: ${(p) => p.theme.color.text};
-  word-break: break-word;
-`;
-
-const InnerCard = styled.div`
-  margin-top: ${(p) => p.theme.space(4)};
-  border: 1px solid ${(p) => p.theme.color.border};
-  border-radius: ${(p) => p.theme.radii.md}px;
-  overflow: hidden;
-`;
-
-const InnerCardTitle = styled.div`
-  padding: ${(p) => p.theme.space(2)} ${(p) => p.theme.space(3)};
-  font-size: 13px;
-  font-weight: 600;
-  color: ${(p) => p.theme.color.text};
-  background: ${(p) => p.theme.color.surfaceAlt};
-  border-bottom: 1px solid ${(p) => p.theme.color.border};
-`;
-
-const InnerCardBody = styled.div`
-  padding: ${(p) => p.theme.space(3)};
-`;
-
-const Pre = styled.pre<{ $danger?: boolean }>`
-  margin: 0;
-  padding: ${(p) => p.theme.space(3)};
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 12px;
-  font-family: ${(p) => p.theme.font.mono};
-  color: ${(p) => (p.$danger ? p.theme.color.danger : p.theme.color.text)};
-`;
 
 /**
  * Every timestamp a job row carries, in lifecycle order. The section lists all of them — including
@@ -138,8 +82,8 @@ function Item({
 }): React.ReactElement {
   return (
     <div>
-      <DescLabel>{label}</DescLabel>
-      <DescValue>{children}</DescValue>
+      <dt className={styles.descLabel}>{label}</dt>
+      <dd className={styles.descValue}>{children}</dd>
     </div>
   );
 }
@@ -314,9 +258,9 @@ export function JobDetailPage(): React.ReactElement {
       <PageHeader
         title={
           <Inline gap={3} align="center" wrap>
-            <MonoTitle level={4} as="span">
+            <Title className={styles.monoTitle} level={4} as="span">
               {truncate(j.id, 14, 8)}
-            </MonoTitle>
+            </Title>
             <CopyButton value={j.id} label="job id" />
           </Inline>
         }
@@ -332,7 +276,7 @@ export function JobDetailPage(): React.ReactElement {
         <Row gutter={16}>
           <Col span={14}>
             <Card title="Details">
-              <DescGrid>
+              <dl className={styles.descGrid}>
                 <Item label="Job id">
                   <Mono>{j.id}</Mono>
                 </Item>
@@ -365,33 +309,33 @@ export function JobDetailPage(): React.ReactElement {
                       the bare schedules list answered nothing about this job. */}
                   <Maybe value={j.scheduleId} to={(v) => `/schedules/${encodeURIComponent(v)}`} />
                 </Item>
-              </DescGrid>
+              </dl>
               {j.failureMessage && (
-                <InnerCard>
-                  <InnerCardTitle>Failure message</InnerCardTitle>
-                  <Pre $danger>{j.failureMessage}</Pre>
-                </InnerCard>
+                <div className={styles.innerCard}>
+                  <div className={styles.innerCardTitle}>Failure message</div>
+                  <pre className={clsx(styles.pre, styles.preDanger)}>{j.failureMessage}</pre>
+                </div>
               )}
-              <InnerCard>
-                <InnerCardTitle>Data</InnerCardTitle>
-                <Pre>{formatPayload(j.data)}</Pre>
-              </InnerCard>
-              <InnerCard>
-                <InnerCardTitle>Return value</InnerCardTitle>
-                <Pre>{formatPayload(j.returnValue)}</Pre>
-              </InnerCard>
-              <InnerCard>
-                <InnerCardTitle>Timestamps</InnerCardTitle>
-                <InnerCardBody>
-                  <DescGrid>
+              <div className={styles.innerCard}>
+                <div className={styles.innerCardTitle}>Data</div>
+                <pre className={styles.pre}>{formatPayload(j.data)}</pre>
+              </div>
+              <div className={styles.innerCard}>
+                <div className={styles.innerCardTitle}>Return value</div>
+                <pre className={styles.pre}>{formatPayload(j.returnValue)}</pre>
+              </div>
+              <div className={styles.innerCard}>
+                <div className={styles.innerCardTitle}>Timestamps</div>
+                <div className={styles.innerCardBody}>
+                  <dl className={styles.descGrid}>
                     {TIMESTAMPS.map((t) => (
                       <Item key={t.key} label={t.label}>
                         <Time value={j[t.key]} />
                       </Item>
                     ))}
-                  </DescGrid>
-                </InnerCardBody>
-              </InnerCard>
+                  </dl>
+                </div>
+              </div>
             </Card>
           </Col>
           <Col span={10}>

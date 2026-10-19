@@ -1,0 +1,64 @@
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.viewport {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--pq-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+/* The icon and the left border share the toast's semantic colour, `--pq-toast-accent`. */
+.item {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 240px;
+  max-width: 440px;
+  padding: 8px 12px;
+  border-radius: var(--pq-radius-md);
+  background: var(--pq-color-surface);
+  color: var(--pq-color-text);
+  border: 1px solid var(--pq-color-border);
+  border-left: 3px solid var(--pq-toast-accent);
+  box-shadow: var(--pq-shadow-lg);
+  font-size: 14px;
+  animation: slideIn var(--pq-motion-base);
+}
+
+.success {
+  --pq-toast-accent: var(--pq-color-success);
+}
+
+.error {
+  --pq-toast-accent: var(--pq-color-danger);
+}
+
+.warning {
+  --pq-toast-accent: var(--pq-color-warning);
+}
+
+.info {
+  --pq-toast-accent: var(--pq-color-info);
+}
+
+.glyph {
+  display: inline-flex;
+  flex: none;
+  font-size: 15px;
+  color: var(--pq-toast-accent);
+}

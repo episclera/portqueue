@@ -1,11 +1,12 @@
 import React from 'react';
-import styled from 'styled-components';
+import clsx from 'clsx';
+import styles from './Form.module.css';
 
-export const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: ${(p) => p.theme.space(4)};
-`;
+export const Form = React.forwardRef<HTMLFormElement, React.FormHTMLAttributes<HTMLFormElement>>(
+  function Form({ className, ...rest }, ref) {
+    return <form ref={ref} className={clsx(styles.form, className)} {...rest} />;
+  },
+);
 
 export interface FieldProps {
   label?: React.ReactNode;
@@ -13,37 +14,10 @@ export interface FieldProps {
   error?: React.ReactNode;
   hint?: React.ReactNode;
   htmlFor?: string;
+  className?: string;
+  style?: React.CSSProperties;
   children: React.ReactNode;
 }
-
-const FieldRoot = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${(p) => p.theme.space(2)};
-`;
-
-const FieldLabel = styled.label`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${(p) => p.theme.color.text};
-`;
-
-const RequiredMark = styled.span`
-  margin-left: 2px;
-  color: ${(p) => p.theme.color.danger};
-`;
-
-const FieldError = styled.p`
-  margin: 0;
-  font-size: 12px;
-  color: ${(p) => p.theme.color.danger};
-`;
-
-const FieldHint = styled.p`
-  margin: 0;
-  font-size: 12px;
-  color: ${(p) => p.theme.color.textMuted};
-`;
 
 /** Presentational field wrapper — label, control, then an error or hint below. */
 export function Field({
@@ -52,22 +26,30 @@ export function Field({
   error,
   hint,
   htmlFor,
+  className,
+  style,
   children,
 }: FieldProps): React.ReactElement {
   return (
-    <FieldRoot>
+    <div className={clsx(styles.field, className)} style={style}>
       {label !== undefined && (
-        <FieldLabel htmlFor={htmlFor}>
+        <label className={styles.label} htmlFor={htmlFor}>
           {label}
-          {required ? <RequiredMark aria-hidden>*</RequiredMark> : null}
-        </FieldLabel>
+          {required ? (
+            <span className={styles.required} aria-hidden>
+              *
+            </span>
+          ) : null}
+        </label>
       )}
       {children}
       {error !== undefined && error !== null && error !== false ? (
-        <FieldError role="alert">{error}</FieldError>
+        <p className={styles.error} role="alert">
+          {error}
+        </p>
       ) : hint !== undefined && hint !== null && hint !== false ? (
-        <FieldHint>{hint}</FieldHint>
+        <p className={styles.hint}>{hint}</p>
       ) : null}
-    </FieldRoot>
+    </div>
   );
 }

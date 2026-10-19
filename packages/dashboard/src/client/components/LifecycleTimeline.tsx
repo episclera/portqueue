@@ -42,10 +42,10 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
       label: <Time value={m.at} />,
       children: (
         <div>
-          <Text $strong>{m.label}</Text>
+          <Text strong>{m.label}</Text>
           {prev && (
             <div>
-              <Text $tone="muted" $small>
+              <Text tone="muted" small>
                 +{duration(prev.at, m.at)} since {prev.label.toLowerCase()}
               </Text>
             </div>
@@ -63,14 +63,14 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
     <div>
       <div style={{ marginBottom: 12 }}>
         <Tag tone="info">Now: {statusLabel(rawStatus)}</Tag>{' '}
-        <Text $tone="muted">
+        <Text tone="muted">
           Attempt {job.retryAttempt} / {job.retryMaxAttempts}
         </Text>
       </div>
       {items.length ? (
         <Timeline items={items} />
       ) : (
-        <Text $tone="muted">No lifecycle events yet.</Text>
+        <Text tone="muted">No lifecycle events yet.</Text>
       )}
     </div>
   );

@@ -1,0 +1,7 @@
+.checkbox {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--pq-color-brand-hover);
+  cursor: pointer;
+}

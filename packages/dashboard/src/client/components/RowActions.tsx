@@ -4,7 +4,6 @@
  * are selected, and the confirmation dialog those bulk actions share.
  */
 import React from 'react';
-import styled from 'styled-components';
 import {
   Button,
   CaretDownIcon,
@@ -18,6 +17,7 @@ import {
   type DropdownItem,
 } from '@portqueue/ui';
 import { ACTIONS_CONFIG } from '../constants/labels';
+import styles from './RowActions.module.css';
 
 export interface RowActionProps {
   icon: React.ReactNode;
@@ -29,16 +29,6 @@ export interface RowActionProps {
   confirm?: { title: string; description?: string };
 }
 
-/** Background-free icon button; only the hover state tints, so a row of actions stays quiet. */
-const ActionButton = styled(IconButton)`
-  background: transparent;
-  border-color: transparent;
-
-  &:hover:not(:disabled) {
-    border-color: transparent;
-  }
-`;
-
 export function RowAction({
   icon,
   label,
@@ -48,7 +38,8 @@ export function RowAction({
   confirm,
 }: RowActionProps): React.ReactElement {
   const button = (
-    <ActionButton
+    <IconButton
+      className={styles.actionButton}
       size="sm"
       variant={danger ? 'danger' : 'text'}
       disabled={disabled}
@@ -56,7 +47,7 @@ export function RowAction({
       onClick={confirm ? undefined : onClick}
     >
       <span aria-hidden>{icon}</span>
-    </ActionButton>
+    </IconButton>
   );
 
   const trigger = confirm ? (
@@ -84,7 +75,13 @@ export function RowAction({
 }
 
 /** Row-actions cell — a tight row of icon buttons. */
-export const RowActions = styled(Inline).attrs({ gap: 1, align: 'center' })``;
+export function RowActions({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <Inline gap={1} align="center">
+      {children}
+    </Inline>
+  );
+}
 
 export interface BulkActionsButtonProps {
   /** Number of selected rows; the button hides itself at 0. */

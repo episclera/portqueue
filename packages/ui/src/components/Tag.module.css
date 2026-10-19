@@ -1,0 +1,54 @@
+/*
+ * Every tag is bordered, and the border always matches the text inside it — so a chip reads as
+ * one colour whatever its variant. The colour is `--pq-tag-color`: set by the tone class, or
+ * inline when the caller passes an explicit `color`.
+ */
+.root {
+  --pq-tag-color: var(--pq-color-status-pending);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: var(--pq-radius-sm);
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.pill {
+  border-radius: 999px;
+}
+
+.success {
+  --pq-tag-color: var(--pq-color-status-completed);
+}
+
+.warning {
+  --pq-tag-color: var(--pq-color-warning-hover);
+}
+
+.danger {
+  --pq-tag-color: var(--pq-color-danger-hover);
+}
+
+.info {
+  --pq-tag-color: var(--pq-color-status-active);
+}
+
+/* `1f` alpha on the tag colour, as a mix — the colour is a variable, so no hex suffix. */
+.soft {
+  color: var(--pq-tag-color);
+  background: color-mix(in srgb, var(--pq-tag-color) 12%, transparent);
+}
+
+.outline {
+  color: var(--pq-tag-color);
+  background: transparent;
+}
+
+.solid {
+  background: var(--pq-tag-color);
+  color: var(--pq-color-on-brand);
+}

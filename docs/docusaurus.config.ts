@@ -5,7 +5,7 @@ import sidebars from './sidebars';
 
 // Brand tokens mirrored from `@portqueue/ui` (`tokens.ts`).
 // Kept in sync manually here so the docs chrome (Infima) matches the dashboard
-// without pulling the AntD/CSS-in-JS package into the static Docusaurus config.
+// without importing `@portqueue/ui` into the static Docusaurus config.
 const REPO_URL = 'https://github.com/episclera/portqueue';
 
 // --- Footer "Docs" column, derived from the left sidebar ---------------------------------

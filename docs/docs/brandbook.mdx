@@ -14,10 +14,11 @@ PortQueue's dashboard and docs share one calm, muted visual system. The goal is 
 content-first surface: a dominant neutral, a single desaturated green accent, one text
 colour, and low-contrast semantic colours used **only where they carry meaning**.
 
-All colours are exposed as CSS variables from a single source of truth — the design tokens
-in [`@portqueue/ui`](https://github.com/episclera/portqueue) (`src/theme/tokens.ts`). The
-dashboard reads them through its styled-components `ThemeProvider`; this docs site mirrors
-them onto Docusaurus's Infima variables. Change a token once and both surfaces follow.
+All colours come from one set of design tokens in
+[`@portqueue/ui`](https://github.com/episclera/portqueue) (`src/theme/tokens.ts`). The dashboard
+reads them as CSS variables (`src/theme/theme.css`, switched between light and dark by its
+`ThemeProvider`); this docs site mirrors them onto Docusaurus's Infima variables. A token change
+is made in `tokens.ts` and mirrored into both stylesheets.
 
 ## Core palette
 

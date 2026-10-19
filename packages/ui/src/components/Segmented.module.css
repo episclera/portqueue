@@ -1,0 +1,42 @@
+.track {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--pq-color-surface-alt);
+  border: 1px solid var(--pq-color-border);
+  border-radius: var(--pq-radius-md);
+  font-size: 13px;
+}
+
+.sm {
+  font-size: 12px;
+}
+
+.segment {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--pq-radius-sm);
+  color: var(--pq-color-text-muted);
+  background: transparent;
+  box-shadow: none;
+  transition:
+    color var(--pq-motion-fast),
+    background var(--pq-motion-fast);
+}
+
+.segment:hover {
+  color: var(--pq-color-text);
+}
+
+.active,
+.active:hover {
+  color: var(--pq-color-link);
+}
+
+.active {
+  background: var(--pq-color-surface);
+  box-shadow: var(--pq-shadow-sm);
+}

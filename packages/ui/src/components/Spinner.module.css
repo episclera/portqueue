@@ -1,0 +1,17 @@
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Diameter and ring width arrive per instance as `--pq-spinner-*` custom properties. */
+.ring {
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--pq-spinner-size);
+  height: var(--pq-spinner-size);
+  border: var(--pq-spinner-ring) solid var(--pq-color-border);
+  border-top-color: var(--pq-color-brand);
+  border-radius: var(--pq-radius-pill);
+  animation: spin 720ms linear infinite;
+}

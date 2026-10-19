@@ -1,0 +1,13 @@
+.group {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.groupLabel {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pq-color-text);
+}

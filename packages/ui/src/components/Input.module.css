@@ -1,0 +1,68 @@
+/* The field look shared by Input, InputNumber and Textarea (each imports this module). */
+.field {
+  --pq-field-border: var(--pq-color-border);
+  --pq-field-border-hover: var(--pq-color-border-strong);
+  --pq-field-ring: var(--pq-color-brand);
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--pq-color-text);
+  background: var(--pq-color-surface);
+  border: 1px solid var(--pq-field-border);
+  border-radius: var(--pq-radius-md);
+  font-family: inherit;
+  transition:
+    border-color var(--pq-motion-fast),
+    box-shadow var(--pq-motion-fast);
+}
+
+.invalid {
+  --pq-field-border: var(--pq-color-danger);
+  --pq-field-border-hover: var(--pq-color-danger);
+  --pq-field-ring: var(--pq-color-danger);
+}
+
+.field::placeholder {
+  color: var(--pq-color-text-faint);
+}
+
+.field:hover:not(:disabled):not(:focus) {
+  border-color: var(--pq-field-border-hover);
+}
+
+.field:focus {
+  outline: none;
+  border-color: var(--pq-field-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pq-field-ring) 20%, transparent);
+}
+
+.field:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Single-line sizes (Input, InputNumber): height / horizontal padding / font size. */
+.sm {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.md {
+  height: 38px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.lg {
+  height: 46px;
+  padding: 0 14px;
+  font-size: 16px;
+}
+
+.textarea {
+  min-height: 88px;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}

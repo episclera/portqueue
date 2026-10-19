@@ -1,8 +1,9 @@
 import React from 'react';
-import styled, { keyframes } from 'styled-components';
+import clsx from 'clsx';
 import { Portal } from '../overlay/Portal';
 import { useAnchoredLayer } from '../overlay/useAnchoredLayer';
 import { useDismiss } from '../overlay/useDismiss';
+import styles from './Dropdown.module.css';
 
 export interface DropdownItem {
   key: string;
@@ -17,79 +18,18 @@ export interface DropdownProps {
   items: DropdownItem[];
   children: React.ReactElement;
   align?: 'left' | 'right';
+  className?: string;
 }
 
-const popIn = keyframes`
-  from { opacity: 0; transform: translateY(4px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-`;
-
-const Wrapper = styled.span`
-  display: inline-block;
-`;
-
+/** Kept in step with `.menu`'s `min-width` in the module. */
 const MIN_WIDTH = 180;
-
-/**
- * Rendered in a body portal at fixed viewport coordinates, so a toolbar or table cell with
- * `overflow: hidden` can't clip the menu and no ancestor stacking context can bury it.
- */
-const Menu = styled.div<{ $top: number; $left: number; $maxHeight: number }>`
-  position: fixed;
-  top: ${(p) => p.$top}px;
-  left: ${(p) => p.$left}px;
-  z-index: ${(p) => p.theme.zIndex.dropdown};
-  min-width: ${MIN_WIDTH}px;
-  max-height: ${(p) => p.$maxHeight}px;
-  overflow-y: auto;
-  padding: ${(p) => p.theme.space(1)};
-  background: ${(p) => p.theme.color.surface};
-  border: 1px solid ${(p) => p.theme.color.border};
-  border-radius: ${(p) => p.theme.radii.md}px;
-  box-shadow: ${(p) => p.theme.shadow.lg};
-  animation: ${popIn} ${(p) => p.theme.motion.fast};
-`;
-
-const MenuItem = styled.button<{ $danger: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: ${(p) => p.theme.space(2)};
-  width: 100%;
-  padding: ${(p) => p.theme.space(2)} ${(p) => p.theme.space(3)};
-  font-family: inherit;
-  font-size: 13.5px;
-  font-weight: 500;
-  text-align: left;
-  color: ${(p) => (p.$danger ? p.theme.color.danger : p.theme.color.text)};
-  background: transparent;
-  border: none;
-  border-radius: ${(p) => p.theme.radii.sm}px;
-  cursor: pointer;
-  transition: background ${(p) => p.theme.motion.fast};
-  &:hover:not(:disabled) {
-    background: ${(p) => (p.$danger ? `${p.theme.color.danger}14` : p.theme.color.surfaceAlt)};
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  &:focus-visible {
-    outline: 2px solid ${(p) => p.theme.color.brand};
-    outline-offset: -2px;
-  }
-`;
-
-const ItemIcon = styled.span`
-  display: inline-flex;
-  width: 16px;
-  justify-content: center;
-`;
 
 /** Bespoke dropdown menu, portalled to the body and anchored to its trigger child. */
 export const Dropdown = ({
   items,
   children,
   align = 'left',
+  className,
 }: DropdownProps): React.ReactElement => {
   const [open, setOpen] = React.useState(false);
   const { triggerRef, layerRef, position } = useAnchoredLayer<HTMLSpanElement, HTMLDivElement>({
@@ -115,30 +55,35 @@ export const Dropdown = ({
 
   return (
     <>
-      <Wrapper ref={triggerRef}>{trigger}</Wrapper>
+      <span ref={triggerRef} className={clsx(styles.wrapper, className)}>
+        {trigger}
+      </span>
       {open && position ? (
         <Portal>
-          <Menu
+          <div
             ref={layerRef}
+            className={styles.menu}
             role="menu"
-            $top={position.top}
-            $left={position.left}
-            $maxHeight={position.maxHeight}
+            style={{ top: position.top, left: position.left, maxHeight: position.maxHeight }}
           >
             {items.map((item) => (
-              <MenuItem
+              <button
                 key={item.key}
+                className={clsx(styles.item, item.danger && styles.danger)}
                 type="button"
                 role="menuitem"
-                $danger={item.danger ?? false}
                 disabled={item.disabled}
                 onClick={() => handleItemClick(item)}
               >
-                {item.icon != null ? <ItemIcon aria-hidden>{item.icon}</ItemIcon> : null}
+                {item.icon != null ? (
+                  <span className={styles.itemIcon} aria-hidden>
+                    {item.icon}
+                  </span>
+                ) : null}
                 <span>{item.label}</span>
-              </MenuItem>
+              </button>
             ))}
-          </Menu>
+          </div>
         </Portal>
       ) : null}
     </>

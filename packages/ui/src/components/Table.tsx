@@ -1,8 +1,9 @@
 import React from 'react';
-import styled, { css } from 'styled-components';
+import clsx from 'clsx';
 import { Checkbox } from './Checkbox';
 import { Tooltip } from './Tooltip';
 import { EmptyIcon } from '../icons';
+import styles from './Table.module.css';
 
 export type TableAlign = 'left' | 'right' | 'center';
 export type TableSize = 'sm' | 'md';
@@ -52,91 +53,9 @@ export interface TableProps<T> {
   size?: TableSize;
   onRowClick?: (row: T) => void;
   rowSelection?: TableRowSelection;
+  className?: string;
+  style?: React.CSSProperties;
 }
-
-/** Body-cell padding — compact, so rows stay dense. */
-const cellPad = (size: TableSize): ReturnType<typeof css> =>
-  size === 'sm'
-    ? css`
-        padding: ${(p) => p.theme.space(1)} ${(p) => p.theme.space(2)};
-      `
-    : css`
-        padding: ${(p) => p.theme.space(2)} ${(p) => p.theme.space(3)};
-      `;
-
-/**
- * Header-cell padding — deliberately airier than the body on the Y axis, while matching its
- * horizontal padding so header labels stay aligned with the cells below them.
- */
-const headerPad = (size: TableSize): ReturnType<typeof css> =>
-  size === 'sm'
-    ? css`
-        padding: ${(p) => p.theme.space(3)} ${(p) => p.theme.space(2)};
-      `
-    : css`
-        padding: ${(p) => p.theme.space(4)} ${(p) => p.theme.space(3)};
-      `;
-
-const StyledTable = styled.table`
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  color: ${(p) => p.theme.color.text};
-  font-family: inherit;
-`;
-
-/**
- * Header cell — transparent (no fill band), roomier on the Y axis than the body rows, and the
- * only place with vertical dividers. Titles keep their given casing.
- */
-const Th = styled.th<{ $align: TableAlign; $size: TableSize }>`
-  ${(p) => headerPad(p.$size)}
-  text-align: ${(p) => p.$align};
-  background: transparent;
-  color: ${(p) => p.theme.color.textMuted};
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0;
-  white-space: nowrap;
-  border-bottom: 1px solid ${(p) => p.theme.color.border};
-  border-right: 1px solid ${(p) => p.theme.color.border};
-  &:last-child {
-    border-right: none;
-  }
-`;
-
-/** Rows are static — no hover tint, so a dense table doesn't flicker under the cursor. */
-const Tr = styled.tr<{ $clickable: boolean }>`
-  cursor: ${(p) => (p.$clickable ? 'pointer' : 'default')};
-`;
-
-/** Body cell — compact, and divided from the next row only (no vertical rules). */
-const Td = styled.td<{ $align: TableAlign; $size: TableSize }>`
-  ${(p) => cellPad(p.$size)}
-  text-align: ${(p) => p.$align};
-  border-bottom: 1px solid ${(p) => p.theme.color.border};
-`;
-
-/** Empty state — given real breathing room so a blank table doesn't read as a broken one. */
-const EmptyCell = styled.td<{ $size: TableSize }>`
-  ${(p) => cellPad(p.$size)}
-  padding-top: 56px;
-  padding-bottom: 56px;
-  text-align: center;
-  color: ${(p) => p.theme.color.textFaint};
-  border-bottom: 1px solid ${(p) => p.theme.color.border};
-`;
-
-/**
- * The empty-state icon, sized up to read as a small illustration and centred on its own line.
- * The wrapper does the block-level layout: the icon package injects `.anticon { display:
- * inline-flex }` at first render, which would race a `display` set on the icon itself.
- */
-const EmptyGlyph = styled.div`
-  margin-bottom: ${(p) => p.theme.space(2)};
-  font-size: 28px;
-  line-height: 1;
-`;
 
 const sizeToPx = (v: number | string | undefined): string | undefined =>
   v === undefined ? undefined : typeof v === 'number' ? `${v}px` : v;
@@ -240,12 +159,14 @@ export function Table<T>({
   size = 'md',
   onRowClick,
   rowSelection,
+  className,
+  style,
 }: TableProps<T>): React.ReactElement {
   const emptyNode = empty ?? (
     <>
-      <EmptyGlyph aria-hidden>
+      <div className={styles.emptyGlyph} aria-hidden>
         <EmptyIcon />
-      </EmptyGlyph>
+      </div>
       No data
     </>
   );
@@ -253,49 +174,58 @@ export function Table<T>({
     ? withSelectionColumn(columns, data, rowKey, rowSelection)
     : columns;
   return (
-    <StyledTable>
+    <table className={clsx(styles.table, className)} style={style}>
       <thead>
         <tr>
           {allColumns.map((column) => (
-            <Th
+            <th
               key={column.key}
-              $align={column.headerAlign ?? column.align ?? 'left'}
-              $size={size}
+              className={clsx(
+                styles.th,
+                styles[column.headerAlign ?? column.align ?? 'left'],
+                size === 'sm' && styles.sm,
+              )}
               style={cellSizing(column)}
             >
               {column.title}
-            </Th>
+            </th>
           ))}
         </tr>
       </thead>
       <tbody>
         {data.length === 0 ? (
           <tr>
-            <EmptyCell $size={size} colSpan={Math.max(allColumns.length, 1)}>
+            <td
+              className={clsx(styles.td, size === 'sm' && styles.sm, styles.empty)}
+              colSpan={Math.max(allColumns.length, 1)}
+            >
               {emptyNode}
-            </EmptyCell>
+            </td>
           </tr>
         ) : (
           data.map((row, index) => (
-            <Tr
+            <tr
               key={rowKey(row)}
-              $clickable={Boolean(onRowClick)}
+              className={onRowClick ? styles.clickable : undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {allColumns.map((column) => (
-                <Td
+                <td
                   key={column.key}
-                  $align={column.align ?? 'left'}
-                  $size={size}
+                  className={clsx(
+                    styles.td,
+                    styles[column.align ?? 'left'],
+                    size === 'sm' && styles.sm,
+                  )}
                   style={cellSizing(column)}
                 >
                   {cellContent(column, row, index)}
-                </Td>
+                </td>
               ))}
-            </Tr>
+            </tr>
           ))
         )}
       </tbody>
-    </StyledTable>
+    </table>
   );
 }

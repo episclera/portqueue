@@ -1,0 +1,5 @@
+/* Generated schedule ids are as long as job ids, and truncate the same way. */
+.monoLink {
+  font-family: var(--pq-font-mono);
+  font-size: 12px;
+}

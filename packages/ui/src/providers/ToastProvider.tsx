@@ -1,8 +1,8 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
-import styled, { keyframes } from 'styled-components';
-import type { DefaultTheme } from 'styled-components';
+import clsx from 'clsx';
 import { Portal } from '../overlay/Portal';
 import { ErrorIcon, InfoIcon, SuccessIcon, WarningIcon } from '../icons';
+import styles from './ToastProvider.module.css';
 
 export type ToastKind = 'success' | 'error' | 'info' | 'warning';
 
@@ -28,58 +28,8 @@ const ICON: Record<ToastKind, React.ComponentType> = {
   warning: WarningIcon,
 };
 
-const slideIn = keyframes`
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
-`;
-
-const Viewport = styled.div`
-  position: fixed;
-  top: ${(p) => p.theme.space(4)};
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: ${(p) => p.theme.zIndex.toast};
-  display: flex;
-  flex-direction: column;
-  gap: ${(p) => p.theme.space(2)};
-  pointer-events: none;
-`;
-
-const ACCENT: Record<ToastKind, (t: DefaultTheme) => string> = {
-  success: (t) => t.color.success,
-  error: (t) => t.color.danger,
-  warning: (t) => t.color.warning,
-  info: (t) => t.color.info,
-};
-
-const Item = styled.div<{ $kind: ToastKind }>`
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  gap: ${(p) => p.theme.space(2)};
-  min-width: 240px;
-  max-width: 440px;
-  padding: ${(p) => p.theme.space(2)} ${(p) => p.theme.space(3)};
-  border-radius: ${(p) => p.theme.radii.md}px;
-  background: ${(p) => p.theme.color.surface};
-  color: ${(p) => p.theme.color.text};
-  border: 1px solid ${(p) => p.theme.color.border};
-  border-left: 3px solid ${(p) => ACCENT[p.$kind](p.theme)};
-  box-shadow: ${(p) => p.theme.shadow.lg};
-  font-size: 14px;
-  animation: ${slideIn} ${(p) => p.theme.motion.base};
-`;
-
-/** The icon and the left border share the toast's semantic colour. */
-const Glyph = styled.span<{ $kind: ToastKind }>`
-  display: inline-flex;
-  flex: none;
-  font-size: 15px;
-  color: ${(p) => ACCENT[p.$kind](p.theme)};
-`;
-
 /**
- * Lightweight toast host — the styled-components replacement for antd's `App` message API.
+ * Lightweight toast host — the replacement for antd's `App` message API.
  * Wrap the app once, then call `useToast()` for `success`/`error`/`info`/`warning`.
  */
 export function ToastProvider({
@@ -115,19 +65,19 @@ export function ToastProvider({
     <ToastContext.Provider value={api}>
       {children}
       <Portal>
-        <Viewport role="status" aria-live="polite">
+        <div className={styles.viewport} role="status" aria-live="polite">
           {toasts.map((t) => {
             const KindIcon = ICON[t.kind];
             return (
-              <Item key={t.id} $kind={t.kind}>
-                <Glyph $kind={t.kind} aria-hidden>
+              <div key={t.id} className={clsx(styles.item, styles[t.kind])}>
+                <span className={styles.glyph} aria-hidden>
                   <KindIcon />
-                </Glyph>
+                </span>
                 <span>{t.content}</span>
-              </Item>
+              </div>
             );
           })}
-        </Viewport>
+        </div>
       </Portal>
     </ToastContext.Provider>
   );

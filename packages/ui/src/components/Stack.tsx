@@ -1,5 +1,6 @@
 import React from 'react';
-import styled, { css } from 'styled-components';
+import clsx from 'clsx';
+import styles from './Stack.module.css';
 
 export interface StackProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Gap between children, in 4px spacing units → `space(gap)`. */
@@ -15,59 +16,55 @@ export interface InlineProps extends React.HTMLAttributes<HTMLDivElement> {
   wrap?: boolean;
 }
 
-const StyledStack = styled.div<{ $gap: number; $align?: React.CSSProperties['alignItems'] }>`
-  display: flex;
-  flex-direction: column;
-  gap: ${(p) => p.theme.space(p.$gap)};
-  ${(p) =>
-    p.$align &&
-    css`
-      align-items: ${p.$align};
-    `}
-`;
+/**
+ * The per-instance layout values. Alignment goes straight onto the element's own `style` — it is
+ * an arbitrary CSS keyword, not one of a fixed set a class could name — under the caller's
+ * `style`, so an explicit override still wins.
+ */
+function layoutStyle(
+  gap: number,
+  style: React.CSSProperties | undefined,
+  align?: React.CSSProperties['alignItems'],
+  justify?: React.CSSProperties['justifyContent'],
+): React.CSSProperties {
+  return {
+    '--pq-gap': `${gap * 4}px`,
+    ...(align === undefined ? {} : { alignItems: align }),
+    ...(justify === undefined ? {} : { justifyContent: justify }),
+    ...style,
+  } as React.CSSProperties;
+}
 
 /** Vertical flex stack — children flow top-to-bottom with a spacing-scale gap. */
 export const Stack = React.forwardRef<HTMLDivElement, StackProps>(function Stack(
-  { gap = 0, align, children, ...rest },
+  { gap = 0, align, className, style, children, ...rest },
   ref,
 ): React.ReactElement {
   return (
-    <StyledStack ref={ref} $gap={gap} $align={align} {...rest}>
+    <div
+      ref={ref}
+      className={clsx(styles.stack, className)}
+      style={layoutStyle(gap, style, align)}
+      {...rest}
+    >
       {children}
-    </StyledStack>
+    </div>
   );
 });
 
-const StyledInline = styled.div<{
-  $gap: number;
-  $align?: React.CSSProperties['alignItems'];
-  $justify?: React.CSSProperties['justifyContent'];
-  $wrap: boolean;
-}>`
-  display: flex;
-  flex-direction: row;
-  gap: ${(p) => p.theme.space(p.$gap)};
-  flex-wrap: ${(p) => (p.$wrap ? 'wrap' : 'nowrap')};
-  ${(p) =>
-    p.$align &&
-    css`
-      align-items: ${p.$align};
-    `}
-  ${(p) =>
-    p.$justify &&
-    css`
-      justify-content: ${p.$justify};
-    `}
-`;
-
 /** Horizontal flex row — children flow left-to-right with a spacing-scale gap. */
 export const Inline = React.forwardRef<HTMLDivElement, InlineProps>(function Inline(
-  { gap = 0, align, justify, wrap = false, children, ...rest },
+  { gap = 0, align, justify, wrap = false, className, style, children, ...rest },
   ref,
 ): React.ReactElement {
   return (
-    <StyledInline ref={ref} $gap={gap} $align={align} $justify={justify} $wrap={wrap} {...rest}>
+    <div
+      ref={ref}
+      className={clsx(styles.inline, wrap && styles.wrap, className)}
+      style={layoutStyle(gap, style, align, justify)}
+      {...rest}
+    >
       {children}
-    </StyledInline>
+    </div>
   );
 });

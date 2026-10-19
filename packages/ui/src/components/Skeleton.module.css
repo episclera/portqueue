@@ -1,0 +1,34 @@
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Size and radius arrive per instance as `--pq-skeleton-*` custom properties. */
+.block {
+  display: block;
+  width: var(--pq-skeleton-width);
+  height: var(--pq-skeleton-height);
+  border-radius: var(--pq-skeleton-radius);
+  background: linear-gradient(
+    90deg,
+    var(--pq-color-surface-alt) 25%,
+    var(--pq-color-border) 37%,
+    var(--pq-color-surface-alt) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.circle {
+  border-radius: 999px;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

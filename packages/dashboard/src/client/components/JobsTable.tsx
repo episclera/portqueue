@@ -9,7 +9,6 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import styled from 'styled-components';
 import { StatusTag, Table, Tooltip } from '@portqueue/ui';
 import type { DropdownItem, TableColumn } from '@portqueue/ui';
 import { JobStatus } from '../queries/enums';
@@ -25,6 +24,7 @@ import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
 import type { FilterDef } from './FiltersModal';
 import { BulkActionsButton, ConfirmModal, RowAction, RowActions } from './RowActions';
+import styles from './JobsTable.module.css';
 
 export interface JobsTableProps {
   /** Narrow to one queue. Omitted on views that span queues. */
@@ -36,11 +36,6 @@ export interface JobsTableProps {
   /** URL param prefix, so two job tables on one page don't share state. */
   prefix?: string;
 }
-
-const MonoLink = styled(Link)`
-  font-family: ${(p) => p.theme.font.mono};
-  font-size: 12px;
-`;
 
 const FILTER_KEYS = ['status'] as const;
 
@@ -103,7 +98,11 @@ export function JobsTable({
     {
       title: 'Job',
       key: 'id',
-      render: (r) => <MonoLink to={`/jobs/${encodeURIComponent(r.id)}`}>{truncate(r.id)}</MonoLink>,
+      render: (r) => (
+        <Link className={styles.monoLink} to={`/jobs/${encodeURIComponent(r.id)}`}>
+          {truncate(r.id)}
+        </Link>
+      ),
     },
     {
       title: 'Status',
@@ -126,9 +125,12 @@ export function JobsTable({
       render: (r) =>
         r.processedOnInstanceKey ? (
           <Tooltip title={r.processedOnInstanceKey} placement="bottom">
-            <MonoLink to={`/instances/${encodeURIComponent(r.processedOnInstanceKey)}`}>
+            <Link
+              className={styles.monoLink}
+              to={`/instances/${encodeURIComponent(r.processedOnInstanceKey)}`}
+            >
               {truncate(r.processedOnInstanceKey, 8, 4)}
-            </MonoLink>
+            </Link>
           </Tooltip>
         ) : (
           '—'

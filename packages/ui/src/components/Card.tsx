@@ -1,60 +1,6 @@
 import React from 'react';
-import styled from 'styled-components';
-
-const CardRoot = styled.section<{ $interactive: boolean; $pad: boolean }>`
-  background: ${(p) => p.theme.color.surface};
-  border: 1px solid ${(p) => p.theme.color.border};
-  border-radius: ${(p) => p.theme.radii.lg}px;
-  box-shadow: ${(p) => p.theme.shadow.sm};
-  overflow: hidden;
-  ${(p) => (p.$pad ? `padding: ${p.theme.space(5)};` : '')}
-  transition: box-shadow ${(p) => p.theme.motion.base}, transform ${(p) => p.theme.motion.base};
-  ${(p) =>
-    p.$interactive
-      ? `&:hover { box-shadow: ${p.theme.shadow.md}; transform: translateY(-1px); }`
-      : ''}
-`;
-
-const HeaderRow = styled.header`
-  display: flex;
-  align-items: center;
-  gap: ${(p) => p.theme.space(3)};
-  padding: ${(p) => p.theme.space(4)} ${(p) => p.theme.space(5)};
-  border-bottom: 1px solid ${(p) => p.theme.color.border};
-`;
-
-const HeaderTitles = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
-`;
-
-const HeaderTitle = styled.h3`
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: ${(p) => p.theme.color.text};
-  letter-spacing: -0.01em;
-`;
-
-const HeaderSubtitle = styled.p`
-  margin: 0;
-  font-size: 13px;
-  color: ${(p) => p.theme.color.textMuted};
-`;
-
-const HeaderExtra = styled.div`
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: ${(p) => p.theme.space(2)};
-`;
-
-const Body = styled.div<{ $pad: boolean }>`
-  ${(p) => (p.$pad ? `padding: ${p.theme.space(5)};` : '')}
-`;
+import clsx from 'clsx';
+import styles from './Card.module.css';
 
 export interface CardHeaderProps {
   title: React.ReactNode;
@@ -63,23 +9,30 @@ export interface CardHeaderProps {
   extra?: React.ReactNode;
   /** Leading icon. */
   icon?: React.ReactNode;
+  className?: string;
 }
 
 /** Header band for a Card: title + optional subtitle, leading icon, and trailing extra. */
-export function CardHeader({ title, subtitle, extra, icon }: CardHeaderProps): React.ReactElement {
+export function CardHeader({
+  title,
+  subtitle,
+  extra,
+  icon,
+  className,
+}: CardHeaderProps): React.ReactElement {
   return (
-    <HeaderRow>
+    <header className={clsx(styles.header, className)}>
       {icon ? (
         <span aria-hidden style={{ fontSize: 20 }}>
           {icon}
         </span>
       ) : null}
-      <HeaderTitles>
-        <HeaderTitle>{title}</HeaderTitle>
-        {subtitle ? <HeaderSubtitle>{subtitle}</HeaderSubtitle> : null}
-      </HeaderTitles>
-      {extra ? <HeaderExtra>{extra}</HeaderExtra> : null}
-    </HeaderRow>
+      <div className={styles.headerTitles}>
+        <h3 className={styles.headerTitle}>{title}</h3>
+        {subtitle ? <p className={styles.headerSubtitle}>{subtitle}</p> : null}
+      </div>
+      {extra ? <div className={styles.headerExtra}>{extra}</div> : null}
+    </header>
   );
 }
 
@@ -96,39 +49,63 @@ export interface CardProps extends Omit<React.HTMLAttributes<HTMLElement>, 'titl
 
 /** Surface container. With `title` it renders a header + padded body; otherwise a plain padded surface. */
 export const Card = React.forwardRef<HTMLElement, CardProps>(function Card(
-  { title, subtitle, extra, icon, interactive = false, bodyPadding = true, children, ...rest },
+  {
+    title,
+    subtitle,
+    extra,
+    icon,
+    interactive = false,
+    bodyPadding = true,
+    className,
+    children,
+    ...rest
+  },
   ref,
 ): React.ReactElement {
   if (title !== undefined || subtitle !== undefined || extra !== undefined) {
     return (
-      <CardRoot ref={ref} $interactive={interactive} $pad={false} {...rest}>
+      <section
+        ref={ref}
+        className={clsx(styles.card, interactive && styles.interactive, className)}
+        {...rest}
+      >
         <CardHeader title={title} subtitle={subtitle} extra={extra} icon={icon} />
-        <Body $pad={bodyPadding}>{children}</Body>
-      </CardRoot>
+        <div className={clsx(bodyPadding && styles.padded)}>{children}</div>
+      </section>
     );
   }
   return (
-    <CardRoot ref={ref} $interactive={interactive} $pad={bodyPadding} {...rest}>
+    <section
+      ref={ref}
+      className={clsx(
+        styles.card,
+        bodyPadding && styles.padded,
+        interactive && styles.interactive,
+        className,
+      )}
+      {...rest}
+    >
       {children}
-    </CardRoot>
+    </section>
   );
 });
 
 /** Body region for a manually-composed Card. */
 export function CardBody({
   padding = true,
+  className,
   children,
 }: {
   padding?: boolean;
+  className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
-  return <Body $pad={padding}>{children}</Body>;
+  return <div className={clsx(padding && styles.padded, className)}>{children}</div>;
 }
 
 /** A lighter inset surface for grouping content inside a page or card. */
-export const Panel = styled.div`
-  background: ${(p) => p.theme.color.surfaceAlt};
-  border: 1px solid ${(p) => p.theme.color.border};
-  border-radius: ${(p) => p.theme.radii.md}px;
-  padding: ${(p) => p.theme.space(4)};
-`;
+export const Panel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  function Panel({ className, ...rest }, ref) {
+    return <div ref={ref} className={clsx(styles.panel, className)} {...rest} />;
+  },
+);

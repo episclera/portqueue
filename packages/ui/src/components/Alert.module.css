@@ -1,0 +1,57 @@
+.root {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--pq-radius-md);
+  color: var(--pq-color-text);
+  font-size: 14px;
+  line-height: 1.5;
+  /* The same semantic colour as the icon, at 12% — a hint of tint, never a fill. */
+  background: color-mix(in srgb, var(--alert-tone) 12%, transparent);
+}
+
+/* The banner's tint and its icon are the same semantic colour, at different strengths. */
+.info {
+  --alert-tone: var(--pq-color-info);
+}
+
+.success {
+  --alert-tone: var(--pq-color-success);
+}
+
+.warning {
+  --alert-tone: var(--pq-color-warning);
+}
+
+.error {
+  --alert-tone: var(--pq-color-danger);
+}
+
+.icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  font-size: 16px;
+  line-height: 1.4;
+  /* The glyph carries the semantic colour; the banner behind it only hints at it. */
+  color: var(--alert-tone);
+}
+
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.message {
+  color: var(--pq-color-text-muted);
+}
+
+.action {
+  flex: 0 0 auto;
+  margin-left: 8px;
+}

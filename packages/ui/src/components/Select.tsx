@@ -1,9 +1,10 @@
 import React from 'react';
-import styled, { css } from 'styled-components';
+import clsx from 'clsx';
 import { Portal } from '../overlay/Portal';
 import { useAnchoredLayer } from '../overlay/useAnchoredLayer';
 import { useDismiss } from '../overlay/useDismiss';
 import { CaretDownIcon, CheckIcon } from '../icons';
+import styles from './Select.module.css';
 
 export type SelectSize = 'sm' | 'md' | 'lg';
 
@@ -20,118 +21,12 @@ export interface SelectProps<T extends string | number> {
   disabled?: boolean;
   block?: boolean;
   size?: SelectSize;
+  className?: string;
+  style?: React.CSSProperties;
 }
-
-const SIZES: Record<SelectSize, { h: number; px: number; fs: number }> = {
-  sm: { h: 30, px: 10, fs: 13 },
-  md: { h: 38, px: 12, fs: 14 },
-  lg: { h: 46, px: 14, fs: 16 },
-};
-
-const Wrapper = styled.div<{ $block: boolean }>`
-  display: ${(p) => (p.$block ? 'block' : 'inline-block')};
-  width: ${(p) => (p.$block ? '100%' : 'auto')};
-`;
-
-const Trigger = styled.button<{ $size: SelectSize; $open: boolean; $placeholder: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: ${(p) => p.theme.space(2)};
-  width: 100%;
-  height: ${(p) => SIZES[p.$size].h}px;
-  padding: 0 ${(p) => SIZES[p.$size].px}px;
-  font-size: ${(p) => SIZES[p.$size].fs}px;
-  font-family: inherit;
-  text-align: left;
-  color: ${(p) => (p.$placeholder ? p.theme.color.textFaint : p.theme.color.text)};
-  background: ${(p) => p.theme.color.surface};
-  border: 1px solid ${(p) => (p.$open ? p.theme.color.brand : p.theme.color.border)};
-  border-radius: ${(p) => p.theme.radii.md}px;
-  cursor: pointer;
-  box-sizing: border-box;
-  transition:
-    border-color ${(p) => p.theme.motion.fast},
-    box-shadow ${(p) => p.theme.motion.fast};
-
-  ${(p) =>
-    p.$open &&
-    css`
-      box-shadow: 0 0 0 3px ${p.theme.color.brand}33;
-    `}
-
-  &:hover:not(:disabled) {
-    border-color: ${(p) => (p.$open ? p.theme.color.brand : p.theme.color.borderStrong)};
-  }
-
-  &:focus-visible {
-    outline: none;
-    border-color: ${(p) => p.theme.color.brand};
-    box-shadow: 0 0 0 3px ${(p) => p.theme.color.brand}33;
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-`;
-
-const Caret = styled(CaretDownIcon)<{ $open: boolean }>`
-  flex: none;
-  font-size: 11px;
-  color: ${(p) => p.theme.color.textMuted};
-  transition: transform ${(p) => p.theme.motion.fast};
-  transform: rotate(${(p) => (p.$open ? '180deg' : '0deg')});
-`;
-
-const Label = styled.span`
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
 
 /** Preferred menu height; shrinks further when the viewport leaves less room. */
 const MAX_MENU_HEIGHT = 260;
-
-/**
- * Rendered in a body portal at fixed viewport coordinates and stretched to the trigger width,
- * so a select inside a Card, a modal or a scrolling table is never clipped or under-stacked.
- */
-const Menu = styled.ul<{ $top: number; $left: number; $width: number; $maxHeight: number }>`
-  position: fixed;
-  top: ${(p) => p.$top}px;
-  left: ${(p) => p.$left}px;
-  width: ${(p) => p.$width}px;
-  z-index: ${(p) => p.theme.zIndex.select};
-  margin: 0;
-  padding: ${(p) => p.theme.space(1)};
-  list-style: none;
-  max-height: ${(p) => p.$maxHeight}px;
-  overflow-y: auto;
-  box-sizing: border-box;
-  background: ${(p) => p.theme.color.surface};
-  border: 1px solid ${(p) => p.theme.color.border};
-  border-radius: ${(p) => p.theme.radii.md}px;
-  box-shadow: ${(p) => p.theme.shadow.md};
-`;
-
-const Item = styled.li<{ $selected: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: ${(p) => p.theme.space(2)};
-  padding: ${(p) => p.theme.space(2)} ${(p) => p.theme.space(3)};
-  font-size: 14px;
-  border-radius: ${(p) => p.theme.radii.sm}px;
-  cursor: pointer;
-  color: ${(p) => (p.$selected ? p.theme.color.brand : p.theme.color.text)};
-  background: ${(p) => (p.$selected ? `${p.theme.color.brand}14` : 'transparent')};
-  font-weight: ${(p) => (p.$selected ? 600 : 400)};
-
-  &:hover {
-    background: ${(p) => p.theme.color.surfaceAlt};
-  }
-`;
 
 /** Bespoke custom-control select — no native `<select>`; keyboard + outside-click aware. */
 export function Select<T extends string | number>({
@@ -142,6 +37,8 @@ export function Select<T extends string | number>({
   disabled = false,
   block = false,
   size = 'md',
+  className,
+  style,
 }: SelectProps<T>): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const { triggerRef, layerRef, position } = useAnchoredLayer<HTMLDivElement, HTMLUListElement>({
@@ -160,48 +57,58 @@ export function Select<T extends string | number>({
   };
 
   return (
-    <Wrapper ref={triggerRef} $block={block}>
-      <Trigger
+    <div
+      ref={triggerRef}
+      className={clsx(styles.wrapper, block && styles.block, className)}
+      style={style}
+    >
+      <button
         type="button"
-        $size={size}
-        $open={open}
-        $placeholder={selected === undefined}
+        className={clsx(
+          styles.trigger,
+          size !== 'md' && styles[size],
+          open && styles.open,
+          selected === undefined && styles.placeholder,
+        )}
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
       >
-        <Label>{selected ? selected.label : placeholder}</Label>
-        <Caret $open={open} aria-hidden />
-      </Trigger>
+        <span className={styles.label}>{selected ? selected.label : placeholder}</span>
+        <CaretDownIcon className={clsx(styles.caret, open && styles.caretOpen)} aria-hidden />
+      </button>
       {open && position ? (
         <Portal>
-          <Menu
+          <ul
             ref={layerRef}
             role="listbox"
-            $top={position.top}
-            $left={position.left}
-            $width={position.width ?? 0}
-            $maxHeight={Math.min(MAX_MENU_HEIGHT, position.maxHeight)}
+            className={styles.menu}
+            style={{
+              top: position.top,
+              left: position.left,
+              width: position.width ?? 0,
+              maxHeight: Math.min(MAX_MENU_HEIGHT, position.maxHeight),
+            }}
           >
             {options.map((option) => {
               const isSelected = option.value === value;
               return (
-                <Item
+                <li
+                  className={clsx(styles.item, isSelected && styles.selected)}
                   key={String(option.value)}
                   role="option"
                   aria-selected={isSelected}
-                  $selected={isSelected}
                   onClick={() => handleSelect(option.value)}
                 >
                   <span>{option.label}</span>
                   {isSelected ? <CheckIcon aria-hidden /> : null}
-                </Item>
+                </li>
               );
             })}
-          </Menu>
+          </ul>
         </Portal>
       ) : null}
-    </Wrapper>
+    </div>
   );
 }

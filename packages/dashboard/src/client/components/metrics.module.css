@@ -1,0 +1,15 @@
+.toned {
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+  font-weight: inherit;
+}
+
+.warn {
+  color: var(--pq-color-warning);
+  font-weight: 600;
+}
+
+.danger {
+  color: var(--pq-color-danger);
+  font-weight: 600;
+}

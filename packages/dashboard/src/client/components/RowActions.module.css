@@ -1,0 +1,12 @@
+/*
+ * Background-free icon button; only the hover state tints, so a row of actions stays quiet. The
+ * doubled class outranks the variant rules of `@portqueue/ui`'s Button, which may combine two.
+ */
+.actionButton.actionButton {
+  background: transparent;
+  border-color: transparent;
+}
+
+.actionButton.actionButton:hover:not(:disabled) {
+  border-color: transparent;
+}

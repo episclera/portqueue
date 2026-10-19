@@ -1,13 +1,10 @@
 // Theme & tokens
-import './theme/styled-augmentation';
 export { tokens } from './theme/tokens';
 export type { StatusColorKey } from './theme/tokens';
 export { typography } from './theme/typography';
-export { lightTheme, darkTheme, themes } from './theme/theme';
-export type { Theme, ThemeColor } from './theme/theme';
 
 // Providers
-export { ThemeProvider, GlobalStyle } from './providers/ThemeProvider';
+export { ThemeProvider, useTheme } from './providers/ThemeProvider';
 export type { ThemeProviderProps } from './providers/ThemeProvider';
 export { ToastProvider, useToast } from './providers/ToastProvider';
 export type { ToastApi, ToastKind } from './providers/ToastProvider';

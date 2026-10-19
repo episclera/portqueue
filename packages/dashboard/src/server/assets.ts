@@ -166,8 +166,9 @@ function htmlResult(html: string, config: DashboardConfigDto): AssetResult {
 
 /**
  * The dashboard's CSP. The SPA has exactly one inline script (the config blob), so it carries a
- * nonce and every other inline script is refused. `style-src` must allow `unsafe-inline`:
- * styled-components injects its rules at runtime into a `<style>` element.
+ * nonce and every other inline script is refused. `style-src` must allow `unsafe-inline`: the
+ * SPA's own styles ship as a stylesheet, but `@ant-design/icons` injects its base icon rules into a
+ * `<style>` element at runtime, and the shell carries a small inline `<style>` of its own.
  */
 function contentSecurityPolicy(nonce: string): string {
   return [

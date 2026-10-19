@@ -1,5 +1,5 @@
 /**
- * Client entry. Mounts the SPA: the shared `@portqueue/ui` styled-components theme (the visitor's
+ * Client entry. Mounts the SPA: the shared `@portqueue/ui` theme (the visitor's
  * own choice, or the OS preference), the toast provider, the TanStack Query cache, and the global
  * LiveProvider.
  */

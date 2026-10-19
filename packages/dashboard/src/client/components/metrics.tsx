@@ -6,7 +6,8 @@
  * reads as a warning in a table and as fine on a detail page would be worse than no colour at all.
  */
 import React from 'react';
-import styled from 'styled-components';
+import clsx from 'clsx';
+import styles from './metrics.module.css';
 
 /**
  * Where a reading stops being comfortable. One pair for both metrics: now that CPU is a share of
@@ -41,17 +42,6 @@ export function metricTone(value: number | null): MetricTone {
   return 'normal';
 }
 
-const Toned = styled.span<{ $tone: MetricTone }>`
-  color: ${(p) =>
-    p.$tone === 'danger'
-      ? p.theme.color.danger
-      : p.$tone === 'warn'
-        ? p.theme.color.warning
-        : 'inherit'};
-  font-variant-numeric: tabular-nums;
-  font-weight: ${(p) => (p.$tone === 'normal' ? 'inherit' : 600)};
-`;
-
 export interface MetricValueProps {
   /** The formatted text to show. */
   children: React.ReactNode;
@@ -61,8 +51,11 @@ export interface MetricValueProps {
 /** A metric reading, coloured only once it is worth an operator's attention. */
 export function MetricValue({ children, tone }: MetricValueProps): React.ReactElement {
   return (
-    <Toned $tone={tone} title={tone === 'normal' ? undefined : `Running ${tone}`}>
+    <span
+      className={clsx(styles.toned, tone !== 'normal' && styles[tone])}
+      title={tone === 'normal' ? undefined : `Running ${tone}`}
+    >
       {children}
-    </Toned>
+    </span>
   );
 }

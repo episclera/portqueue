@@ -1,0 +1,78 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: var(--pq-color-text);
+  font-family: inherit;
+}
+
+/*
+ * Header cell — transparent (no fill band), roomier on the Y axis than the body rows, and the
+ * only place with vertical dividers. Titles keep their given casing. Its horizontal padding
+ * matches the body's so header labels stay aligned with the cells below them.
+ */
+.th {
+  padding: 16px 12px;
+  background: transparent;
+  color: var(--pq-color-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--pq-color-border);
+  border-right: 1px solid var(--pq-color-border);
+}
+
+.th:last-child {
+  border-right: none;
+}
+
+.th.sm {
+  padding: 12px 8px;
+}
+
+/* Rows are static — no hover tint, so a dense table doesn't flicker under the cursor. */
+.clickable {
+  cursor: pointer;
+}
+
+/* Body cell — compact, and divided from the next row only (no vertical rules). */
+.td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--pq-color-border);
+}
+
+.td.sm {
+  padding: 4px 8px;
+}
+
+.left {
+  text-align: left;
+}
+
+.right {
+  text-align: right;
+}
+
+.center {
+  text-align: center;
+}
+
+/* Empty state — given real breathing room so a blank table doesn't read as a broken one. */
+.td.empty {
+  padding-top: 56px;
+  padding-bottom: 56px;
+  text-align: center;
+  color: var(--pq-color-text-faint);
+}
+
+/*
+ * The empty-state icon, sized up to read as a small illustration and centred on its own line.
+ * The wrapper does the block-level layout: the icon package injects `.anticon { display:
+ * inline-flex }` at first render, which would race a `display` set on the icon itself.
+ */
+.emptyGlyph {
+  margin-bottom: 8px;
+  font-size: 28px;
+  line-height: 1;
+}

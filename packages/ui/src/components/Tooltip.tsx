@@ -1,6 +1,7 @@
 import React from 'react';
-import styled from 'styled-components';
+import clsx from 'clsx';
 import { Portal } from '../overlay/Portal';
+import styles from './Tooltip.module.css';
 
 export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 
@@ -13,37 +14,9 @@ export interface TooltipProps {
    */
   block?: boolean;
   children: React.ReactElement;
+  className?: string;
+  style?: React.CSSProperties;
 }
-
-const Wrapper = styled.span<{ $block: boolean }>`
-  position: relative;
-  display: ${(p) => (p.$block ? 'flex' : 'inline-flex')};
-  ${(p) => (p.$block ? 'width: 100%;' : '')}
-`;
-
-/**
- * Rendered in a body portal with fixed coordinates, so an ancestor with `overflow: hidden`
- * (a Card, a horizontally scrolling table) can never clip it. Sits at the top of the stack —
- * a tooltip can be triggered from inside a dialog, a menu or a popover.
- */
-const Bubble = styled.span<{ $top: number; $left: number }>`
-  position: fixed;
-  top: ${(p) => p.$top}px;
-  left: ${(p) => p.$left}px;
-  z-index: ${(p) => p.theme.zIndex.tooltip};
-  max-width: 240px;
-  padding: 5px 9px;
-  font-family: ${(p) => p.theme.font.family};
-  font-size: 12.5px;
-  line-height: 1.4;
-  font-weight: 500;
-  white-space: normal;
-  color: #ffffff;
-  background: #1f2530;
-  border-radius: ${(p) => p.theme.radii.sm}px;
-  box-shadow: ${(p) => p.theme.shadow.md};
-  pointer-events: none;
-`;
 
 const OFFSET = 6;
 const ESTIMATED = { width: 180, height: 30 };
@@ -88,6 +61,8 @@ export const Tooltip = ({
   placement = 'top',
   block = false,
   children,
+  className,
+  style,
 }: TooltipProps): React.ReactElement => {
   const [coords, setCoords] = React.useState<{ top: number; left: number } | null>(null);
   const triggerRef = React.useRef<HTMLSpanElement>(null);
@@ -119,21 +94,27 @@ export const Tooltip = ({
 
   return (
     <>
-      <Wrapper
+      <span
         ref={triggerRef}
-        $block={block}
+        className={clsx(styles.wrapper, block && styles.block, className)}
+        style={style}
         onMouseEnter={show}
         onMouseLeave={hide}
         onFocus={show}
         onBlur={hide}
       >
         {children}
-      </Wrapper>
+      </span>
       {coords ? (
         <Portal>
-          <Bubble ref={bubbleRef} $top={coords.top} $left={coords.left} role="tooltip">
+          <span
+            ref={bubbleRef}
+            className={styles.bubble}
+            style={{ top: coords.top, left: coords.left }}
+            role="tooltip"
+          >
             {title}
-          </Bubble>
+          </span>
         </Portal>
       ) : null}
     </>

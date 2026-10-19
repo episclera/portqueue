@@ -1,0 +1,16 @@
+/* The gutter arrives as a custom property set inline from the `gutter` prop. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: var(--pq-grid-gutter);
+  margin-left: calc(var(--pq-grid-gutter) / -2);
+  margin-right: calc(var(--pq-grid-gutter) / -2);
+}
+
+.col {
+  box-sizing: border-box;
+  min-width: 0;
+  padding-left: calc(var(--pq-grid-gutter) / 2);
+  padding-right: calc(var(--pq-grid-gutter) / 2);
+  flex: 1 1 0;
+}

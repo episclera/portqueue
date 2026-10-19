@@ -1,6 +1,7 @@
 import React from 'react';
-import styled from 'styled-components';
-import { fieldBaseStyles, INPUT_SIZES, type InputSize } from './Input';
+import clsx from 'clsx';
+import type { InputSize } from './Input';
+import styles from './Input.module.css';
 
 /**
  * Extends the native input props so a caller can pass `id`, `name` and any `aria-*`. A
@@ -22,13 +23,6 @@ export interface InputNumberProps extends Omit<
   inputSize?: InputSize;
 }
 
-const StyledInput = styled.input<{ $invalid: boolean; $size: InputSize }>`
-  ${fieldBaseStyles}
-  height: ${(p) => INPUT_SIZES[p.$size].h}px;
-  padding: 0 ${(p) => INPUT_SIZES[p.$size].px}px;
-  font-size: ${(p) => INPUT_SIZES[p.$size].fs}px;
-`;
-
 /** Numeric input — parses to `number | null` (empty string → null) on change. */
 export function InputNumber({
   value,
@@ -40,6 +34,7 @@ export function InputNumber({
   disabled = false,
   invalid = false,
   inputSize = 'md',
+  className,
   ...rest
 }: InputNumberProps): React.ReactElement {
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -53,8 +48,9 @@ export function InputNumber({
   };
 
   return (
-    <StyledInput
+    <input
       {...rest}
+      className={clsx(styles.field, styles[inputSize], invalid && styles.invalid, className)}
       type="number"
       value={value ?? ''}
       onChange={handleChange}
@@ -63,8 +59,6 @@ export function InputNumber({
       step={step}
       placeholder={placeholder}
       disabled={disabled}
-      $invalid={invalid}
-      $size={inputSize}
       aria-invalid={invalid || undefined}
     />
   );

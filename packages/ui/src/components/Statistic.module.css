@@ -1,0 +1,50 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.below {
+  flex-direction: column-reverse;
+}
+
+.label {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--pq-color-text-muted);
+}
+
+.value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--pq-font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--pq-color-text);
+}
+
+.brand {
+  color: var(--pq-color-brand);
+}
+
+.success {
+  color: var(--pq-color-success);
+}
+
+.danger {
+  color: var(--pq-color-danger);
+}
+
+.warning {
+  color: var(--pq-color-warning);
+}
+
+.affix {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--pq-color-text-muted);
+}

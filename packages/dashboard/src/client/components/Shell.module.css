@@ -1,0 +1,164 @@
+/* The chrome's two fixed dimensions; the sticky sidebar and the drawer's scrim both start below the header. */
+.body {
+  --header-height: 60px;
+  --sidebar-width: 182px;
+
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/*
+ * Off-canvas below `md` (768px). `visibility: hidden` matters as much as the transform: a
+ * translated element is still focusable and still reachable by a screen reader, so a "closed"
+ * drawer would otherwise keep every nav link in the tab order behind the page. `visibility`
+ * transitions discretely (it flips at the end), so the slide-out animation still plays.
+ */
+.nav {
+  flex: 0 0 var(--sidebar-width);
+  width: var(--sidebar-width);
+  align-self: flex-start;
+  position: sticky;
+  top: var(--header-height);
+  height: calc(100vh - var(--header-height));
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  background: var(--pq-color-surface);
+  border-right: 1px solid var(--pq-color-border);
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .nav {
+    position: fixed;
+    left: 0;
+    z-index: var(--pq-z-drawer);
+    box-shadow: var(--pq-shadow-lg);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform var(--pq-motion-base),
+      visibility var(--pq-motion-base);
+  }
+
+  .navOpen {
+    transform: translateX(0);
+    visibility: visible;
+  }
+}
+
+.scrim {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: var(--header-height) 0 0 0;
+    z-index: calc(var(--pq-z-drawer) - 1);
+    background: rgba(9, 12, 18, 0.4);
+  }
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navItemLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pq-color-text-muted);
+  text-decoration: none;
+  border-radius: var(--pq-radius-md);
+  transition:
+    background var(--pq-motion-fast),
+    color var(--pq-motion-fast);
+}
+
+.navItemLink:hover {
+  background: var(--pq-color-surface-alt);
+  color: var(--pq-color-text);
+}
+
+/* The brand green at ~14% — a tint, not a fill. */
+.navItemLink.active {
+  background: color-mix(in srgb, var(--pq-color-brand) 14%, transparent);
+  color: var(--pq-color-link);
+}
+
+/* Pinned to the bottom of the sidebar: both links share one row. */
+.navFooter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--pq-color-border);
+}
+
+.navFooterLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 1;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pq-color-text-muted);
+  text-decoration: none;
+  border: 1px solid var(--pq-color-border);
+  border-radius: var(--pq-radius-md);
+  transition:
+    background var(--pq-motion-fast),
+    color var(--pq-motion-fast);
+}
+
+.navFooterLink:hover {
+  background: var(--pq-color-surface-alt);
+  color: var(--pq-color-text);
+  text-decoration: none;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  color: var(--pq-color-text);
+  background: transparent;
+  border: 1px solid var(--pq-color-border);
+  border-radius: var(--pq-radius-md);
+  cursor: pointer;
+}
+
+.burger:hover {
+  background: var(--pq-color-surface-alt);
+}
+
+@media (max-width: 768px) {
+  .burger {
+    display: inline-flex;
+  }
+}

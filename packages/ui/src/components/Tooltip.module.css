@@ -1,0 +1,31 @@
+.wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.block {
+  display: flex;
+  width: 100%;
+}
+
+/*
+ * Rendered in a body portal with fixed coordinates (set inline), so an ancestor with
+ * `overflow: hidden` (a Card, a horizontally scrolling table) can never clip it. Sits at the top
+ * of the stack — a tooltip can be triggered from inside a dialog, a menu or a popover.
+ */
+.bubble {
+  position: fixed;
+  z-index: var(--pq-z-tooltip);
+  max-width: 240px;
+  padding: 5px 9px;
+  font-family: var(--pq-font-family);
+  font-size: 12.5px;
+  line-height: 1.4;
+  font-weight: 500;
+  white-space: normal;
+  color: #ffffff;
+  background: #1f2530;
+  border-radius: var(--pq-radius-sm);
+  box-shadow: var(--pq-shadow-md);
+  pointer-events: none;
+}

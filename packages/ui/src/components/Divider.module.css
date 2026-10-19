@@ -1,0 +1,29 @@
+.hRule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  color: var(--pq-color-text-muted);
+  font-size: 13px;
+}
+
+.plain {
+  height: 1px;
+  background: var(--pq-color-border);
+}
+
+.labelled::before,
+.labelled::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--pq-color-border);
+}
+
+.vRule {
+  display: inline-block;
+  align-self: stretch;
+  width: 1px;
+  min-height: 1em;
+  background: var(--pq-color-border);
+}

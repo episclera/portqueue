@@ -1,7 +1,7 @@
 /** Search box with the magnifier inside the field. Debounced so typing doesn't spam the URL. */
 import React, { useEffect, useState } from 'react';
-import styled from 'styled-components';
 import { CloseIcon, Input, SearchIcon } from '@portqueue/ui';
+import styles from './SearchInput.module.css';
 
 export interface SearchInputProps {
   value: string;
@@ -11,51 +11,6 @@ export interface SearchInputProps {
 
 /** How long to wait after the last keystroke before pushing the term into the URL. */
 const DEBOUNCE_MS = 300;
-
-const Wrapper = styled.div`
-  position: relative;
-  width: 220px;
-  max-width: 100%;
-`;
-
-const Icon = styled(SearchIcon)`
-  position: absolute;
-  top: 50%;
-  left: 10px;
-  transform: translateY(-50%);
-  font-size: 12px;
-  line-height: 1;
-  opacity: 0.6;
-  pointer-events: none;
-`;
-
-/** The magnifier sits inside the field, so the input needs room for it. */
-const Field = styled(Input)`
-  padding-left: 30px;
-`;
-
-const Clear = styled.button`
-  position: absolute;
-  top: 50%;
-  right: 6px;
-  transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  font-size: 11px;
-  color: ${(p) => p.theme.color.textMuted};
-  background: transparent;
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
-  &:hover {
-    background: ${(p) => p.theme.color.surfaceAlt};
-    color: ${(p) => p.theme.color.text};
-  }
-`;
 
 export function SearchInput({
   value,
@@ -74,9 +29,10 @@ export function SearchInput({
   }, [draft, value, onChange]);
 
   return (
-    <Wrapper>
-      <Icon aria-hidden />
-      <Field
+    <div className={styles.wrapper}>
+      <SearchIcon className={styles.icon} aria-hidden />
+      <Input
+        className={styles.field}
         inputSize="sm"
         value={draft}
         placeholder={placeholder}
@@ -84,7 +40,8 @@ export function SearchInput({
         onChange={(e) => setDraft(e.target.value)}
       />
       {draft ? (
-        <Clear
+        <button
+          className={styles.clear}
           type="button"
           aria-label="Clear search"
           onClick={() => {
@@ -93,8 +50,8 @@ export function SearchInput({
           }}
         >
           <CloseIcon aria-hidden />
-        </Clear>
+        </button>
       ) : null}
-    </Wrapper>
+    </div>
   );
 }

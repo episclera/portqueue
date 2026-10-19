@@ -1,0 +1,64 @@
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.wrapper {
+  display: inline-block;
+}
+
+/*
+ * Rendered in a body portal at fixed viewport coordinates (set inline): a row-action popover has
+ * to escape the table cell that would otherwise clip it, and outrank the dialog it may be opened
+ * inside. `min-width` matches `MIN_WIDTH` in the component.
+ */
+.popover {
+  position: fixed;
+  z-index: var(--pq-z-popover);
+  min-width: 220px;
+  max-width: 300px;
+  padding: 12px 16px;
+  background: var(--pq-color-surface);
+  color: var(--pq-color-text);
+  border: 1px solid var(--pq-color-border);
+  border-radius: var(--pq-radius-md);
+  box-shadow: var(--pq-shadow-lg);
+  animation: popIn var(--pq-motion-fast);
+}
+
+.title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pq-color-text);
+}
+
+/* The question mark leads the prompt in the caution colour, since every use is a confirm. */
+.titleIcon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--pq-color-warning);
+}
+
+.description {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--pq-color-text-muted);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}

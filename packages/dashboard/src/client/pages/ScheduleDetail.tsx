@@ -24,7 +24,6 @@ import {
   Tag,
   Title,
 } from '@portqueue/ui';
-import styled from 'styled-components';
 import { ActionKind, type ScheduleDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
@@ -35,29 +34,7 @@ import { cadence } from '../components/SchedulesPanel';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
 import { truncate } from '../components/format';
-
-const DescGrid = styled.dl`
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: ${(p) => p.theme.space(3)};
-  margin: 0;
-  @media (min-width: 480px) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-`;
-
-const DescLabel = styled.dt`
-  font-size: 12px;
-  color: ${(p) => p.theme.color.textMuted};
-  margin-bottom: 2px;
-`;
-
-const DescValue = styled.dd`
-  margin: 0;
-  font-size: 14px;
-  color: ${(p) => p.theme.color.text};
-  word-break: break-word;
-`;
+import styles from './ScheduleDetail.module.css';
 
 function Item({
   label,
@@ -68,8 +45,8 @@ function Item({
 }): React.ReactElement {
   return (
     <div>
-      <DescLabel>{label}</DescLabel>
-      <DescValue>{children}</DescValue>
+      <dt className={styles.descLabel}>{label}</dt>
+      <dd className={styles.descValue}>{children}</dd>
     </div>
   );
 }
@@ -210,7 +187,7 @@ export function ScheduleDetailPage(): React.ReactElement {
       <Content>
         <Stack gap={4}>
           <Card title="Definition">
-            <DescGrid>
+            <dl className={styles.descGrid}>
               <Item label="Schedule id">
                 <Mono>{s.scheduleId}</Mono>
               </Item>
@@ -233,7 +210,7 @@ export function ScheduleDetailPage(): React.ReactElement {
               <Item label="Idempotency key">
                 {s.idempotencyKey ? <Mono>{s.idempotencyKey}</Mono> : '—'}
               </Item>
-            </DescGrid>
+            </dl>
           </Card>
 
           <Stack gap={2}>

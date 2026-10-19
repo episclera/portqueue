@@ -1,7 +1,7 @@
 /**
  * App shell + routing. The chrome (top bar, left sidebar, mobile drawer) lives in `Shell`;
  * each page renders its own full-width subheader band followed by its content. Uses
- * react-router v5; layout + primitives come from `@portqueue/ui` (styled-components).
+ * react-router v5; layout + primitives come from `@portqueue/ui` (CSS Modules).
  */
 import React from 'react';
 import { HashRouter, Link, Route, Switch as RouteSwitch, useLocation } from 'react-router-dom';
@@ -40,7 +40,7 @@ function Routes(): React.ReactElement {
           <Content>
             <Stack gap={2}>
               <Title level={3}>Not found</Title>
-              <Text $tone="muted">
+              <Text tone="muted">
                 <Link to="/">Back to overview</Link>
               </Text>
             </Stack>

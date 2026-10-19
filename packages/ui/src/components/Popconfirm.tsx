@@ -1,10 +1,11 @@
 import React from 'react';
-import styled, { keyframes } from 'styled-components';
+import clsx from 'clsx';
 import { Button } from './Button';
 import { Portal } from '../overlay/Portal';
 import { useAnchoredLayer } from '../overlay/useAnchoredLayer';
 import { useDismiss } from '../overlay/useDismiss';
 import { ConfirmIcon } from '../icons';
+import styles from './Popconfirm.module.css';
 
 export interface PopconfirmProps {
   title: React.ReactNode;
@@ -14,70 +15,12 @@ export interface PopconfirmProps {
   okText?: string;
   cancelText?: string;
   okDanger?: boolean;
+  className?: string;
   children: React.ReactElement;
 }
 
-const popIn = keyframes`
-  from { opacity: 0; transform: translateY(4px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-`;
-
-const Wrapper = styled.span`
-  display: inline-block;
-`;
-
+/** Kept in step with `.popover`'s `min-width` in the module. */
 const MIN_WIDTH = 220;
-
-/**
- * Rendered in a body portal at fixed viewport coordinates: a row-action popover has to escape
- * the table cell that would otherwise clip it, and outrank the dialog it may be opened inside.
- */
-const Popover = styled.div<{ $top: number; $left: number }>`
-  position: fixed;
-  top: ${(p) => p.$top}px;
-  left: ${(p) => p.$left}px;
-  z-index: ${(p) => p.theme.zIndex.popover};
-  min-width: ${MIN_WIDTH}px;
-  max-width: 300px;
-  padding: ${(p) => p.theme.space(3)} ${(p) => p.theme.space(4)};
-  background: ${(p) => p.theme.color.surface};
-  color: ${(p) => p.theme.color.text};
-  border: 1px solid ${(p) => p.theme.color.border};
-  border-radius: ${(p) => p.theme.radii.md}px;
-  box-shadow: ${(p) => p.theme.shadow.lg};
-  animation: ${popIn} ${(p) => p.theme.motion.fast};
-`;
-
-const Title = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: ${(p) => p.theme.space(2)};
-  font-size: 14px;
-  font-weight: 600;
-  color: ${(p) => p.theme.color.text};
-`;
-
-/** The question mark leads the prompt in the caution colour, since every use is a confirm. */
-const TitleIcon = styled(ConfirmIcon)`
-  flex: none;
-  margin-top: 2px;
-  color: ${(p) => p.theme.color.warning};
-`;
-
-const Description = styled.div`
-  margin-top: ${(p) => p.theme.space(1)};
-  font-size: 13px;
-  line-height: 1.45;
-  color: ${(p) => p.theme.color.textMuted};
-`;
-
-const Actions = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: ${(p) => p.theme.space(2)};
-  margin-top: ${(p) => p.theme.space(3)};
-`;
 
 /** Bespoke confirmation popover, portalled to the body and anchored to its trigger child. */
 export const Popconfirm = ({
@@ -88,6 +31,7 @@ export const Popconfirm = ({
   okText = 'OK',
   cancelText = 'Cancel',
   okDanger = false,
+  className,
   children,
 }: PopconfirmProps): React.ReactElement => {
   const [open, setOpen] = React.useState(false);
@@ -117,24 +61,31 @@ export const Popconfirm = ({
 
   return (
     <>
-      <Wrapper ref={triggerRef}>{trigger}</Wrapper>
+      <span ref={triggerRef} className={clsx(styles.wrapper, className)}>
+        {trigger}
+      </span>
       {open && position ? (
         <Portal>
-          <Popover ref={layerRef} role="dialog" $top={position.top} $left={position.left}>
-            <Title>
-              <TitleIcon aria-hidden />
+          <div
+            ref={layerRef}
+            className={styles.popover}
+            role="dialog"
+            style={{ top: position.top, left: position.left }}
+          >
+            <div className={styles.title}>
+              <ConfirmIcon className={styles.titleIcon} aria-hidden />
               <span>{title}</span>
-            </Title>
-            {description != null ? <Description>{description}</Description> : null}
-            <Actions>
+            </div>
+            {description != null ? <div className={styles.description}>{description}</div> : null}
+            <div className={styles.actions}>
               <Button variant="text" size="sm" onClick={handleCancel}>
                 {cancelText}
               </Button>
               <Button variant={okDanger ? 'danger' : 'primary'} size="sm" onClick={handleConfirm}>
                 {okText}
               </Button>
-            </Actions>
-          </Popover>
+            </div>
+          </div>
         </Portal>
       ) : null}
     </>

@@ -1,0 +1,64 @@
+/* Doubled so it outranks the Title's own font-family. */
+.monoTitle.monoTitle {
+  font-family: var(--pq-font-mono);
+}
+
+.descGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin: 0;
+}
+
+@media (min-width: 480px) {
+  .descGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.descLabel {
+  font-size: 12px;
+  color: var(--pq-color-text-muted);
+  margin-bottom: 2px;
+}
+
+.descValue {
+  margin: 0;
+  font-size: 14px;
+  color: var(--pq-color-text);
+  word-break: break-word;
+}
+
+.innerCard {
+  margin-top: 16px;
+  border: 1px solid var(--pq-color-border);
+  border-radius: var(--pq-radius-md);
+  overflow: hidden;
+}
+
+.innerCardTitle {
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pq-color-text);
+  background: var(--pq-color-surface-alt);
+  border-bottom: 1px solid var(--pq-color-border);
+}
+
+.innerCardBody {
+  padding: 12px;
+}
+
+.pre {
+  margin: 0;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  font-family: var(--pq-font-mono);
+  color: var(--pq-color-text);
+}
+
+.preDanger {
+  color: var(--pq-color-danger);
+}

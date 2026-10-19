@@ -1,30 +1,58 @@
-:root {
-  --pq-radius-md: 10px;
-  --pq-radius-lg: 16px;
-  --pq-shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.06);
-  --pq-motion-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+/*
+ * Base page styles, applied only when `ThemeProvider` is given `applyGlobalStyles` (it sets
+ * `data-pq-global` on `<html>`). Gated on that attribute rather than on whether the file is
+ * imported, so a host that manages its own body — the docs site — can render the library without
+ * inheriting these.
+ *
+ * The short unprefixed names (`--bg`, `--primary`, …) are the ones the docs site's Infima theme
+ * also defines, kept here so a style written against either surface reads the same palette.
+ */
+
+html[data-pq-global] {
+  --bg: var(--pq-color-bg);
+  --surface: var(--pq-color-surface);
+  --primary: var(--pq-color-brand);
+  --primary-dark: var(--pq-color-brand-hover);
+  --link: var(--pq-color-link);
+  --secondary: var(--pq-color-border);
+  --text: var(--pq-color-text);
+  --text-muted: var(--pq-color-text-muted);
+  --danger: var(--pq-color-danger);
+  --danger-dark: var(--pq-color-danger-hover);
+  --warning: var(--pq-color-warning);
+  --warning-dark: var(--pq-color-warning-hover);
+  --info: var(--pq-color-info);
 }
 
-* {
+html[data-pq-global] *,
+html[data-pq-global] *::before,
+html[data-pq-global] *::after {
   box-sizing: border-box;
 }
 
-/* Soft, content-first surfaces over hard borders. */
-.pq-surface {
-  border-radius: var(--pq-radius-lg);
-  box-shadow: var(--pq-shadow-md);
-  transition:
-    box-shadow var(--pq-motion-base),
-    transform var(--pq-motion-base);
+html[data-pq-global] a {
+  color: var(--pq-color-link);
+  text-decoration: none;
 }
 
-.pq-surface:hover {
-  transform: translateY(-1px);
+html[data-pq-global] a:hover {
+  text-decoration: underline;
+}
+
+html[data-pq-global] body {
+  margin: 0;
+  background: var(--pq-color-bg);
+  color: var(--pq-color-text);
+  font-family: var(--pq-font-family);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-    animation: none !important;
+  html[data-pq-global] *,
+  html[data-pq-global] *::before,
+  html[data-pq-global] *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -6,7 +6,6 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import styled from 'styled-components';
 import { Code, Table, Tag } from '@portqueue/ui';
 import type { DropdownItem, TableColumn } from '@portqueue/ui';
 import { ActionKind, type ScheduleDto, type SchedulePageDto } from '../../shared/dto';
@@ -21,17 +20,12 @@ import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
 import type { FilterDef } from './FiltersModal';
 import { BulkActionsButton, ConfirmModal, RowAction, RowActions } from './RowActions';
+import styles from './SchedulesPanel.module.css';
 
 export interface SchedulesPanelProps {
   /** Narrow to one queue's schedules. Omitted on the all-queues page. */
   queue?: string;
 }
-
-/** Generated schedule ids are as long as job ids, and truncate the same way. */
-const MonoLink = styled(Link)`
-  font-family: ${(p) => p.theme.font.mono};
-  font-size: 12px;
-`;
 
 const FILTER_KEYS = ['state'] as const;
 
@@ -92,9 +86,9 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
       title: 'Schedule',
       key: 'scheduleId',
       render: (r) => (
-        <MonoLink to={`/schedules/${encodeURIComponent(r.scheduleId)}`}>
+        <Link className={styles.monoLink} to={`/schedules/${encodeURIComponent(r.scheduleId)}`}>
           {truncate(r.scheduleId)}
-        </MonoLink>
+        </Link>
       ),
     },
     {

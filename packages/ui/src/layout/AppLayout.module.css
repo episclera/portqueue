@@ -1,0 +1,108 @@
+/* Full-height application shell — sets the page background, base text colour and font. */
+.appShell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--pq-color-bg);
+  color: var(--pq-color-text);
+  font-family: var(--pq-font-family);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--pq-z-header);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 60px;
+  padding: 0 clamp(12px, 3vw, 28px);
+  background: var(--pq-color-surface);
+  border-bottom: 1px solid var(--pq-color-border);
+}
+
+.headerSlot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.headerCenter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* `clamp(16px, 2vw, 24px)` is the single page gutter, shared by the content and the subheader. */
+.content {
+  width: 100%;
+  padding: clamp(16px, 2vw, 24px);
+}
+
+.footer {
+  margin-top: auto;
+  padding: 24px clamp(16px, 3vw, 32px);
+  border-top: 1px solid var(--pq-color-border);
+  color: var(--pq-color-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/*
+ * Full-bleed band: title + one-line description on the left, actions hard right on the same
+ * row. Rendered as a sibling of `Content` (not inside it) so it spans the whole width.
+ */
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 16px clamp(16px, 2vw, 24px);
+  background: var(--pq-color-surface);
+  border-bottom: 1px solid var(--pq-color-border);
+}
+
+/* sm breakpoint. */
+@media (max-width: 640px) {
+  .pageHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.pageHeaderText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pageTitle {
+  margin: 0;
+  font-family: var(--pq-font-display);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--pq-color-text);
+}
+
+.pageSubtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pq-color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pageHeaderExtra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  flex-wrap: wrap;
+}

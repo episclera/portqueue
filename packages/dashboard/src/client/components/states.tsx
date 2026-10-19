@@ -52,8 +52,8 @@ export function ErrorState({ title, error, onRetry }: ErrorStateProps): React.Re
       }
     >
       <Stack gap={1}>
-        <Text $small>{messageOf(error)}</Text>
-        <Text $tone="muted" $small>
+        <Text small>{messageOf(error)}</Text>
+        <Text tone="muted" small>
           The queue itself keeps running — this only affects what the dashboard can display.
         </Text>
       </Stack>
@@ -83,9 +83,9 @@ export function EmptyState({
 }: EmptyStateProps): React.ReactElement {
   return (
     <Stack gap={1} align="center">
-      <Text $tone="muted">{message}</Text>
+      <Text tone="muted">{message}</Text>
       {hint ? (
-        <Text $tone="muted" $small>
+        <Text tone="muted" small>
           {hint}{' '}
           {docsHref ? (
             <a href={docsHref} target="_blank" rel="noreferrer noopener">

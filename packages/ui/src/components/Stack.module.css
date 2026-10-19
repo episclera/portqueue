@@ -1,0 +1,17 @@
+/* The gap arrives per instance as `--pq-gap` (the 4px spacing scale, already in px). */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pq-gap);
+}
+
+.inline {
+  display: flex;
+  flex-direction: row;
+  gap: var(--pq-gap);
+  flex-wrap: nowrap;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
