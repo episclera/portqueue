@@ -1,0 +1,188 @@
+/*
+ * Landing page styles. A CSS Module rather than styled-components: Docusaurus extracts these into
+ * the static build, so the pre-rendered HTML is styled on first paint. styled-components only
+ * injects its rules at runtime, and its generated class names differ between the server and the
+ * client bundle, so the hydrated page kept the server's names with no matching rules.
+ */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 6rem 1rem 5rem;
+  text-align: center;
+  background:
+    radial-gradient(1200px 500px at 50% -10%, rgba(169, 216, 184, 0.3), transparent 70%),
+    radial-gradient(900px 400px at 85% 10%, rgba(143, 184, 216, 0.22), transparent 65%);
+}
+
+.heroBrand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.heroLogo {
+  width: 88px;
+  height: 88px;
+  filter: drop-shadow(0 8px 24px rgba(111, 161, 132, 0.3));
+}
+
+.heroTitle {
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0;
+  color: var(--primary-dark);
+}
+
+.heroTagline {
+  font-size: clamp(1.05rem, 2.5vw, 1.4rem);
+  max-width: 42rem;
+  margin: 0 auto 1rem;
+  opacity: 0.85;
+}
+
+.ctas {
+  display: flex;
+  gap: 0.9rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+  padding: 0 1.4rem;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 120ms ease;
+}
+
+.cta:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  border-color: var(--primary);
+}
+
+/* On the green primary fill, text is always the near-black brand text (never white),
+   in both light and dark themes; the surface secondary follows the theme text colour. */
+.ctaPrimary,
+.ctaPrimary:hover {
+  color: #1b1f1d;
+}
+
+.ctaPrimary {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+}
+
+.ctaPrimary:hover {
+  background: var(--primary-dark);
+}
+
+.ctaSecondary,
+.ctaSecondary:hover {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.ctaSecondary {
+  border: 1px solid var(--secondary);
+}
+
+.section {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 4rem 1.25rem;
+}
+
+.sectionTight {
+  padding: 1.5rem 1.25rem 4rem;
+}
+
+.sectionTitle {
+  text-align: center;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.sectionLead {
+  text-align: center;
+  opacity: 0.75;
+  max-width: 40rem;
+  margin: 0 auto 2.5rem;
+}
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+
+.feature {
+  display: flex;
+  flex-direction: column;
+  padding: 1.6rem;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--secondary);
+  box-shadow: var(--ifm-global-shadow-md);
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.feature:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--ifm-global-shadow-tl);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feature,
+  .feature:hover {
+    transform: none;
+  }
+}
+
+.featureIcon {
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+  display: block;
+  color: var(--primary-dark);
+}
+
+.featureTitle {
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.featureBody {
+  font-size: 0.95rem;
+  opacity: 0.8;
+  margin: 0;
+}
+
+.featureLink {
+  margin-top: auto;
+  padding-top: 1rem;
+  align-self: flex-start;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--primary-dark);
+}
+
+.featureLink:hover {
+  text-decoration: none;
+  color: var(--primary);
+}

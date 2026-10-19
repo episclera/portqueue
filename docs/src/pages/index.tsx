@@ -3,7 +3,7 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import CodeBlock from '@theme/CodeBlock';
-import styled from 'styled-components';
+import clsx from 'clsx';
 import {
   ArrowRightOutlined,
   ClearOutlined,
@@ -13,6 +13,7 @@ import {
   GlobalOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
+import styles from './index.module.css';
 
 /**
  * The docs site has no dependency on `@portqueue/ui`, so it imports `@ant-design/icons`
@@ -102,161 +103,6 @@ pq.createQueue<{ to: string }>({
 // Every operation is a method on \`pq\`, with the queue named in it.
 await pq.addJob({ queue: QueueName.Emails, data: { to: 'a@b.com' } });`;
 
-const Hero = styled.header`
-  position: relative;
-  overflow: hidden;
-  padding: 6rem 1rem 5rem;
-  text-align: center;
-  background:
-    radial-gradient(1200px 500px at 50% -10%, rgba(169, 216, 184, 0.3), transparent 70%),
-    radial-gradient(900px 400px at 85% 10%, rgba(143, 184, 216, 0.22), transparent 65%);
-`;
-
-const HeroBrand = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-bottom: 0.25rem;
-`;
-
-const HeroLogo = styled.img`
-  width: 88px;
-  height: 88px;
-  filter: drop-shadow(0 8px 24px rgba(111, 161, 132, 0.3));
-`;
-
-const HeroTitle = styled.h1`
-  font-size: clamp(2.4rem, 6vw, 4rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  margin: 0;
-  color: var(--primary-dark);
-`;
-
-const HeroTagline = styled.p`
-  font-size: clamp(1.05rem, 2.5vw, 1.4rem);
-  max-width: 42rem;
-  margin: 0 auto 1rem;
-  opacity: 0.85;
-`;
-
-const Ctas = styled.div`
-  display: flex;
-  gap: 0.9rem;
-  justify-content: center;
-  flex-wrap: wrap;
-`;
-
-const CtaButton = styled(Link)<{ $variant?: 'primary' | 'secondary' }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 46px;
-  padding: 0 1.4rem;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 1rem;
-  text-decoration: none;
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    transform 120ms ease;
-  border: 1px solid ${(p) => (p.$variant === 'primary' ? 'var(--primary)' : 'var(--secondary)')};
-  background: ${(p) => (p.$variant === 'primary' ? 'var(--primary)' : 'var(--surface)')};
-  /* On the green primary fill, text is always the near-black brand text (never white),
-     in both light and dark themes; the surface secondary follows the theme text colour. */
-  color: ${(p) => (p.$variant === 'primary' ? '#1b1f1d' : 'var(--text)')};
-  &:hover {
-    text-decoration: none;
-    color: ${(p) => (p.$variant === 'primary' ? '#1b1f1d' : 'var(--text)')};
-    transform: translateY(-1px);
-    background: ${(p) => (p.$variant === 'primary' ? 'var(--primary-dark)' : 'var(--surface)')};
-    border-color: var(--primary);
-  }
-`;
-
-const Section = styled.section<{ $tight?: boolean }>`
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: ${(p) => (p.$tight ? '1.5rem 1.25rem 4rem' : '4rem 1.25rem')};
-`;
-
-const SectionTitle = styled.h2`
-  text-align: center;
-  font-size: clamp(1.6rem, 4vw, 2.2rem);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin-bottom: 0.5rem;
-`;
-
-const SectionLead = styled.p`
-  text-align: center;
-  opacity: 0.75;
-  max-width: 40rem;
-  margin: 0 auto 2.5rem;
-`;
-
-const FeatureGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.25rem;
-`;
-
-const Feature = styled.div`
-  display: flex;
-  flex-direction: column;
-  padding: 1.6rem;
-  border-radius: 16px;
-  background: var(--surface);
-  border: 1px solid var(--secondary);
-  box-shadow: var(--ifm-global-shadow-md);
-  transition:
-    transform 200ms ease,
-    box-shadow 200ms ease;
-  &:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--ifm-global-shadow-tl);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    &,
-    &:hover {
-      transform: none;
-    }
-  }
-`;
-
-const FeatureIcon = styled.span`
-  font-size: 1.75rem;
-  margin-bottom: 0.5rem;
-  display: block;
-  color: var(--primary-dark);
-`;
-
-const FeatureTitle = styled.div`
-  font-weight: 700;
-  margin-bottom: 0.35rem;
-`;
-
-const FeatureBody = styled.p`
-  font-size: 0.95rem;
-  opacity: 0.8;
-  margin: 0;
-`;
-
-const FeatureLink = styled(Link)`
-  margin-top: auto;
-  padding-top: 1rem;
-  align-self: flex-start;
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--primary-dark);
-  &:hover {
-    text-decoration: none;
-    color: var(--primary);
-  }
-`;
-
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
   // Keyword-rich meta description for the highest-traffic page (SEO landing page).
@@ -265,60 +111,62 @@ export default function Home(): ReactNode {
     'delayed & cron jobs, retries, retention, and rate limiting on Postgres, PGLite, SQLite, Oracle, or MySQL.';
   return (
     <Layout title="PortQueue" description={description}>
-      <Hero>
-        <HeroBrand>
-          <HeroLogo src="/portqueue/img/logo.svg" alt="PortQueue logo" />
-          <HeroTitle>PortQueue</HeroTitle>
-        </HeroBrand>
-        <HeroTagline>{siteConfig.tagline}</HeroTagline>
-        <Ctas>
-          <CtaButton $variant="primary" to="/docs/getting-started">
+      <header className={styles.hero}>
+        <div className={styles.heroBrand}>
+          <img className={styles.heroLogo} src="/portqueue/img/logo.svg" alt="PortQueue logo" />
+          <h1 className={styles.heroTitle}>PortQueue</h1>
+        </div>
+        <p className={styles.heroTagline}>{siteConfig.tagline}</p>
+        <div className={styles.ctas}>
+          <Link className={clsx(styles.cta, styles.ctaPrimary)} to="/docs/getting-started">
             Get Started
-          </CtaButton>
-          <CtaButton
-            $variant="secondary"
+          </Link>
+          <Link
+            className={clsx(styles.cta, styles.ctaSecondary)}
             to="https://github.com/episclera/portqueue"
             target="_blank"
             rel="noopener noreferrer"
           >
             GitHub
-          </CtaButton>
-        </Ctas>
-      </Hero>
+          </Link>
+        </div>
+      </header>
 
       <main>
-        <Section $tight>
-          <FeatureGrid>
+        <section className={clsx(styles.section, styles.sectionTight)}>
+          <div className={styles.featureGrid}>
             {FEATURES.map((f) => (
-              <Feature key={f.title}>
-                <FeatureIcon aria-hidden>
+              <div key={f.title} className={styles.feature}>
+                <span className={styles.featureIcon} aria-hidden>
                   <f.icon />
-                </FeatureIcon>
-                <FeatureTitle>{f.title}</FeatureTitle>
-                <FeatureBody>{f.body}</FeatureBody>
-                <FeatureLink to={f.to}>
+                </span>
+                <div className={styles.featureTitle}>{f.title}</div>
+                <p className={styles.featureBody}>{f.body}</p>
+                <Link className={styles.featureLink} to={f.to}>
                   {f.cta} <ArrowRightOutlined aria-hidden />
-                </FeatureLink>
-              </Feature>
+                </Link>
+              </div>
             ))}
-          </FeatureGrid>
-        </Section>
+          </div>
+        </section>
 
-        <Section>
-          <SectionTitle>At a glance</SectionTitle>
-          <SectionLead>Add a job, process it on a worker. Same code on any driver.</SectionLead>
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>At a glance</h2>
+          <p className={styles.sectionLead}>
+            Add a job, process it on a worker. Same code on any driver.
+          </p>
           <CodeBlock language="ts" title="app.ts">
             {QUICK_START}
           </CodeBlock>
-        </Section>
+        </section>
 
-        <Section id="license">
-          <SectionTitle>License</SectionTitle>
-          <SectionLead>
+        <section id="license" className={styles.section}>
+          <h2 className={styles.sectionTitle}>License</h2>
+          <p className={styles.sectionLead}>
             PortQueue is <strong>absolutely free</strong> — open source under the MIT license.
             Commercial use permitted, no license fee, no obligations. Use it in anything, forever.
-          </SectionLead>
-        </Section>
+          </p>
+        </section>
       </main>
     </Layout>
   );

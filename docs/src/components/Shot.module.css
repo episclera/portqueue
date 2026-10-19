@@ -1,0 +1,122 @@
+/* A CSS Module, not styled-components, so these rules ship in the static build (see pages/index.module.css). */
+
+.block {
+  margin: 1.5rem 0 2.5rem;
+}
+
+.copy > :first-child {
+  margin-top: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.thumb {
+  position: relative;
+  flex: 1 1 320px;
+  max-width: 100%;
+  padding: 0;
+  border: 1px solid var(--secondary);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--ifm-global-shadow-lw);
+  cursor: zoom-in;
+  transition: box-shadow var(--ifm-transition-fast) ease-out;
+}
+
+.thumb img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.thumb:hover,
+.thumb:focus-visible {
+  box-shadow: var(--ifm-global-shadow-md);
+}
+
+.thumb:hover > .overlay,
+.thumb:focus-visible > .overlay {
+  opacity: 1;
+}
+
+/* Sits over the thumbnail on hover: a dim wash plus the zoom glyph, so the click is discoverable. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(27, 31, 29, 0.34);
+  color: #fff;
+  font-size: 1.75rem;
+  opacity: 0;
+  transition: opacity var(--ifm-transition-fast) ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb,
+  .overlay {
+    transition: none;
+  }
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem;
+  background: rgba(23, 26, 25, 0.82);
+  cursor: zoom-out;
+}
+
+@media (max-width: 996px) {
+  .backdrop {
+    padding: 1rem;
+  }
+}
+
+.full {
+  max-width: min(1400px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 12px;
+  cursor: default;
+  box-shadow: var(--ifm-global-shadow-tl);
+}
+
+.full img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.closeButton {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.closeButton:hover,
+.closeButton:focus-visible {
+  background: rgba(255, 255, 255, 0.26);
+}
