@@ -1,6 +1,6 @@
 {
   "name": "@portqueue/dashboard",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Self-hostable React dashboard middleware for PortQueue.",
   "license": "MIT",
   "homepage": "https://episclera.github.io/portqueue",
@@ -50,7 +50,7 @@
     "test:coverage": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --coverage --passWithNoTests"
   },
   "peerDependencies": {
-    "@portqueue/core": "^0.1.0"
+    "@portqueue/core": "^0.2.0"
   },
   "devDependencies": {
     "@ant-design/icons": "^6.3.2",
