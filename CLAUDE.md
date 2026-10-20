@@ -266,7 +266,10 @@ in three sections, and no section at all when there is nothing to put in it.
 
 ## Tooling
 - Each workspace owns a standalone `tsconfig.json`, `eslint.config.mjs`, `package.json`. No root `extends`.
-- Conventional commits enforced.
+- Conventional commits enforced — and they **are** the release: release-please reads them to pick the
+  next version (`fix` → patch, `feat` → minor, `!`/`BREAKING CHANGE` → major) and write the CHANGELOGs.
+  `core`, `dashboard` and `cli` always share one version. Only use `!` for a genuine break of the
+  published API; it ships a new major. There are no changeset files.
 
 ## Testing
 - Jest + ts-jest. A fresh, clean database per suite; an injectable clock so nothing waits on real time.

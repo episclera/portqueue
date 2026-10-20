@@ -30,7 +30,11 @@ npm run lint       # ESLint + `tsc --noEmit` in one step
 ```
 
 Commits follow **[Conventional Commits](https://www.conventionalcommits.org)** (enforced
-by commitlint) — the changelog is derived from them.
+by commitlint) — the changelog *and the version* are derived from them. Releases are cut by
+[release-please](https://github.com/googleapis/release-please): every push to `main` updates an open
+release PR, and merging it publishes `@portqueue/core`, `@portqueue/dashboard` and `@portqueue/cli`
+together at one shared version. `fix:` ships a patch, `feat:` a minor, and `!` (or a
+`BREAKING CHANGE:` footer) a major — so reserve `!` for real breaks of the public API.
 
 **Automated tests run on PGLite + SQLite only**, so they need no external DB server. Both are
 in-process, so the whole suite — the conformance kit included — runs anywhere; and because PGLite *is*

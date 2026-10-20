@@ -22,9 +22,7 @@
     "test:oracle": "npm run test:oracle --workspace @portqueue/core",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "changeset": "changeset",
-    "version": "changeset version && npm install --package-lock-only --ignore-scripts",
-    "release": "npm run build && changeset publish",
+    "release": "npm publish -w @portqueue/core -w @portqueue/dashboard -w @portqueue/cli",
     "setup": "bash scripts/dev/setup.sh",
     "cli": "bash scripts/cli/sqlite.sh",
     "dev:docs": "bash scripts/dev/start-docs.sh",
@@ -45,7 +43,6 @@
     "example:transactional": "bash scripts/dev/examples/transactional-enqueue.sh"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.0",
     "@types/node": "^22.10.0",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0"
