@@ -1,5 +1,23 @@
 # @portqueue/cli
 
+## [1.0.1](https://github.com/episclera/portqueue/compare/cli-v1.0.0...cli-v1.0.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **cli:** drop leading ./ from bin path so npm stops warning on publish ([cbf2cc7](https://github.com/episclera/portqueue/commit/cbf2cc7246a82d5cb126c56a589a14ad8946c06c))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @portqueue/dashboard bumped from ^1.0.0 to ^1.0.1
+  * devDependencies
+    * @portqueue/core bumped from * to 1.0.1
+  * peerDependencies
+    * @portqueue/core bumped from ^1.0.0 to ^1.0.1
+
 ## 1.0.0
 
 ### Minor Changes

@@ -1,5 +1,21 @@
 # @portqueue/dashboard
 
+## [1.0.1](https://github.com/episclera/portqueue/compare/dashboard-v1.0.0...dashboard-v1.0.1) (2026-10-20)
+
+
+### Miscellaneous Chores
+
+* **dashboard:** Synchronize portqueue versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * @portqueue/core bumped from * to 1.0.1
+  * peerDependencies
+    * @portqueue/core bumped from ^1.0.0 to ^1.0.1
+
 ## 1.0.0
 
 ### Minor Changes

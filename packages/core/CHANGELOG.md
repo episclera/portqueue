@@ -1,5 +1,12 @@
 # @portqueue/core
 
+## [1.0.1](https://github.com/episclera/portqueue/compare/core-v1.0.0...core-v1.0.1) (2026-10-20)
+
+
+### Miscellaneous Chores
+
+* **core:** Synchronize portqueue versions
+
 ## 1.0.0
 
 ### Minor Changes
