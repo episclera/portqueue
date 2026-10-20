@@ -42,9 +42,14 @@ import { PostgresDriver } from '@portqueue/core/drivers/postgres';
 const pq = new PortQueue({ driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }) });
 await pq.init();
 
-// One call declares the queue and processes it: name, tuning, and the handler together.
-pq.createQueue({ name: 'emails', limiter: { concurrency: 10 }, handler: async (job) => send(job.data) });
+// Create the queue and provide a jobs handler.
+pq.createQueue({
+  name: 'emails',
+  limiter: { concurrency: 10 },
+  handler: async (job) => { await send(job.data); },
+});
 
+// Add a job to the queue.
 await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
 ```
 

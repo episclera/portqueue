@@ -93,14 +93,14 @@ const pq = new PortQueue<QueueName>({
 });
 await pq.init();
 
-// One call declares the queue and consumes it — the handler is what makes this a consumer.
+// Create the queue and provide a jobs handler.
 pq.createQueue<{ to: string }>({
   name: QueueName.Emails,
   limiter: { concurrency: 10 },
-  handler: async (job) => { await sendEmail(job.data); },
+  handler: async (job) => { await send(job.data); },
 });
 
-// Every operation is a method on \`pq\`, with the queue named in it.
+// Add a job to the queue.
 await pq.addJob({ queue: QueueName.Emails, data: { to: 'a@b.com' } });`;
 
 export default function Home(): ReactNode {

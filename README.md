@@ -40,14 +40,14 @@ const pq = new PortQueue({
 });
 await pq.init();
 
-// One call per queue: its name, its tuning, and — if this process should process it — its handler.
+// Create the queue and provide a jobs handler.
 pq.createQueue({
   name: 'emails',
   limiter: { concurrency: 10 },
   handler: async (job) => { await send(job.data); },
 });
 
-// Every operation is a method on `pq`, with the queue named in it.
+// Add a job to the queue.
 await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
 ```
 
