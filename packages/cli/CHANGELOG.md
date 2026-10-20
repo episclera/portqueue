@@ -25,5 +25,5 @@
 ### Patch Changes
 
 - Updated dependencies [7f0cfee]
-  - @portqueue/core@0.2.0
+  - @portqueue/core@1.0.0
   - @portqueue/dashboard@1.0.0

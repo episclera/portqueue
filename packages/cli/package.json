@@ -39,7 +39,7 @@
     "test": "node --experimental-vm-modules ../../node_modules/jest/bin/jest.js --passWithNoTests"
   },
   "peerDependencies": {
-    "@portqueue/core": "^0.2.0"
+    "@portqueue/core": "^1.0.0"
   },
   "dependencies": {
     "@portqueue/dashboard": "^1.0.0",

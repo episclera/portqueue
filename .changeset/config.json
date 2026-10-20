@@ -2,10 +2,23 @@
   "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [],
+  "fixed": [
+    [
+      "@portqueue/core",
+      "@portqueue/dashboard",
+      "@portqueue/cli"
+    ]
+  ],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@portqueue/ui", "@portqueue/eslint-config", "@portqueue/docs"]
+  "ignore": [
+    "@portqueue/ui",
+    "@portqueue/eslint-config",
+    "@portqueue/docs"
+  ],
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+    "onlyUpdatePeerDependentsWhenOutOfRange": true
+  }
 }
