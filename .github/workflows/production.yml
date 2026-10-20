@@ -1,9 +1,14 @@
 name: production
 
-# Release the public packages to npm on main, driven by release-please and Conventional Commits.
-# Every push to main updates one open release PR (version bump + CHANGELOG, derived from the commit
-# messages). Merging that PR is the release: the push it makes creates the GitHub releases and tags,
-# and only then does this job publish. Any other push publishes nothing.
+# Everything that ships to the production environment, on every push to main: the npm packages and
+# the docs site. One workflow per environment, not one per artifact — the docs depend on more than
+# their own files (the API reference, typed samples, the packages' sources), so they deploy with the
+# release rather than behind a paths filter that can miss a change.
+#
+# npm is driven by release-please and Conventional Commits. Every push to main updates one open
+# release PR (version bump + CHANGELOG, derived from the commit messages). Merging that PR is the
+# release: the push it makes creates the GitHub releases and tags, and only then does this job
+# publish. Any other push publishes nothing to npm.
 on:
   push:
     branches: [main]
@@ -13,6 +18,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 permissions:
   contents: write
   pull-requests: write
+  pages: write
   id-token: write
 
 jobs:
@@ -28,9 +34,13 @@ jobs:
       - run: npm ci
       # Build first: the workspace packages are symlinked from this checkout, and core/dashboard
       # expose their types from dist/, so lint and tests type-check against the code just built.
+      # The root build includes the docs site, so docs/build comes from this same commit.
       - run: npm run build
       - run: npm run lint
       - run: npm test
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build
       # Opens/updates the release PR, or — on the merge of that PR — tags and creates the releases.
       - id: release
         uses: googleapis/release-please-action@v4
@@ -45,3 +55,14 @@ jobs:
         run: npm run release
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Deploys the site built and tested in `release` to GitHub Pages.
+  deploy-docs:
+    needs: release
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
