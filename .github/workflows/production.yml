@@ -1,4 +1,4 @@
-name: publish
+name: production
 
 # Release the public packages to npm on main, driven by release-please and Conventional Commits.
 # Every push to main updates one open release PR (version bump + CHANGELOG, derived from the commit
