@@ -1,12 +1,16 @@
-name: ci
+name: pr-check
 
-# Lint + typecheck + test + build on every push (every branch) and PR.
+# Lint + typecheck + test + build on pull requests. Pushes to main are not checked here:
+# publish.yml runs the same build/lint/test before releasing, so main is never tested twice.
 on:
-  push:
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
-  ci:
+  pr-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
