@@ -21,7 +21,7 @@
     "node": ">=20.11.0"
   },
   "bin": {
-    "portqueue": "./dist/cli.mjs"
+    "portqueue": "dist/cli.mjs"
   },
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
