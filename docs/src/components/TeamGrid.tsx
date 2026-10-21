@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import clsx from 'clsx';
 import styles from './TeamGrid.module.css';
 
 type Member = {
@@ -13,16 +14,17 @@ type Member = {
 const team: Member[] = [
   {
     name: 'Gheorghe Gherciu',
-    role: 'Creator & Lead Developer',
+    role: 'Creator & Lead Engineer',
     bio: 'Designed and built PortQueue — the driver model, the public API, and the docs and dashboard design system.',
     initials: 'GG',
     links: [{ label: 'GitHub', href: 'https://github.com/episclera' }],
   },
 ];
 
-export function TeamGrid(): ReactNode {
+/** `centered` lays the cards out from the middle (home page) instead of filling the row from the left. */
+export function TeamGrid({ centered = false }: { centered?: boolean }): ReactNode {
   return (
-    <div className={styles.grid}>
+    <div className={clsx(styles.grid, centered && styles.centered)}>
       {team.map((m) => (
         <div key={m.name} className={styles.card}>
           <div className={styles.avatar} aria-hidden>

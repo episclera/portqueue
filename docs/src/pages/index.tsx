@@ -13,6 +13,7 @@ import {
   GlobalOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
+import { TeamGrid } from '@site/src/components/TeamGrid';
 import styles from './index.module.css';
 
 /**
@@ -165,6 +166,16 @@ export default function Home(): ReactNode {
           <p className={styles.sectionLead}>
             PortQueue is <strong>absolutely free</strong> — open source under the MIT license.
             Commercial use permitted, no license fee, no obligations. Use it in anything, forever.
+          </p>
+        </section>
+
+        <section id="team" className={styles.section}>
+          <h2 className={styles.sectionTitle}>Team</h2>
+          <p className={styles.sectionLead}>The people who build PortQueue.</p>
+          <TeamGrid centered />
+          <p className={styles.sectionLead}>
+            Want to join them? PortQueue is open source and welcomes contributors — see the{' '}
+            <Link to="/docs/contributing">Contributing</Link> guide.
           </p>
         </section>
       </main>
