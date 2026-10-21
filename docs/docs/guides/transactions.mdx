@@ -8,7 +8,7 @@ keywords:
     portqueue,
     transactions,
     transactional outbox,
-    postgres queue,
+    postgresql queue,
     database queue,
     job queue,
     idempotency,
@@ -60,7 +60,7 @@ the transaction commits — never before. There's no window where a worker can c
 business row hasn't been committed yet.
 
 :::info Wake-up after commit is engine-specific
-On **Postgres / PGLite** the driver issues a `NOTIFY` immediately after your transaction commits,
+On **PostgreSQL / PGLite** the driver issues a `NOTIFY` immediately after your transaction commits,
 so `LISTEN`-ing workers wake and claim the job almost instantly. On engines **without
 LISTEN/NOTIFY** (**SQLite**, **MySQL**) there is no cross-process wake-up — a worker picks the job
 up on its next poll (`limiter.pollIntervalSeconds`, default **5 seconds** on all drivers). The job is

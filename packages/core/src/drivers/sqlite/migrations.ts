@@ -17,7 +17,7 @@ import type { FlavourMigration, MigrationNames } from '../shared/migration';
  *
  * SQLite has no schemas, so the driver takes no `schema` option and nothing here qualifies a name.
  *
- * **Keys and indexes** mirror the Postgres set — same access paths, authored separately in SQLite's
+ * **Keys and indexes** mirror the PostgreSQL set — same access paths, authored separately in SQLite's
  * own dialect. The one dialect difference is `WHERE` on an index: SQLite supports partial indexes
  * from 3.8, so the same predicates are used.
  */

@@ -12,7 +12,7 @@ const nodeBuiltins = builtinModules.flatMap((name) => [name, `node:${name}`]);
 // entry so importing one driver never pulls in another engine's peer client.
 const entries = {
   index: resolve(__dirname, 'src/index.ts'),
-  'drivers/postgres/index': resolve(__dirname, 'src/drivers/postgres/index.ts'),
+  'drivers/postgresql/index': resolve(__dirname, 'src/drivers/postgresql/index.ts'),
   'drivers/pglite/index': resolve(__dirname, 'src/drivers/pglite/index.ts'),
   'drivers/sqlite/index': resolve(__dirname, 'src/drivers/sqlite/index.ts'),
   'drivers/oracle/index': resolve(__dirname, 'src/drivers/oracle/index.ts'),

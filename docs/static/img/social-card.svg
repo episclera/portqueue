@@ -31,7 +31,7 @@
 
   <!-- Supporting line -->
   <text x="96" y="430" font-family="Inter, Helvetica, Arial, sans-serif" font-size="30" font-weight="500" fill="#C8D6CD">Distributed · fault-tolerant · broker-less — runs on your database.</text>
-  <text x="96" y="474" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="400" fill="#8FA697">Postgres · PGLite · SQLite · Oracle · MySQL — one type-safe API.</text>
+  <text x="96" y="474" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="400" fill="#8FA697">PostgreSQL · PGLite · SQLite · Oracle · MySQL — one type-safe API.</text>
 
   <!-- URL footer -->
   <text x="96" y="566" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="600" fill="#6FA184">episclera.github.io/portqueue</text>

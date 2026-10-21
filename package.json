@@ -26,8 +26,8 @@
     "setup": "bash scripts/dev/setup.sh",
     "cli": "bash scripts/cli/sqlite.sh",
     "dev:docs": "bash scripts/dev/start-docs.sh",
-    "db:pg:up": "bash scripts/dev/db/start-postgres.sh",
-    "db:pg:down": "bash scripts/dev/db/stop-postgres.sh",
+    "db:postgresql:up": "bash scripts/dev/db/start-postgresql.sh",
+    "db:postgresql:down": "bash scripts/dev/db/stop-postgresql.sh",
     "db:mysql:up": "bash scripts/dev/db/start-mysql.sh",
     "db:mysql:down": "bash scripts/dev/db/stop-mysql.sh",
     "db:oracle:up": "bash scripts/dev/db/start-oracle.sh",
@@ -39,7 +39,7 @@
     "example:retries": "bash scripts/dev/examples/retries-backoff.sh",
     "example:idempotency": "bash scripts/dev/examples/idempotency-singleton.sh",
     "example:graceful": "bash scripts/dev/examples/graceful-shutdown.sh",
-    "example:postgres": "bash scripts/dev/examples/postgres-connection.sh",
+    "example:postgresql": "bash scripts/dev/examples/postgresql-connection.sh",
     "example:transactional": "bash scripts/dev/examples/transactional-enqueue.sh"
   },
   "devDependencies": {

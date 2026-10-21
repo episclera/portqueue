@@ -1,8 +1,8 @@
 {
-  "name": "@portqueue-examples/postgres-connection",
+  "name": "@portqueue-examples/postgresql-connection",
   "version": "0.0.0",
   "private": true,
-  "description": "Connect to a real Postgres server with PostgresDriver + DATABASE_URL.",
+  "description": "Connect to a real PostgreSQL server with PostgresqlDriver + DATABASE_URL.",
   "type": "module",
   "engines": {
     "node": ">=20.11.0"

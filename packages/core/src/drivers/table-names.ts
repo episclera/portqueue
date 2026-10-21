@@ -184,7 +184,7 @@ export class TableNames {
   /**
    * The name for an object an engine files *inside* the table's own schema — an index or a
    * constraint. `<prefix><table>_<suffix>`, unqualified, because qualifying it would name the
-   * schema twice (`CREATE INDEX jobs.x ON jobs.pq_job` is an error on Postgres).
+   * schema twice (`CREATE INDEX jobs.x ON jobs.pq_job` is an error on PostgreSQL).
    */
   derived(table: TableName, suffix: string): string {
     return `${this.bare(table)}_${suffix}`;

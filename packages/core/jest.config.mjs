@@ -27,9 +27,9 @@ export default {
     '!src/**/*.test.ts',
     '!src/test-utils/**',
     '!src/**/index.ts',
-    // Postgres/Oracle drivers require a live server; validated by the conformance kit
+    // PostgreSQL/Oracle drivers require a live server; validated by the conformance kit
     // against real servers, not in CI. PGLite/SQLite cover the dialects.
-    '!src/drivers/postgres/**',
+    '!src/drivers/postgresql/**',
     '!src/drivers/oracle/**',
     // Type-only modules (interfaces/option shapes) have no runtime behavior to cover.
     '!src/**/*.interface.ts',

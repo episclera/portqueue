@@ -136,7 +136,7 @@ export abstract class BaseDriver {
   /**
    * The most bound parameters this engine accepts in one statement. The default is a floor that
    * every supported engine clears: SQLite's `SQLITE_MAX_VARIABLE_NUMBER` (32766 on a modern build),
-   * Postgres' 16-bit parameter index (65535) and MySQL's `max_prepared_stmt_count` are all above it.
+   * PostgreSQL' 16-bit parameter index (65535) and MySQL's `max_prepared_stmt_count` are all above it.
    * A driver whose engine is tighter — Oracle's `INSERT ALL` — lowers it.
    */
   protected readonly maxBindParams: number = 30_000;
@@ -246,7 +246,7 @@ export abstract class BaseDriver {
    * Split a batch so no single statement exceeds this engine's bound-parameter limit.
    *
    * A multi-row insert binds every column of every row, so a batch of a thousand jobs is tens of
-   * thousands of parameters — past SQLite's `SQLITE_MAX_VARIABLE_NUMBER` and Postgres' 16-bit
+   * thousands of parameters — past SQLite's `SQLITE_MAX_VARIABLE_NUMBER` and PostgreSQL' 16-bit
    * parameter index. The caller loops over the chunks; each is still one round trip, so a large
    * batch costs `ceil(rows / chunk)` statements instead of `rows`.
    */
@@ -267,7 +267,7 @@ export abstract class BaseDriver {
    * tightest engine's `IN` limit, so a public batch is always one chunk; this is what keeps an
    * internal caller (or a driver with a lower ceiling) from emitting a statement the engine rejects —
    * `removeJobs` with 1001 ids used to raise ORA-01795 on Oracle and to blow past the parameter
-   * index on Postgres and SQLite at a few tens of thousands.
+   * index on PostgreSQL and SQLite at a few tens of thousands.
    */
   protected chunkIds<T>(keys: readonly T[]): T[][] {
     const perChunk = Math.max(
@@ -349,7 +349,7 @@ export abstract class BaseDriver {
    * declared by the query's own `ESCAPE '!'` — so a user typing `100%` searches for that text rather
    * than matching everything. Still a bound parameter: nothing here is interpolated into SQL.
    *
-   * The term is lower-cased for the engines whose query site lower-cases the column too; Postgres and
+   * The term is lower-cased for the engines whose query site lower-cases the column too; PostgreSQL and
    * PGLite use `ILIKE`, where the case folding is the operator's job and this is already inert.
    *
    * **A free-text search is a scan, and no index is declared for one.** The pattern has a leading

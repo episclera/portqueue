@@ -25,7 +25,7 @@ import type { Clock } from '../../util/clock';
  *   contiguous prefix, and there is no way to reach "v1 and v3 applied, v2 not" — the state in which
  *   a maximum would read as complete while a version was missing.
  *
- * **Concurrency.** Where the engine has a named lock (Postgres' `pg_try_advisory_lock`, MySQL's
+ * **Concurrency.** Where the engine has a named lock (PostgreSQL' `pg_try_advisory_lock`, MySQL's
  * `GET_LOCK`) one instance migrates and the rest wait for the version to land. Where it does not
  * (Oracle, SQLite, PGLite) every instance proceeds, which is safe only because each engine's DDL is
  * written to be idempotent — `IF NOT EXISTS`, `MERGE`, PL/SQL-guarded `CREATE INDEX` — and because
@@ -102,7 +102,7 @@ export class MigrationRunner {
         } catch (err) {
           throw new MigrationFailedError(`Migration v${migration.version} failed.`, err);
         }
-        // Read it back before moving on. On Postgres, SQLite and PGLite the statements and the
+        // Read it back before moving on. On PostgreSQL, SQLite and PGLite the statements and the
         // version insert share a transaction, so this only ever confirms what is already true. On
         // MySQL and Oracle it cannot: DDL commits implicitly there, so `applyMigration` runs the
         // statements and *then* records the version, and a crash between the two would otherwise

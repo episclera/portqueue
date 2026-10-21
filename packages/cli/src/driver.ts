@@ -4,7 +4,7 @@ import { CliError } from './errors';
 
 /** The engines the CLI can construct a driver for. */
 export enum CliEngine {
-  POSTGRES = 'postgres',
+  POSTGRESQL = 'postgresql',
   PGLITE = 'pglite',
   SQLITE = 'sqlite',
   MYSQL = 'mysql',
@@ -22,8 +22,8 @@ export interface DriverFlags {
 
 /** Engines whose connection string carries their own URL scheme. */
 const SCHEME_TO_ENGINE: Record<string, CliEngine> = {
-  postgres: CliEngine.POSTGRES,
-  postgresql: CliEngine.POSTGRES,
+  postgres: CliEngine.POSTGRESQL,
+  postgresql: CliEngine.POSTGRESQL,
   mysql: CliEngine.MYSQL,
   oracle: CliEngine.ORACLE,
   sqlite: CliEngine.SQLITE,
@@ -122,9 +122,9 @@ async function createDriver(
   const storage = storageOptions(flags);
 
   switch (engine) {
-    case CliEngine.POSTGRES: {
-      const { PostgresDriver } = await import('@portqueue/core/drivers/postgres');
-      return new PostgresDriver({
+    case CliEngine.POSTGRESQL: {
+      const { PostgresqlDriver } = await import('@portqueue/core/drivers/postgresql');
+      return new PostgresqlDriver({
         connectionString: requireConnectionString(engine, connectionString),
         ...storage,
       });

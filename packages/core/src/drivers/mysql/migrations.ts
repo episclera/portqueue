@@ -15,7 +15,7 @@ import type { FlavourMigration, MigrationNames } from '../shared/migration';
  * - **There is no `CREATE INDEX IF NOT EXISTS`.** Indexes are declared inline as `KEY` clauses
  *   inside `CREATE TABLE IF NOT EXISTS`, which makes re-running the migration a no-op without any
  *   existence probing.
- * - **There are no partial indexes**, so the Postgres flavour's `WHERE … IS NOT NULL` predicates are
+ * - **There are no partial indexes**, so the PostgreSQL flavour's `WHERE … IS NOT NULL` predicates are
  *   dropped; the index simply covers the NULL rows too.
  * - **A schema is a database**, so `CREATE SCHEMA IF NOT EXISTS` creates one.
  *

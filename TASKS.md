@@ -52,7 +52,7 @@ for them, and the toast says "… 2 running jobs were asked to stop."
 
 **Fixed, with a cap as well as chunking.** `MAX_BATCH_IDS = 1000` — Oracle's `IN`-list ceiling, taken
 as everyone's — is enforced by `assertBatchIds` on every public id-taking method, so a batch cannot
-work on Postgres and raise ORA-01795 on Oracle. Underneath, `BaseDriver.chunkIds`/`overIdChunks` split
+work on PostgreSQL and raise ORA-01795 on Oracle. Underneath, `BaseDriver.chunkIds`/`overIdChunks` split
 any id list by `maxInListItems` *and* the bind budget; `removeJobs`, `cancelJobs`, `requeueJobs`,
 `deleteSchedules` and the grouped counts all go through it in all four drivers. The dashboard's tables
 stop a selection past the cap with a tooltip. Every plural method issues plural SQL — the delegation
@@ -78,7 +78,7 @@ requires idempotent statements, and the runner **reads the version back before a
 step** — so a step that ran without being recorded is an error rather than something carried forward.
 Stated in `Driver.applyMigration`, both driver classes, and the driver-author docs.
 
-### 7. Migration lock was Postgres-only, so a concurrent first boot raced on every other engine
+### 7. Migration lock was PostgreSQL-only, so a concurrent first boot raced on every other engine
 
 **Fixed for MySQL; documented for the rest.** MySQL has a real named lock, so `MysqlDriver` implements
 `tryAdvisoryLock`/`releaseAdvisoryLock` with `GET_LOCK` on a held connection and declares
@@ -86,7 +86,7 @@ Stated in `Driver.applyMigration`, both driver classes, and the driver-author do
 equivalent, so the runner proceeds without one (safe for idempotent DDL), logs that it did, and the
 docs recommend `portqueue migrate` before starting a multi-instance Oracle deployment.
 
-Found on the way: Postgres' advisory lock was taken and released on *pooled* connections, so the
+Found on the way: PostgreSQL' advisory lock was taken and released on *pooled* connections, so the
 release landed on whichever connection came out next. Both drivers now hold the connection for the
 lock's lifetime and drop it on `disconnect`.
 
@@ -201,7 +201,7 @@ the collision arithmetic for a caller taking more.
 
 ### 25. `likePattern` lower-cased in JS but the column was lower-cased in SQL
 
-**Resolved.** Postgres/PGLite use `ILIKE`, dropping a per-row `LOWER()` call. No index was added:
+**Resolved.** PostgreSQL/PGLite use `ILIKE`, dropping a per-row `LOWER()` call. No index was added:
 a leading-wildcard `LIKE` is unindexable on every engine here — a functional `LOWER(name)` index would
 not serve it either — so the honest answer is the `LIMIT`, and `likePattern` now says so.
 

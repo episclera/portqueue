@@ -9,14 +9,14 @@
  * up with a job for an order that was never saved (or an order with no follow-up job).
  *
  * Because the job is inserted inside your transaction, workers only see it AFTER you commit. On
- * Postgres the driver issues a NOTIFY at commit so listeners wake instantly; on engines without
+ * PostgreSQL the driver issues a NOTIFY at commit so listeners wake instantly; on engines without
  * LISTEN/NOTIFY, workers pick it up on their next poll.
  *
  * Needs the `pg` peer dependency and a reachable `DATABASE_URL` (the database must already exist).
  */
 import pg from 'pg';
 import { MigrationMode, PortQueue } from '@portqueue/core';
-import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+import { PostgresqlDriver } from '@portqueue/core/drivers/postgresql';
 import { fromPg } from '@portqueue/core/tx';
 
 const connectionString =
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
   );
 
   const pq = new PortQueue<QueueName>({
-    driver: new PostgresDriver({ pool }),
+    driver: new PostgresqlDriver({ pool }),
     migration: MigrationMode.AUTO,
   });
   await pq.init();

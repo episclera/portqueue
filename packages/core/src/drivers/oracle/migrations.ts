@@ -8,7 +8,7 @@ import type { FlavourMigration, MigrationNames } from '../shared/migration';
 /**
  * Predefined Oracle DDL, version by version. Oracle has no `TEXT`/`BIGINT`/`SMALLINT` and (pre-23c)
  * no `IF NOT EXISTS` on anything, so this flavour is authored from scratch rather than borrowed
- * from Postgres:
+ * from PostgreSQL:
  *
  * - short strings → `VARCHAR2(255)`, free-form payloads (`data`, `return_value`, `failure_message`,
  *   `job_options`, `preferred_instance_key_pattern`) → `CLOB`;
@@ -23,7 +23,7 @@ import type { FlavourMigration, MigrationNames } from '../shared/migration';
  * would not fit an 8 KB block.
  *
  * Oracle has no partial indexes, and needs none here: it already leaves all-NULL entries out of a
- * B-tree, which is exactly what the Postgres flavour's `WHERE … IS NOT NULL` predicates buy.
+ * B-tree, which is exactly what the PostgreSQL flavour's `WHERE … IS NOT NULL` predicates buy.
  *
  * A `schema` on Oracle is a **user**, which cannot be conjured by a migration — the driver
  * qualifies every object name with it and the schema must already exist with the right grants.

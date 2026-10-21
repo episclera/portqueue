@@ -28,13 +28,13 @@ describe('buildPortQueue', () => {
   });
 
   it('errors when a server engine has no connection string', async () => {
-    await expect(buildPortQueue({ driver: 'postgres' })).rejects.toThrow(
+    await expect(buildPortQueue({ driver: 'postgresql' })).rejects.toThrow(
       /needs a connection string/,
     );
   });
 
   it('exposes the engine enum values used by --driver', () => {
-    expect(CliEngine.POSTGRES).toBe('postgres');
+    expect(CliEngine.POSTGRESQL).toBe('postgresql');
     expect(CliEngine.SQLITE).toBe('sqlite');
     expect(CliEngine.PGLITE).toBe('pglite');
     expect(CliEngine.MYSQL).toBe('mysql');

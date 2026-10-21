@@ -48,7 +48,7 @@ export enum MigrationMode {
 
 /** Database engines a driver can advertise. */
 export enum DatabaseEngine {
-  POSTGRES = 'POSTGRES',
+  POSTGRESQL = 'POSTGRESQL',
   PGLITE = 'PGLITE',
   SQLITE = 'SQLITE',
   ORACLE = 'ORACLE',

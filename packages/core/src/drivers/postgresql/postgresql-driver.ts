@@ -26,7 +26,7 @@ import {
 import { retentionStatusBit } from '../shared/retention-statuses';
 import { MS_PER_SECOND } from '../../util/seconds';
 import { toMigrationSteps } from '../shared/migration';
-import { POSTGRES_MIGRATIONS } from './migrations';
+import { POSTGRESQL_MIGRATIONS } from './migrations';
 import type {
   Driver,
   DriverProbe,
@@ -55,7 +55,7 @@ import type {
 import type { QueueOptions } from '../../options/queue-options';
 import type { TransactionHandle } from '../../tx/transaction-handle';
 
-export interface PostgresDriverOptions {
+export interface PostgresqlDriverOptions {
   connectionString?: string;
   /** An existing `pg.Pool` to share with the app. */
   pool?: unknown;
@@ -95,7 +95,7 @@ const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_SCHEMA = '3F000';
 
 /**
- * Postgres driver — the full-feature reference driver and the sole owner of the PG-wire SQL
+ * PostgreSQL driver — the full-feature reference driver and the sole owner of the PG-wire SQL
  * surface: `$1`-style placeholders, LISTEN/NOTIFY on a dedicated connection, advisory locks for
  * leader-only tasks, SKIP LOCKED claiming, RETURNING everywhere, real keys and indexes. No method
  * emits a relational JOIN — relationships resolve by name/key lookups — and idempotency/singleton
@@ -103,16 +103,16 @@ const PG_UNDEFINED_SCHEMA = '3F000';
  * could not honour one. The `pg` package is an optional peer, imported lazily inside `connect()`.
  *
  * Row mapping, value conversion, insert value lists and the affinity scan arithmetic come from
- * {@link BaseDriver} — mechanism, not SQL. Every statement string in this file is Postgres'.
+ * {@link BaseDriver} — mechanism, not SQL. Every statement string in this file is PostgreSQL'.
  *
  * PG-wire subclassing: `PgliteDriver` extends this class and overrides only the connection
  * mechanism (`connect`/`disconnect`/`execute`/`transaction`/`probe`) plus the features PGLite
  * lacks. Every query method below is therefore shared with PGLite — treat a change here as a
- * change to both engines, and if a tweak is genuinely Postgres-only, override it in `PgliteDriver`
+ * change to both engines, and if a tweak is genuinely PostgreSQL-only, override it in `PgliteDriver`
  * rather than branching on the engine here. No other engine shares this code.
  */
-export class PostgresDriver extends BaseDriver implements Driver {
-  readonly engine: DatabaseEngine = DatabaseEngine.POSTGRES;
+export class PostgresqlDriver extends BaseDriver implements Driver {
+  readonly engine: DatabaseEngine = DatabaseEngine.POSTGRESQL;
   readonly capabilities: DriverCapabilitySet = capabilities({
     [DriverCapability.SKIP_LOCKED]: true,
     [DriverCapability.RETURNING]: true,
@@ -120,7 +120,7 @@ export class PostgresDriver extends BaseDriver implements Driver {
     [DriverCapability.LISTEN_NOTIFY]: true,
     [DriverCapability.ADVISORY_LOCK]: true,
   });
-  readonly migrations: MigrationStep[] = toMigrationSteps(POSTGRES_MIGRATIONS);
+  readonly migrations: MigrationStep[] = toMigrationSteps(POSTGRESQL_MIGRATIONS);
 
   private pool: PgPool | null = null;
   private listenClient: PgClient | null = null;
@@ -130,9 +130,9 @@ export class PostgresDriver extends BaseDriver implements Driver {
    */
   private readonly lockClients = new Map<string, PgClient>();
   private readonly listeners = new Map<string, Set<(payload: string) => void>>();
-  private readonly options: PostgresDriverOptions;
+  private readonly options: PostgresqlDriverOptions;
 
-  constructor(options: PostgresDriverOptions = {}) {
+  constructor(options: PostgresqlDriverOptions = {}) {
     super({
       ...(options.tablePrefix !== undefined ? { tablePrefix: options.tablePrefix } : {}),
       ...(options.schema !== undefined ? { schema: options.schema } : {}),
@@ -155,7 +155,7 @@ export class PostgresDriver extends BaseDriver implements Driver {
         Pool: new (config?: Record<string, unknown>) => PgPool;
       };
     } catch {
-      throw new MissingPeerDependencyError('pg', 'Postgres');
+      throw new MissingPeerDependencyError('pg', 'PostgreSQL');
     }
     try {
       const config: Record<string, unknown> = { ...this.options.config };
@@ -163,7 +163,7 @@ export class PostgresDriver extends BaseDriver implements Driver {
       this.pool = new pg.Pool(config);
       await this.pool.query('SELECT 1');
     } catch (err) {
-      throw new DriverConnectionError('Failed to connect to Postgres.', err);
+      throw new DriverConnectionError('Failed to connect to PostgreSQL.', err);
     }
   }
 
@@ -185,14 +185,14 @@ export class PostgresDriver extends BaseDriver implements Driver {
     session?: Session,
   ): Promise<RawResult> {
     const target = (session as PgClient | undefined) ?? this.pool;
-    if (!target) throw new DriverConnectionError('Postgres driver is not connected.');
+    if (!target) throw new DriverConnectionError('PostgreSQL driver is not connected.');
     const res = await target.query(sql, params);
     return { rows: res.rows ?? [], rowCount: res.rowCount ?? res.rows?.length ?? 0 };
   }
 
   /** Wrap `fn` in a transaction. `protected` so a PG-wire subclass can swap in its own client. */
   protected async transaction<T>(fn: (session: Session) => Promise<T>): Promise<T> {
-    if (!this.pool) throw new DriverConnectionError('Postgres driver is not connected.');
+    if (!this.pool) throw new DriverConnectionError('PostgreSQL driver is not connected.');
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -207,7 +207,7 @@ export class PostgresDriver extends BaseDriver implements Driver {
     }
   }
 
-  /** Postgres uses `$1`-style positional placeholders. */
+  /** PostgreSQL uses `$1`-style positional placeholders. */
   protected ph(index0: number): string {
     return `$${index0 + 1}`;
   }
@@ -1481,7 +1481,7 @@ export class PostgresDriver extends BaseDriver implements Driver {
     channel: string;
     onNotification: (payload: string) => void;
   }): Promise<Subscription> {
-    if (!this.pool) throw new DriverConnectionError('Postgres driver is not connected.');
+    if (!this.pool) throw new DriverConnectionError('PostgreSQL driver is not connected.');
     const ch = this.channel(options.channel);
     if (!this.listenClient) {
       this.listenClient = await this.pool.connect();
@@ -1567,13 +1567,13 @@ export class PostgresDriver extends BaseDriver implements Driver {
 }
 
 /**
- * Map a string key to the `bigint` Postgres advisory locks are keyed by.
+ * Map a string key to the `bigint` PostgreSQL advisory locks are keyed by.
  *
- * Six bytes of the digest, which is 48 bits — deliberately short of the 64 Postgres accepts, because
+ * Six bytes of the digest, which is 48 bits — deliberately short of the 64 PostgreSQL accepts, because
  * the value crosses through a JS `number` and beyond `Number.MAX_SAFE_INTEGER` it would not survive
  * the trip. 48 bits is ample for the handful of named locks the tool takes (one, today: the migration
  * lock), and the collision arithmetic is what the caller needs to know if it ever takes more — see
- * {@link PostgresDriver.tryAdvisoryLock}, whose doc names the keys in use.
+ * {@link PostgresqlDriver.tryAdvisoryLock}, whose doc names the keys in use.
  */
 function advisoryKey(key: string): number {
   const hash = createHash('sha1').update(key).digest();

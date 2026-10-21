@@ -16,6 +16,7 @@
     "worker",
     "scheduler",
     "cron",
+    "postgresql",
     "postgres",
     "mysql",
     "oracle",
@@ -37,10 +38,10 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./drivers/postgres": {
-      "types": "./dist/drivers/postgres/index.d.ts",
-      "import": "./dist/drivers/postgres/index.mjs",
-      "require": "./dist/drivers/postgres/index.cjs"
+    "./drivers/postgresql": {
+      "types": "./dist/drivers/postgresql/index.d.ts",
+      "import": "./dist/drivers/postgresql/index.mjs",
+      "require": "./dist/drivers/postgresql/index.cjs"
     },
     "./drivers/pglite": {
       "types": "./dist/drivers/pglite/index.d.ts",

@@ -143,7 +143,7 @@ in three sections, and no section at all when there is nothing to put in it.
   bound-parameter budget, and `chunkIds`/`overIdChunks` keep an id list inside `maxInListItems` — the
   engine's ceiling on `IN (...)` expressions, which on Oracle is 1000 whatever the bind budget says.
   `MAX_BATCH_IDS` takes Oracle's ceiling as **everyone's** and every public id-taking method rejects
-  more up front (`assertBatchIds`), so a 1001-id batch cannot work on Postgres and raise ORA-01795 on
+  more up front (`assertBatchIds`), so a 1001-id batch cannot work on PostgreSQL and raise ORA-01795 on
   Oracle. The dashboard's tables stop a selection growing past the same number and say why.
 - **A running job is untouchable.** `requeueJob`, `removeJob` and `cancelJob` all refuse an `ACTIVE`
   row and report "nothing done" rather than acting. Re-arming a running job clears its lock, so a
@@ -169,9 +169,9 @@ in three sections, and no section at all when there is nothing to put in it.
   disagree. Anything unbounded is a bug: every sweep takes a `limit` and loops until a batch comes
   back short.
 - **No SQL `JOIN`** anywhere — relationships resolve via separate key-based lookups. Keep the schema **minimal**: few tables, little spread; only split a table out when genuinely necessary. Link rows by a **unique name or key** in preference to a surrogate id + foreign key.
-- **The driver owns its SQL dialect.** Core calls an intent-named JS method on the driver (e.g. `upsert`, `getOrCreate`) and the driver emits the best SQL its engine supports: a capable engine (Postgres/PGLite) may use native `INSERT … ON CONFLICT`/`MERGE`, real indexes, unique/check constraints and PKs; a sharded/distributed engine uses the conservative path — a guarded `UPDATE … RETURNING` then `INSERT`, or `SELECT`-then-`INSERT` get-or-create — and declares shard keys (usually the queue name) instead of constraints it can't honour; an engine without `RETURNING` (MySQL) mutates then reads the affected rows back in the same transaction. Core logic never assumes a dialect; every path still enforces every invariant (name uniqueness, idempotency/singleton dedup) in code so behaviour is identical across engines.
+- **The driver owns its SQL dialect.** Core calls an intent-named JS method on the driver (e.g. `upsert`, `getOrCreate`) and the driver emits the best SQL its engine supports: a capable engine (PostgreSQL/PGLite) may use native `INSERT … ON CONFLICT`/`MERGE`, real indexes, unique/check constraints and PKs; a sharded/distributed engine uses the conservative path — a guarded `UPDATE … RETURNING` then `INSERT`, or `SELECT`-then-`INSERT` get-or-create — and declares shard keys (usually the queue name) instead of constraints it can't honour; an engine without `RETURNING` (MySQL) mutates then reads the affected rows back in the same transaction. Core logic never assumes a dialect; every path still enforces every invariant (name uniqueness, idempotency/singleton dedup) in code so behaviour is identical across engines.
 - **One standalone driver per engine — duplicate the SQL, share the mechanism.** Every engine
-  (Postgres, SQLite, Oracle, MySQL, …) has its **own folder under
+  (PostgreSQL, SQLite, Oracle, MySQL, …) has its **own folder under
   `packages/core/src/drivers/<engine>/` and its own driver class** implementing the `Driver` contract.
   **Every statement string lives in that file**; compatible-looking SQL is copied so an
   engine-specific change can never leak across engines.
@@ -184,7 +184,7 @@ in three sections, and no section at all when there is nothing to put in it.
   The line to hold: if it is a statement, or decides the shape of one, it belongs to the engine. If it
   reads a `Row` by column name or does arithmetic, it belongs to `BaseDriver`. Duplicating the mapping
   cost a real bug — a column added to the schema had to be remembered in five files.
-- **The one exception: a flavour of an already-supported engine may extend it.** PGLite *is* Postgres (compiled to WASM), same wire protocol and same dialect, so `PgliteDriver extends PostgresDriver` and keeps only what is genuinely custom: the connection mechanism (`connect`/`disconnect`/`execute`/`transaction`, the `@electric-sql/pglite` client shape), `probe`, its capability set (no LISTEN/NOTIFY, no advisory locks), and its own migration array. The `pglite/` folder, its `PGliteDriverOptions`/client types and its `PGLITE_MIGRATIONS` export all stay in place — the folder is still the whole PGLite surface. Two rules hold: the members a flavour needs from Postgres are `protected` (`execute`, `transaction`, `enabledCapabilities`) and pool/listener state stays private; and **a change to a query in `PostgresDriver` changes PGLite too** — if a tweak is Postgres-only, override it in `PgliteDriver` rather than branching on the engine in the base. This applies to PG-wire flavours only; two engines that merely *look* alike still duplicate.
+- **The one exception: a flavour of an already-supported engine may extend it.** PGLite *is* PostgreSQL (compiled to WASM), same wire protocol and same dialect, so `PgliteDriver extends PostgresqlDriver` and keeps only what is genuinely custom: the connection mechanism (`connect`/`disconnect`/`execute`/`transaction`, the `@electric-sql/pglite` client shape), `probe`, its capability set (no LISTEN/NOTIFY, no advisory locks), and its own migration array. The `pglite/` folder, its `PGliteDriverOptions`/client types and its `PGLITE_MIGRATIONS` export all stay in place — the folder is still the whole PGLite surface. Two rules hold: the members a flavour needs from PostgreSQL are `protected` (`execute`, `transaction`, `enabledCapabilities`) and pool/listener state stays private; and **a change to a query in `PostgresqlDriver` changes PGLite too** — if a tweak is PostgreSQL-only, override it in `PgliteDriver` rather than branching on the engine in the base. This applies to PG-wire flavours only; two engines that merely *look* alike still duplicate.
 - **Each driver owns its migrations, authored by hand alongside the driver.** Migrations live at
   `packages/core/src/drivers/<engine>/migrations.ts` as an authored `FlavourMigration[]`
   (version → `statements(names)`), written in that engine's own dialect (types, `IF NOT EXISTS`
@@ -194,7 +194,7 @@ in three sections, and no section at all when there is nothing to put in it.
   the code does not make. `applyMigration` runs the statements *and* records the version in one
   transaction, so a crash between them can't leave an applied-but-unrecorded migration.
   PGLite is the one exception, matching the driver rule above: `PGLITE_MIGRATIONS` is its own array but
-  points at the Postgres statement builders (`v1`, … exported from `postgres/migrations.ts`) while the
+  points at the PostgreSQL statement builders (`v1`, … exported from `postgresql/migrations.ts`) while the
   DDL is identical; a version that needs to diverge gets a local builder swapped in for that version
   only. The driver exposes them via `readonly migrations` (built with the shared `toMigrationSteps`
   helper); the **single shared `MigrationRunner`** in `drivers/shared/` applies the pending steps.
@@ -205,7 +205,7 @@ in three sections, and no section at all when there is nothing to put in it.
 - **Use the keys and indexes the engine has.** Every engine here is capable, so `v1` declares a
   primary key per table and one index per hot access path (the claim query in its exact order, both
   maintenance sweeps, the retention sweep, both dedup lookups, the newest-first page, the due-schedule
-  scan). Authored per engine in its own dialect: partial indexes on Postgres/SQLite, inline `KEY`
+  scan). Authored per engine in its own dialect: partial indexes on PostgreSQL/SQLite, inline `KEY`
   clauses on MySQL (no `CREATE INDEX IF NOT EXISTS`), PL/SQL-guarded `CREATE INDEX` on Oracle.
   Nothing beyond the primary keys is a *uniqueness* constraint: idempotency and singleton dedup stay
   enforced in driver code, so behaviour is identical on an engine that could not honour one — and a
@@ -279,8 +279,8 @@ in three sections, and no section at all when there is nothing to put in it.
   and the shared fake inside it is the one that quietly drifts from what it is standing in for. Shared
   fakes and harnesses go in the package's `test-support/`.
 - **Automated coverage runs on PGLite and SQLite only.** They are in-process, so the whole suite —
-  including the conformance kit — runs with no external service. PGLite exercises the Postgres SQL by
-  inheritance, so Postgres is covered in practice too.
+  including the conformance kit — runs with no external service. PGLite exercises the PostgreSQL SQL by
+  inheritance, so PostgreSQL is covered in practice too.
 - **MySQL and Oracle are verified by hand**, with `npm run test:mysql` / `npm run test:oracle` against
   a real server (`npm run db:mysql:up` / `npm run db:oracle:up` start one). Those run the same
   conformance kit via `src/conformance/manual.test.ts`, which skips an engine whose connection

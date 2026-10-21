@@ -26,17 +26,17 @@ const CORE = '@portqueue/core';
 
 export const DRIVERS: DriverInfo[] = [
   {
-    value: 'postgres',
-    label: 'Postgres',
+    value: 'postgresql',
+    label: 'PostgreSQL',
     peerDep: 'pg',
-    className: 'PostgresDriver',
-    module: `${CORE}/drivers/postgres`,
+    className: 'PostgresqlDriver',
+    module: `${CORE}/drivers/postgresql`,
     default: true,
     connect: `import { PortQueue } from '@portqueue/core';
-import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+import { PostgresqlDriver } from '@portqueue/core/drivers/postgresql';
 
 const pq = new PortQueue({
-  driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }),
+  driver: new PostgresqlDriver({ connectionString: process.env.DATABASE_URL }),
 });
 await pq.init();`,
   },

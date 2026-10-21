@@ -107,7 +107,7 @@ const config: Config = {
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Node.js',
         description:
-          'A broker-less, strictly typed background job queue for Node.js and TypeScript that treats your relational database (Postgres, PGLite, SQLite, Oracle, MySQL) as the single source of truth.',
+          'A broker-less, strictly typed background job queue for Node.js and TypeScript that treats your relational database (PostgreSQL, PGLite, SQLite, Oracle, MySQL) as the single source of truth.',
         url: 'https://episclera.github.io/portqueue/',
         codeRepository: REPO_URL,
         license: 'https://opensource.org/licenses/MIT',
@@ -154,7 +154,7 @@ const config: Config = {
       {
         name: 'keywords',
         content:
-          'portqueue, job queue, task queue, message queue, background jobs, postgres queue, ' +
+          'portqueue, job queue, task queue, message queue, background jobs, postgresql queue, ' +
           'database queue, node.js job queue, typescript queue, workers, cron jobs, delayed jobs, ' +
           'recurring jobs, transactional enqueue, bullmq alternative, pg-boss alternative, ' +
           'celery alternative, sqlite, oracle, pglite, mysql',

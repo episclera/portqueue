@@ -1,6 +1,6 @@
 # Driver verification
 
-PGLite and SQLite run the conformance kit in CI (`npm test`), so the Postgres SQL is exercised by
+PGLite and SQLite run the conformance kit in CI (`npm test`), so the PostgreSQL SQL is exercised by
 inheritance and SQLite directly. **MySQL and Oracle cannot be**: their statements are authored in
 their own dialects and no in-process engine speaks either, so they are verified by hand against a
 real server — and this file records when that last happened.

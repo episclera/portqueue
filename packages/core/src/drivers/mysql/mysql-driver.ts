@@ -104,7 +104,7 @@ const MYSQL_MISSING_OBJECT = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_DB_ERROR']);
  * **The dialect fact that shapes this file: MySQL has no `RETURNING`.** Every "mutate and read back"
  * operation is therefore an explicit two-step inside one transaction — select the affected ids (with
  * `FOR UPDATE SKIP LOCKED` where the rows are contended), then mutate exactly those ids. That is why
- * several methods here open a transaction where the Postgres driver runs a single statement.
+ * several methods here open a transaction where the PostgreSQL driver runs a single statement.
  *
  * Row mapping, value conversion and insert value lists come from {@link BaseDriver} — mechanism,
  * not SQL. `mysql2` is an optional peer dependency.
@@ -115,7 +115,7 @@ export class MysqlDriver extends BaseDriver implements Driver {
     [DriverCapability.SKIP_LOCKED]: true,
     [DriverCapability.TRANSACTIONS]: true,
     // `GET_LOCK` is a genuine named lock, so the migration runner can serialize a concurrent first
-    // boot here exactly as it does on Postgres. No RETURNING and no LISTEN/NOTIFY.
+    // boot here exactly as it does on PostgreSQL. No RETURNING and no LISTEN/NOTIFY.
     [DriverCapability.ADVISORY_LOCK]: true,
   });
   readonly migrations: MigrationStep[] = toMigrationSteps(MYSQL_MIGRATIONS);
@@ -1356,7 +1356,7 @@ export class MysqlDriver extends BaseDriver implements Driver {
     metrics?: InstanceMetrics;
   }): Promise<InstanceRow> {
     // Update-first, then insert only if the row is genuinely absent, then read it back — three
-    // statements where Postgres needs one, because MySQL has no RETURNING and reports an UPDATE that
+    // statements where PostgreSQL needs one, because MySQL has no RETURNING and reports an UPDATE that
     // changed nothing as zero rows affected. The read-back is what the caller takes
     // `processingPaused` from, so there is no query after this transaction. The pause flag is never
     // written here.

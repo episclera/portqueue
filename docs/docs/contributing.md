@@ -38,7 +38,7 @@ together at one shared version. `fix:` ships a patch, `feat:` a minor, and `!` (
 
 **Automated tests run on PGLite + SQLite only**, so they need no external DB server. Both are
 in-process, so the whole suite — the conformance kit included — runs anywhere; and because PGLite *is*
-Postgres compiled to WASM, the Postgres SQL is exercised by inheritance too.
+PostgreSQL compiled to WASM, the PostgreSQL SQL is exercised by inheritance too.
 
 **MySQL and Oracle are verified by hand.** Their SQL is authored in their own dialects and no
 in-process engine can exercise it, so a change to either driver isn't finished until you've run the
@@ -58,7 +58,7 @@ Start one in Docker. Each engine has an `npm run` script and an equivalent shell
 `scripts/dev/db/` — use whichever you prefer:
 
 ```bash
-npm run db:pg:up          # or: ./scripts/dev/db/start-postgres.sh   (stop: db:pg:down)
+npm run db:postgresql:up          # or: ./scripts/dev/db/start-postgresql.sh   (stop: db:postgresql:down)
 npm run db:mysql:up       # or: ./scripts/dev/db/start-mysql.sh      (stop: db:mysql:down)
 npm run db:oracle:up      # or: ./scripts/dev/db/start-oracle.sh     (stop: db:oracle:down)
 ```

@@ -1,17 +1,17 @@
 /**
- * A real Postgres connection — `PostgresDriver` + a `DATABASE_URL`.
+ * A real PostgreSQL connection — `PostgresqlDriver` + a `DATABASE_URL`.
  *
- * Run with: `npm run example:postgres` (from the repo root) or `npm start` here.
+ * Run with: `npm run example:postgresql` (from the repo root) or `npm start` here.
  *
- * Unlike the PGLite examples, this one talks to a **real Postgres server**, so it needs:
+ * Unlike the PGLite examples, this one talks to a **real PostgreSQL server**, so it needs:
  *   1. the `pg` peer dependency installed (already declared here), and
  *   2. a reachable database — set `DATABASE_URL`, e.g.
- *      `DATABASE_URL=postgres://user:pass@localhost:5432/app npm run example:postgres`.
+ *      `DATABASE_URL=postgres://user:pass@localhost:5432/app npm run example:postgresql`.
  *
  * The database must already exist; PortQueue creates only its own tables (migrations run on init).
  */
 import { MigrationMode, PortQueue } from '@portqueue/core';
-import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+import { PostgresqlDriver } from '@portqueue/core/drivers/postgresql';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://portqueue:portqueue@localhost:5432/portqueue';
@@ -20,11 +20,11 @@ type QueueName = 'welcome';
 
 async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({
-    driver: new PostgresDriver({ connectionString }),
+    driver: new PostgresqlDriver({ connectionString }),
     migration: MigrationMode.AUTO, // create/upgrade PortQueue's tables on init
   });
   await pq.init();
-  console.log(`Connected to Postgres and migrated schema (${connectionString}).`);
+  console.log(`Connected to PostgreSQL and migrated schema (${connectionString}).`);
 
   // One call declares the queue and consumes it: `handler` is required, because declaring a queue is
   // declaring that this process processes it. A process that only produces skips `createQueue`

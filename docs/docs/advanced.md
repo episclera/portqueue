@@ -24,7 +24,7 @@ import type { Driver, DriverCapabilitySet, MigrationStep } from '@portqueue/core
 import { BaseDriver, capabilities, DriverCapability, DatabaseEngine } from '@portqueue/core';
 
 class MyDriver extends BaseDriver implements Driver {
-  readonly engine = DatabaseEngine.POSTGRES; // your engine
+  readonly engine = DatabaseEngine.POSTGRESQL; // your engine
   readonly capabilities: DriverCapabilitySet = capabilities({
     [DriverCapability.SKIP_LOCKED]: false,   // no row-skip lock? claim atomically another way
     [DriverCapability.LISTEN_NOTIFY]: false, // no pub/sub? core polls
@@ -81,7 +81,7 @@ caller's transaction. The interface groups its methods by concern:
   or a permissions error has to surface, because reading it as "never migrated" would start a full
   migration run against a database that may already be migrated.
 - `applyMigration({ migration: MigrationStep }): Promise<void>` — run the step's statements **and**
-  record its version, in one transaction **wherever the engine allows it**. Postgres, PGLite and
+  record its version, in one transaction **wherever the engine allows it**. PostgreSQL, PGLite and
   SQLite run DDL transactionally, so a crash between the two cannot leave an applied-but-unrecorded
   migration there. MySQL and Oracle commit each DDL statement implicitly and no transaction can span
   them: those drivers run the statements first and record the version after, so an interruption leaves
@@ -223,11 +223,11 @@ allowlist-validated and quoted; every operation runs in a transaction.
 
 The one exception is a **flavour of an engine that is already supported** — a build that speaks the
 same wire protocol and dialect rather than a different engine. `PgliteDriver` is exactly that
-(PGLite is Postgres compiled to WASM), so it `extends PostgresDriver`, inherits the whole SQL
+(PGLite is PostgreSQL compiled to WASM), so it `extends PostgresqlDriver`, inherits the whole SQL
 surface, and overrides only what is genuinely its own: the connection mechanism, its capability set
 (no LISTEN/NOTIFY, no advisory locks) and its migration array. `PGLITE_MIGRATIONS` stays PGLite's
-own array — it just points at the Postgres statement builders while the DDL is identical, so a
-version can be swapped for a PGLite-specific one without touching Postgres. If your engine merely
+own array — it just points at the PostgreSQL statement builders while the DDL is identical, so a
+version can be swapped for a PGLite-specific one without touching PostgreSQL. If your engine merely
 *resembles* another, duplicate instead: subclass only when the dialect is the same by construction.
 
 ### Declare capabilities honestly
@@ -294,5 +294,5 @@ is most likely to get subtly wrong: `requeueJob`/`removeJob`/`cancelJob` refusin
 guarded claim, the `search` filter, and agreement between every list page and its `count*`.
 
 The same kit validates the built-in drivers, so passing it means your engine behaves identically to
-Postgres/SQLite from app code's perspective. PGLite and SQLite run it in CI; MySQL and Oracle are
+PostgreSQL/SQLite from app code's perspective. PGLite and SQLite run it in CI; MySQL and Oracle are
 validated with it by hand against a real server.

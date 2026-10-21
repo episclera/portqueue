@@ -27,7 +27,7 @@ function normalizeRows(result: unknown): TxQueryResult {
 export function fromPg(client: {
   query(sql: string, params?: readonly unknown[]): Promise<unknown>;
 }): TransactionHandle {
-  return makeHandle('POSTGRES', async (sql, params) =>
+  return makeHandle('POSTGRESQL', async (sql, params) =>
     normalizeRows(await client.query(sql, params)),
   );
 }
@@ -85,7 +85,7 @@ export function fromOracle(connection: {
 export function fromKnex(trx: {
   raw(sql: string, bindings?: readonly unknown[]): Promise<unknown>;
 }): TransactionHandle {
-  return makeHandle('POSTGRES', async (sql, params) => normalizeRows(await trx.raw(sql, params)));
+  return makeHandle('POSTGRESQL', async (sql, params) => normalizeRows(await trx.raw(sql, params)));
 }
 
 /** Wrap a Kysely transaction via its underlying driver connection executor. */
@@ -93,7 +93,7 @@ export function fromKysely(executor: {
   executeQuery?: (sql: string, params: readonly unknown[]) => Promise<unknown>;
   raw?: (sql: string, params?: readonly unknown[]) => Promise<unknown>;
 }): TransactionHandle {
-  return makeHandle('POSTGRES', async (sql, params) => {
+  return makeHandle('POSTGRESQL', async (sql, params) => {
     if (executor.executeQuery) return normalizeRows(await executor.executeQuery(sql, params));
     if (executor.raw) return normalizeRows(await executor.raw(sql, params));
     throw new Error('fromKysely: provide an executor exposing executeQuery(sql, params).');
@@ -105,7 +105,7 @@ export function fromDrizzle(
   tx: { execute(query: unknown): Promise<unknown> },
   sqlTag?: (s: string, p: readonly unknown[]) => unknown,
 ): TransactionHandle {
-  return makeHandle('POSTGRES', async (sql, params) => {
+  return makeHandle('POSTGRESQL', async (sql, params) => {
     const query = sqlTag ? sqlTag(sql, params) : sql;
     return normalizeRows(await tx.execute(query));
   });
@@ -118,7 +118,7 @@ export function fromPrisma(txClient: {
   $queryRawUnsafe(sql: string, ...params: unknown[]): Promise<unknown>;
   $executeRawUnsafe(sql: string, ...params: unknown[]): Promise<number>;
 }): TransactionHandle {
-  return makeHandle('POSTGRES', async (sql, params) => {
+  return makeHandle('POSTGRESQL', async (sql, params) => {
     if (/^\s*select/i.test(sql) || /returning/i.test(sql)) {
       const rows = (await txClient.$queryRawUnsafe(sql, ...params)) as Array<
         Record<string, unknown>
@@ -134,7 +134,7 @@ export function fromPrisma(txClient: {
 export function fromTypeorm(em: {
   query(sql: string, params?: unknown[]): Promise<unknown>;
 }): TransactionHandle {
-  return makeHandle('POSTGRES', async (sql, params) =>
+  return makeHandle('POSTGRESQL', async (sql, params) =>
     normalizeRows(await em.query(sql, [...params])),
   );
 }
@@ -149,7 +149,7 @@ export function fromSequelize(
   },
   transaction: unknown,
 ): TransactionHandle {
-  return makeHandle('POSTGRES', async (sql, params) => {
+  return makeHandle('POSTGRESQL', async (sql, params) => {
     const res = (await sequelize.query(sql, { bind: params, transaction })) as unknown;
     // Sequelize returns [rows, metadata] for raw queries.
     if (Array.isArray(res)) return normalizeRows(res[0]);
@@ -161,7 +161,7 @@ export function fromSequelize(
 export function fromMikroOrm(em: {
   getConnection(): { execute(sql: string, params?: unknown[]): Promise<unknown> };
 }): TransactionHandle {
-  return makeHandle('POSTGRES', async (sql, params) =>
+  return makeHandle('POSTGRESQL', async (sql, params) =>
     normalizeRows(await em.getConnection().execute(sql, [...params])),
   );
 }

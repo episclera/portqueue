@@ -11,11 +11,11 @@
 - **Operate** — [Scaling horizontally](https://episclera.github.io/portqueue/docs/scale-horizontally) · [Dashboard](https://episclera.github.io/portqueue/docs/dashboard) · [CLI](https://episclera.github.io/portqueue/docs/cli)
 - **Reference** — [API reference](https://episclera.github.io/portqueue/docs/api-reference)
 
-PortQueue treats your relational database as the single source of truth for background jobs — no Redis, no broker. Write your queue code once and run it on **Postgres, MySQL, Oracle, PGLite, or SQLite** (or plug in a custom driver for any engine).
+PortQueue treats your relational database as the single source of truth for background jobs — no Redis, no broker. Write your queue code once and run it on **PostgreSQL, MySQL, Oracle, PGLite, or SQLite** (or plug in a custom driver for any engine).
 
 ## Why PortQueue
 
-- **One API across every driver.** Swap Postgres for SQLite without touching app code.
+- **One API across every driver.** Swap PostgreSQL for SQLite without touching app code.
 - **Developer experience first.** Named-options objects, no positional arguments, importable enums instead of magic strings, strict types with no `any`, result objects (never bare ids), and error messages that explain the fix.
 - **Horizontally scalable.** Multiple instances cooperate through row-level claiming (`SKIP LOCKED` or a safe fallback) — no double-processing.
 - **Fault tolerant.** A throwing handler never crashes the worker loop.
@@ -33,10 +33,10 @@ npm install pg   # or: mysql2, oracledb, @electric-sql/pglite, better-sqlite3
 
 ```ts
 import { PortQueue } from '@portqueue/core';
-import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+import { PostgresqlDriver } from '@portqueue/core/drivers/postgresql';
 
 const pq = new PortQueue({
-  driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }),
+  driver: new PostgresqlDriver({ connectionString: process.env.DATABASE_URL }),
 });
 await pq.init();
 

@@ -17,7 +17,7 @@ describe('transaction adapters', () => {
       },
     });
     expect(isTransactionHandle(handle)).toBe(true);
-    expect(handle.engine).toBe('POSTGRES');
+    expect(handle.engine).toBe('POSTGRESQL');
     const res = await handle.execute('INSERT ... RETURNING id', ['a']);
     expect(res).toEqual({ rows: [{ id: '1' }], rowCount: 1 });
     expect(calls[0]!.params).toEqual(['a']);

@@ -17,7 +17,7 @@ No stubbed queues, no faked internal methods, no "trust me, it works in prod."
 
 Two drivers are purpose-built for this:
 
-- **PGLite** — a full Postgres compiled to WASM. If you run Postgres in production, this
+- **PGLite** — a full PostgreSQL compiled to WASM. If you run PostgreSQL in production, this
   mirrors it faithfully (same dialect, same `INSERT … ON CONFLICT`, real constraints).
 - **SQLite** — `better-sqlite3`, a single small dependency, extremely fast to spin up.
 
@@ -34,7 +34,7 @@ await pq.init(); // runs migrations against the fresh database
 
 :::info Install the driver's peer dependency
 Each database driver relies on a peer package you install yourself — `@electric-sql/pglite`
-for PGLite, `better-sqlite3` for SQLite, `pg` for Postgres, `mysql2` for MySQL. If it's
+for PGLite, `better-sqlite3` for SQLite, `pg` for PostgreSQL, `mysql2` for MySQL. If it's
 missing, the driver throws `MissingPeerDependencyError` (code `MISSING_PEER_DEPENDENCY`) as
 soon as it tries to connect. Add the matching package to your dev dependencies before
 running the suite.

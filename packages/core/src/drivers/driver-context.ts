@@ -8,7 +8,7 @@ import { TableNames } from './table-names';
  * `schema` by qualifying every object name with it; SQLite has none and does not accept the option.
  */
 export interface StorageOptions {
-  /** DB schema/namespace (Postgres/PGLite/MySQL/Oracle). */
+  /** DB schema/namespace (PostgreSQL/PGLite/MySQL/Oracle). */
   schema?: string;
   /** Prefix for all created tables (default 'pq_'). */
   tablePrefix?: string;

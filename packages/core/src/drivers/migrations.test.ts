@@ -1,11 +1,11 @@
 import { DatabaseEngine } from '../options/enums';
 import { TableName } from './table-names';
-import { PostgresDriver } from './postgres/postgres-driver';
+import { PostgresqlDriver } from './postgresql/postgresql-driver';
 import { PgliteDriver } from './pglite/pglite-driver';
 import { SqliteDriver } from './sqlite/sqlite-driver';
 import { OracleDriver } from './oracle/oracle-driver';
 import { MysqlDriver } from './mysql/mysql-driver';
-import { POSTGRES_MIGRATIONS } from './postgres/migrations';
+import { POSTGRESQL_MIGRATIONS } from './postgresql/migrations';
 import { PGLITE_MIGRATIONS } from './pglite/migrations';
 import { SQLITE_MIGRATIONS } from './sqlite/migrations';
 import { ORACLE_MIGRATIONS } from './oracle/migrations';
@@ -26,7 +26,7 @@ const tables = (statements: string[]): string[] => statements.filter((s) => /CRE
 describe('per-engine migrations (authored alongside each driver)', () => {
   it('each engine authors its own migration set — separate arrays, never shared', () => {
     const sets = [
-      POSTGRES_MIGRATIONS,
+      POSTGRESQL_MIGRATIONS,
       PGLITE_MIGRATIONS,
       SQLITE_MIGRATIONS,
       ORACLE_MIGRATIONS,
@@ -46,7 +46,7 @@ describe('per-engine migrations (authored alongside each driver)', () => {
 
   it('each driver exposes runner steps built from its own migrations', () => {
     const drivers = [
-      [new PostgresDriver(), DatabaseEngine.POSTGRES],
+      [new PostgresqlDriver(), DatabaseEngine.POSTGRESQL],
       [new PgliteDriver(), DatabaseEngine.PGLITE],
       [new SqliteDriver(), DatabaseEngine.SQLITE],
       [new OracleDriver(), DatabaseEngine.ORACLE],
@@ -58,8 +58,8 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     }
   });
 
-  it('Postgres v1 creates every table with the pruned job shape and the schedule dedup token', () => {
-    const statements = v1(POSTGRES_MIGRATIONS);
+  it('PostgreSQL v1 creates every table with the pruned job shape and the schedule dedup token', () => {
+    const statements = v1(POSTGRESQL_MIGRATIONS);
     const created = tables(statements);
     expect(created).toHaveLength(5);
     expect(created.every((s) => s.startsWith('CREATE TABLE IF NOT EXISTS'))).toBe(true);
@@ -81,11 +81,11 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     expect(migration).toContain('created_at');
   });
 
-  it('Postgres v1 declares a primary key per table and an index per hot access path', () => {
-    const statements = v1(POSTGRES_MIGRATIONS);
+  it('PostgreSQL v1 declares a primary key per table and an index per hot access path', () => {
+    const statements = v1(POSTGRESQL_MIGRATIONS);
     for (const table of tables(statements)) expect(table).toContain('PRIMARY KEY');
     const indexes = statements.filter((s) => s.startsWith('CREATE INDEX'));
-    // Every index is idempotent and unqualified (Postgres files it in the table's own schema).
+    // Every index is idempotent and unqualified (PostgreSQL files it in the table's own schema).
     expect(indexes.every((s) => s.startsWith('CREATE INDEX IF NOT EXISTS pq_'))).toBe(true);
     // The claim query's exact shape: queue + claimable status, then priority and due order.
     expect(indexes.join('\n')).toContain('(queue_name, status, priority DESC, start_after ASC)');
@@ -107,8 +107,8 @@ describe('per-engine migrations (authored alongside each driver)', () => {
   });
 
   it('creates the schema itself only when one was configured', () => {
-    expect(v1(POSTGRES_MIGRATIONS).some((s) => s.startsWith('CREATE SCHEMA'))).toBe(false);
-    const scoped = POSTGRES_MIGRATIONS[0]!.statements({
+    expect(v1(POSTGRESQL_MIGRATIONS).some((s) => s.startsWith('CREATE SCHEMA'))).toBe(false);
+    const scoped = POSTGRESQL_MIGRATIONS[0]!.statements({
       name: (t) => `jobs.pq_${t}`,
       derived: (t, suffix) => `pq_${t}_${suffix}`,
       schema: 'jobs',
@@ -147,7 +147,7 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     expect(job).toContain('created_at INTEGER NOT NULL');
     expect(job).not.toMatch(/BIGINT|SMALLINT/);
     expect(job).toContain('id TEXT NOT NULL PRIMARY KEY');
-    // Same access paths as Postgres, authored separately in SQLite's own dialect.
+    // Same access paths as PostgreSQL, authored separately in SQLite's own dialect.
     expect(statements.some((s) => s.includes('CREATE INDEX IF NOT EXISTS pq_job_claim_idx'))).toBe(
       true,
     );
@@ -174,10 +174,10 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     expect(statements.every((s) => !/\bLIMIT\b/.test(s))).toBe(true);
   });
 
-  it('PGLite reuses the Postgres statement builders (PG-wire) from its own array', () => {
-    expect(PGLITE_MIGRATIONS).not.toBe(POSTGRES_MIGRATIONS);
+  it('PGLite reuses the PostgreSQL statement builders (PG-wire) from its own array', () => {
+    expect(PGLITE_MIGRATIONS).not.toBe(POSTGRESQL_MIGRATIONS);
     // Same builder object, not a hand-kept copy: the two can never drift.
-    expect(PGLITE_MIGRATIONS[0]!.statements).toBe(POSTGRES_MIGRATIONS[0]!.statements);
-    expect(v1(PGLITE_MIGRATIONS)).toEqual(v1(POSTGRES_MIGRATIONS));
+    expect(PGLITE_MIGRATIONS[0]!.statements).toBe(POSTGRESQL_MIGRATIONS[0]!.statements);
+    expect(v1(PGLITE_MIGRATIONS)).toEqual(v1(POSTGRESQL_MIGRATIONS));
   });
 });

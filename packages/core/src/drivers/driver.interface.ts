@@ -161,7 +161,7 @@ export interface Driver {
   /**
    * Apply one step's DDL and record its version.
    *
-   * **In one transaction wherever the engine allows it** — Postgres, PGLite and SQLite all run DDL
+   * **In one transaction wherever the engine allows it** — PostgreSQL, PGLite and SQLite all run DDL
    * transactionally, so a crash there cannot leave an applied-but-unrecorded migration. MySQL and
    * Oracle commit each DDL statement implicitly and no transaction can span them: those drivers run
    * the statements and then record the version, in that order, so an interruption leaves the schema

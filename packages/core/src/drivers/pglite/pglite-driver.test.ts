@@ -2,18 +2,18 @@ import { PortQueue } from '../../port-queue';
 import { DatabaseEngine } from '../../options/enums';
 import { DriverCapability } from '../driver-capabilities';
 import { NoopLogger } from '../../logging/console-logger';
-import { PostgresDriver } from '../postgres/postgres-driver';
+import { PostgresqlDriver } from '../postgresql/postgresql-driver';
 import { PgliteDriver } from './index';
 
 /**
- * PGLite inherits the whole SQL surface from `PostgresDriver` (same wire protocol, same dialect).
+ * PGLite inherits the whole SQL surface from `PostgresqlDriver` (same wire protocol, same dialect).
  * These tests pin down what must stay PGLite's own despite that, plus one live round-trip proving
  * the inherited queries really run through PGLite's own `execute`/`transaction`.
  */
-describe('PgliteDriver extends PostgresDriver', () => {
+describe('PgliteDriver extends PostgresqlDriver', () => {
   it('keeps its own identity, capabilities and migrations', () => {
     const driver = new PgliteDriver();
-    expect(driver).toBeInstanceOf(PostgresDriver);
+    expect(driver).toBeInstanceOf(PostgresqlDriver);
     expect(driver.engine).toBe(DatabaseEngine.PGLITE);
     // In-process: no shared notification bus and nothing to coordinate a lock with.
     expect(driver.capabilities[DriverCapability.LISTEN_NOTIFY]).toBe(false);

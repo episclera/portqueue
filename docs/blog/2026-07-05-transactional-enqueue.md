@@ -4,7 +4,7 @@ title: 'Transactional enqueue: killing the dual-write bug'
 authors: [gheorghe]
 tags: [design, transactions]
 description: How PortQueue enqueues jobs inside your own database transaction to kill the dual-write bug, so a job exists only if your business write commits.
-keywords: [portqueue, transactional enqueue, dual-write bug, database queue, postgres queue, background jobs, node.js, typescript]
+keywords: [portqueue, transactional enqueue, dual-write bug, database queue, postgresql queue, background jobs, node.js, typescript]
 ---
 
 You write an order row, then enqueue its fulfillment job. What happens if the process

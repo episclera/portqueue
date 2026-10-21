@@ -9,14 +9,14 @@ commit (or roll back) together. The core pattern:
 4. commit.
 
 If anything fails before commit, both the business row and the job insert roll back. Because the
-job is inserted inside your transaction, workers only see it **after** you commit — on Postgres the
+job is inserted inside your transaction, workers only see it **after** you commit — on PostgreSQL the
 driver `NOTIFY`s at commit for instant pickup; engines without LISTEN/NOTIFY pick it up on the next
 poll.
 
 ## Prerequisites
 
 - The `pg` peer dependency (declared in this example's `package.json`).
-- A reachable Postgres database that **already exists**.
+- A reachable PostgreSQL database that **already exists**.
 
 ```bash
 DATABASE_URL=postgres://user:pass@localhost:5432/app npm run example:transactional
@@ -25,10 +25,10 @@ DATABASE_URL=postgres://user:pass@localhost:5432/app npm start
 ```
 
 If `DATABASE_URL` is unset it defaults to `postgresql://portqueue:portqueue@localhost:5432/portqueue`,
-which matches the repo's dev Postgres — so from a clean checkout you can just:
+which matches the repo's dev PostgreSQL — so from a clean checkout you can just:
 
 ```bash
-npm run db:pg:up               # start the dev Postgres in Docker
+npm run db:postgresql:up               # start the dev PostgreSQL in Docker
 npm run example:transactional
 ```
 

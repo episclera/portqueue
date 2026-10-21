@@ -46,9 +46,10 @@ const FEATURES: {
     title: 'Database Agnostic',
     body: (
       <>
-        Point it at the database you already run — <strong>Postgres</strong>, <strong>MySQL</strong>
-        , <strong>Oracle</strong>, <strong>PGLite</strong>, or <strong>SQLite</strong>. Each driver
-        picks the best strategy its engine supports, so your app code stays identical.
+        Point it at the database you already run — <strong>PostgreSQL</strong>,{' '}
+        <strong>MySQL</strong>, <strong>Oracle</strong>, <strong>PGLite</strong>, or{' '}
+        <strong>SQLite</strong>. Each driver picks the best strategy its engine supports, so your
+        app code stays identical.
       </>
     ),
     to: '/docs/getting-started',
@@ -85,12 +86,12 @@ const FEATURES: {
 ];
 
 const QUICK_START = `import { PortQueue } from '@portqueue/core';
-import { PostgresDriver } from '@portqueue/core/drivers/postgres';
+import { PostgresqlDriver } from '@portqueue/core/drivers/postgresql';
 
 enum QueueName { Emails = 'emails' }
 
 const pq = new PortQueue<QueueName>({
-  driver: new PostgresDriver({ connectionString: process.env.DATABASE_URL }),
+  driver: new PostgresqlDriver({ connectionString: process.env.DATABASE_URL }),
 });
 await pq.init();
 
@@ -109,7 +110,7 @@ export default function Home(): ReactNode {
   // Keyword-rich meta description for the highest-traffic page (SEO landing page).
   const description =
     'PortQueue is a broker-less, strictly typed background job queue for Node.js & TypeScript — ' +
-    'delayed & cron jobs, retries, retention, and rate limiting on Postgres, PGLite, SQLite, Oracle, or MySQL.';
+    'delayed & cron jobs, retries, retention, and rate limiting on PostgreSQL, PGLite, SQLite, Oracle, or MySQL.';
   return (
     <Layout title="PortQueue" description={description}>
       <header className={styles.hero}>

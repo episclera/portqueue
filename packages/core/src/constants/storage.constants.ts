@@ -6,7 +6,7 @@ export const DEFAULT_TABLE_PREFIX = 'pq_';
 /** Logical prefix for pub/sub channels when several PortQueues share one database. */
 export const DEFAULT_NAMESPACE = 'portqueue';
 
-/** Identifier length ceiling a driver assumes when it declares none (Postgres' limit). */
+/** Identifier length ceiling a driver assumes when it declares none (PostgreSQL' limit). */
 export const DEFAULT_MAX_IDENTIFIER_LEN = 63;
 
 /**
@@ -14,7 +14,7 @@ export const DEFAULT_MAX_IDENTIFIER_LEN = 63;
  * `deleteSchedules`, and the dashboard's bulk actions.
  *
  * Oracle caps the expressions in an `IN` list at 1000 and is the lowest of the engines here, so its
- * limit is everyone's: a 1001-id batch that works on Postgres and raises ORA-01795 on Oracle is a
+ * limit is everyone's: a 1001-id batch that works on PostgreSQL and raises ORA-01795 on Oracle is a
  * portability bug the tool refuses up front rather than one a caller discovers in production. It is
  * a cap on what a single *call* may ask for — a set that still needs several statements (an insert
  * binds ~25 values per job) is chunked by `BaseDriver.chunkForBind` underneath.

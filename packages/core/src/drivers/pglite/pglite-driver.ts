@@ -8,17 +8,17 @@ import {
 import { toMigrationSteps } from '../shared/migration';
 import { PGLITE_MIGRATIONS } from './migrations';
 import type { Driver, DriverProbe, MigrationStep, Subscription } from '../driver.interface';
-// --- Compatible with Postgres: the whole SQL surface is inherited ---
-// PGLite is Postgres compiled to WASM and speaks the same wire protocol and dialect, so every
+// --- Compatible with PostgreSQL: the whole SQL surface is inherited ---
+// PGLite is PostgreSQL compiled to WASM and speaks the same wire protocol and dialect, so every
 // query method (jobs, queues, schedules, instances, claiming, retention, paging, the tx handle)
-// comes from `PostgresDriver` unchanged. `RawResult`/`Session` are its own connection-level types,
+// comes from `PostgresqlDriver` unchanged. `RawResult`/`Session` are its own connection-level types,
 // imported so the overrides below stay signature-compatible.
-import { PostgresDriver, type RawResult, type Session } from '../postgres/postgres-driver';
+import { PostgresqlDriver, type RawResult, type Session } from '../postgresql/postgresql-driver';
 
 /**
  * Options for {@link PgliteDriver} — entirely custom to PGLite: there is no host, port, user or
  * pool, only an optional on-disk directory. `schema`/`tablePrefix`/`namespace` mean exactly what
- * they mean for Postgres and are forwarded to the base driver's `DriverContext`.
+ * they mean for PostgreSQL and are forwarded to the base driver's `DriverContext`.
  */
 export interface PGliteDriverOptions {
   /** Data directory for a file-backed DB; omit for in-memory. */
@@ -47,14 +47,14 @@ export interface PGliteInstance extends PGliteQueryable {
 }
 
 /**
- * PGLite driver — Postgres compiled to WASM, running in-process. Primarily for embedded/edge use
+ * PGLite driver — PostgreSQL compiled to WASM, running in-process. Primarily for embedded/edge use
  * and tests.
  *
- * Because PGLite is byte-for-byte PG-wire compatible, this class **extends `PostgresDriver`** and
+ * Because PGLite is byte-for-byte PG-wire compatible, this class **extends `PostgresqlDriver`** and
  * inherits its entire SQL surface: `$1`-style placeholders, SKIP LOCKED claiming, RETURNING
  * everywhere, the keys and indexes its migration creates, no relational JOIN (relationships resolve
  * by name/key lookups), and the in-code enforcement of idempotency/singleton dedup. A change to a
- * query in `PostgresDriver` therefore changes PGLite too; anything that must differ is overridden
+ * query in `PostgresqlDriver` therefore changes PGLite too; anything that must differ is overridden
  * here.
  *
  * What is custom to PGLite and overridden below:
@@ -68,9 +68,9 @@ export interface PGliteInstance extends PGliteQueryable {
  * - `tryAdvisoryLock`/`releaseAdvisoryLock` — inert, since a single in-process DB has nothing to
  *   coordinate with.
  */
-export class PgliteDriver extends PostgresDriver implements Driver {
+export class PgliteDriver extends PostgresqlDriver implements Driver {
   override readonly engine: DatabaseEngine = DatabaseEngine.PGLITE;
-  /** Same as Postgres minus LISTEN/NOTIFY and advisory locks — neither is meaningful in-process. */
+  /** Same as PostgreSQL minus LISTEN/NOTIFY and advisory locks — neither is meaningful in-process. */
   override readonly capabilities: DriverCapabilitySet = capabilities({
     [DriverCapability.SKIP_LOCKED]: true,
     [DriverCapability.RETURNING]: true,
@@ -155,7 +155,7 @@ export class PgliteDriver extends PostgresDriver implements Driver {
   // --- Advisory locks (custom to PGLite: inert) ---
   // A single in-process DB has no second process to coordinate with, so the migration runner takes
   // no lock — it skips these entirely because ADVISORY_LOCK is off in `capabilities`. They stay
-  // declared, and inert, so Postgres' pool-backed implementations can never be inherited.
+  // declared, and inert, so PostgreSQL' pool-backed implementations can never be inherited.
   override async tryAdvisoryLock(_options: { key: string }): Promise<boolean> {
     return false;
   }

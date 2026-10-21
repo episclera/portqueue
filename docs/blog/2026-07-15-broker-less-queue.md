@@ -4,10 +4,10 @@ title: Why we built a broker-less, database-native job queue
 authors: [gheorghe]
 tags: [design]
 description: Why PortQueue is a broker-less, database-native job queue using SKIP LOCKED and LISTEN/NOTIFY, so your existing SQL database is all you need.
-keywords: [portqueue, broker-less, database queue, postgres queue, background jobs, transactional enqueue, node.js, job queue]
+keywords: [portqueue, broker-less, database queue, postgresql queue, background jobs, transactional enqueue, node.js, job queue]
 ---
 
-Adding a queue shouldn't mean adding a broker. If you already run Postgres (or SQLite, or
+Adding a queue shouldn't mean adding a broker. If you already run PostgreSQL (or SQLite, or
 Oracle), you already have durable storage, transactions, and — with `SKIP LOCKED` and
 `LISTEN/NOTIFY` — everything a robust queue needs.
 
@@ -30,7 +30,7 @@ problem — the classic **dual-write bug**.
 
 ## What we kept broker-like
 
-Low latency still matters, so where the engine supports it (Postgres) workers wake within
+Low latency still matters, so where the engine supports it (PostgreSQL) workers wake within
 milliseconds via `LISTEN/NOTIFY`; elsewhere they poll on a tunable interval. You get
 broker-like responsiveness without the broker.
 

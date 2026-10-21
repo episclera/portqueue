@@ -14,14 +14,14 @@ distributed-by-design, transactional approach matters.
 
 | | PortQueue | pg-boss | BullMQ | Celery |
 |---|---|---|---|---|
-| Storage | Any SQL engine (7 drivers) | Postgres only | Redis | Redis/RabbitMQ + result backend |
+| Storage | Any SQL engine (7 drivers) | PostgreSQL only | Redis | Redis/RabbitMQ + result backend |
 | Broker required | No | No | Yes | Yes |
-| Same code, any engine | Yes — swap the driver | Postgres only | Redis only | Broker only |
+| Same code, any engine | Yes — swap the driver | PostgreSQL only | Redis only | Broker only |
 | Distributed instances | Yes (`SKIP LOCKED`, opt-in keys) | Yes | Yes | Yes |
 | Transactional enqueue | Yes (your tx) | Limited | No | No |
 | Resumable multi-step | Yes (each step a row) | No | Flows (Redis) | Chains/canvas |
 | Fault tolerance | Timeouts, retries, stall recovery | Retries | Retries, stalled checks | Retries, acks-late |
-| Local testing | In-process PGLite / SQLite | Needs Postgres | Needs Redis | Needs broker |
+| Local testing | In-process PGLite / SQLite | Needs PostgreSQL | Needs Redis | Needs broker |
 | Strict typing | End to end | Partial | Partial | N/A |
 
 ## What makes PortQueue different
@@ -30,7 +30,7 @@ distributed-by-design, transactional approach matters.
   claim from the same queue with `SKIP LOCKED` and never double-process. Multi-instance
   mode is a one-line opt-in.
 - **Truly multi-driver — same code, different engines.** The same application code runs
-  unchanged on Postgres, MySQL, Oracle, PGLite, and SQLite. You swap the
+  unchanged on PostgreSQL, MySQL, Oracle, PGLite, and SQLite. You swap the
   driver, not your code.
 - **Easy to test.** Run your entire suite in-process against PGLite or SQLite — no Redis,
   no broker, no external database to stand up.
@@ -39,7 +39,7 @@ distributed-by-design, transactional approach matters.
 
 ## Where each shines
 
-- **pg-boss** — a great, focused Postgres queue. If you're Postgres-only and happy with
+- **pg-boss** — a great, focused PostgreSQL queue. If you're PostgreSQL-only and happy with
   its API, it's excellent. PortQueue generalizes the idea to many engines — the same code
   runs on seven of them — with richer results and in-process testing.
 - **BullMQ** — the gold standard on Redis, with a clean producer/consumer split we

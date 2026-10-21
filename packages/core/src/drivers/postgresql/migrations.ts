@@ -6,16 +6,16 @@ import type { FlavourMigration, MigrationNames } from '../shared/migration';
 // past migration's DDL.
 
 /**
- * Predefined Postgres DDL, version by version. Authored by hand for this engine; not generated at
+ * Predefined PostgreSQL DDL, version by version. Authored by hand for this engine; not generated at
  * runtime. There is a single version so far — the base schema — but the array is the extension
  * point: a future change appends `{ version: 2, ... }` with its own statement builder rather than
  * editing `v1`, which is a frozen record of what has already been applied.
  *
- * The statement builders are exported because PGLite is Postgres compiled to WASM and reuses them
+ * The statement builders are exported because PGLite is PostgreSQL compiled to WASM and reuses them
  * verbatim (see `../pglite/migrations.ts`) — every other engine authors its own copy under its own
- * folder, so a change here reaches Postgres and PGLite and no one else.
+ * folder, so a change here reaches PostgreSQL and PGLite and no one else.
  *
- * **Keys and indexes.** Postgres is a capable engine, so the schema uses them: a primary key per
+ * **Keys and indexes.** PostgreSQL is a capable engine, so the schema uses them: a primary key per
  * table (which is also what makes `INSERT … ON CONFLICT DO NOTHING` a legal get-or-create for the
  * queue and instance rows), plus one index per hot access path — the claim query, the two
  * maintenance sweeps, the retention sweep, both dedup lookups, the newest-first job page and the
@@ -112,7 +112,7 @@ export function v1(names: MigrationNames): string[] {
     )`,
   );
 
-  // Index names stay unqualified: Postgres files an index in its table's own schema, and naming
+  // Index names stay unqualified: PostgreSQL files an index in its table's own schema, and naming
   // the schema on both sides of `CREATE INDEX … ON …` is an error.
   statements.push(
     // The claim query, in its exact order: narrow by queue and claimable status, then take the
@@ -165,4 +165,4 @@ export function v1(names: MigrationNames): string[] {
   return statements;
 }
 
-export const POSTGRES_MIGRATIONS: FlavourMigration[] = [{ version: 1, statements: v1 }];
+export const POSTGRESQL_MIGRATIONS: FlavourMigration[] = [{ version: 1, statements: v1 }];

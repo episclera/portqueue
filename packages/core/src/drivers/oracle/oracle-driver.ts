@@ -139,7 +139,7 @@ export class OracleDriver extends BaseDriver implements Driver {
    * Oracle's own hard limit on the expressions in an `IN (...)` list — 1000, regardless of the bind
    * budget above. Stated explicitly here even though it equals the shared default, because that
    * default *is* this number: `MAX_BATCH_IDS` takes Oracle's ceiling as everyone's so a batch that
-   * works on Postgres cannot raise ORA-01795 here.
+   * works on PostgreSQL cannot raise ORA-01795 here.
    */
   protected override readonly maxInListItems = 1_000;
 

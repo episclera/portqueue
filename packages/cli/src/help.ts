@@ -9,7 +9,7 @@ Usage: portqueue <command> [--flags]
 
 const GLOBAL_FLAGS = `
 Global flags:
-  --driver <engine>          postgres | pglite | sqlite | mysql | oracle
+  --driver <engine>          postgresql | pglite | sqlite | mysql | oracle
   --connection-string <s>    DB connection string (also via DATABASE_URL)
   --schema <name>            Optional storage schema
   --table-prefix <name>      Optional table prefix (default pq_)

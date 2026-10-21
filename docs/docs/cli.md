@@ -2,8 +2,8 @@
 id: cli
 title: CLI
 sidebar_label: CLI
-description: Operate PortQueue from the terminal with the CLI — inspect queues and stats, retry jobs, run migrations, and serve the dashboard for Postgres, MySQL, and more.
-keywords: [portqueue, cli, command line, job queue, postgres queue, database queue, monitoring, node.js]
+description: Operate PortQueue from the terminal with the CLI — inspect queues and stats, retry jobs, run migrations, and serve the dashboard for PostgreSQL, MySQL, and more.
+keywords: [portqueue, cli, command line, job queue, postgresql queue, database queue, monitoring, node.js]
 ---
 
 # CLI
@@ -20,20 +20,20 @@ string comes from `--connection-string` or the `DATABASE_URL` environment variab
 
 :::info
 The CLI connects through the same `@portqueue/core` driver your app uses, so the driver's **peer
-dependency must be installed** — `pg` for Postgres, `mysql2` for MySQL, `better-sqlite3` for SQLite,
+dependency must be installed** — `pg` for PostgreSQL, `mysql2` for MySQL, `better-sqlite3` for SQLite,
 `@electric-sql/pglite` for PGLite, `oracledb` for Oracle. Missing it raises `MISSING_PEER_DEPENDENCY`.
 :::
 
 ```bash
 # explicit driver + connection string
-portqueue queues --driver postgres --connection-string postgres://user:pass@host:5432/app
+portqueue queues --driver postgresql --connection-string postgres://user:pass@host:5432/app
 
 # or rely on DATABASE_URL
-DATABASE_URL=postgres://user:pass@host:5432/app portqueue queues --driver postgres
+DATABASE_URL=postgres://user:pass@host:5432/app portqueue queues --driver postgresql
 ```
 
 When the connection string carries a recognizable URL scheme, `--driver` can be omitted and
-the engine is inferred: `postgres://` / `postgresql://` → postgres, `mysql://` → mysql,
+the engine is inferred: `postgres://` / `postgresql://` → postgresql, `mysql://` → mysql,
 `oracle://` → oracle. **`sqlite` and `pglite` have no URL scheme, so they always need
 `--driver`** (their connection string is a file path / data directory rather than a URL).
 
@@ -59,7 +59,7 @@ straight to `portqueue`. Drop this next to your project and use it for every com
 # Usage: ./pq <command> [flags]   e.g.  ./pq queues   ./pq retry --id abc
 set -euo pipefail
 exec portqueue \
-  --driver postgres \
+  --driver postgresql \
   --connection-string "${DATABASE_URL:-postgres://user:pass@localhost:5432/app}" \
   "$@"
 ```
@@ -79,7 +79,7 @@ The connection lives in one place, and `"$@"` passes the rest through — so eve
 
 | Flag | Default | Description |
 | --- | --- | --- |
-| `--driver <engine>` | inferred from the connection-string scheme | `postgres` \| `pglite` \| `sqlite` \| `mysql` \| `oracle`. Required for `sqlite` and `pglite`, which have no URL scheme |
+| `--driver <engine>` | inferred from the connection-string scheme | `postgresql` \| `pglite` \| `sqlite` \| `mysql` \| `oracle`. Required for `sqlite` and `pglite`, which have no URL scheme |
 | `--connection-string <s>` | `DATABASE_URL` | DB connection string |
 | `--schema <name>` | driver default (none) | Optional storage schema |
 | `--table-prefix <name>` | `pq_` | Optional table prefix |
