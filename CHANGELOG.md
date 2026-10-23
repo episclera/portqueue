@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.3 (2026-10-23)
+
+### Build System
+
+* replace semantic-release with a tag-free release script ([0844cf2](https://github.com/episclera/portqueue/commit/0844cf2eed87d2ea1595898e9a441e07044e941c))
+
+### Continuous Integration
+
+* align versions with npm and refuse an already-published version ([2b02ea7](https://github.com/episclera/portqueue/commit/2b02ea79a9b29bafa93a02b40e34b5a4bc5c3001))
+
 ## [1.0.1](https://github.com/episclera/portqueue/compare/v1.0.0...v1.0.1) (2026-10-23)
 
 ### Documentation
