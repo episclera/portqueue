@@ -5,29 +5,68 @@ name: production
 # API reference, typed samples, the packages' sources), so they deploy with the release rather than
 # behind a paths filter that can miss a change.
 #
-# npm is driven by semantic-release and Conventional Commits (release.config.mjs), and every push to
-# main is a release — there is no release PR. It reads the commits since the last `v<version>` tag,
-# picks the bump, writes the one shared version into core/dashboard/cli and CHANGELOG.md, commits that
-# back as `chore(release): x.y.z [skip ci]`, tags it, creates the GitHub release and publishes. The
-# release commit is pushed with GITHUB_TOKEN, which never triggers another workflow run, so a release
-# cannot loop into a second one.
+# Three jobs, each gated on the one before it:
+#   validate     install → build → lint → test, then hands the build on as artifacts: the packages'
+#                dist/ for publish, docs/build for deploy-docs. Nothing later rebuilds, so what ships
+#                is byte-for-byte what was tested.
+#   publish      semantic-release (release.config.mjs) reads the Conventional Commits since the last
+#                `v<version>` tag, picks the bump, writes the one shared version into
+#                core/dashboard/cli and CHANGELOG.md, commits that back as
+#                `chore(release): x.y.z [skip ci]`, tags it, creates the GitHub release and publishes
+#                the dist/ from validate. Every push to main is a release — there is no release PR.
+#                The release commit is pushed with GITHUB_TOKEN, which never triggers another run.
+#   deploy-docs  only when publish actually released, so the site never describes a version npm
+#                doesn't have, and a push that ships no packages deploys no docs.
 #
-# The docs deploy only after that publish succeeds: the site documents the published API, so a push
-# that ships no packages deploys no docs, and the site never describes a version npm doesn't have.
+# Reusing the build across the version bump is safe because nothing built embeds the version: the
+# release commit changes only package.json versions, the lockfile and CHANGELOG.md.
 on:
   push:
     branches: [main]
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+permissions: {}
 
 jobs:
-  release:
+  validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      # Build first: the workspace packages are symlinked from this checkout, and core/dashboard
+      # expose their types from dist/, so lint and tests type-check against the code just built.
+      # The root build includes the docs site, so docs/build comes from this same commit.
+      - run: npm run build
+      - run: npm run lint
+      - run: npm test
+      # The published packages' build, restored into the same paths by publish.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-dist
+          path: |
+            packages/core/dist
+            packages/dashboard/dist
+            packages/cli/dist
+          if-no-files-found: error
+          retention-days: 1
+      # The docs site, picked up by deploy-docs — which only runs once the packages are on npm.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/build
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     outputs:
       released: ${{ steps.released.outputs.released }}
     steps:
@@ -40,15 +79,14 @@ jobs:
           node-version: 24.x
           cache: npm
           registry-url: https://registry.npmjs.org
+      # For semantic-release and its plugins, and the workspace links npm publish resolves — no build.
       - run: npm ci
-      # Build first: the workspace packages are symlinked from this checkout, and core/dashboard
-      # expose their types from dist/, so lint and tests type-check against the code just built.
-      # The root build includes the docs site, so docs/build comes from this same commit.
-      - run: npm run build
-      - run: npm run lint
-      - run: npm test
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages-dist
+          path: packages
       # Bumps, changelogs, commits, tags and publishes — or does nothing when there is nothing to
-      # release. dist/ was built above from this same commit, so publish ships exactly what was tested.
+      # release.
       - run: npm run semantic-release
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -59,18 +97,16 @@ jobs:
           if [ -n "$(git tag --points-at HEAD 'v*')" ]; then
             echo "released=true" >> "$GITHUB_OUTPUT"
           fi
-      # Uploaded only after a successful publish, so the site below is never ahead of npm.
-      - if: ${{ steps.released.outputs.released == 'true' }}
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/build
 
-  # Deploys the site built and tested in `release` to GitHub Pages — only on a release, and only once
-  # the packages it documents are on npm (`needs: release` waits for the publish step to succeed).
+  # Deploys the site built and tested in validate — only on a release, and only once the packages it
+  # documents are on npm.
   deploy-docs:
-    needs: release
-    if: ${{ needs.release.outputs.released == 'true' }}
+    needs: publish
+    if: ${{ needs.publish.outputs.released == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
