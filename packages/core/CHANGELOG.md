@@ -1,5 +1,12 @@
 # @portqueue/core
 
+## [1.0.2](https://github.com/episclera/portqueue/compare/core-v1.0.1...core-v1.0.2) (2026-10-23)
+
+
+### Code Refactoring
+
+* rename the Postgres driver to PostgreSQL ([ac56aa0](https://github.com/episclera/portqueue/commit/ac56aa0f83e82f2698ef6660d9dbeaa85017e134))
+
 ## [1.0.1](https://github.com/episclera/portqueue/compare/core-v1.0.0...core-v1.0.1) (2026-10-20)
 
 
