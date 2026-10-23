@@ -56,6 +56,8 @@ export default {
     [
       '@semantic-release/exec',
       {
+        // Refuses a version npm already has before anything is committed, tagged or pushed.
+        verifyReleaseCmd: 'node scripts/ci_cd/assert-unpublished.mjs ${nextRelease.version}',
         // Writes the one version into every published package.json, every internal
         // `@portqueue/*` reference between them, and package-lock.json.
         prepareCmd: 'node scripts/ci_cd/set-version.mjs ${nextRelease.version}',
