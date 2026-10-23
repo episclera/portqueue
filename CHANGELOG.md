@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1](https://github.com/episclera/portqueue/compare/v1.0.0...v1.0.1) (2026-10-23)
+
+### Documentation
+
+* keep only the root changelog ([01eed86](https://github.com/episclera/portqueue/commit/01eed86fc8539afd068ae74c43bb36163e105fed))
+
 ## 1.0.0 (2026-10-23)
 
 ### ⚠ BREAKING CHANGES
