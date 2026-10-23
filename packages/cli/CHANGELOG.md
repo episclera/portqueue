@@ -1,5 +1,23 @@
 # @portqueue/cli
 
+## [1.0.2](https://github.com/episclera/portqueue/compare/cli-v1.0.1...cli-v1.0.2) (2026-10-23)
+
+
+### Code Refactoring
+
+* rename the Postgres driver to PostgreSQL ([ac56aa0](https://github.com/episclera/portqueue/commit/ac56aa0f83e82f2698ef6660d9dbeaa85017e134))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @portqueue/dashboard bumped from ^1.0.1 to ^1.0.2
+  * devDependencies
+    * @portqueue/core bumped from 1.0.1 to 1.0.2
+  * peerDependencies
+    * @portqueue/core bumped from ^1.0.0 to ^1.0.2
+
 ## [1.0.1](https://github.com/episclera/portqueue/compare/cli-v1.0.0...cli-v1.0.1) (2026-10-20)
 
 

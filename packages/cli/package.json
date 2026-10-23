@@ -1,6 +1,6 @@
 {
   "name": "@portqueue/cli",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Command-line tool for monitoring and operating PortQueue, and serving the dashboard.",
   "license": "MIT",
   "homepage": "https://episclera.github.io/portqueue",
@@ -42,11 +42,11 @@
     "@portqueue/core": "^1.0.0"
   },
   "dependencies": {
-    "@portqueue/dashboard": "^1.0.1",
+    "@portqueue/dashboard": "^1.0.2",
     "basic-auth": "^2.0.1"
   },
   "devDependencies": {
-    "@portqueue/core": "1.0.1",
+    "@portqueue/core": "1.0.2",
     "@portqueue/eslint-config": "*",
     "@types/basic-auth": "^1.1.8",
     "@types/jest": "^29.5.14",
