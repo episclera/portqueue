@@ -23,6 +23,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "release": "npm publish -w @portqueue/core -w @portqueue/dashboard -w @portqueue/cli",
+    "semantic-release": "semantic-release",
     "setup": "bash scripts/dev/setup.sh",
     "cli": "bash scripts/cli/sqlite.sh",
     "dev:docs": "bash scripts/dev/start-docs.sh",
@@ -43,8 +44,13 @@
     "example:transactional": "bash scripts/dev/examples/transactional-enqueue.sh"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^7.0.0",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/git": "^11.0.1",
     "@types/node": "^22.10.0",
+    "conventional-changelog-conventionalcommits": "^10.4.1",
     "prettier": "^3.4.0",
+    "semantic-release": "^25.0.9",
     "typescript": "^5.7.0"
   },
   "overrides": {
