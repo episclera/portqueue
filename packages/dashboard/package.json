@@ -1,6 +1,6 @@
 {
   "name": "@portqueue/dashboard",
-  "version": "1.0.2",
+  "version": "1.0.0",
   "description": "Self-hostable React dashboard middleware for PortQueue.",
   "license": "MIT",
   "homepage": "https://episclera.github.io/portqueue",
@@ -54,7 +54,7 @@
   },
   "devDependencies": {
     "@ant-design/icons": "^6.3.2",
-    "@portqueue/core": "1.0.2",
+    "@portqueue/core": "1.0.0",
     "@portqueue/eslint-config": "*",
     "@portqueue/ui": "*",
     "@tanstack/react-query": "^5.62.0",
