@@ -312,6 +312,6 @@ UnsupportedForWorkerTypeError, and the WORKFLOW_*/JOB_STEP_COMPLETED events.
 * update package-lock for dashboard test deps ([2301178](https://github.com/episclera/portqueue/commit/23011788ce0bcdcd5c81eb5c4eb0c18108c9dfca))
 
 `@portqueue/core`, `@portqueue/dashboard` and `@portqueue/cli` share one version, so they share this
-one changelog. Releases up to and including 1.0.2 were recorded per package:
-[core](packages/core/CHANGELOG.md), [dashboard](packages/dashboard/CHANGELOG.md),
-[cli](packages/cli/CHANGELOG.md).
+one changelog. Releases up to and including 1.0.2 predate it and were tagged per package
+(`core-v*`, `dashboard-v*`, `cli-v*`); their notes are in the git history under those
+[tags](https://github.com/episclera/portqueue/tags).
