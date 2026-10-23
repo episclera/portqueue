@@ -5,10 +5,12 @@ name: production
 # API reference, typed samples, the packages' sources), so they deploy with the release rather than
 # behind a paths filter that can miss a change.
 #
-# npm is driven by release-please and Conventional Commits. Every push to main updates one open
-# release PR (version bump + CHANGELOG, derived from the commit messages). Merging that PR is the
-# release: the push it makes creates the GitHub releases and tags, and only then does this job
-# publish. Any other push publishes nothing to npm.
+# npm is driven by semantic-release and Conventional Commits (release.config.mjs), and every push to
+# main is a release — there is no release PR. It reads the commits since the last `v<version>` tag,
+# picks the bump, writes the one shared version into core/dashboard/cli and CHANGELOG.md, commits that
+# back as `chore(release): x.y.z [skip ci]`, tags it, creates the GitHub release and publishes. The
+# release commit is pushed with GITHUB_TOKEN, which never triggers another workflow run, so a release
+# cannot loop into a second one.
 #
 # The docs deploy only after that publish succeeds: the site documents the published API, so a push
 # that ships no packages deploys no docs, and the site never describes a version npm doesn't have.
@@ -20,7 +22,6 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   contents: write
-  pull-requests: write
   pages: write
   id-token: write
 
@@ -28,9 +29,12 @@ jobs:
   release:
     runs-on: ubuntu-latest
     outputs:
-      releases_created: ${{ steps.release.outputs.releases_created }}
+      released: ${{ steps.released.outputs.released }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # semantic-release reads every commit and tag since the last release.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24.x
@@ -43,22 +47,20 @@ jobs:
       - run: npm run build
       - run: npm run lint
       - run: npm test
-      # Opens/updates the release PR, or — on the merge of that PR — tags and creates the releases.
-      - id: release
-        uses: googleapis/release-please-action@v4
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-      # Print each tarball's file list into the log before it ships.
-      - if: ${{ steps.release.outputs.releases_created == 'true' }}
-        run: npm pack --dry-run -w @portqueue/core -w @portqueue/dashboard -w @portqueue/cli
-      # dist/ was built above from this same commit, so publish ships exactly what was tested.
-      - if: ${{ steps.release.outputs.releases_created == 'true' }}
-        run: npm run release
+      # Bumps, changelogs, commits, tags and publishes — or does nothing when there is nothing to
+      # release. dist/ was built above from this same commit, so publish ships exactly what was tested.
+      - run: npx semantic-release
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # A release leaves HEAD on the tagged release commit; no release leaves it untagged.
+      - id: released
+        run: |
+          if [ -n "$(git tag --points-at HEAD 'v*')" ]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          fi
       # Uploaded only after a successful publish, so the site below is never ahead of npm.
-      - if: ${{ steps.release.outputs.releases_created == 'true' }}
+      - if: ${{ steps.released.outputs.released == 'true' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/build
@@ -67,7 +69,7 @@ jobs:
   # the packages it documents are on npm (`needs: release` waits for the publish step to succeed).
   deploy-docs:
     needs: release
-    if: ${{ needs.release.outputs.releases_created == 'true' }}
+    if: ${{ needs.release.outputs.released == 'true' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
