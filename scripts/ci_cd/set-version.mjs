@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// Sets one version on every published package — called by semantic-release's prepare step
-// (release.config.mjs). It rewrites each published package.json's `version`, every reference one
-// published package makes to another (dependencies, devDependencies, peerDependencies,
-// optionalDependencies — keeping its `^`/`~`/exact prefix), and the matching entries in
-// package-lock.json, so `npm ci` stays in sync with the released manifests.
+// Sets one version on every published package — called by release-commit.mjs. It rewrites each
+// published package.json's `version`, every reference one published package makes to another
+// (dependencies, devDependencies, peerDependencies, optionalDependencies — keeping its `^`/`~`/exact
+// prefix), and the matching entries in package-lock.json, so `npm ci` stays in sync with the
+// released manifests.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const PACKAGES = {

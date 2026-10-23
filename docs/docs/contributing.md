@@ -30,9 +30,9 @@ npm run lint       # ESLint + `tsc --noEmit` in one step
 ```
 
 Commits follow **[Conventional Commits](https://www.conventionalcommits.org)** (enforced
-by commitlint) — the changelog *and the version* are derived from them. Releases are cut by
-[semantic-release](https://github.com/semantic-release/semantic-release): every push to `main` is a
-release, with no release PR to merge. It publishes `@portqueue/core`, `@portqueue/dashboard` and
+by commitlint) — the changelog *and the version* are derived from them. Releases are cut by a small
+script in CI (`scripts/ci_cd/release-commit.mjs`): every push to `main` is a release, with no release
+PR to merge and no git tags. It publishes `@portqueue/core`, `@portqueue/dashboard` and
 `@portqueue/cli` together at one shared version and records it in the
 [changelog](https://github.com/episclera/portqueue/blob/main/CHANGELOG.md). Every commit type is
 releasable: `feat:` ships a minor, `!` (or a `BREAKING CHANGE:` footer) a major, and anything else

@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // Fails the release when any published package already has this version on npm — called by
-// semantic-release's verifyRelease step (release.config.mjs). That step runs before prepare, so a
-// taken version stops the run before the release commit and tag are pushed; without it, npm only
-// refuses at publish, after both are already on main.
+// release-commit.mjs before it writes anything, so a taken version stops the run before a release
+// commit exists; without it, npm only refuses at publish, after that commit is already on main.
 import { execFileSync } from 'node:child_process';
 
 const PACKAGES = ['@portqueue/core', '@portqueue/dashboard', '@portqueue/cli'];
@@ -32,7 +31,7 @@ const taken = PACKAGES.filter(isPublished);
 if (taken.length > 0) {
   console.error(
     `${taken.map((name) => `${name}@${version}`).join(', ')} already on npm. ` +
-      `Tag the commit that holds the highest published version as v<that version> so the next release starts above it.`,
+      `Run set-version.mjs with the highest published version and commit it as "chore(release): <that version>" so the next release starts above it.`,
   );
   process.exit(1);
 }

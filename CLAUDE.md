@@ -266,20 +266,26 @@ in three sections, and no section at all when there is nothing to put in it.
 
 ## Tooling
 - Each workspace owns a standalone `tsconfig.json`, `eslint.config.mjs`, `package.json`. No root `extends`.
-- Conventional commits enforced — and they **are** the release. **semantic-release** (`release.config.mjs`)
-  runs on every push to `main`: no release PR, no manual step. It reads the commits since the last
-  `v<version>` tag to pick the next version (`feat` → minor, `!`/`BREAKING CHANGE` → major, every
-  other type — `fix`, `refactor`, `docs`, `ci`, `chore`, … — → patch), writes it into the root
-  `CHANGELOG.md`, commits that back as `chore(release): x.y.z [skip ci]`, tags it and publishes.
-  So **every push to `main` ships a version**. Only use `!` for a genuine break of the published API;
-  it ships a new major. There are no changeset files and no release-please.
-- `core`, `dashboard` and `cli` are **one product at one version**: one tag, one GitHub release, one
-  changelog. `scripts/ci_cd/set-version.mjs` (semantic-release's prepare step) writes the version into
+- Conventional commits enforced — and they **are** the release. `scripts/ci_cd/release-commit.mjs`
+  (`npm run release:commit`) runs in `production.yml` on every push to `main`: no release PR, no
+  manual step. It reads the commits since the last `chore(release): …` commit to pick the next version
+  (`feat` → minor, `!`/`BREAKING CHANGE` → major, every other type — `fix`, `refactor`, `docs`, `ci`,
+  `chore`, … — → patch), refuses a version npm already has, writes it into the packages and the root
+  `CHANGELOG.md`, and commits that as `chore(release): x.y.z [skip ci]`. The workflow pushes that
+  commit, then publishes. So **every push to `main` ships a version**. Only use `!` for a genuine
+  break of the published API; it ships a new major. There is no semantic-release, no changeset files
+  and no release-please.
+- **No git tags.** The last release is the newest `chore(release): …` commit and the version is what
+  it wrote into the packages; history is the only state. A tag buys no safety: going back is a revert
+  PR or a fix merged on top, and history already lets you check out any commit. Never create or push
+  a `v*` tag, and never add a step that reads one.
+- `core`, `dashboard` and `cli` are **one product at one version**: one release commit, one root
+  changelog. `scripts/ci_cd/set-version.mjs` (called by the release script) writes the version into
   all three `package.json`s, every internal `@portqueue/*` reference between them (dependencies,
   devDependencies **and** peerDependencies, keeping each range prefix) and `package-lock.json`. Never
   edit a `version` by hand, and never give one package a version the others don't have. A new
-  published package goes in that script's list, the `release` script and `PUBLISHED` in
-  `release.config.mjs`.
+  published package goes in that script's list, `assert-unpublished.mjs`'s list, the `release`
+  script and the workflow's `npm pack --dry-run` line.
 
 ## Testing
 - Jest + ts-jest. A fresh, clean database per suite; an injectable clock so nothing waits on real time.
