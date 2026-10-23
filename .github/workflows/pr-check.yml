@@ -1,7 +1,8 @@
 name: pr-check
 
-# Lint + typecheck + test + build on pull requests. Pushes to main are not checked here:
-# production.yml runs the same build/lint/test before releasing, so main is never tested twice.
+# Lint + typecheck + test + build on pull requests. The job is `validate`, the same name and the same
+# checks as production.yml's first job. Pushes to main are not checked here: production.yml's
+# validate job does that before anything ships, so main is never tested twice.
 on:
   pull_request:
 
@@ -10,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pr-check:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
