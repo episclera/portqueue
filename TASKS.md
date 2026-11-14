@@ -131,20 +131,6 @@ must be used.
 **Fixed**, including the resubscribe hazard the naive fix would have introduced (the entry is only
 dropped if it is still the same set). `pubsub/wakeup.test.ts` covers both.
 
-### 14. `run.ts` shut the client down twice on a failure inside a persistent command
-
-**Fixed.** Commands register teardowns via `CommandContext.onExit`; the runner closes them
-newest-first and then the client, exactly once, on a clean exit, a throw, or `SIGINT`/`SIGTERM`.
-`dashboard` registers the server and the mount; `listen` its subscriptions.
-
-### 15. `--watch` kept a client alive with an interval that was never cleared
-
-**Fixed** — `stats --watch` hands its interval to `onExit`, and the signal handler drains the client.
-
-### 16. `parseArgs` swallowed a command that followed a valueless flag
-
-**Fixed** with a `BOOLEAN_FLAGS` allowlist, and tested in both orderings.
-
 ### 17. Dashboard bulk actions across queues were N requests, partially applied
 
 **Fixed.** One request carries the whole selection: `queue` left the job-batch actions entirely (an id
@@ -249,20 +235,6 @@ talks to), and an oversized body is drained and discarded before the reader reje
 ### 35. `owns()` matched `basePath` as a raw prefix
 
 **Fixed** — the dead `?` clause is gone, and `engine.test.ts` pins that `/portqueue-admin` is not ours.
-
-### 36. CLI `--limit`/`--offset` treated `0` as "unset"
-
-**Fixed** — a shared `pageFlags` helper tests `!== undefined` and rejects a limit below 1.
-
-### 37. CLI had no way to page schedules
-
-**Fixed** — `schedules` takes `--limit`/`--offset` and prints the same "… more" hint as every other
-paged list, from a shared `printMoreHint`.
-
-### 38. CLI `retry`/`cancel`/`remove` each did a read before the write
-
-**Fixed** — they act first and read only to explain a refusal, which also closes the TOCTOU window
-that made the message name a state the job was no longer in.
 
 ### 39. `errorToMessage` stored full stacks by default
 
