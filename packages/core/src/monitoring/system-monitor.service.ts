@@ -3,8 +3,13 @@ import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { cpuUsage } from 'node:process';
 import { getHeapStatistics } from 'node:v8';
 import { PortQueueEvent } from '../events/event-name.enum';
-import { secondsToMs } from '../util/seconds';
-import { DEFAULT_SAMPLE_INTERVAL_SECONDS, MICROS_PER_MS } from '../constants';
+import { msToSeconds, secondsToMs } from '../util/seconds';
+import {
+  DEFAULT_SAMPLE_INTERVAL_SECONDS,
+  EVENT_LOOP_HISTOGRAM_RESOLUTION_SECONDS,
+  MICROS_PER_MS,
+  NANOS_PER_MS,
+} from '../constants';
 import type { SystemLimiterOptions } from '../options/common';
 import type { EventBusService } from '../events/event-bus.service';
 import type { Logger } from '../logging/logger.interface';
@@ -52,11 +57,12 @@ interface Reading {
 /**
  * Samples **this process's** health, and optionally throttles on it.
  *
- * **Monitoring is unconditional.** Process CPU and heap are sampled for as long as the client runs,
- * because the instance heartbeat persists them — that is what makes the dashboard's per-instance
- * metrics possible, so there is no option to turn it off. Both numbers belong to the process that
- * took them, so two PortQueue processes on one box report their own figures and the instance row
- * says whose reading it was.
+ * **Monitoring runs whenever something reads it.** The client lifecycle starts this service only
+ * when the process has an `instanceKey` (the instance heartbeat persists the samples — that is what
+ * makes the dashboard's per-instance metrics possible) or a `systemLimiter` (which throttles on
+ * them); with neither, nothing would ever read a sample, so none is taken. Both numbers belong to
+ * the process that took them, so two PortQueue processes on one box report their own figures and
+ * the instance row says whose reading it was.
  *
  * **Limiting is opt-in.** Only when the caller passes `systemLimiter` does a breached threshold
  * raise the backpressure flag that stops workers claiming, and clearing every threshold lower it
@@ -103,7 +109,12 @@ export class SystemMonitorService {
 
   start(): void {
     if (this.limiter?.maxEventLoopDelaySeconds != null) {
-      this.histogram = monitorEventLoopDelay({ resolution: 20 });
+      this.histogram = monitorEventLoopDelay({
+        resolution: secondsToMs(
+          EVENT_LOOP_HISTOGRAM_RESOLUTION_SECONDS,
+          'event-loop histogram resolution',
+        ),
+      });
       this.histogram.enable();
     }
     this.timer = setInterval(
@@ -187,7 +198,7 @@ export class SystemMonitorService {
     if (this.histogram) {
       // The histogram reports nanoseconds and is reset each sample, so this is the mean since the
       // previous one rather than since the process started.
-      eventLoopDelaySeconds = this.histogram.mean / 1e9;
+      eventLoopDelaySeconds = msToSeconds(this.histogram.mean / NANOS_PER_MS);
       this.histogram.reset();
     }
     return {

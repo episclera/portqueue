@@ -34,7 +34,8 @@ export type CronSpec = string | { pattern: string; tz?: string };
  *
  * `startAfterSeconds` is mutually exclusive with the recurring modes. Every value here is **in
  * seconds** — there is deliberately no absolute-`Date` variant of any of them, so there is exactly
- * one way to express a delay. For a known wall-clock instant, subtract: `(at - Date.now()) / 1000`.
+ * one way to express a delay. For a known wall-clock instant, subtract and convert with the exported
+ * `msToSeconds`: `Math.round(msToSeconds(at.getTime() - Date.now()))`.
  */
 export interface ScheduleOptions {
   /** Delay a one-off job by this many **seconds** from now. */

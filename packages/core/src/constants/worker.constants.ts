@@ -1,3 +1,5 @@
+import { PauseMode } from '../options/enums';
+
 /** Worker throughput and claim defaults. Durations are **in seconds**. */
 
 /** Handlers a worker runs at once. `LimiterOptions.concurrency`. */
@@ -35,3 +37,9 @@ export const ABORT_GRACE_SECONDS = 0.25;
  * stalled immediately. `secondsToMs` accepts the negative value for exactly this reason.
  */
 export const LOCK_RELEASE_SECONDS = -1;
+
+/** Whether `shutdown()` drains in-flight handlers before closing. `ShutdownOptions.graceful`. */
+export const DEFAULT_SHUTDOWN_GRACEFUL = true;
+
+/** What `pauseQueue`/`pauseQueues` stops when no `mode` is given: claiming, not producing. */
+export const DEFAULT_PAUSE_MODE = PauseMode.PROCESSING;

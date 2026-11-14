@@ -3,7 +3,8 @@ import { PortQueueEvent } from '../events/event-name.enum';
 import { DeduplicationReason } from '../options/enums';
 import { InvalidOptionsError, QueuePausedError } from '../errors/errors';
 import { wholeSeconds, wholeSecondsToMs } from '../util/seconds';
-import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '../constants';
+import { DEFAULT_CRON_TIMEZONE } from '../constants';
+import { pageWindow } from '../monitoring/stats.service';
 import { CronExpression } from '../scheduling/cron';
 import type { AddJobOptions, CronSpec, ScheduleOptions } from '../options/job-options';
 import type { AddJobResult, GetSchedulesQuery, Page, ScheduleInfo } from './results';
@@ -462,11 +463,7 @@ export class ProducerService {
    * listing the schedules of a name that was never used does not create it.
    */
   async getSchedules(query: GetSchedulesQuery = {}): Promise<Page<ScheduleInfo>> {
-    const limit = Math.min(
-      Math.max(Math.trunc(query.limit ?? DEFAULT_PAGE_LIMIT), 1),
-      MAX_PAGE_LIMIT,
-    );
-    const offset = Math.max(Math.trunc(query.offset ?? 0), 0);
+    const { limit, offset } = pageWindow(query);
     const filter = {
       ...(query.queue ? { queueName: query.queue } : {}),
       ...(query.enabled !== undefined ? { enabled: query.enabled } : {}),
@@ -475,7 +472,7 @@ export class ProducerService {
       this.runtime.driver.listSchedules({ ...filter, limit, offset }),
       this.runtime.driver.countSchedules(filter),
     ]);
-    return { items: rows.map((s) => toScheduleInfo(s)), total };
+    return { items: rows.map(toScheduleInfo), total };
   }
 
   /** One schedule by id, or null when no schedule has that id. */
@@ -485,8 +482,8 @@ export class ProducerService {
   }
 }
 
-/** Map a schedule row to the public {@link ScheduleInfo}. */
-function toScheduleInfo(s: {
+/** Map a schedule row to the public {@link ScheduleInfo}. Shared with the dashboard facade. */
+export function toScheduleInfo(s: {
   id: string;
   queueName: string;
   cron: string | null;
@@ -512,6 +509,6 @@ function toScheduleInfo(s: {
 
 /** Normalize a {@link CronSpec} (string or `{ pattern, tz }`) to a pattern + IANA tz. */
 function normalizeCron(cron: CronSpec): { pattern: string; tz: string } {
-  if (typeof cron === 'string') return { pattern: cron, tz: 'UTC' };
-  return { pattern: cron.pattern, tz: cron.tz ?? 'UTC' };
+  if (typeof cron === 'string') return { pattern: cron, tz: DEFAULT_CRON_TIMEZONE };
+  return { pattern: cron.pattern, tz: cron.tz ?? DEFAULT_CRON_TIMEZONE };
 }

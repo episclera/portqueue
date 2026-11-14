@@ -10,7 +10,7 @@
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PortQueue } from '@portqueue/core';
+import { msToSeconds, PortQueue } from '@portqueue/core';
 import { PgliteDriver } from '@portqueue/core/drivers/pglite';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
   await pq.addJob({
     queue: 'reminders',
     data: { message: `this one runs at ${at.toISOString()}` },
-    schedule: { startAfterSeconds: Math.round((at.getTime() - Date.now()) / 1000) },
+    schedule: { startAfterSeconds: Math.round(msToSeconds(at.getTime() - Date.now())) },
   });
 
   console.log(`Enqueued 3 reminders (now, +3s, +5s). Waiting for them to run…\n`);

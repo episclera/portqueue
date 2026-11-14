@@ -1,9 +1,13 @@
 import { JobStatus } from '../jobs/job-state.enum';
-import { BackoffStrategy } from '../options/enums';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { CronExpression } from './cron';
-import { secondsToMs } from '../util/seconds';
+import { wholeSecondsToMs } from '../util/seconds';
 import {
+  DEFAULT_BACKOFF_STRATEGY,
+  DEFAULT_CRON_TIMEZONE,
+  DEFAULT_PRIORITY,
+  DEFAULT_RETRY_DELAY_SECONDS,
+  DEFAULT_RETRY_MAX_ATTEMPTS,
   MAINTENANCE_BATCH_SIZE,
   MAINTENANCE_MAX_BATCHES,
   SCHEDULE_BATCH_SIZE,
@@ -81,15 +85,15 @@ export class SchedulerService {
     const job: NewJobRecord = {
       queueName: schedule.queueName,
       status: JobStatus.PENDING,
-      priority: schedule.priority ?? 0,
+      priority: schedule.priority ?? DEFAULT_PRIORITY,
       data: schedule.data,
       startAfter: now,
       expireAt:
-        t?.expireInSeconds != null ? now + secondsToMs(t.expireInSeconds, 'expireInSeconds') : null,
+        t?.expireInSeconds != null ? now + wholeSecondsToMs(t.expireInSeconds, 'expireInSeconds') : null,
       retryAttempt: 0,
-      retryMaxAttempts: schedule.retryMaxAttempts ?? 1,
-      retryDelaySeconds: schedule.retryDelaySeconds ?? 0,
-      retryBackoff: t?.retryBackoff ?? BackoffStrategy.FIXED,
+      retryMaxAttempts: schedule.retryMaxAttempts ?? DEFAULT_RETRY_MAX_ATTEMPTS,
+      retryDelaySeconds: schedule.retryDelaySeconds ?? DEFAULT_RETRY_DELAY_SECONDS,
+      retryBackoff: t?.retryBackoff ?? DEFAULT_BACKOFF_STRATEGY,
       retryBackoffFactor: t?.retryBackoffFactor ?? null,
       retryMaxDelaySeconds: t?.retryMaxDelaySeconds ?? null,
       retryJitter: t?.retryJitter ?? false,
@@ -112,10 +116,10 @@ export class SchedulerService {
 
   private computeNext(schedule: ScheduleRow, now: number): number | null {
     if (schedule.cron) {
-      return new CronExpression(schedule.cron, schedule.timezone ?? 'UTC').next(now);
+      return new CronExpression(schedule.cron, schedule.timezone ?? DEFAULT_CRON_TIMEZONE).next(now);
     }
     if (schedule.everySeconds != null) {
-      return now + secondsToMs(schedule.everySeconds, 'schedule.startEverySeconds');
+      return now + wholeSecondsToMs(schedule.everySeconds, 'schedule.startEverySeconds');
     }
     return null;
   }

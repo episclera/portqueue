@@ -57,6 +57,15 @@ describe('client reads & admin (sqlite)', () => {
     expect(page3.items.every((j) => !firstIds.includes(j.id))).toBe(true);
   });
 
+  it('reports the real total for an offset past the last row, not the offset', async () => {
+    for (let i = 0; i < 3; i += 1) await h.pq.addJob({ queue: 'past-end', data: { i } });
+
+    const beyond = await h.pq.getJobs({ queue: 'past-end', limit: 10, offset: 1000 });
+
+    expect(beyond.items).toHaveLength(0);
+    expect(beyond.total).toBe(3);
+  });
+
   it('counts only the filtered rows in total', async () => {
     for (let i = 0; i < 3; i += 1) await h.pq.addJob({ queue: 'counted', data: { i } });
     await h.pq.addJob({ queue: 'other', data: {} });

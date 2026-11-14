@@ -18,7 +18,8 @@ import { PortQueueEvent } from '../events/event-name.enum';
 import { InvalidOptionsError } from '../errors/errors';
 import { assertBatchIds } from '../util/batch-ids';
 import { pageWindow } from '../monitoring/stats.service';
-import { DASHBOARD_MAX_PAGE_LIMIT, DEFAULT_PAGE_LIMIT } from '../constants';
+import { DASHBOARD_MAX_PAGE_LIMIT } from '../constants';
+import { toScheduleInfo } from '../producer/producer.service';
 import {
   JobBatchAction,
   type BatchResult,
@@ -121,20 +122,7 @@ export class DashboardService {
       this.runtime.driver.listSchedules({ ...filter, limit, offset }),
       this.runtime.driver.countSchedules(filter),
     ]);
-    return {
-      items: rows.map((s) => ({
-        scheduleId: s.id,
-        queue: s.queueName,
-        cron: s.cron,
-        everySeconds: s.everySeconds,
-        timezone: s.timezone,
-        nextRunAt: s.nextRunAt != null ? new Date(s.nextRunAt) : null,
-        lastRunAt: s.lastRunAt != null ? new Date(s.lastRunAt) : null,
-        enabled: s.enabled,
-        idempotencyKey: s.idempotencyKey,
-      })),
-      total,
-    };
+    return { items: rows.map(toScheduleInfo), total };
   }
 
   /** One schedule by id, with its queue — backs the schedule detail page. */
@@ -169,10 +157,7 @@ export class DashboardService {
     return this.reads.getJobs<TData>({
       ...base,
       ...(term ? { search: term } : {}),
-      limit: Math.min(
-        Math.max(Math.trunc(base.limit ?? DEFAULT_PAGE_LIMIT), 1),
-        DASHBOARD_MAX_PAGE_LIMIT,
-      ),
+      ...pageWindow(base, DASHBOARD_MAX_PAGE_LIMIT),
     });
   }
 

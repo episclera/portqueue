@@ -1,4 +1,4 @@
-import { FailureDetail } from '../options/enums';
+import { BackoffStrategy, FailureDetail } from '../options/enums';
 
 /** Per-job resolution defaults — what a job gets when neither it nor its queue says otherwise. */
 
@@ -10,6 +10,9 @@ export const DEFAULT_RETRY_MAX_ATTEMPTS = 1;
 
 /** Delay before a retry, **in seconds**. `retry.delaySeconds`. */
 export const DEFAULT_RETRY_DELAY_SECONDS = 0;
+
+/** How a retry's delay grows when no strategy is given. `retry.backoff.strategy`. */
+export const DEFAULT_BACKOFF_STRATEGY = BackoffStrategy.FIXED;
 
 /** Growth factor an EXPONENTIAL backoff uses when none is given. `retry.backoff.factor`. */
 export const DEFAULT_BACKOFF_FACTOR = 2;

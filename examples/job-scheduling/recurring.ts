@@ -11,7 +11,7 @@
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PortQueue } from '@portqueue/core';
+import { PortQueue, secondsToMs } from '@portqueue/core';
 import { PgliteDriver } from '@portqueue/core/drivers/pglite';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +23,7 @@ type QueueName = 'healthchecks' | 'reports';
 /** How many runs of each recurrence to wait for before shutting down. */
 const TARGET_RUNS = 3;
 /** Give up waiting after this long, so a stuck example can never hang a terminal (or CI). */
-const DEADLINE_MS = 60_000;
+const DEADLINE_SECONDS = 60;
 
 async function main(): Promise<void> {
   // The scheduler materializes due runs on the client tick (default every 5s), so a recurrence can
@@ -118,14 +118,14 @@ async function main(): Promise<void> {
   const timedOut = await Promise.race([
     sawEnoughRuns.then(() => false),
     new Promise<boolean>((r) => {
-      deadline = setTimeout(() => r(true), DEADLINE_MS);
+      deadline = setTimeout(() => r(true), secondsToMs(DEADLINE_SECONDS, 'DEADLINE_SECONDS'));
     }),
   ]);
   if (deadline) clearTimeout(deadline);
 
   if (timedOut) {
     console.log(
-      `\n⚠️  Gave up after ${DEADLINE_MS / 1000}s with ` +
+      `\n⚠️  Gave up after ${DEADLINE_SECONDS}s with ` +
         `${runs.healthchecks} healthcheck / ${runs.reports} report runs.`,
     );
   } else {

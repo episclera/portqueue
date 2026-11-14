@@ -1,9 +1,10 @@
-import { BackoffStrategy } from './enums';
+import type { BackoffStrategy } from './enums';
 import type { JobOptions } from './job-options';
 import type { RetentionOptions } from './common';
 import type { JobStatus } from '../jobs/job-state.enum';
 import { wholeSeconds, wholeSecondsToMs } from '../util/seconds';
 import {
+  DEFAULT_BACKOFF_STRATEGY,
   DEFAULT_PRIORITY,
   DEFAULT_RETRY_DELAY_SECONDS,
   DEFAULT_RETRY_MAX_ATTEMPTS,
@@ -69,7 +70,7 @@ export class OptionResolver {
         merged.retry?.delaySeconds != null
           ? wholeSeconds(merged.retry.delaySeconds, 'retry.delaySeconds')
           : DEFAULT_RETRY_DELAY_SECONDS,
-      retryBackoff: backoff?.strategy ?? BackoffStrategy.FIXED,
+      retryBackoff: backoff?.strategy ?? DEFAULT_BACKOFF_STRATEGY,
       retryBackoffFactor: backoff?.factor ?? null,
       retryMaxDelaySeconds:
         backoff?.maxDelaySeconds != null

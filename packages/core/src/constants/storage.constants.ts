@@ -1,3 +1,5 @@
+import { MigrationMode } from '../options/enums';
+
 /** Storage-layout defaults every driver shares. */
 
 /** Prefix on every physical table name. `<driver>Options.tablePrefix`. */
@@ -36,3 +38,12 @@ export const AFFINITY_PAGE_MAX = 500;
 export const AFFINITY_MAX_PAGES = 20;
 /** The floor on total rows scanned, so a tiny batch still makes progress through a backlog. */
 export const AFFINITY_MIN_SCAN = 2000;
+
+/** How a client that joins a deployment treats pending migrations. `PortQueueOptions.migration`. */
+export const DEFAULT_MIGRATION_MODE = MigrationMode.AUTO;
+
+/**
+ * The same default for a headless (admin) client: pointing a dashboard or the CLI at a database must
+ * never migrate it as a side effect.
+ */
+export const DEFAULT_HEADLESS_MIGRATION_MODE = MigrationMode.MANUAL;

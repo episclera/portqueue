@@ -6,6 +6,9 @@
  * files that could drift apart.
  */
 
+/** The IANA timezone a cron schedule is evaluated in when its `CronSpec` names none. */
+export const DEFAULT_CRON_TIMEZONE = 'UTC';
+
 /** Maintenance tick (scheduler + retention + expiry) cadence. `PortQueueOptions.tickIntervalSeconds`. */
 export const DEFAULT_TICK_INTERVAL_SECONDS = 5;
 
@@ -39,6 +42,19 @@ export const MIGRATION_WAIT_TIMEOUT_SECONDS = 30;
  * invariant is about, and this is a different pair of units.
  */
 export const MICROS_PER_MS = 1000;
+
+/**
+ * Milliseconds → nanoseconds, for the event-loop-delay histogram, which reports in nanoseconds. The
+ * same reasoning as {@link MICROS_PER_MS}: the reading goes ns → ms here, then ms → seconds through
+ * `util/seconds`.
+ */
+export const NANOS_PER_MS = 1_000_000;
+
+/**
+ * Sampling resolution of the event-loop-delay histogram, **in seconds** (20 ms). Fine enough to see
+ * a stall worth throttling on, coarse enough that the histogram's own timer costs nothing.
+ */
+export const EVENT_LOOP_HISTOGRAM_RESOLUTION_SECONDS = 0.02;
 
 /** How often that wait re-reads the applied schema version. */
 export const MIGRATION_WAIT_POLL_SECONDS = 0.2;

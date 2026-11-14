@@ -34,7 +34,9 @@ import {
   DEFAULT_CONCURRENCY,
   DEFAULT_FAILURE_DETAIL,
   DEFAULT_LOCK_DURATION_SECONDS,
+  DEFAULT_PAUSE_MODE,
   DEFAULT_POLL_INTERVAL_SECONDS,
+  DEFAULT_SHUTDOWN_GRACEFUL,
   DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
   DEFAULT_TICK_INTERVAL_SECONDS,
   INSTANCE_REMOVAL_STALE_SECONDS,
@@ -175,7 +177,7 @@ export class PortQueue<TQueues extends string = string> {
 
   async shutdown(options: ShutdownOptions = {}): Promise<void> {
     await this.lifecycle.shutdown({
-      graceful: options.graceful ?? true,
+      graceful: options.graceful ?? DEFAULT_SHUTDOWN_GRACEFUL,
       timeoutSeconds: options.timeoutSeconds ?? DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
     });
   }
@@ -546,16 +548,12 @@ export class PortQueue<TQueues extends string = string> {
    */
   async removeJob(options: { jobId: string; tx?: TransactionHandle }): Promise<boolean> {
     this.requireStarted('removeJob');
-    const removed = await this.runtime.driver.removeJob({
-      jobId: options.jobId,
+    // The singular delegates to the plural, never the other way round (see the batch invariant).
+    const removed = await this.removeJobs({
+      jobIds: [options.jobId],
       ...(options.tx ? { tx: options.tx } : {}),
     });
-    if (!removed) return false;
-    this.events.emit(PortQueueEvent.JOB_REMOVED, {
-      jobId: removed.jobId,
-      queue: removed.queueName,
-    });
-    return true;
+    return removed > 0;
   }
 
   /**
@@ -692,7 +690,7 @@ export class PortQueue<TQueues extends string = string> {
   }): Promise<QueueBatchItem[]> {
     this.requireStarted('pauseQueues');
     assertBatchIds(options.queues, 'pauseQueues({ queues })');
-    const mode = options.mode ?? PauseMode.PROCESSING;
+    const mode = options.mode ?? DEFAULT_PAUSE_MODE;
     const applied = await this.setPaused(options.queues, true, mode === PauseMode.ALL);
     for (const queue of applied) this.events.emit(PortQueueEvent.QUEUE_PAUSED, { queue, mode });
     return this.queueItems(options.queues, applied);

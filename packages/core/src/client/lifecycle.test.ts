@@ -89,6 +89,55 @@ describe.each(TEST_ENGINES)('client shutdown (%s)', (engine) => {
   });
 });
 
+describe.each(TEST_ENGINES)('health monitor (%s)', (engine) => {
+  /** The lifecycle's monitor, read through the private field — nothing public exposes it. */
+  function monitorOf(pq: PortQueue): unknown {
+    return (pq as unknown as { lifecycle: { monitor: unknown } }).lifecycle.monitor;
+  }
+
+  it('is not started when nothing reads its samples', async () => {
+    const pq = newClient(createDriver(engine));
+    await pq.init();
+    try {
+      expect(monitorOf(pq)).toBeNull();
+    } finally {
+      await pq.shutdown();
+    }
+  });
+
+  it('is started for a systemLimiter, which throttles on the samples', async () => {
+    const pq = new PortQueue({
+      driver: createDriver(engine),
+      logger: new NoopLogger(),
+      clock: new FakeClock(1_700_000_000_000),
+      tickIntervalSeconds: 0.05,
+      systemLimiter: { maxCpuPercent: 100 },
+    });
+    await pq.init();
+    try {
+      expect(monitorOf(pq)).not.toBeNull();
+    } finally {
+      await pq.shutdown();
+    }
+  });
+
+  it('is started for a named instance, whose heartbeat persists the samples', async () => {
+    const pq = new PortQueue({
+      driver: createDriver(engine),
+      logger: new NoopLogger(),
+      clock: new FakeClock(1_700_000_000_000),
+      tickIntervalSeconds: 0.05,
+      instance: { instanceKey: 'worker-1' },
+    });
+    await pq.init();
+    try {
+      expect(monitorOf(pq)).not.toBeNull();
+    } finally {
+      await pq.shutdown();
+    }
+  });
+});
+
 function newClient(driver: Driver): PortQueue {
   return new PortQueue({
     driver,

@@ -1,5 +1,6 @@
 import { CronExpressionParser } from 'cron-parser';
 import { InvalidOptionsError } from '../errors/errors';
+import { DEFAULT_CRON_TIMEZONE } from '../constants';
 
 /**
  * A thin wrapper over the `cron-parser` package — the parsing and the calendar walk are its job,
@@ -22,7 +23,7 @@ import { InvalidOptionsError } from '../errors/errors';
 export class CronExpression {
   constructor(
     readonly expression: string,
-    readonly timezone: string = 'UTC',
+    readonly timezone: string = DEFAULT_CRON_TIMEZONE,
   ) {
     // Validate the timezone before the expression so an unknown zone gets its own clear message.
     try {

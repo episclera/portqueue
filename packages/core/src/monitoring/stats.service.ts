@@ -177,22 +177,19 @@ export class ReadService {
    */
   async getInstances(query: GetInstancesQuery = {}): Promise<Page<InstanceInfo>> {
     const { limit, offset } = pageWindow(query);
+    // One cutoff for the filter and the `alive` flag, so an `alive: true` page can never carry an
+    // item that reads `alive: false` because the clock moved between the two.
+    const seenSince = this.runtime.clock.now() - instanceStaleAfterMs(this.runtime.options);
     const filter = {
       ...(query.search ? { search: query.search } : {}),
       ...(query.processingPaused !== undefined ? { processingPaused: query.processingPaused } : {}),
-      ...(query.alive !== undefined
-        ? {
-            alive: query.alive,
-            seenSince: this.runtime.clock.now() - instanceStaleAfterMs(this.runtime.options),
-          }
-        : {}),
+      ...(query.alive !== undefined ? { alive: query.alive, seenSince } : {}),
     };
     const [rows, total] = await Promise.all([
       this.runtime.driver.listInstances({ ...filter, limit, offset }),
       this.runtime.driver.countInstances(filter),
     ]);
     if (!rows.length) return { items: [], total };
-    const seenSince = this.runtime.clock.now() - instanceStaleAfterMs(this.runtime.options);
     // One grouped count for the whole page rather than a query per instance.
     const counts = await this.runtime.driver.countJobsByStatusPerInstance({
       instanceKeys: rows.map((r) => r.instanceKey),

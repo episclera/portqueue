@@ -1,4 +1,3 @@
-import { MigrationMode } from '../options/enums';
 import { PortQueueEvent } from '../events/event-name.enum';
 import { SubscriberService } from '../pubsub/subscriber.service';
 import { SchedulerService } from '../scheduling/scheduler.service';
@@ -9,7 +8,9 @@ import { MigrationRunner } from '../drivers/shared/migration-runner.service';
 import { ShutdownTimeoutError } from '../errors/errors';
 import { secondsToMs } from '../util/seconds';
 import {
+  DEFAULT_HEADLESS_MIGRATION_MODE,
   DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
+  DEFAULT_MIGRATION_MODE,
   DEFAULT_TICK_INTERVAL_SECONDS,
   MIN_SUBSCRIBER_POLL_SECONDS,
 } from '../constants';
@@ -56,7 +57,9 @@ export class ClientLifecycleService {
     await driver.connect();
     // 2. Migrate. A headless (admin) client defaults to MANUAL: pointing a dashboard at a database
     //    must never migrate it as a side effect. The CLI's `migrate` command applies them itself.
-    const defaultMode = this.runtime.headless ? MigrationMode.MANUAL : MigrationMode.AUTO;
+    const defaultMode = this.runtime.headless
+      ? DEFAULT_HEADLESS_MIGRATION_MODE
+      : DEFAULT_MIGRATION_MODE;
     const migrationRunner = new MigrationRunner(driver, context, logger, events, clock);
     await migrationRunner.run(options.migration ?? defaultMode);
 
@@ -175,10 +178,13 @@ export class ClientLifecycleService {
     await this.subscriber?.stop();
     this.state.running = false; // stop new claims
 
-    // Drain workers.
-    for (const worker of this.registry.allWorkers()) {
-      await worker.stop({ graceful: options.graceful, timeoutSeconds: options.timeoutSeconds });
-    }
+    // Drain workers — concurrently, so `timeoutSeconds` is the budget for the whole shutdown rather
+    // than for each queue in turn (one after another, ten queues could take ten timeouts).
+    await Promise.all(
+      [...this.registry.allWorkers()].map((worker) =>
+        worker.stop({ graceful: options.graceful, timeoutSeconds: options.timeoutSeconds }),
+      ),
+    );
 
     this.monitor?.stop();
     // A tick, pump, heartbeat or NOTIFY fired without an await may still be mid-query. Let it
