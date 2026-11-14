@@ -269,9 +269,3 @@ that made the message name a state the job was no longer in.
 **Fixed** — `createQueue({ failureDetail: FailureDetail.MESSAGE })` drops the frames for a queue that
 fails often; the default stays `STACK`.
 
-### 40. `docs/` needed a pass
-
-**Done** — the API reference covers the `CancelOutcome`, the promoted query filters, `failureDetail`,
-the batch cap and the new errors; `advanced.md` carries the driver-author contract for the claim fence,
-the migration/lock semantics and the dedup lock; the dashboard page gains a short note on what the
-`x-requested-with` requirement does and does not do.
