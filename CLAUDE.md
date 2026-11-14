@@ -8,6 +8,20 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
 - **Never create git branches.** Always work on the **current branch**. Only create a branch when the user explicitly asks for it in a prompt — never on your own initiative, and never as a step before committing.
 - **Never interactive logins** or anything needing network/credentials — surface the command for the user.
 - **Keep the docs in sync with the public API.** Every time the public API of the tool (`@portqueue/core`), the dashboard, or the CLI changes — new/renamed/removed options, methods, DTOs, events, endpoints, or CLI flags — check the Docusaurus site under `docs/` and improve the developer-facing docs if needed (guides, API reference, dashboard/CLI pages, and register any new page in `docs/sidebars.ts`).
+- **Check every link when you add or update docs.** Any time you touch a page under `docs/` (or a
+  README that links into it), verify each link you added or edited — and the others on that page —
+  resolves: a doc route must point at a page that exists (prefer file-relative `./page.md#anchor`
+  links, which Docusaurus validates at build), an `#anchor` must match a real heading slug, and a
+  GitHub link must name a path that exists in the repo. A bare relative URL (`../foo`) resolves
+  against the page's URL, not its file, and is the usual source of a 404.
+- **Ship the singular and the plural together.** When you add an operation that acts on one thing
+  by id or name — a public `PortQueue` method, a CLI command, a dashboard action — add its plural
+  twin in the same change where a caller could reasonably want it on a set (`cancelJob` /
+  `cancelJobs`, `pauseQueue` / `pauseQueues`). The plural follows the batch invariant below (one
+  driver statement, `assertBatchIds`, skips rather than fails) and returns one `BatchItemResult`
+  per id in input order with an outcome enum, so a caller sees what happened to each item. Document
+  both in one place: the plural is a sentence and an example under the singular's entry, not a
+  section of its own.
 - **Keep the examples list in sync.** Every time you add a new example under `examples/`, list it (with a link) on the Examples docs page (`docs/docs/examples.md`) and in the examples index (`examples/README.md`). Add a launcher under `scripts/dev/examples/` and a matching `example:*` script in the root `package.json`.
 
 ## Always end with a short change report
