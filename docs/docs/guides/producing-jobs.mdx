@@ -185,6 +185,17 @@ const result = await pq.retryJob({ jobId });
 its lock would let a second worker claim it, so the same job would run twice at once. Cancel it first
 with [`cancelJob`](#cancel-a-job) and retry once it has settled.
 
+To retry several at once, `retryJobs` re-arms the whole set — from any queue — in one statement and
+returns one item per id, in order, with an `outcome` instead of a `null`:
+
+```ts
+const items = await pq.retryJobs({ jobIds: [a, b, c] });
+// → [{ jobId: a, queue, outcome: 'APPLIED', status, startAfter }, { jobId: b, queue, outcome: 'REFUSED' }, …]
+```
+
+A running job comes back `REFUSED` and an unknown id `NOT_FOUND`; see
+[batch results](../api-reference.mdx#batch-results).
+
 To start a **fresh run from scratch** instead, don't retry at all — just
 [add a new job](#add-a-job) to the queue.
 
@@ -201,6 +212,14 @@ If the job is still **pending/delayed**, it's marked `CANCELLED` so it never run
 must honour `job.signal` to actually stop. See [Canceling jobs](./canceling-jobs.md) for how to
 write abort-aware handlers.
 
+`cancelJobs` cancels many in one statement and reports each id rather than throwing for an unknown
+one:
+
+```ts
+const items = await pq.cancelJobs({ jobIds: [a, b] });
+// each item: { jobId, queue?, outcome: 'APPLIED' | 'SIGNALLED' | 'REFUSED' | 'NOT_FOUND' }
+```
+
 :::info Recurring jobs are different
 `cancelJob` acts on a single job. To stop a **recurring** (interval/cron) job, cancel or
 remove its **schedule** instead — see [Remove a schedule](#remove-a-schedule) below
@@ -216,7 +235,8 @@ await pq.removeSchedule({ scheduleId }); // delete a schedule row
 `removeSchedule` deletes a row from the **schedule** table, so no _new_ jobs are produced from
 that recurrence — this is how you **stop a recurring (interval/cron) job**. Jobs it has already
 produced are untouched; remove those separately with `removeJob` / `removeJobs` if you want them
-gone too.
+gone too. `removeSchedules({ scheduleIds })` removes several in one delete and returns an
+`APPLIED`/`NOT_FOUND` item per id.
 
 ## Remove jobs
 
@@ -260,6 +280,14 @@ await pq.pauseQueue({ queue: 'emails', mode: PauseMode.ALL }); // also refuse ne
 await pq.resumeQueue({ queue: 'emails' });
 ```
 
+`pauseQueues` / `resumeQueues` take a list and write every queue in one statement. Where the singular
+throws `QueueNotFoundError` for a name nothing has used, the plural reports it as `NOT_FOUND`:
+
+```ts
+await pq.pauseQueues({ queues: ['emails', 'sms'], mode: PauseMode.ALL });
+await pq.resumeQueues({ queues: ['emails', 'sms'] });
+```
+
 ## Idempotency & singleton
 
 Both keys are **queue-scoped**, but they solve different problems:
@@ -300,7 +328,8 @@ ORMs, and raw drivers alike. Pick your tab:
 <TxTabs />
 
 Every job-manipulating method that writes to the database (`addJob`, `addJobs`, `retryJob`,
-`cancelJob`, `removeJob`, `removeJobs`, `removeSchedule`) accepts `tx`; omit it and the method runs
+`retryJobs`, `cancelJob`, `cancelJobs`, `removeJob`, `removeJobs`, `removeSchedule`,
+`removeSchedules`) accepts `tx`; omit it and the method runs
 autonomously. `addJobs` is one insert for the whole batch, so every entry must share the same `tx`
 (or none of them set one). See
 [Transactions](./transactions.mdx) for the full list of adapters and the reasoning behind

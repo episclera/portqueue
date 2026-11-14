@@ -106,7 +106,7 @@ warm cache / local data / GPU / region is"*.
 - **Tune `instance.heartbeatIntervalSeconds`** (default `15`) to your failover appetite: an instance is
   "dead" after ~3 missed beats.
 - **Drain one node at a time** from the dashboard **Instances** page (or
-  `pauseInstance`/`resumeInstance`) for a deploy without touching the rest; remove a decommissioned
+  `pauseInstance`/`resumeInstance`, or their plurals for several at once) for a deploy without touching the rest; remove a decommissioned
   instance once it's been unseen for 30 minutes (`removeInstance` / dashboard /
   `portqueue remove-instance`).
 

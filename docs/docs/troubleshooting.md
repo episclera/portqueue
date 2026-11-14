@@ -44,10 +44,12 @@ try {
 | `MIGRATION_FAILED` | `MigrationFailedError` | A migration step errored. Check DB permissions and the underlying error; re-run migrate. |
 | `DRIVER_CONNECTION_ERROR` | `DriverConnectionError` | Couldn't connect. Check connection string, network, credentials, and that the DB client peer dep is installed. |
 | `DRIVER_QUERY_ERROR` | `DriverQueryError` | A query failed at the engine. Inspect the wrapped cause; often a permissions or schema issue. |
-| `QUEUE_NOT_FOUND` | `QueueNotFoundError` | An **admin** client (the dashboard or CLI) was asked to produce onto a queue with no row. Have the application declare it (or add a job to it) first — an admin tool never creates queues. Also raised by `pauseQueue`/`resumeQueue` for a name nothing has ever used. |
+| `JOB_NOT_FOUND` | `JobNotFoundError` | `cancelJob` was given an id that names no job. Check the id; `cancelJobs` reports such an id as `NOT_FOUND` instead of throwing. |
+| `QUEUE_NOT_FOUND` | `QueueNotFoundError` | An **admin** client (the dashboard or CLI) was asked to produce onto a queue with no row. Have the application declare it (or add a job to it) first — an admin tool never creates queues. Also raised by `pauseQueue`/`resumeQueue` for a name nothing has ever used (`pauseQueues`/`resumeQueues` report it as `NOT_FOUND`). |
 | `QUEUE_PAUSED` | `QueuePausedError` | An add was refused because the queue is paused with `PauseMode.ALL`. Resume it, or expect this during a drain. |
 | `QUEUE_IN_USE` | `QueueInUseError` | `removeQueue` refused because the queue is still declared in *this* process (by `createQueue`). Remove it from an admin client, or stop declaring it here first. |
-| `INSTANCE_ACTIVE` | `InstanceActiveError` | `removeInstance` refused because the instance was last seen less than 30 minutes ago. Wait until it has been unseen that long — a live instance would just re-register. |
+| `INSTANCE_ACTIVE` | `InstanceActiveError` | `removeInstance` refused because the instance was last seen less than 30 minutes ago. Wait until it has been unseen that long — a live instance would just re-register. (`removeInstances` reports it as `REFUSED`.) |
+| `LOCK_LOST` | `LockLostError` | Raised on the `ERROR` event (never thrown at you) when a handler finished after its claim was lost — the lock lapsed and another worker reclaimed the job — so its outcome was not written. Raise `limiter.lockDurationSeconds`, or keep the event loop free so the lock is extended in time. |
 | `SHUTDOWN_TIMEOUT` | `ShutdownTimeoutError` | `shutdown()` gave up on in-flight work after `timeoutSeconds`. The client is stopped and the driver disconnected either way; raise the timeout or make long handlers honour `job.signal`. |
 | `MISSING_PEER_DEPENDENCY` | `MissingPeerDependencyError` | The driver's client (e.g. `pg`, `better-sqlite3`) isn't installed. Install the peer shown in the message. |
 
@@ -59,9 +61,11 @@ library doesn't keep, so the never-thrown placeholders that used to sit here (`A
 gone. `init()` is idempotent, dedup returns `result.deduplicated` rather than raising, and a migration
 is identified by its version alone.
 
-There is no `JOB_NOT_FOUND` for the same reason: every by-id operation already says "not found" in its
-return type — `getJob` gives `null`, `removeJob`/`cancelJob` give `false`, `retryJob` gives `null` —
-which is also what lets a bulk action skip a stale id instead of failing the whole batch.
+`JOB_NOT_FOUND` is thrown from exactly one place, `cancelJob`, which reports *what it did* and has no
+honest answer for an id that names nothing. Every other by-id operation says "not found" in its
+return type — `getJob` and `retryJob` give `null`, `removeJob` gives `false` — and every plural
+method reports it as a `NOT_FOUND` item, which is what lets a batch skip a stale id instead of
+failing the rest.
 :::
 
 ### Exported error classes
@@ -74,6 +78,7 @@ with the offending fields). Branching on `err.code` is still the most robust che
 |---|---|---|---|
 | `PortQueueError` | *(any)* | Base class for every error the library throws. | Branch on `err.code`. |
 | `NotStartedError` | `NOT_STARTED` | A method was called before `await pq.init()`. | Await `init()` first. |
+| `JobNotFoundError` | `JOB_NOT_FOUND` | `cancelJob` was given an id that names no job. | Check the id, or use `cancelJobs`, which reports it as `NOT_FOUND`. |
 | `QueueNotFoundError` | `QUEUE_NOT_FOUND` | A headless (dashboard/CLI) client named a queue with no row, or a pause targeted a name nothing has used. | Declare the queue in your application first. |
 | `InvalidOptionsError` | `INVALID_OPTIONS` | An options object failed validation. | Read the message; it names the offending field. |
 | `UnsupportedCapabilityError` | `UNSUPPORTED_CAPABILITY` | The driver's engine can't do what was asked. | Use a capable driver or the documented fallback. |
@@ -84,6 +89,7 @@ with the offending fields). Branching on `err.code` is still the most robust che
 | `QueuePausedError` | `QUEUE_PAUSED` | `add` refused because the queue is paused with `PauseMode.ALL`. | Resume the queue, or expect this during a drain. |
 | `QueueInUseError` | `QUEUE_IN_USE` | `removeQueue` refused because the queue is still declared in this process. | Stop declaring it here, or remove it from an admin client. |
 | `InstanceActiveError` | `INSTANCE_ACTIVE` | `removeInstance` refused because the instance was seen less than 30 minutes ago. | Wait until it has been unseen for 30 minutes. |
+| `LockLostError` | `LOCK_LOST` | A handler's claim was lost before it settled, so its outcome was discarded (emitted on `ERROR`). | Raise `limiter.lockDurationSeconds` or unblock the event loop. |
 | `ShutdownTimeoutError` | `SHUTDOWN_TIMEOUT` | Graceful shutdown didn't finish within `timeoutSeconds`. | Raise the timeout or make handlers honor `job.signal`. |
 | `MissingPeerDependencyError` | `MISSING_PEER_DEPENDENCY` | The driver's client peer dep isn't installed. | Install the peer shown in the message. |
 

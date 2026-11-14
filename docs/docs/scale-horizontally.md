@@ -137,6 +137,13 @@ await pq.resumeInstance({ instanceKey: '10.0.1.7:ram-8gb:cpu-4cor' });
 
 A paused server keeps heartbeating (so it still shows as alive) but claims no jobs until resumed.
 
+`pauseInstances` / `resumeInstances` take several keys and write them in one statement, returning an
+`APPLIED`/`NOT_FOUND` item per key:
+
+```ts
+await pq.pauseInstances({ instanceKeys: ['10.0.1.7:ram-8gb:cpu-4cor', '10.0.1.8:ram-8gb:cpu-4cor'] });
+```
+
 ### Removing a server from monitoring
 
 When a server is decommissioned its instance row lingers in the instances list. You can remove that
@@ -149,6 +156,14 @@ any job** — it only tidies the list. The tool never removes instances on its o
 
 ```ts
 await pq.removeInstance({ instanceKey: '10.0.9.9:ram-2gb:cpu-1cor' }); // throws if seen < 30 min ago
+```
+
+`removeInstances` tidies several in one delete. A server seen in the last 30 minutes comes back
+`REFUSED` instead of throwing, so the stale ones beside it still go:
+
+```ts
+const items = await pq.removeInstances({ instanceKeys: ['10.0.9.9:ram-2gb:cpu-1cor', '10.0.9.10:ram-2gb:cpu-1cor'] });
+// → [{ instanceKey, outcome: 'APPLIED' | 'REFUSED' | 'NOT_FOUND' }, …]
 ```
 
 - **Dashboard** → **Instances**: a **Remove** action appears on any server last seen over 30

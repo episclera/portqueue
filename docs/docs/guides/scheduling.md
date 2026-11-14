@@ -141,6 +141,13 @@ await pq.removeSchedule({ scheduleId: reportsJob.scheduleId });
 **not** delete jobs already produced (remove those by id or status if you want). It is its own
 method (not `removeJob`) per the entity-naming rule: a method names the one entity it acts on.
 
+To unschedule several at once, `removeSchedules` deletes them in one statement and returns an item
+per id (`APPLIED` with its `queue`, or `NOT_FOUND`):
+
+```ts
+await pq.removeSchedules({ scheduleIds: [reportsJob.scheduleId!, digestJob.scheduleId!] });
+```
+
 :::info Changing a schedule = remove + re-add
 There is **no "edit schedule" API**. The only way to change a schedule (a different cron pattern,
 interval, timezone, or template) is to **remove it** (`pq.removeSchedule({ scheduleId })`) and

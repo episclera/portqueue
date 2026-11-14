@@ -24,7 +24,18 @@ await pq.cancelJob({ jobId });
   Cancellation is then **cooperative**: the handler has to notice the signal and stop. A handler
   that ignores `job.signal` runs to completion regardless.
 
-`cancelJob` returns `true` if it either marked a job cancelled or signalled a running one.
+`cancelJob` returns a `CancelOutcome` saying what it did: `CANCELLED` (the row is now cancelled),
+`SIGNALLED` (a handler here was asked to stop — it may still complete) or `NOT_CANCELLABLE` (already
+finished, or running in another process). It throws `JobNotFoundError` for an id that names no row.
+
+To cancel several jobs at once — from any queue — use `cancelJobs`. It is one statement for the
+whole set and returns one item per id, in order, with the same answers as an `outcome`
+(`APPLIED`, `SIGNALLED`, `REFUSED`) plus `NOT_FOUND` instead of a throw:
+
+```ts
+const items = await pq.cancelJobs({ jobIds: [a, b, c] });
+const signalled = items.filter((i) => i.outcome === BatchItemOutcome.SIGNALLED);
+```
 
 :::warning Signalling a running job is instance-local
 `cancelJob` fires the handler's `AbortSignal` **only when the job is running on the same instance

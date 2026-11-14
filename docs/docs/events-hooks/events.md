@@ -59,9 +59,12 @@ Emitted as instances are paused, resumed, or removed from the fleet — see
 [Scale horizontally](../scale-horizontally.md), which relies on these to track fleet
 membership.
 
-- `INSTANCE_PAUSED` — `{ instanceKey }` — fired by `pq.pauseInstance`
-- `INSTANCE_RESUMED` — `{ instanceKey }` — fired by `pq.resumeInstance`
-- `INSTANCE_REMOVED` — `{ instanceKey }` — fired by `pq.removeInstance`
+- `INSTANCE_PAUSED` — `{ instanceKey }` — fired by `pq.pauseInstance` / `pq.pauseInstances`
+- `INSTANCE_RESUMED` — `{ instanceKey }` — fired by `pq.resumeInstance` / `pq.resumeInstances`
+- `INSTANCE_REMOVED` — `{ instanceKey }` — fired by `pq.removeInstance` / `pq.removeInstances`
+
+A plural method emits one event per item it actually changed — never for a `NOT_FOUND` or
+`REFUSED` one.
 
 **System pressure**
 
