@@ -21,7 +21,8 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
   driver statement, `assertBatchIds`, skips rather than fails) and returns one `BatchItemResult`
   per id in input order with an outcome enum, so a caller sees what happened to each item. Document
   both in one place: the plural is a sentence and an example under the singular's entry, not a
-  section of its own.
+  section of its own. **The API reference page (`docs/docs/api-reference.mdx`) is the exception**:
+  there every plural gets its own item in the method tree, placed directly after its singular.
 - **Keep the examples list in sync.** Every time you add a new example under `examples/`, list it (with a link) on the Examples docs page (`docs/docs/examples.md`) and in the examples index (`examples/README.md`). Add a launcher under `scripts/dev/examples/` and a matching `example:*` script in the root `package.json`.
 
 ## Always end with a short change report

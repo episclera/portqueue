@@ -101,6 +101,12 @@ only; no I/O until `init()`.
     </span>
   </li>
   <li>
+    <span className="api-badge">getQueue(&#123; name &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;QueueInfo | null&gt;</code>
+    </span>
+  </li>
+  <li>
     <span className="api-badge">getQueues(query?)</span>{' '}
     <span className="api-note">
       → <code>Promise&lt;Page&lt;QueueInfo&gt;&gt;</code>
@@ -110,12 +116,6 @@ only; no I/O until `init()`.
         <a href="#getqueuesquery">GetQueuesQuery</a>
       </li>
     </ul>
-  </li>
-  <li>
-    <span className="api-badge">getQueue(&#123; name &#125;)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;QueueInfo | null&gt;</code>
-    </span>
   </li>
   <li>
     <span className="api-badge">getQueueStats(&#123; queue? &#125;)</span>{' '}
@@ -147,6 +147,12 @@ only; no I/O until `init()`.
     </ul>
   </li>
   <li>
+    <span className="api-badge">getSchedule(&#123; scheduleId &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;ScheduleInfo | null&gt;</code> — by id alone; the result names its queue
+    </span>
+  </li>
+  <li>
     <span className="api-badge">getSchedules(query?)</span>{' '}
     <span className="api-note">
       → <code>Promise&lt;Page&lt;ScheduleInfo&gt;&gt;</code> — one queue's with <code>queue</code>,
@@ -159,19 +165,18 @@ only; no I/O until `init()`.
     </ul>
   </li>
   <li>
-    <span className="api-badge">getSchedule(&#123; scheduleId &#125;)</span>{' '}
-    <span className="api-note">
-      → <code>Promise&lt;ScheduleInfo | null&gt;</code> — by id alone; the result names its queue
-    </span>
-  </li>
-  <li>
     <span className="api-badge">retryJob(&#123; jobId, tx? &#125;)</span>{' '}
     <span className="api-note">
       → <code>Promise&lt;AddJobResult | null&gt;</code> — re-arms the job's own row.{' '}
       <code>null</code> when the id is unknown <strong>or the job is ACTIVE</strong>: re-arming a
-      running job would let a second worker claim it. Add a new job for a fresh run.<br />
-      Plural: <code>retryJobs(&#123; jobIds, tx? &#125;)</code> → <code>Promise&lt;RetriedJobItem[]&gt;</code> — many jobs, from any queue, in one statement; a running job is <code>REFUSED</code>. See{' '}
-      <a href="#batch-results">batch results</a>.
+      running job would let a second worker claim it. Add a new job for a fresh run.
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">retryJobs(&#123; jobIds, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;RetriedJobItem[]&gt;</code> — many jobs, from any queue, in one statement;
+      a running job is <code>REFUSED</code>. See <a href="#batch-results">batch results</a>.
     </span>
   </li>
   <li>
@@ -181,9 +186,15 @@ only; no I/O until `init()`.
       <code>CANCELLED</code> when the row is now cancelled, <code>SIGNALLED</code> when a
       locally-running handler was only asked to stop, <code>NOT_CANCELLABLE</code> when the job has
       already finished or is running in another process. Throws <code>JobNotFoundError</code> for an
-      id that names no row.<br />
-      Plural: <code>cancelJobs(&#123; jobIds, tx? &#125;)</code> → <code>Promise&lt;JobBatchItem[]&gt;</code> — the same three answers per id as <code>APPLIED</code>/<code>SIGNALLED</code>/<code>REFUSED</code>, and <code>NOT_FOUND</code> instead of a throw. See{' '}
-      <a href="#batch-results">batch results</a>.
+      id that names no row.
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">cancelJobs(&#123; jobIds, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;JobBatchItem[]&gt;</code> — the same three answers per id as{' '}
+      <code>APPLIED</code>/<code>SIGNALLED</code>/<code>REFUSED</code>, and <code>NOT_FOUND</code>{' '}
+      instead of a throw. See <a href="#batch-results">batch results</a>.
     </span>
   </li>
   <li>
@@ -208,8 +219,13 @@ only; no I/O until `init()`.
   <li>
     <span className="api-badge">removeSchedule(&#123; scheduleId, tx? &#125;)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;boolean&gt;</code><br />
-      Plural: <code>removeSchedules(&#123; scheduleIds, tx? &#125;)</code> → <code>Promise&lt;ScheduleBatchItem[]&gt;</code> — many schedules in one delete. See{' '}
+      → <code>Promise&lt;boolean&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">removeSchedules(&#123; scheduleIds, tx? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;ScheduleBatchItem[]&gt;</code> — many schedules in one delete. See{' '}
       <a href="#batch-results">batch results</a>.
     </span>
   </li>
@@ -241,23 +257,39 @@ only; no I/O until `init()`.
     <span className="api-badge">pauseQueue(&#123; queue, mode? &#125;)</span>{' '}
     <span className="api-note">
       → <code>Promise&lt;void&gt;</code> — <code>mode</code> is a <a href="#enums">PauseMode</a>;
-      throws <code>QueueNotFoundError</code> for a name nothing has used.<br />
-      Plural: <code>pauseQueues(&#123; queues, mode? &#125;)</code> → <code>Promise&lt;QueueBatchItem[]&gt;</code> — an unknown name is <code>NOT_FOUND</code> rather than a throw. See{' '}
-      <a href="#batch-results">batch results</a>.
+      throws <code>QueueNotFoundError</code> for a name nothing has used.
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">pauseQueues(&#123; queues, mode? &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;QueueBatchItem[]&gt;</code> — an unknown name is <code>NOT_FOUND</code>{' '}
+      rather than a throw. See <a href="#batch-results">batch results</a>.
     </span>
   </li>
   <li>
     <span className="api-badge">resumeQueue(&#123; queue &#125;)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;void&gt;</code><br />
-      Plural: <code>resumeQueues(&#123; queues &#125;)</code> → <code>Promise&lt;QueueBatchItem[]&gt;</code> — same per-name result as <code>pauseQueues</code>. See{' '}
-      <a href="#batch-results">batch results</a>.
+      → <code>Promise&lt;void&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">resumeQueues(&#123; queues &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;QueueBatchItem[]&gt;</code> — same per-name result as{' '}
+      <code>pauseQueues</code>. See <a href="#batch-results">batch results</a>.
     </span>
   </li>
   <li>
     <span className="api-badge">removeQueue(&#123; name &#125;)</span>{' '}
     <span className="api-note">
       → <code>Promise&lt;boolean&gt;</code> — refused while the queue is declared in this process
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">getInstance(&#123; instanceKey &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;InstanceInfo | null&gt;</code>
     </span>
   </li>
   <li>
@@ -273,33 +305,43 @@ only; no I/O until `init()`.
     </ul>
   </li>
   <li>
-    <span className="api-badge">getInstance(&#123; instanceKey &#125;)</span>{' '}
+    <span className="api-badge">pauseInstance(&#123; instanceKey &#125;)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;InstanceInfo | null&gt;</code>
+      → <code>Promise&lt;void&gt;</code>
     </span>
   </li>
   <li>
-    <span className="api-badge">pauseInstance(&#123; instanceKey &#125;)</span>{' '}
+    <span className="api-badge">pauseInstances(&#123; instanceKeys &#125;)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;void&gt;</code><br />
-      Plural: <code>pauseInstances(&#123; instanceKeys &#125;)</code> → <code>Promise&lt;InstanceBatchItem[]&gt;</code> — a key no instance registered under is <code>NOT_FOUND</code>. See{' '}
-      <a href="#batch-results">batch results</a>.
+      → <code>Promise&lt;InstanceBatchItem[]&gt;</code> — a key no instance registered under is{' '}
+      <code>NOT_FOUND</code>. See <a href="#batch-results">batch results</a>.
     </span>
   </li>
   <li>
     <span className="api-badge">resumeInstance(&#123; instanceKey &#125;)</span>{' '}
     <span className="api-note">
-      → <code>Promise&lt;void&gt;</code><br />
-      Plural: <code>resumeInstances(&#123; instanceKeys &#125;)</code> → <code>Promise&lt;InstanceBatchItem[]&gt;</code> — same per-key result as <code>pauseInstances</code>. See{' '}
-      <a href="#batch-results">batch results</a>.
+      → <code>Promise&lt;void&gt;</code>
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">resumeInstances(&#123; instanceKeys &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;InstanceBatchItem[]&gt;</code> — same per-key result as{' '}
+      <code>pauseInstances</code>. See <a href="#batch-results">batch results</a>.
     </span>
   </li>
   <li>
     <span className="api-badge">removeInstance(&#123; instanceKey &#125;)</span>{' '}
     <span className="api-note">
       → <code>Promise&lt;boolean&gt;</code> — refused until the instance is unseen for 30 min
-      (throws <code>InstanceActiveError</code>).<br />
-      Plural: <code>removeInstances(&#123; instanceKeys &#125;)</code> → <code>Promise&lt;InstanceBatchItem[]&gt;</code> — a recently-seen instance is <code>REFUSED</code> rather than thrown for, so the stale ones still go. See{' '}
+      (throws <code>InstanceActiveError</code>).
+    </span>
+  </li>
+  <li>
+    <span className="api-badge">removeInstances(&#123; instanceKeys &#125;)</span>{' '}
+    <span className="api-note">
+      → <code>Promise&lt;InstanceBatchItem[]&gt;</code> — a recently-seen instance is{' '}
+      <code>REFUSED</code> rather than thrown for, so the stale ones still go. See{' '}
       <a href="#batch-results">batch results</a>.
     </span>
   </li>
