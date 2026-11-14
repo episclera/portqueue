@@ -38,4 +38,27 @@ describe('schedulesCommand', () => {
     );
     expect(calls.createQueue).toEqual([]);
   });
+
+  it('hands --limit/--offset to the paged read', async () => {
+    const { calls } = await runCommand(
+      schedulesCommand,
+      { queue: 'emails', limit: '1', offset: '0' },
+      { schedules: SCHEDULES },
+    );
+    // `0` is a real offset, not "unset".
+    expect(calls.getSchedules).toEqual([{ queue: 'emails', limit: 1, offset: 0 }]);
+  });
+
+  it('prints the same "more" hint as every other paged list', async () => {
+    const { stdout } = await runCommand(
+      schedulesCommand,
+      { limit: '1', offset: '3' },
+      { schedules: SCHEDULES, scheduleTotal: 10 },
+    );
+    expect(stdout).toContain('use --offset 4');
+  });
+
+  it('rejects a limit below 1', async () => {
+    await expect(runCommand(schedulesCommand, { limit: '0' })).rejects.toThrow(/--limit/);
+  });
 });

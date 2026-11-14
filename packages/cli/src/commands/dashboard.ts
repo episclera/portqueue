@@ -60,7 +60,16 @@ export const dashboardCommand: Command = {
         }),
     );
     const host = flagString(flags, 'host') ?? DEFAULT_HOST;
-    await new Promise<void>((resolve) => server.listen(port, host, resolve));
+    // A bind failure (port in use, no permission) arrives as an `error` event, not a callback. With
+    // no listener it was an uncaught exception that took the process down past every teardown;
+    // rejecting turns it into an ordinary command failure the runner reports and cleans up after.
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(port, host, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
     success(
       `Dashboard serving at http://${host}:${port}${basePath ?? DEFAULT_BASE_PATH} (basic auth).`,
     );

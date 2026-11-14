@@ -10,6 +10,13 @@ export interface FakePqCalls {
   /** `pq._cli.purge(...)` — the facade path a purge takes. */
   purge: unknown[];
   removeSchedule: unknown[];
+  /**
+   * By-id job reads. The action commands act first and read only to explain a refusal, so a happy
+   * path must leave this empty.
+   */
+  getJob: unknown[];
+  /** `pq._cli.getSchedules(...)` — the paging window `schedules` asked for. */
+  getSchedules: unknown[];
   pauseQueue: unknown[];
   resumeQueue: unknown[];
   /**
@@ -27,6 +34,8 @@ export interface FakePqOverrides {
   jobPage?: unknown;
   job?: unknown; // returned by getJob; `null` models "not found"
   schedules?: unknown;
+  /** The `total` the schedules page reports; defaults to the number of `schedules` given. */
+  scheduleTotal?: number;
   addResult?: unknown;
   retryResult?: unknown;
   /** What `cancelJob` answers. `null` models the id matching no row, which core throws for. */
@@ -81,6 +90,8 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
     removeJob: [],
     purge: [],
     removeSchedule: [],
+    getJob: [],
+    getSchedules: [],
     pauseQueue: [],
     resumeQueue: [],
     createQueue: [],
@@ -89,9 +100,10 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
 
   /** The `pq._cli` facade the CLI reaches for instead of widening the public API. */
   const cli = {
-    getSchedules: async () => {
+    getSchedules: async (arg: unknown) => {
+      calls.getSchedules.push(arg);
       const items = (overrides.schedules ?? []) as unknown[];
-      return { items, total: items.length };
+      return { items, total: overrides.scheduleTotal ?? items.length };
     },
     purge: async (arg: unknown) => {
       calls.purge.push(arg);
@@ -119,7 +131,10 @@ export function makeFakePq(overrides: FakePqOverrides = {}): {
       return { items, total: items.length };
     },
     getJobs: async () => overrides.jobPage ?? { items: [DEFAULT_JOB], total: 1 },
-    getJob: async () => ('job' in overrides ? overrides.job : DEFAULT_JOB),
+    getJob: async (arg: unknown) => {
+      calls.getJob.push(arg);
+      return 'job' in overrides ? overrides.job : DEFAULT_JOB;
+    },
     getInstances: async () => {
       const items = (overrides.instances ?? [DEFAULT_INSTANCE]) as unknown[];
       return { items, total: items.length };

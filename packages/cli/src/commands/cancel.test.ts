@@ -13,6 +13,14 @@ describe('cancelCommand', () => {
     expect(stdout).toContain('Cancelled job');
   });
 
+  it('never reads the job, on any path', async () => {
+    // `cancelJob` reports exactly what it did, so there is nothing a read could add.
+    for (const cancelOutcome of Object.values(CancelOutcome)) {
+      const { calls } = await runCommand(cancelCommand, { id: 'job-1' }, { cancelOutcome });
+      expect(calls.getJob).toEqual([]);
+    }
+  });
+
   it('does not claim a running job was cancelled — only that it was asked to stop', async () => {
     // The distinction the old boolean lost: a handler that ignores `job.signal` completes normally,
     // so "Cancelled" would have been a lie.

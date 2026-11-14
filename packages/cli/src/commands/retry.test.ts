@@ -8,6 +8,8 @@ describe('retryCommand', () => {
     // The same row is re-armed, so there is one id to report, not an old one and a new one.
     expect(stdout).toContain('Requeued job job-abcdef123456 on queue emails');
     expect(calls.retryJob).toEqual([{ jobId: 'job-abcdef123456' }]);
+    // Act first: a successful retry never reads the row.
+    expect(calls.getJob).toEqual([]);
   });
 
   it('explains the refusal when the job is still running', async () => {

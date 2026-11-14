@@ -49,20 +49,33 @@ export async function run(argv: string[]): Promise<number> {
   // Whatever the command opened — a server, an interval, a dashboard mount — newest first, so a
   // resource is released before the thing it depends on.
   const teardowns: Teardown[] = [];
-  const onExit = (fn: Teardown): void => void teardowns.unshift(fn);
+  let closing: Promise<void> | undefined;
 
-  /** Release everything this run opened, once, tolerating a failure in any single step. */
-  const closeAll = async (): Promise<void> => {
-    const client = pq;
-    pq = undefined; // claim the shutdown, so a signal and the catch below can't both run it
-    for (const teardown of teardowns.splice(0)) {
-      await Promise.resolve()
-        .then(teardown)
-        .catch(() => undefined);
-    }
-    if (client) await client.shutdown().catch(() => undefined);
+  /** Run one teardown, tolerating its failure so the rest still run. */
+  const release = (teardown: Teardown): Promise<void> =>
+    Promise.resolve()
+      .then(teardown)
+      .catch(() => undefined);
+
+  // A resource opened after the shutdown began (a command still starting up when Ctrl-C landed) is
+  // released straight away rather than queued behind a drain that has already read the list.
+  const onExit = (fn: Teardown): void => {
+    if (closing) void release(fn);
+    else teardowns.unshift(fn);
   };
 
+  /**
+   * Release everything this run opened, exactly once. Memoized rather than flagged: a second caller
+   * — the catch below after a signal made the command throw — waits for the same drain instead of
+   * returning at once and letting the process exit underneath it.
+   */
+  const closeAll = (): Promise<void> =>
+    (closing ??= (async () => {
+      for (const teardown of teardowns.splice(0)) await release(teardown);
+      if (pq) await pq.shutdown().catch(() => undefined);
+    })());
+
+  let uninstallStopHandlers: (() => void) | undefined;
   try {
     pq = await buildPortQueue({
       driver: flagString(parsed.flags, 'driver'),
@@ -74,10 +87,12 @@ export async function run(argv: string[]): Promise<number> {
     if (!pq.isRunning) await pq.init();
     const persistent = command.persistent === true || flagBool(parsed.flags, WATCH_FLAG);
     // Installed before the command runs, so an interrupt during its startup is handled too.
-    if (persistent) installStopHandlers(closeAll);
+    if (persistent) uninstallStopHandlers = installStopHandlers(closeAll);
     await command.run({ pq, flags: parsed.flags, onExit });
-    // A persistent command keeps the client alive; its signal handler owns the shutdown.
-    if (!persistent) await closeAll();
+    // A persistent command never returns — it is held open until a signal, whose handler owns the
+    // shutdown. So a command that *did* return is finished, whatever its flags said: `jobs --watch`
+    // (a command with nothing to watch) used to skip this and exit with the client still connected.
+    await closeAll();
     return 0;
   } catch (err) {
     if (err instanceof CliError) {
@@ -88,6 +103,8 @@ export async function run(argv: string[]): Promise<number> {
     }
     await closeAll();
     return 1;
+  } finally {
+    uninstallStopHandlers?.();
   }
 }
 
@@ -97,12 +114,18 @@ export async function run(argv: string[]): Promise<number> {
  * `once` per signal, so a second Ctrl-C is not queued behind an in-flight drain — it reaches Node's
  * default handler and kills the process, which is what a user pressing it twice is asking for.
  */
-function installStopHandlers(closeAll: () => Promise<void>): void {
-  for (const signal of STOP_SIGNALS) {
-    process.once(signal, () => {
+function installStopHandlers(closeAll: () => Promise<void>): () => void {
+  const handlers = STOP_SIGNALS.map((signal) => {
+    const handler = (): void => {
       void closeAll().then(() => {
         process.exit(signal === 'SIGINT' ? EXIT_ON_SIGINT : EXIT_ON_SIGTERM);
       });
-    });
-  }
+    };
+    process.once(signal, handler);
+    return { signal, handler };
+  });
+  // Removed once the run is over, so a finished command leaves no listener behind to fire later.
+  return () => {
+    for (const { signal, handler } of handlers) process.removeListener(signal, handler);
+  };
 }

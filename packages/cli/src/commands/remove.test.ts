@@ -7,6 +7,15 @@ describe('removeCommand', () => {
     const { stdout, calls } = await runCommand(removeCommand, { id: 'job-abcdef123456' });
     expect(stdout).toContain('Removed job');
     expect(calls.removeJob).toHaveLength(1);
+    // Act first: a successful removal never reads the row.
+    expect(calls.getJob).toEqual([]);
+  });
+
+  it('throws when a refused id matches no job', async () => {
+    // The one read happens only after the write refused, and only to say why.
+    await expect(
+      runCommand(removeCommand, { id: 'nope' }, { removeJobOk: false, job: null }),
+    ).rejects.toThrow(/not found/);
   });
 
   it('warns when the job is running rather than claiming it was removed', async () => {
@@ -15,7 +24,7 @@ describe('removeCommand', () => {
       { id: 'job-abcdef123456' },
       { removeJobOk: false },
     );
-    expect(stdout).toContain('not removed');
+    expect(stdout).toContain('is FAILED and was not removed');
   });
 
   it('removes a schedule by --schedule-id alone', async () => {

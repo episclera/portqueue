@@ -32,6 +32,11 @@ export interface PageFlags {
  * "unset" and page the default 50 rows. A zero or negative limit is a mistake, so it says so.
  */
 export function pageFlags(flags: Flags): PageFlags {
+  // A bare `--limit` (or `--limit --offset 5`) parses as a switch, which a number accessor reads as
+  // "unset" — the same silent fallback to the default page, by another route.
+  for (const name of ['limit', 'offset']) {
+    if (flags[name] === true) throw new CliError(`--${name} needs a value.`);
+  }
   const limit = flagNumber(flags, 'limit');
   const offset = flagNumber(flags, 'offset');
   if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
