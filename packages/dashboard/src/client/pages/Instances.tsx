@@ -166,7 +166,7 @@ export function InstancesPage(): React.ReactElement {
               danger
               disabled={!removable}
               icon={ACTIONS_CONFIG.remove.icon}
-              label={removable ? ACTIONS_CONFIG.remove.label : INSTANCE_ACTIONS_COPY.removeBlocked}
+              label={removable ? ACTIONS_CONFIG.remove.label : INSTANCE_ACTIONS_COPY.removeBlocked(r.removableAfter)}
               confirm={{
                 title: INSTANCE_ACTIONS_COPY.removeConfirm,
                 description: INSTANCE_ACTIONS_COPY.removeConfirmDescription,

@@ -2,6 +2,7 @@
  * Maps PortQueue snapshots → wire DTOs. Pure functions, fully typed;
  * the single place Dates become ISO strings for the JSON boundary.
  */
+import { INSTANCE_REMOVAL_STALE_SECONDS, secondsToMs } from '@portqueue/core';
 import type { JobSnapshot, InstanceInfo, QueueInfo, QueueStats, Page } from '@portqueue/core';
 import type {
   JobDto,
@@ -124,6 +125,10 @@ export function serializeInstance(i: InstanceInfo): InstanceDto {
     createdAt: i.createdAt.toISOString(),
     updatedAt: i.updatedAt.toISOString(),
     lastSeenAt: i.lastSeenAt.toISOString(),
+    removableAfter: new Date(
+      i.lastSeenAt.getTime() +
+        secondsToMs(INSTANCE_REMOVAL_STALE_SECONDS, 'instance removal staleness window'),
+    ).toISOString(),
     cpuPercent: i.cpuPercent,
     memoryPercent: i.memoryPercent,
     counts: counts(i.counts),

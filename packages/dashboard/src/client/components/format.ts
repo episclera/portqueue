@@ -72,15 +72,26 @@ export function formatDateTime(ms: number): string {
   return `${parts.instant} ${parts.offset}`;
 }
 
+/**
+ * Unit factors for **displaying** the gap between two instants. The browser cannot import core's
+ * `util/seconds` (the core barrel drags Node builtins into the bundle), and these never touch a
+ * configured duration — every one of those reaches the client already rendered or as an instant.
+ */
+const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60 * MS_PER_SECOND;
+const MS_PER_HOUR = 60 * MS_PER_MINUTE;
+
 /** Human-readable duration between two ISO timestamps. */
 export function duration(fromIso?: string | null, toIso?: string | null): string {
   if (!fromIso || !toIso) return '—';
   const ms = new Date(toIso).getTime() - new Date(fromIso).getTime();
   if (Number.isNaN(ms) || ms < 0) return '—';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
-  return `${Math.floor(ms / 3_600_000)}h ${Math.round((ms % 3_600_000) / 60_000)}m`;
+  if (ms < MS_PER_SECOND) return `${ms}ms`;
+  if (ms < MS_PER_MINUTE) return `${(ms / MS_PER_SECOND).toFixed(1)}s`;
+  if (ms < MS_PER_HOUR) {
+    return `${Math.floor(ms / MS_PER_MINUTE)}m ${Math.round((ms % MS_PER_MINUTE) / MS_PER_SECOND)}s`;
+  }
+  return `${Math.floor(ms / MS_PER_HOUR)}h ${Math.round((ms % MS_PER_HOUR) / MS_PER_MINUTE)}m`;
 }
 
 export function truncate(id: string | null | undefined, head = 8, tail = 6): string {

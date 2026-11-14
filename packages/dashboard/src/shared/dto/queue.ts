@@ -45,6 +45,12 @@ export interface InstanceDto {
   updatedAt: string;
   lastSeenAt: string;
   /**
+   * The instant from which core accepts a remove for this instance — `lastSeenAt` plus core's
+   * removal window. Sent as an instant rather than the window itself, so the browser gates the
+   * action with a comparison and never does unit arithmetic or copies core's 30 minutes.
+   */
+  removableAfter: string;
+  /**
    * The health of the **Node process** behind this instance, at its last heartbeat, both 0-100:
    * `cpuPercent` over the cores available to it, `memoryPercent` over V8's heap limit. Neither is
    * machine-wide. Null until the instance's first beat.

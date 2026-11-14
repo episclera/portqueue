@@ -371,6 +371,7 @@ describe('instances page', () => {
     createdAt: '2026-07-22T00:00:00.000Z',
     updatedAt: '2026-07-22T00:02:00.000Z',
     lastSeenAt: '2026-07-22T00:02:00.000Z',
+    removableAfter: '2026-07-22T00:32:00.000Z',
     cpuPercent: 12.5,
     memoryPercent: 94.2,
     counts: { COMPLETED: 8, FAILED: 1 },

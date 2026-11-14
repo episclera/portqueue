@@ -83,6 +83,8 @@ describe('serializeInstance', () => {
     expect(dto.cpuPercent).toBe(42.5);
     expect(dto.memoryPercent).toBe(18.25);
     expect(dto.lastSeenAt).toBe('2026-07-22T00:02:00.000Z');
+    // Core's 30-minute removal window, delivered as the instant it ends.
+    expect(dto.removableAfter).toBe('2026-07-22T00:32:00.000Z');
     expect(dto.counts).toEqual({ COMPLETED: 3 });
   });
 });

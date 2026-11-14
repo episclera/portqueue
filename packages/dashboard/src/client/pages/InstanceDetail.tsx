@@ -166,7 +166,7 @@ export function InstanceDetailPage(): React.ReactElement {
       {/* Disabled rather than hidden, as in the table: a button that materialises half an hour
           later is worse than one that says what it is waiting for. */}
       <Tooltip
-        title={removable ? ACTIONS_CONFIG.remove.label : INSTANCE_ACTIONS_COPY.removeBlocked}
+        title={removable ? ACTIONS_CONFIG.remove.label : INSTANCE_ACTIONS_COPY.removeBlocked(i.removableAfter)}
         placement="bottom"
       >
         <Popconfirm

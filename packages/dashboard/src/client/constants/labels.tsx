@@ -20,6 +20,7 @@ import {
   SearchIcon,
 } from '@portqueue/ui';
 import { JobStatus, PauseMode } from '../queries/enums';
+import { formatDateTime } from '../components/format';
 
 export interface DisplayConfig {
   label: string;
@@ -152,20 +153,19 @@ export const PAUSE_STATE_FILTER_OPTIONS = [
   { label: PAUSE_STATES_CONFIG.processingPaused.label, value: 'paused' },
 ];
 
-/** Core only lets an instance be removed once it has been unseen for 30 minutes. */
-const INSTANCE_REMOVABLE_AFTER_MS = 30 * 60 * 1000;
-
 /**
  * Whether core would accept a remove for this instance. Shared by the instances table and the
- * instance detail page so both gate the action on the same rule core enforces.
+ * instance detail page so both gate the action on the same rule core enforces — the server sends
+ * the instant (`removableAfter`), so the window itself is never copied into the browser.
  */
-export function instanceRemovable(row: { lastSeenAt: string }): boolean {
-  return Date.now() - new Date(row.lastSeenAt).getTime() > INSTANCE_REMOVABLE_AFTER_MS;
+export function instanceRemovable(row: { removableAfter: string }): boolean {
+  return Date.now() > Date.parse(row.removableAfter);
 }
 
 /** The instance actions both the table row and the detail header offer, worded once. */
 export const INSTANCE_ACTIONS_COPY = {
-  removeBlocked: 'Removable after 30 minutes unseen',
+  removeBlocked: (removableAfter: string): string =>
+    `Seen recently — removable from ${formatDateTime(Date.parse(removableAfter))}`,
   pauseConfirm: 'Pause job processing on this instance?',
   removeConfirm: 'Remove this inactive instance from monitoring?',
   removeConfirmDescription: 'Only tidies the instances list; job history is untouched.',

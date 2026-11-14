@@ -64,6 +64,8 @@ const INSTANCE = {
   createdAt: '2026-07-22T00:00:00.000Z',
   updatedAt: '2026-07-22T00:02:00.000Z',
   lastSeenAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  // The server sends when core will accept a remove; half an hour ago means it already does.
+  removableAfter: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
   cpuPercent: 12.5,
   memoryPercent: 30,
   counts: { COMPLETED: 8 },
@@ -624,7 +626,10 @@ describe('instance detail actions', () => {
 
   it('keeps remove disabled while the instance is still being seen', async () => {
     // Core refuses one it heard from in the last half hour, so the button never offers it.
-    const h = openInstance({ lastSeenAt: new Date().toISOString() });
+    const h = openInstance({
+      lastSeenAt: new Date().toISOString(),
+      removableAfter: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    });
     const [remove] = await screen.findAllByRole('button', { name: /^Remove$/ });
 
     expect(remove).toBeDisabled();
