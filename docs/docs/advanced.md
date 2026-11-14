@@ -144,6 +144,8 @@ engine, a deadlock).
 **Reading**
 
 - `getJob({ jobId }): Promise<JobRecord | null>`
+- `findJobRefs({ jobIds, tx? }): Promise<JobRef[]>` — which ids name a row, with each row's queue, in
+  one `IN` lookup. Core reads it only on a batch's refusal path, to tell `REFUSED` from `NOT_FOUND`.
 - `getJobs({ queueName?, statuses?, scheduleId?, processedOnInstanceKey?, search?, limit, offset }): Promise<JobRecord[]>` —
   always newest-first. `search` is a case-insensitive substring matched **in SQL** across the id,
   status, idempotency key, failure message and serialized payload, so a text query pages in the
@@ -171,6 +173,9 @@ engine, a deadlock).
 
 - `setQueuePaused({ queueName, processingPaused?, acceptingPaused?, now, tx? }): Promise<QueueRow | null>` —
   returns the updated row so the caller refreshes its cached pause flags without a second read.
+- `setQueuesPaused({ queueNames, processingPaused?, acceptingPaused?, now, tx? }): Promise<QueueRow[]>` —
+  the same write over many names in one statement, returning only the rows it updated. The built-in
+  drivers implement `setQueuePaused` as this with one name.
 - `ensureQueue({ name, options?, now, tx? }): Promise<QueueRow>`
 - `getQueueByName({ name }): Promise<QueueRow | null>`
 - `deleteQueue({ name, tx? }): Promise<boolean>`
@@ -181,9 +186,14 @@ engine, a deadlock).
   independently-controlled pause flag, and must return the resulting row: the caller reads
   `processingPaused` from it rather than issuing a follow-up read.
 - `listInstances({ search?, processingPaused?, alive?, seenSince?, limit?, offset? }?): Promise<InstanceRow[]>` — `alive` compares `last_seen_at` against the `seenSince` cutoff the caller computed, so the driver never needs to know the liveness window. `countInstances(filter?)` gives the matching total.
-- `getInstance({ instanceKey }): Promise<InstanceRow | null>`
+- `getInstance({ instanceKey }): Promise<InstanceRow | null>`, and `getInstancesByKeys({ instanceKeys, tx? }): Promise<InstanceRow[]>` for many in one statement.
 - `setInstancePaused({ instanceKey, processingPaused, now }): Promise<void>`
+- `setInstancesPaused({ instanceKeys, processingPaused, now, tx? }): Promise<string[]>` — one statement,
+  returning the keys it updated.
 - `deleteInstance({ instanceKey, tx? }): Promise<boolean>`
+- `deleteInstances({ instanceKeys, seenBefore?, tx? }): Promise<string[]>` — returns the keys removed.
+  With `seenBefore`, only rows whose `last_seen_at` is older are deleted: the staleness rule is
+  re-checked **in the statement**, so an instance that heartbeat after core's check survives.
 
 **Retention**
 
