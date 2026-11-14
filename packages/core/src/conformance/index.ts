@@ -23,7 +23,8 @@ import type { NewJobRecord } from '../jobs/job-record';
  *   `setScheduleEnabled`, the instance reads and their grouped counts, and the by-key batches
  *   (`findJobRefs`, `setQueuesPaused`, `setInstancesPaused`, `deleteInstances`' staleness guard).
  * - **Reads**: the `search` filter in SQL, and agreement between every list page and its `count*`.
- * - **Limits**: a batch at the id cap works, and one past it is chunked rather than sent whole.
+ * - **Limits**: a batch at the id cap works, one past it is chunked rather than sent whole, and a
+ *   keyed insert batch past the cap dedups without overflowing its lookup.
  *
  * Shipped from `@portqueue/core/conformance` so custom-driver authors validate the same way. PGLite
  * and SQLite run it in CI; MySQL and Oracle are validated with it by hand against a real server — see
@@ -574,6 +575,25 @@ export function runConformance(options: ConformanceOptions): void {
       });
       expect(again[0]!.deduplicated).toBe(true);
       expect(again[0]!.id).toBe(inserted[0]!.id);
+    });
+
+    it('dedups a keyed batch larger than the id cap without overflowing the lookup', async () => {
+      // `addJobs` is not id-capped, so the dedup lookup's `IN (...)` over the batch's keys has to be
+      // chunked like every other key list — unchunked, 1001 keys raised ORA-01795 on Oracle.
+      const size = MAX_BATCH_IDS + 1;
+      const keyed = (kind: 'idempotencyKey' | 'singletonKey') =>
+        Array.from({ length: size }, (_, i) => newJob(queueName, now, { [kind]: `${kind}-${i}` }));
+
+      const first = await driver.insertJobs({ jobs: keyed('idempotencyKey') });
+      expect(first.every((r) => r.deduplicated === false)).toBe(true);
+      const again = await driver.insertJobs({ jobs: keyed('idempotencyKey') });
+      expect(again.every((r) => r.deduplicated === true)).toBe(true);
+      expect(again.map((r) => r.id)).toEqual(first.map((r) => r.id));
+
+      const slots = await driver.insertJobs({ jobs: keyed('singletonKey') });
+      const held = await driver.insertJobs({ jobs: keyed('singletonKey') });
+      expect(held.every((r) => r.deduplicationReason === 'SINGLETON')).toBe(true);
+      expect(held.map((r) => r.id)).toEqual(slots.map((r) => r.id));
     });
 
     it('deduplicates a singleton key only while a job holds the slot', async () => {

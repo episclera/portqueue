@@ -72,8 +72,9 @@ export enum JobColumn {
    */
   RETENTION_TTL_SECONDS = 'retention_ttl_seconds',
   /**
-   * The finished statuses this job's retention policy may delete, as a comma-separated token list,
-   * or NULL for "every finished status". Frozen onto the row like every other retention field, so a
+   * The finished statuses this job's retention policy may delete, as an integer bitmask (one bit per
+   * entry of `FINISHED_STATUSES`; see `shared/retention-statuses.ts`), or NULL for "every finished
+   * status". Frozen onto the row like every other retention field, so a
    * policy change never retroactively re-scopes jobs that are already queued.
    */
   RETENTION_STATUSES = 'retention_statuses',

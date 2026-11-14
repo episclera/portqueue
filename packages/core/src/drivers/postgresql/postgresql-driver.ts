@@ -364,11 +364,6 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
   }
 
   /**
-   * Locate the existing jobs that dedup this batch, in one lookup per distinct queue and key kind
-   * rather than two per job. No unique index enforces either key — dedup lives in code so every
-   * engine behaves identically and a duplicate returns the existing job instead of raising.
-   */
-  /**
    * Serialize the dedup-lookup-then-insert pair against another producer's, per queue.
    *
    * Only called when a batch actually carries an idempotency or singleton key. Without it the pair is
@@ -391,13 +386,23 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
       ),
     ].sort(); // a stable order, so two batches over the same queues cannot deadlock each other
     if (!names.length) return;
-    await run(
-      `SELECT ${QueueColumn.NAME} FROM ${this.t(TableName.QUEUE)} ` +
-        `WHERE ${QueueColumn.NAME} IN (${this.phList(names.length)}) FOR UPDATE`,
-      names,
-    );
+    // Chunked like every other key list; a batch rarely spans more than a handful of queues, so this
+    // is one statement in practice, and the sorted order holds across chunks too.
+    await this.overIdChunks(names, async (chunk) => {
+      const res = await run(
+        `SELECT ${QueueColumn.NAME} FROM ${this.t(TableName.QUEUE)} ` +
+          `WHERE ${QueueColumn.NAME} IN (${this.phList(chunk.length)}) FOR UPDATE`,
+        chunk,
+      );
+      return res.rows;
+    });
   }
 
+  /**
+   * Locate the existing jobs that dedup this batch, in one lookup per distinct queue and key kind
+   * rather than two per job. No unique index enforces either key — dedup lives in code so every
+   * engine behaves identically and a duplicate returns the existing job instead of raising.
+   */
   private async findDeduplicated(
     jobs: NewJobRecord[],
     run: (sql: string, params: readonly unknown[]) => Promise<RawResult>,
@@ -418,12 +423,17 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
         ...new Set(queueJobs.flatMap((j) => (j.idempotencyKey ? [j.idempotencyKey] : []))),
       ];
       if (idemKeys.length) {
-        const res = await run(
-          `SELECT ${cols}, ${JobColumn.IDEMPOTENCY_KEY} FROM ${this.t(TableName.JOB)} ` +
-            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} IN (${this.phList(idemKeys.length, 1)})`,
-          [queueName, ...idemKeys],
-        );
-        const found = new Map(res.rows.map((r) => [String(r[JobColumn.IDEMPOTENCY_KEY]), r]));
+        // Chunked: `addJobs` is not id-capped, so a large keyed batch can carry more keys than the
+        // engine takes in one `IN (...)` (1000 on Oracle). Every chunk runs inside this transaction.
+        const rows = await this.overIdChunks(idemKeys, async (chunk) => {
+          const res = await run(
+            `SELECT ${cols}, ${JobColumn.IDEMPOTENCY_KEY} FROM ${this.t(TableName.JOB)} ` +
+              `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} IN (${this.phList(chunk.length, 1)})`,
+            [queueName, ...chunk],
+          );
+          return res.rows;
+        });
+        const found = new Map(rows.map((r) => [String(r[JobColumn.IDEMPOTENCY_KEY]), r]));
         for (const job of queueJobs) {
           if (job.idempotencyKey == null) continue;
           const row = found.get(job.idempotencyKey);
@@ -437,14 +447,16 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
         ),
       ];
       if (singletonKeys.length) {
-        const statusPh = this.phList(ACTIVE_STATUSES.length, 1 + singletonKeys.length);
-        const res = await run(
-          `SELECT ${cols}, ${JobColumn.SINGLETON_KEY} FROM ${this.t(TableName.JOB)} ` +
-            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} IN (${this.phList(singletonKeys.length, 1)}) ` +
-            `AND ${JobColumn.STATUS} IN (${statusPh})`,
-          [queueName, ...singletonKeys, ...ACTIVE_STATUSES],
-        );
-        const found = new Map(res.rows.map((r) => [String(r[JobColumn.SINGLETON_KEY]), r]));
+        const rows = await this.overIdChunks(singletonKeys, async (chunk) => {
+          const res = await run(
+            `SELECT ${cols}, ${JobColumn.SINGLETON_KEY} FROM ${this.t(TableName.JOB)} ` +
+              `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} IN (${this.phList(chunk.length, 1)}) ` +
+              `AND ${JobColumn.STATUS} IN (${this.phList(ACTIVE_STATUSES.length, 1 + chunk.length)})`,
+            [queueName, ...chunk, ...ACTIVE_STATUSES],
+          );
+          return res.rows;
+        });
+        const found = new Map(rows.map((r) => [String(r[JobColumn.SINGLETON_KEY]), r]));
         for (const job of queueJobs) {
           if (out.has(job) || job.singletonKey == null) continue;
           const row = found.get(job.singletonKey);
@@ -1522,8 +1534,8 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
    *
    * The per-status term is what makes `retention.statuses` real. A row with a NULL
    * `retention_statuses` is eligible in every finished status (the default); a row that named a
-   * subset is eligible only in one of those, matched against the delimited encoding so `,FAILED,`
-   * can never be matched by a search for a different token.
+   * subset is eligible only in one of those, tested as a bit of the `retention_statuses` bitmask
+   * (see `shared/retention-statuses.ts`).
    */
   private retentionWhere(olderThan: number, params: unknown[]): string {
     const statusPh = this.phList(FINISHED_STATUSES.length, params.length);
@@ -1660,9 +1672,14 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
  *
  * Six bytes of the digest, which is 48 bits — deliberately short of the 64 PostgreSQL accepts, because
  * the value crosses through a JS `number` and beyond `Number.MAX_SAFE_INTEGER` it would not survive
- * the trip. 48 bits is ample for the handful of named locks the tool takes (one, today: the migration
- * lock), and the collision arithmetic is what the caller needs to know if it ever takes more — see
- * {@link PostgresqlDriver.tryAdvisoryLock}, whose doc names the keys in use.
+ * the trip.
+ *
+ * **Keys in use:** exactly one — the `MigrationRunner`'s `[<schema>.]<tablePrefix>migrate`. Advisory
+ * locks are database-wide, so the space shared is every key any PortQueue deployment (any prefix,
+ * any schema) and any other application takes in that database. The chance two of `k` distinct keys
+ * collide is about `k² / 2^49` — one in ~10^14 for a pair, still under one in a million at ~16,000
+ * keys. A collision is not a correctness failure either: it only makes two unrelated migrations
+ * serialize. Anyone adding a second key should keep that arithmetic in mind and list it here.
  */
 function advisoryKey(key: string): number {
   const hash = createHash('sha1').update(key).digest();

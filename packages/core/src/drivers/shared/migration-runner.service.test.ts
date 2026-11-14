@@ -23,7 +23,9 @@ interface FakeOptions {
   /** Versions the driver ships. */
   ships?: number[];
   /** Whether this engine has a named lock, and whether the attempt wins it. */
-  lock?: 'none' | 'won' | 'lost';
+  lock?: 'none' | 'won' | 'lost' | 'freed';
+  /** A configured schema, for the lock-key scoping. */
+  schema?: string;
   /** Versions whose statements throw. */
   failOn?: number[];
   /** Versions that run but are never recorded — the MySQL/Oracle crash-in-between case. */
@@ -44,7 +46,7 @@ function fakeDriver(options: FakeOptions = {}) {
 
   const driver = {
     capabilities: { [DriverCapability.ADVISORY_LOCK]: options.lock && options.lock !== 'none' },
-    context: new DriverContext({}),
+    context: new DriverContext(options.schema ? { schema: options.schema } : {}),
     migrations,
     getSchemaVersion: async () => (applied.size ? Math.max(...applied) : null),
     applyMigration: async ({ migration }: { migration: MigrationStep }) => {
@@ -58,7 +60,8 @@ function fakeDriver(options: FakeOptions = {}) {
       options.lock && options.lock !== 'none'
         ? async ({ key }: { key: string }) => {
             locks.push(key);
-            return options.lock === 'won';
+            // 'freed': held elsewhere on the first attempt, free on the next.
+            return options.lock === 'won' || (options.lock === 'freed' && locks.length > 1);
           }
         : undefined,
     releaseAdvisoryLock: async ({ key }: { key: string }) => void released.push(key),
@@ -170,6 +173,29 @@ describe('the advisory lock', () => {
     await runner.run(MigrationMode.AUTO);
 
     expect(fake.ran).toEqual([]);
+  });
+
+  it('takes the lock over and migrates when it frees up with the schema still behind', async () => {
+    // The holder crashed, or was migrating something else under the same key: waiting out the
+    // timeout for a version nobody is applying would fail a boot that could simply proceed.
+    const fake = fakeDriver({ lock: 'freed' });
+    const { runner } = runnerFor(fake.driver);
+
+    await runner.run(MigrationMode.AUTO);
+
+    expect(fake.ran).toEqual([1]);
+    expect(fake.locks).toEqual(['pq_migrate', 'pq_migrate']);
+    expect(fake.released).toEqual(['pq_migrate']);
+  });
+
+  it('scopes the lock key by schema, so two schemas in one database never share it', async () => {
+    const fake = fakeDriver({ lock: 'won', schema: 'tenant_a' });
+    const { runner } = runnerFor(fake.driver);
+
+    await runner.run(MigrationMode.AUTO);
+
+    expect(fake.locks).toEqual(['tenant_a.pq_migrate']);
+    expect(fake.released).toEqual(['tenant_a.pq_migrate']);
   });
 
   it('applies without a lock on an engine that has none', async () => {

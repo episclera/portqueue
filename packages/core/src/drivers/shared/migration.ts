@@ -34,9 +34,11 @@ export interface FlavourMigration {
 /**
  * Wrap a driver's authored {@link FlavourMigration} list into the runner's {@link MigrationStep}
  * units — resolving object names against the live context, and nothing else. The driver's
- * `applyMigration` runs the statements *and* records the version in one transaction, so a crash
- * can never leave an applied-but-unrecorded migration. This is the only piece of the migration
- * path shared across engines: the mechanism, never the SQL.
+ * `applyMigration` runs the statements *and* records the version — in one transaction where the
+ * engine has transactional DDL (PostgreSQL, PGLite, SQLite); on MySQL and Oracle DDL commits
+ * implicitly, so the statements run first and must be idempotent, and the `MigrationRunner` reads the
+ * version back before the next step. This is the only piece of the migration path shared across
+ * engines: the mechanism, never the SQL.
  */
 export function toMigrationSteps(migrations: FlavourMigration[]): MigrationStep[] {
   return migrations.map((migration) => ({

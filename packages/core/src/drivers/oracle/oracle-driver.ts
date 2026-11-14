@@ -308,16 +308,9 @@ export class OracleDriver extends BaseDriver implements Driver {
   }
 
   /**
-   * Apply one migration's DDL, then record its version.
-   *
-   * Oracle commits DDL implicitly, so — like MySQL — these cannot share one transaction. That is
-   * safe because every statement in the migration swallows its "already exists" code: a crash
-   * between the DDL and the version row leaves a schema the next run re-applies as a no-op and then
-   * records. The version insert is guarded on its own absence for the same reason.
-   */
-  /**
-   * Apply one step, then record it — **not** in one transaction, and it cannot be: Oracle commits each DDL statement implicitly, so no transaction can span them. A `BEGIN`
-   * around them would be silently discarded at the first `CREATE TABLE`.
+   * Apply one step, then record it — **not** in one transaction, and it cannot be: Oracle commits
+   * each DDL statement implicitly, so no transaction can span them. A `BEGIN` around them would be
+   * silently discarded at the first `CREATE TABLE`.
    *
    * What holds instead: every statement in this engine's migrations is idempotent, so an
    * interruption between the DDL and the version insert is repaired by re-running the step, and the
@@ -409,11 +402,6 @@ export class OracleDriver extends BaseDriver implements Driver {
   }
 
   /**
-   * Locate the existing jobs that dedup this batch, in one lookup per distinct queue and key kind
-   * rather than two per job. No unique index enforces either key — dedup lives in code so every
-   * engine behaves identically and a duplicate returns the existing job instead of raising.
-   */
-  /**
    * Serialize the dedup-lookup-then-insert pair against another producer's, per queue.
    *
    * Only called when a batch actually carries an idempotency or singleton key. Without it the pair is
@@ -436,13 +424,23 @@ export class OracleDriver extends BaseDriver implements Driver {
       ),
     ].sort(); // a stable order, so two batches over the same queues cannot deadlock each other
     if (!names.length) return;
-    await run(
-      `SELECT ${QueueColumn.NAME} FROM ${this.t(TableName.QUEUE)} ` +
-        `WHERE ${QueueColumn.NAME} IN (${this.phList(names.length)}) FOR UPDATE`,
-      names,
-    );
+    // Chunked like every other key list; a batch rarely spans more than a handful of queues, so this
+    // is one statement in practice, and the sorted order holds across chunks too.
+    await this.overIdChunks(names, async (chunk) => {
+      const res = await run(
+        `SELECT ${QueueColumn.NAME} FROM ${this.t(TableName.QUEUE)} ` +
+          `WHERE ${QueueColumn.NAME} IN (${this.phList(chunk.length)}) FOR UPDATE`,
+        chunk,
+      );
+      return res.rows;
+    });
   }
 
+  /**
+   * Locate the existing jobs that dedup this batch, in one lookup per distinct queue and key kind
+   * rather than two per job. No unique index enforces either key — dedup lives in code so every
+   * engine behaves identically and a duplicate returns the existing job instead of raising.
+   */
   private async findDeduplicated(
     jobs: NewJobRecord[],
     run: (sql: string, params: readonly unknown[]) => Promise<RawResult>,
@@ -463,12 +461,17 @@ export class OracleDriver extends BaseDriver implements Driver {
         ...new Set(queueJobs.flatMap((j) => (j.idempotencyKey ? [j.idempotencyKey] : []))),
       ];
       if (idemKeys.length) {
-        const res = await run(
-          `SELECT ${cols}, ${JobColumn.IDEMPOTENCY_KEY} FROM ${this.t(TableName.JOB)} ` +
-            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} IN (${this.phList(idemKeys.length, 1)})`,
-          [queueName, ...idemKeys],
-        );
-        const found = new Map(res.rows.map((r) => [String(r[JobColumn.IDEMPOTENCY_KEY]), r]));
+        // Chunked: `addJobs` is not id-capped, so a large keyed batch can carry more keys than the
+        // engine takes in one `IN (...)` (1000 on Oracle). Every chunk runs inside this transaction.
+        const rows = await this.overIdChunks(idemKeys, async (chunk) => {
+          const res = await run(
+            `SELECT ${cols}, ${JobColumn.IDEMPOTENCY_KEY} FROM ${this.t(TableName.JOB)} ` +
+              `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} IN (${this.phList(chunk.length, 1)})`,
+            [queueName, ...chunk],
+          );
+          return res.rows;
+        });
+        const found = new Map(rows.map((r) => [String(r[JobColumn.IDEMPOTENCY_KEY]), r]));
         for (const job of queueJobs) {
           if (job.idempotencyKey == null) continue;
           const row = found.get(job.idempotencyKey);
@@ -482,13 +485,16 @@ export class OracleDriver extends BaseDriver implements Driver {
         ),
       ];
       if (singletonKeys.length) {
-        const res = await run(
-          `SELECT ${cols}, ${JobColumn.SINGLETON_KEY} FROM ${this.t(TableName.JOB)} ` +
-            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} IN (${this.phList(singletonKeys.length, 1)}) ` +
-            `AND ${JobColumn.STATUS} IN (${this.phList(ACTIVE_STATUSES.length, 1 + singletonKeys.length)})`,
-          [queueName, ...singletonKeys, ...ACTIVE_STATUSES],
-        );
-        const found = new Map(res.rows.map((r) => [String(r[JobColumn.SINGLETON_KEY]), r]));
+        const rows = await this.overIdChunks(singletonKeys, async (chunk) => {
+          const res = await run(
+            `SELECT ${cols}, ${JobColumn.SINGLETON_KEY} FROM ${this.t(TableName.JOB)} ` +
+              `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} IN (${this.phList(chunk.length, 1)}) ` +
+              `AND ${JobColumn.STATUS} IN (${this.phList(ACTIVE_STATUSES.length, 1 + chunk.length)})`,
+            [queueName, ...chunk, ...ACTIVE_STATUSES],
+          );
+          return res.rows;
+        });
+        const found = new Map(rows.map((r) => [String(r[JobColumn.SINGLETON_KEY]), r]));
         for (const job of queueJobs) {
           if (out.has(job) || job.singletonKey == null) continue;
           const row = found.get(job.singletonKey);

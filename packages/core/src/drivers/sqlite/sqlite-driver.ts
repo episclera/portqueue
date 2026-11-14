@@ -383,12 +383,17 @@ export class SqliteDriver extends BaseDriver implements Driver {
         ...new Set(queueJobs.flatMap((j) => (j.idempotencyKey ? [j.idempotencyKey] : []))),
       ];
       if (idemKeys.length) {
-        const res = await run(
-          `SELECT ${cols}, ${JobColumn.IDEMPOTENCY_KEY} FROM ${this.t(TableName.JOB)} ` +
-            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} IN (${this.phList(idemKeys.length, 1)})`,
-          [queueName, ...idemKeys],
-        );
-        const found = new Map(res.rows.map((r) => [String(r[JobColumn.IDEMPOTENCY_KEY]), r]));
+        // Chunked: `addJobs` is not id-capped, so a large keyed batch can carry more keys than the
+        // engine takes in one `IN (...)` (1000 on Oracle). Every chunk runs inside this transaction.
+        const rows = await this.overIdChunks(idemKeys, async (chunk) => {
+          const res = await run(
+            `SELECT ${cols}, ${JobColumn.IDEMPOTENCY_KEY} FROM ${this.t(TableName.JOB)} ` +
+              `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.IDEMPOTENCY_KEY} IN (${this.phList(chunk.length, 1)})`,
+            [queueName, ...chunk],
+          );
+          return res.rows;
+        });
+        const found = new Map(rows.map((r) => [String(r[JobColumn.IDEMPOTENCY_KEY]), r]));
         for (const job of queueJobs) {
           if (job.idempotencyKey == null) continue;
           const row = found.get(job.idempotencyKey);
@@ -402,13 +407,16 @@ export class SqliteDriver extends BaseDriver implements Driver {
         ),
       ];
       if (singletonKeys.length) {
-        const res = await run(
-          `SELECT ${cols}, ${JobColumn.SINGLETON_KEY} FROM ${this.t(TableName.JOB)} ` +
-            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} IN (${this.phList(singletonKeys.length, 1)}) ` +
-            `AND ${JobColumn.STATUS} IN (${this.phList(ACTIVE_STATUSES.length, 1 + singletonKeys.length)})`,
-          [queueName, ...singletonKeys, ...ACTIVE_STATUSES],
-        );
-        const found = new Map(res.rows.map((r) => [String(r[JobColumn.SINGLETON_KEY]), r]));
+        const rows = await this.overIdChunks(singletonKeys, async (chunk) => {
+          const res = await run(
+            `SELECT ${cols}, ${JobColumn.SINGLETON_KEY} FROM ${this.t(TableName.JOB)} ` +
+              `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(0)} AND ${JobColumn.SINGLETON_KEY} IN (${this.phList(chunk.length, 1)}) ` +
+              `AND ${JobColumn.STATUS} IN (${this.phList(ACTIVE_STATUSES.length, 1 + chunk.length)})`,
+            [queueName, ...chunk, ...ACTIVE_STATUSES],
+          );
+          return res.rows;
+        });
+        const found = new Map(rows.map((r) => [String(r[JobColumn.SINGLETON_KEY]), r]));
         for (const job of queueJobs) {
           if (out.has(job) || job.singletonKey == null) continue;
           const row = found.get(job.singletonKey);
