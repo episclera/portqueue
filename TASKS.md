@@ -35,16 +35,6 @@ re-claim, `failJob`/`retryJob` likewise, and `extendLock` false once the claim i
 CANCEL batch counts signalled jobs in `signalled` rather than `affected`, emits **no** `JOB_CANCELLED`
 for them, and the toast says "… 2 running jobs were asked to stop."
 
-### 4. Batch id methods bypassed `chunkForBind`, so a large batch exceeded the bind-parameter limit
-
-**Fixed, with a cap as well as chunking.** `MAX_BATCH_IDS = 1000` — Oracle's `IN`-list ceiling, taken
-as everyone's — is enforced by `assertBatchIds` on every public id-taking method, so a batch cannot
-work on PostgreSQL and raise ORA-01795 on Oracle. Underneath, `BaseDriver.chunkIds`/`overIdChunks` split
-any id list by `maxInListItems` *and* the bind budget; `removeJobs`, `cancelJobs`, `requeueJobs`,
-`deleteSchedules` and the grouped counts all go through it in all four drivers. The dashboard's tables
-stop a selection past the cap with a tooltip. Every plural method issues plural SQL — the delegation
-runs singular → plural, never the other way. Conformance covers a batch at the cap and past it.
-
 ### 5. `getQueue`/`getQueues` counts could disagree with the page on a large queue list
 
 **Fixed.** `search` and `processingPaused` are on the public `GetQueuesQuery` (and `search` /
@@ -55,42 +45,6 @@ second copy of the same driver calls; it only tightens the page ceiling.
 ---
 
 ## P2 — defects and unkept guarantees
-
-### 6. `applyMigration` is **not** atomic on MySQL or Oracle
-
-**Documented as the engine constraint it is, and made detectable.** DDL commits implicitly on both, so
-no transaction can span the statements and the version insert. The drivers run the DDL first (a
-version recorded for statements that never ran would be worse), the `MigrationStep` contract now
-requires idempotent statements, and the runner **reads the version back before attempting the next
-step** — so a step that ran without being recorded is an error rather than something carried forward.
-Stated in `Driver.applyMigration`, both driver classes, and the driver-author docs.
-
-### 7. Migration lock was PostgreSQL-only, so a concurrent first boot raced on every other engine
-
-**Fixed for MySQL; documented for the rest.** MySQL has a real named lock, so `MysqlDriver` implements
-`tryAdvisoryLock`/`releaseAdvisoryLock` with `GET_LOCK` on a held connection and declares
-`ADVISORY_LOCK`. SQLite and PGLite serialize writers by construction. Oracle has no portable
-equivalent, so the runner proceeds without one (safe for idempotent DDL), logs that it did, and the
-docs recommend `portqueue migrate` before starting a multi-instance Oracle deployment.
-
-Found on the way: PostgreSQL' advisory lock was taken and released on *pooled* connections, so the
-release landed on whichever connection came out next. Both drivers now hold the connection for the
-lock's lifetime and drop it on `disconnect`.
-
-### 8. `requeueJobs` left `retried_at`/`stalled_at` set
-
-**Fixed** in all four drivers, along with `lock_token`, plus a conformance case asserting a requeued
-job carries no marker of its previous life.
-
-### 9. `insertJobs` dedup was a read-then-write with no uniqueness backstop
-
-**Fixed by locking, not by a constraint.** A batch carrying an `idempotencyKey` or `singletonKey`
-takes a row lock on the queue row before the lookup — the lock every other producer on that queue must
-also take — so two concurrent adds of one key can no longer both insert. SQLite needs none
-(`BEGIN IMMEDIATE` holds the database-wide write lock) and says so at the call site. Still no unique
-index: singleton dedup is scoped to the statuses holding the slot, which no portable constraint
-expresses, and a dedup must return the existing job rather than raise. Two conformance cases run
-concurrent identical adds.
 
 ### 10. `pauseQueue`'s dead `if (row)` branch
 
@@ -141,39 +95,6 @@ The **adapter tests** are the ones that earned their keep: driven through real E
 Fastify (`express`, `koa`, `fastify` are now dev dependencies), they found two genuine bugs — the
 Fastify plugin was encapsulated, so every dashboard URL fell through to Fastify's 404, and its hook
 never signalled completion, so a request that reached it hung.
-
-### 22. The conformance kit did not cover MySQL or Oracle in CI, and several methods had no case
-
-**Both addressed.** `src/conformance/manual.test.ts` runs the kit against a live MySQL or Oracle from
-environment variables and skips an engine that has none; `npm run test:mysql` / `npm run test:oracle`
-pass the dev-compose credentials. `packages/core/DRIVER-VERIFICATION.md` records when each was last
-run — **both are pending**, and this changeset touched both drivers materially. Missing cases added:
-`setScheduleEnabled`, `countJobsByStatusPerInstance`, `getInstance`/`deleteInstance`, the bind-limit
-behaviour, and `extendLock` returning false for a lapsed claim.
-
-### 23. `getSchemaVersion` read `MAX(version)`, so a partial set read as complete
-
-**Fixed by making the maximum truthful**: versions apply in ascending order and each is confirmed
-recorded before the next is attempted, so the applied set is always a contiguous prefix.
-
-### 24. `advisoryKey` truncated a SHA-1 to 48 bits
-
-**Documented as the constraint it is.** 48 bits is the widest that survives a round trip through a JS
-`number`, which is what the parameter is bound as; the doc names the keys in use (one) and points at
-the collision arithmetic for a caller taking more.
-
-### 25. `likePattern` lower-cased in JS but the column was lower-cased in SQL
-
-**Resolved.** PostgreSQL/PGLite use `ILIKE`, dropping a per-row `LOWER()` call. No index was added:
-a leading-wildcard `LIKE` is unindexable on every engine here — a functional `LOWER(name)` index would
-not serve it either — so the honest answer is the `LIMIT`, and `likePattern` now says so.
-
-### 26. Retention's `LIKE` over `retention_statuses` could not use an index
-
-**Fixed with the bitmask the finding suggested.** `retention_statuses` is an integer, tested with `&`
-(`BITAND` on Oracle): one integer comparison per candidate row instead of four `OR`ed leading-wildcard
-`LIKE`s, in a fraction of the bytes. `FINISHED_STATUSES` order is now part of the stored format, and
-`retention-statuses.ts` says a status may be appended but never reordered.
 
 ### 27. `QueueRegistry.refreshStale` issued one query per stale queue
 
