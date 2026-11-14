@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.1.0 (2026-11-14)
+
+### Features
+
+* **core:** add plural twins for job, schedule, queue and instance admin ([3389556](https://github.com/episclera/portqueue/commit/3389556088a94bdfc6dd9b2ee46f70d25791dd6a))
+
+### Bug Fixes
+
+* **dashboard:** deliver the instance removal instant instead of copying core's window ([51ecde5](https://github.com/episclera/portqueue/commit/51ecde5b22cb7718c360de236dcc3a1368d9c8a1))
+* **core:** refresh only the declared queues, filtered in SQL ([a0f775f](https://github.com/episclera/portqueue/commit/a0f775f705bc44569401944166ce841c9ac88c8d))
+* **core:** drain workers concurrently and stop inlining defaults ([74ffd58](https://github.com/episclera/portqueue/commit/74ffd58e35ac35fa6e13293b403b9ca198a507d4))
+* **core:** chunk keyed-batch dedup lookups and scope the migration lock ([4b71334](https://github.com/episclera/portqueue/commit/4b7133470936341e05a52593d1ebc4fdb527a333))
+* **dashboard:** stop mutations hanging behind a host body parser ([4497687](https://github.com/episclera/portqueue/commit/4497687fef5058c9eb61de9294d14065145be752))
+* **cli:** close the client exactly once and harden watch and paging flags ([d554166](https://github.com/episclera/portqueue/commit/d554166c3fa8c92af9082ba3d89bfafd11c1b750))
+
+### Documentation
+
+* describe the schema-scoped migration lock and the lock takeover ([4a7acab](https://github.com/episclera/portqueue/commit/4a7acab074e1b802258f155db04022589eeab634))
+* list the new batch driver methods in the custom-driver contract ([3875278](https://github.com/episclera/portqueue/commit/3875278d2dcab0b870b408c313273c2709944d24))
+* document the plural admin methods beside their singulars ([220c239](https://github.com/episclera/portqueue/commit/220c239109ee461df59085cf2ddbdb35185901a3))
+* **claude:** require link checks and singular/plural pairs ([44d661a](https://github.com/episclera/portqueue/commit/44d661a480c353d26ad56c082166a5898148240e))
+* fix the API reference links that 404'd ([ea01038](https://github.com/episclera/portqueue/commit/ea01038dc23a63f615775a6013353d1f30961dcf))
+
+### Miscellaneous Chores
+
+* remove TASKS.md now every audit finding is re-verified ([758cf6d](https://github.com/episclera/portqueue/commit/758cf6d0c8cfc6e96cf046a7682357ba55aef009))
+* drop the re-verified driver tasks from TASKS.md ([b27f4ee](https://github.com/episclera/portqueue/commit/b27f4eefa7b7c273ef9b12ad340acdea40fab025))
+* drop the re-verified dashboard tasks from TASKS.md ([d60bb80](https://github.com/episclera/portqueue/commit/d60bb80cc37952082cba4bdc4952010dd50ecb92))
+* drop the re-verified CLI tasks from TASKS.md ([d6208a9](https://github.com/episclera/portqueue/commit/d6208a9739adcf4a4dd1ab1fb29f0ec4cdaec396))
+* drop the re-verified docs task from TASKS.md ([6435e6c](https://github.com/episclera/portqueue/commit/6435e6caffb47cfadec30ac986f1aabe509ec300))
+
 ## 1.0.3 (2026-10-23)
 
 ### Build System
