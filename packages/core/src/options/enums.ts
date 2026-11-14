@@ -39,6 +39,29 @@ export enum CancelOutcome {
   NOT_CANCELLABLE = 'NOT_CANCELLABLE',
 }
 
+/**
+ * What a plural method (`cancelJobs`, `pauseQueues`, `removeInstances`, …) did with **one** of the
+ * ids or names it was given. A batch skips what it cannot act on rather than failing, so every item
+ * reports its own outcome and one stale id never hides what happened to the rest.
+ */
+export enum BatchItemOutcome {
+  /** The action took effect on this item. */
+  APPLIED = 'APPLIED',
+  /**
+   * `cancelJobs` only: the job is running in **this** process, so its handler's `AbortSignal` was
+   * fired. Same meaning as {@link CancelOutcome.SIGNALLED} — nothing has been cancelled yet.
+   */
+  SIGNALLED = 'SIGNALLED',
+  /**
+   * The item exists but the action does not apply to it right now: a running job for
+   * `retryJobs`, an already-settled (or elsewhere-running) job for `cancelJobs`, an instance seen
+   * too recently for `removeInstances`.
+   */
+  REFUSED = 'REFUSED',
+  /** No row carries this id or name. */
+  NOT_FOUND = 'NOT_FOUND',
+}
+
 /** Auto-migration behavior on init. */
 export enum MigrationMode {
   AUTO = 'AUTO',

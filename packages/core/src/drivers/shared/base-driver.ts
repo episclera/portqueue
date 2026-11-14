@@ -473,6 +473,11 @@ export abstract class BaseDriver {
     };
   }
 
+  /** An instance's key, as the instance batch mutations return it. */
+  protected mapInstanceKey(row: Row): string {
+    return String(row[InstanceColumn.INSTANCE_KEY]);
+  }
+
   // --- Insert value lists ---
 
   /** The ordered values for one job row, matching {@link JOB_COLUMNS} exactly. */

@@ -20,7 +20,8 @@ import type { NewJobRecord } from '../jobs/job-record';
  * - **Guards core relies on**: `requeueJob`/`removeJob`/`cancelJob` refusing an ACTIVE row, a requeue
  *   clearing every marker of the job's previous life, bounded `expireDueJobs`/`reclaimStalledJobs`,
  *   `deleteFinishedJobs` with per-row retention statuses, `advanceSchedule`'s guarded claim,
- *   `setScheduleEnabled`, the instance reads and their grouped counts.
+ *   `setScheduleEnabled`, the instance reads and their grouped counts, and the by-key batches
+ *   (`findJobRefs`, `setQueuesPaused`, `setInstancesPaused`, `deleteInstances`' staleness guard).
  * - **Reads**: the `search` filter in SQL, and agreement between every list page and its `count*`.
  * - **Limits**: a batch at the id cap works, and one past it is chunked rather than sent whole.
  *
@@ -430,6 +431,36 @@ export function runConformance(options: ConformanceOptions): void {
       expect(await driver.deleteInstance({ instanceKey: 'inst-gone' })).toBe(false);
     });
 
+    it('reads, pauses and removes many instances by key, one statement each', async () => {
+      await driver.upsertInstance({ instanceKey: 'inst-old', now });
+      await driver.upsertInstance({ instanceKey: 'inst-new', now: now + 10_000 });
+
+      const rows = await driver.getInstancesByKeys({ instanceKeys: ['inst-old', 'inst-new', 'nope'] });
+      expect(rows.map((r) => r.instanceKey).sort()).toEqual(['inst-new', 'inst-old']);
+
+      // A key with no row is simply absent from what the pause reports.
+      const paused = await driver.setInstancesPaused({
+        instanceKeys: ['inst-old', 'inst-new', 'nope'],
+        processingPaused: true,
+        now: now + 1,
+      });
+      expect([...paused].sort()).toEqual(['inst-new', 'inst-old']);
+      expect((await driver.getInstance({ instanceKey: 'inst-new' }))?.processingPaused).toBe(true);
+      await driver.setInstancesPaused({ instanceKeys: ['inst-new'], processingPaused: false, now });
+      expect((await driver.getInstance({ instanceKey: 'inst-new' }))?.processingPaused).toBe(false);
+
+      // `seenBefore` guards the delete itself: an instance seen at or after it survives.
+      const removed = await driver.deleteInstances({
+        instanceKeys: ['inst-old', 'inst-new', 'nope'],
+        seenBefore: now + 5_000,
+      });
+      expect(removed).toEqual(['inst-old']);
+      expect(await driver.getInstance({ instanceKey: 'inst-old' })).toBe(null);
+      expect(await driver.getInstance({ instanceKey: 'inst-new' })).not.toBe(null);
+      // Without the guard every named row goes.
+      expect(await driver.deleteInstances({ instanceKeys: ['inst-new'] })).toEqual(['inst-new']);
+    });
+
     it('counts jobs by status per instance, in one grouped query', async () => {
       // What the instances list renders. A key with no jobs must come back zeroed rather than absent,
       // so the page does not have to distinguish "none" from "unknown".
@@ -663,6 +694,15 @@ export function runConformance(options: ConformanceOptions): void {
 
       const removed = await driver.removeJobs({ jobIds: [settled.id, active.id, 'missing'] });
       expect(removed.map((r) => r.jobId)).toEqual([settled.id]);
+    });
+
+    it('finds which job ids name a row, with each row\'s queue', async () => {
+      // The refusal path of a batch reads this to tell "no such job" from "refused".
+      const job = await driver.insertJob({ job: newJob(queueName, now) });
+      expect(await driver.findJobRefs({ jobIds: [job.id, 'missing'] })).toEqual([
+        { jobId: job.id, queueName },
+      ]);
+      expect(await driver.findJobRefs({ jobIds: [] })).toEqual([]);
     });
 
     it('survives a batch at the id cap rather than overflowing a statement', async () => {
@@ -971,6 +1011,29 @@ export function runConformance(options: ConformanceOptions): void {
       expect((await driver.listQueues({ processingPaused: true })).map((q) => q.name)).toEqual([
         'alpha-billing',
       ]);
+    });
+
+    it('pauses many queues in one statement, returning only the rows it updated', async () => {
+      await driver.ensureQueue({ name: 'batch-a', now });
+      await driver.ensureQueue({ name: 'batch-b', now });
+      const rows = await driver.setQueuesPaused({
+        queueNames: ['batch-a', 'batch-b', 'batch-missing'],
+        processingPaused: true,
+        acceptingPaused: true,
+        now: now + 1,
+      });
+      expect(rows.map((r) => r.name).sort()).toEqual(['batch-a', 'batch-b']);
+      expect(rows.every((r) => r.processingPaused && r.acceptingPaused)).toBe(true);
+      // A flag left undefined is not written.
+      const resumed = await driver.setQueuesPaused({
+        queueNames: ['batch-a'],
+        processingPaused: false,
+        now: now + 2,
+      });
+      expect(resumed).toHaveLength(1);
+      expect(resumed[0]!.processingPaused).toBe(false);
+      expect(resumed[0]!.acceptingPaused).toBe(true);
+      expect(resumed[0]!.updatedAt).toBe(now + 2);
     });
 
     it('gets or creates a queue without ever rewriting an existing row', async () => {

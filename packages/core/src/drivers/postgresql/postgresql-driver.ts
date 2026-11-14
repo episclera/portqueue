@@ -871,6 +871,19 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
     return res.rows[0] ? this.mapJob(res.rows[0]) : null;
   }
 
+  async findJobRefs(options: { jobIds: string[]; tx?: TransactionHandle }): Promise<JobRef[]> {
+    if (!options.jobIds.length) return [];
+    return this.overIdChunks(options.jobIds, async (jobIds) => {
+      const res = await this.runMaybeTx(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(jobIds.length)})`,
+        jobIds,
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapJobRef(r));
+    });
+  }
+
   /**
    * WHERE clauses for a job filter, appending each value to `params`. Shared by `getJobs` and
    * `countJobs` so a page and its total can never disagree about what they select. `search` is
@@ -1205,28 +1218,44 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
     now: number;
     tx?: TransactionHandle;
   }): Promise<QueueRow | null> {
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (options.processingPaused !== undefined) {
-      sets.push(`${QueueColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
-      params.push(this.boolIn(options.processingPaused));
-    }
-    if (options.acceptingPaused !== undefined) {
-      sets.push(`${QueueColumn.ACCEPTING_PAUSED} = ${this.ph(params.length)}`);
-      params.push(this.boolIn(options.acceptingPaused));
-    }
-    sets.push(`${QueueColumn.UPDATED_AT} = ${this.ph(params.length)}`);
-    params.push(options.now);
-    const namePh = this.ph(params.length);
-    params.push(options.queueName);
-    // RETURNING the row means the caller refreshes its cached pause flags from this one statement
-    // rather than following it with a read.
-    const res = await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE ${QueueColumn.NAME} = ${namePh} RETURNING *`,
-      params,
-      options.tx,
-    );
-    return res.rows[0] ? this.mapQueue(res.rows[0]) : null;
+    const { queueName, ...rest } = options;
+    const [row] = await this.setQueuesPaused({ ...rest, queueNames: [queueName] });
+    return row ?? null;
+  }
+
+  async setQueuesPaused(options: {
+    queueNames: string[];
+    processingPaused?: boolean;
+    acceptingPaused?: boolean;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<QueueRow[]> {
+    if (!options.queueNames.length) return [];
+    // Chunked so one statement can never carry more names than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.queueNames, async (queueNames) => {
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      if (options.processingPaused !== undefined) {
+        sets.push(`${QueueColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
+        params.push(this.boolIn(options.processingPaused));
+      }
+      if (options.acceptingPaused !== undefined) {
+        sets.push(`${QueueColumn.ACCEPTING_PAUSED} = ${this.ph(params.length)}`);
+        params.push(this.boolIn(options.acceptingPaused));
+      }
+      sets.push(`${QueueColumn.UPDATED_AT} = ${this.ph(params.length)}`);
+      params.push(options.now);
+      const namesPh = this.phList(queueNames.length, params.length);
+      // RETURNING the rows means the caller refreshes its cached pause flags from this one
+      // statement rather than following it with a read.
+      const res = await this.runMaybeTx(
+        `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE ${QueueColumn.NAME} IN (${namesPh}) RETURNING *`,
+        [...params, ...queueNames],
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapQueue(r));
+    });
   }
 
   async ensureQueue(options: {
@@ -1388,27 +1417,87 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
     return res.rows[0] ? this.mapInstance(res.rows[0]) : null;
   }
 
+  async getInstancesByKeys(options: {
+    instanceKeys: string[];
+    tx?: TransactionHandle;
+  }): Promise<InstanceRow[]> {
+    if (!options.instanceKeys.length) return [];
+    return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
+      const res = await this.runMaybeTx(
+        `SELECT * FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} IN (${this.phList(instanceKeys.length)})`,
+        instanceKeys,
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapInstance(r));
+    });
+  }
+
   async setInstancePaused(options: {
     instanceKey: string;
     processingPaused: boolean;
     now: number;
   }): Promise<void> {
-    await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ` +
-        `${InstanceColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(2)}`,
-      [this.boolIn(options.processingPaused), options.now, options.instanceKey],
-    );
+    await this.setInstancesPaused({
+      instanceKeys: [options.instanceKey],
+      processingPaused: options.processingPaused,
+      now: options.now,
+    });
+  }
+
+  async setInstancesPaused(options: {
+    instanceKeys: string[];
+    processingPaused: boolean;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]> {
+    if (!options.instanceKeys.length) return [];
+    return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
+      const sets =
+        `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
+      const params = [this.boolIn(options.processingPaused), options.now, ...instanceKeys];
+      const res = await this.runMaybeTx(
+        `UPDATE ${this.t(TableName.INSTANCE)} SET ${sets} ` +
+          `WHERE ${InstanceColumn.INSTANCE_KEY} IN (${this.phList(instanceKeys.length, 2)}) ` +
+          `RETURNING ${InstanceColumn.INSTANCE_KEY}`,
+        params,
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapInstanceKey(r));
+    });
   }
 
   async deleteInstance(options: { instanceKey: string; tx?: TransactionHandle }): Promise<boolean> {
-    // Only removes the instance (monitoring) row. Jobs record processed_on_instance_key as a plain
-    // string (no FK), so removing an instance never touches or orphans any job rows.
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
-      [options.instanceKey],
-      options.tx,
-    );
-    return res.rowCount > 0;
+    const removed = await this.deleteInstances({
+      instanceKeys: [options.instanceKey],
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return removed.length > 0;
+  }
+
+  async deleteInstances(options: {
+    instanceKeys: string[];
+    seenBefore?: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]> {
+    if (!options.instanceKeys.length) return [];
+    return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
+      // Only removes the instance (monitoring) row. Jobs record processed_on_instance_key as a plain
+      // string (no FK), so removing an instance never touches or orphans any job rows.
+      const params: unknown[] = [...instanceKeys];
+      let guard = '';
+      if (options.seenBefore !== undefined) {
+        guard = ` AND ${InstanceColumn.LAST_SEEN_AT} < ${this.ph(params.length)}`;
+        params.push(options.seenBefore);
+      }
+      const res = await this.runMaybeTx(
+        `DELETE FROM ${this.t(TableName.INSTANCE)} ` +
+          `WHERE ${InstanceColumn.INSTANCE_KEY} IN (${this.phList(instanceKeys.length)})${guard} ` +
+          `RETURNING ${InstanceColumn.INSTANCE_KEY}`,
+        params,
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapInstanceKey(r));
+    });
   }
 
   // --- Retention ---

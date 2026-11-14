@@ -1,5 +1,5 @@
 import type { JobStatus } from '../jobs/job-state.enum';
-import type { DeduplicationReason } from '../options/enums';
+import type { BatchItemOutcome, DeduplicationReason } from '../options/enums';
 import type { PageQuery } from '../options/common';
 
 export type { Page, PageQuery } from '../options/common';
@@ -27,6 +27,46 @@ export interface AddJobResult {
   deduplicationReason?: DeduplicationReason;
   /** When a one-off job becomes due. */
   startAfter?: Date;
+}
+
+/**
+ * One item of a plural method's result. A batch returns one of these **per id or name it was
+ * given, in the order given**, so a caller can line the result up with its input.
+ */
+export interface BatchItemResult {
+  outcome: BatchItemOutcome;
+}
+
+/** One job's outcome in `cancelJobs`. */
+export interface JobBatchItem extends BatchItemResult {
+  jobId: string;
+  /** The queue the row is on — present whenever the id named a row. */
+  queue?: string;
+}
+
+/** One job's outcome in `retryJobs`; an `APPLIED` item also carries what `retryJob` reports. */
+export interface RetriedJobItem extends JobBatchItem {
+  /** The re-armed job's status (`APPLIED` only). */
+  status?: JobStatus;
+  /** When the re-armed job becomes due (`APPLIED` only). */
+  startAfter?: Date;
+}
+
+/** One schedule's outcome in `removeSchedules`. */
+export interface ScheduleBatchItem extends BatchItemResult {
+  scheduleId: string;
+  /** The queue the schedule produced onto (`APPLIED` only). */
+  queue?: string;
+}
+
+/** One queue's outcome in `pauseQueues` / `resumeQueues`. */
+export interface QueueBatchItem extends BatchItemResult {
+  queue: string;
+}
+
+/** One instance's outcome in `pauseInstances` / `resumeInstances` / `removeInstances`. */
+export interface InstanceBatchItem extends BatchItemResult {
+  instanceKey: string;
 }
 
 /** A read-side snapshot of a job. */

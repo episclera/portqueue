@@ -1,4 +1,4 @@
-import { CancelOutcome, FailureDetail, PauseMode } from './options/enums';
+import { BatchItemOutcome, CancelOutcome, FailureDetail, PauseMode } from './options/enums';
 import { PortQueueEvent } from './events/event-name.enum';
 import { DriverCapability } from './drivers/driver-capabilities';
 import { ConsoleLogger } from './logging/console-logger';
@@ -48,11 +48,15 @@ import type { Logger } from './logging/logger.interface';
 import type { Runtime } from './client/runtime';
 import type { HookRegistration } from './events/hooks';
 import type { TransactionHandle } from './tx/transaction-handle';
-import type { QueueRow } from './jobs/job-record';
 import type { EventListener, Unsubscribe } from './events/event-name.enum';
 import type {
   AddJobResult,
   GetInstancesQuery,
+  InstanceBatchItem,
+  JobBatchItem,
+  QueueBatchItem,
+  RetriedJobItem,
+  ScheduleBatchItem,
   GetJobsQuery,
   GetQueuesQuery,
   GetSchedulesQuery,
@@ -386,25 +390,62 @@ export class PortQueue<TQueues extends string = string> {
    */
   async retryJob(options: { jobId: string; tx?: TransactionHandle }): Promise<AddJobResult | null> {
     this.requireStarted('retryJob');
-    const requeued = await this.runtime.driver.requeueJob({
-      jobId: options.jobId,
-      now: this.runtime.clock.now(),
+    const [item] = await this.retryJobs({
+      jobIds: [options.jobId],
       ...(options.tx ? { tx: options.tx } : {}),
     });
-    if (!requeued) return null;
-    this.runtime.wakeup.signal(requeued.queueName);
-    this.events.emit(PortQueueEvent.JOB_ADDED, {
-      jobId: requeued.jobId,
-      queue: requeued.queueName,
-      deduplicated: false,
-    });
+    if (item?.outcome !== BatchItemOutcome.APPLIED) return null;
     return {
-      jobId: requeued.jobId,
-      queue: requeued.queueName,
-      status: requeued.status,
-      startAfter: new Date(requeued.startAfter),
+      jobId: item.jobId,
+      queue: item.queue!,
+      status: item.status!,
+      startAfter: item.startAfter!,
       deduplicated: false,
     };
+  }
+
+  /**
+   * Requeue many settled jobs — from any queue — in **one** statement, with the same `ACTIVE`
+   * refusal as {@link retryJob}. Returns one item per id, in the order given: `APPLIED` (with the
+   * re-armed `status` and `startAfter`), `REFUSED` for a running job, `NOT_FOUND` for an unknown id.
+   */
+  async retryJobs(options: {
+    jobIds: string[];
+    tx?: TransactionHandle;
+  }): Promise<RetriedJobItem[]> {
+    this.requireStarted('retryJobs');
+    assertBatchIds(options.jobIds, 'retryJobs({ jobIds })');
+    if (!options.jobIds.length) return [];
+    const tx = options.tx ? { tx: options.tx } : {};
+    const requeued = await this.runtime.driver.requeueJobs({
+      jobIds: options.jobIds,
+      now: this.runtime.clock.now(),
+      ...tx,
+    });
+    // One wakeup per distinct queue, not per job.
+    for (const queue of new Set(requeued.map((r) => r.queueName))) this.runtime.wakeup.signal(queue);
+    for (const ref of requeued) {
+      this.events.emit(PortQueueEvent.JOB_ADDED, {
+        jobId: ref.jobId,
+        queue: ref.queueName,
+        deduplicated: false,
+      });
+    }
+    const applied = new Map(requeued.map((r) => [r.jobId, r]));
+    const existing = await this.existingJobQueues(options.jobIds, applied, options.tx);
+    return options.jobIds.map((jobId): RetriedJobItem => {
+      const ref = applied.get(jobId);
+      if (ref) {
+        return {
+          jobId,
+          queue: ref.queueName,
+          outcome: BatchItemOutcome.APPLIED,
+          status: ref.status,
+          startAfter: new Date(ref.startAfter),
+        };
+      }
+      return this.unappliedJob(jobId, existing);
+    });
   }
 
   /**
@@ -420,29 +461,82 @@ export class PortQueue<TQueues extends string = string> {
    */
   async cancelJob(options: { jobId: string; tx?: TransactionHandle }): Promise<CancelOutcome> {
     this.requireStarted('cancelJob');
-    // A locally-running handler owns its row's outcome — fire its signal and let it settle,
-    // rather than racing a DB write against its completion.
-    if (this.runtime.cancelRunning?.(options.jobId)) return CancelOutcome.SIGNALLED;
-    const cancelled = await this.runtime.driver.cancelJob({
-      jobId: options.jobId,
-      now: this.runtime.clock.now(),
+    const [item] = await this.cancelJobs({
+      jobIds: [options.jobId],
       ...(options.tx ? { tx: options.tx } : {}),
     });
-    if (cancelled) {
-      this.events.emit(PortQueueEvent.JOB_CANCELLED, {
-        jobId: cancelled.jobId,
-        queue: cancelled.queueName,
-      });
-      return CancelOutcome.CANCELLED;
+    switch (item?.outcome) {
+      case BatchItemOutcome.APPLIED:
+        return CancelOutcome.CANCELLED;
+      case BatchItemOutcome.SIGNALLED:
+        return CancelOutcome.SIGNALLED;
+      case BatchItemOutcome.REFUSED:
+        return CancelOutcome.NOT_CANCELLABLE;
+      default:
+        throw new JobNotFoundError(options.jobId);
     }
-    // Nothing was cancellable, and the two reasons read very differently to an operator. One read
-    // separates them — on the refusal path only, never on a cancel that worked.
-    const row = await this.runtime.driver.getJob({
-      jobId: options.jobId,
-      ...(options.tx ? { tx: options.tx } : {}),
+  }
+
+  /**
+   * Cancel many jobs — from any queue — in **one** statement, with the same rules as
+   * {@link cancelJob}. Returns one item per id, in the order given: `APPLIED` (now `CANCELLED`),
+   * `SIGNALLED` (running here; its handler was asked to stop), `REFUSED` (already settled, or
+   * running in another process) or `NOT_FOUND`. A batch never throws for an unknown id.
+   */
+  async cancelJobs(options: { jobIds: string[]; tx?: TransactionHandle }): Promise<JobBatchItem[]> {
+    this.requireStarted('cancelJobs');
+    assertBatchIds(options.jobIds, 'cancelJobs({ jobIds })');
+    if (!options.jobIds.length) return [];
+    // A locally-running handler owns its row's outcome — it is signalled rather than raced with a
+    // DB write. The signals fire only after the write lands, because no statement can undo one.
+    const running = new Set(options.jobIds.filter((id) => this.runtime.isJobRunningHere?.(id)));
+    const remaining = options.jobIds.filter((id) => !running.has(id));
+    const cancelled = remaining.length
+      ? await this.runtime.driver.cancelJobs({
+          jobIds: remaining,
+          now: this.runtime.clock.now(),
+          ...(options.tx ? { tx: options.tx } : {}),
+        })
+      : [];
+    for (const jobId of running) this.runtime.cancelRunning?.(jobId);
+    // No `JOB_CANCELLED` for a signalled job: a handler that ignores `job.signal` completes normally.
+    for (const ref of cancelled) {
+      this.events.emit(PortQueueEvent.JOB_CANCELLED, { jobId: ref.jobId, queue: ref.queueName });
+    }
+    const applied = new Map(cancelled.map((r) => [r.jobId, r]));
+    const existing = await this.existingJobQueues(remaining, applied, options.tx);
+    return options.jobIds.map((jobId): JobBatchItem => {
+      if (running.has(jobId)) return { jobId, outcome: BatchItemOutcome.SIGNALLED };
+      const ref = applied.get(jobId);
+      if (ref) return { jobId, queue: ref.queueName, outcome: BatchItemOutcome.APPLIED };
+      return this.unappliedJob(jobId, existing);
     });
-    if (!row) throw new JobNotFoundError(options.jobId);
-    return CancelOutcome.NOT_CANCELLABLE;
+  }
+
+  /**
+   * The queue of every id a batch did **not** act on that still names a row — read only on that
+   * refusal path, and in one statement, so a batch that did everything it was asked pays nothing.
+   */
+  private async existingJobQueues(
+    jobIds: string[],
+    applied: ReadonlyMap<string, unknown>,
+    tx: TransactionHandle | undefined,
+  ): Promise<Map<string, string>> {
+    const leftover = [...new Set(jobIds.filter((id) => !applied.has(id)))];
+    if (!leftover.length) return new Map();
+    const refs = await this.runtime.driver.findJobRefs({
+      jobIds: leftover,
+      ...(tx ? { tx } : {}),
+    });
+    return new Map(refs.map((r) => [r.jobId, r.queueName]));
+  }
+
+  /** A job the batch did not act on: refused when its row exists, otherwise not found. */
+  private unappliedJob(jobId: string, existing: ReadonlyMap<string, string>): JobBatchItem {
+    const queue = existing.get(jobId);
+    return queue !== undefined
+      ? { jobId, queue, outcome: BatchItemOutcome.REFUSED }
+      : { jobId, outcome: BatchItemOutcome.NOT_FOUND };
   }
 
   /**
@@ -508,16 +602,41 @@ export class PortQueue<TQueues extends string = string> {
   /** Remove a recurring schedule by id. Returns true when a schedule went away. */
   async removeSchedule(options: { scheduleId: string; tx?: TransactionHandle }): Promise<boolean> {
     this.requireStarted('removeSchedule');
-    const removed = await this.runtime.driver.deleteSchedule({
-      scheduleId: options.scheduleId,
+    const [item] = await this.removeSchedules({
+      scheduleIds: [options.scheduleId],
       ...(options.tx ? { tx: options.tx } : {}),
     });
-    if (!removed) return false;
-    this.events.emit(PortQueueEvent.SCHEDULE_REMOVED, {
-      scheduleId: removed.scheduleId,
-      queue: removed.queueName,
+    return item?.outcome === BatchItemOutcome.APPLIED;
+  }
+
+  /**
+   * Remove many recurring schedules in **one** statement. Returns one item per id, in the order
+   * given: `APPLIED` (with the schedule's `queue`) or `NOT_FOUND`.
+   */
+  async removeSchedules(options: {
+    scheduleIds: string[];
+    tx?: TransactionHandle;
+  }): Promise<ScheduleBatchItem[]> {
+    this.requireStarted('removeSchedules');
+    assertBatchIds(options.scheduleIds, 'removeSchedules({ scheduleIds })');
+    if (!options.scheduleIds.length) return [];
+    const removed = await this.runtime.driver.deleteSchedules({
+      scheduleIds: options.scheduleIds,
+      ...(options.tx ? { tx: options.tx } : {}),
     });
-    return true;
+    for (const ref of removed) {
+      this.events.emit(PortQueueEvent.SCHEDULE_REMOVED, {
+        scheduleId: ref.scheduleId,
+        queue: ref.queueName,
+      });
+    }
+    const applied = new Map(removed.map((r) => [r.scheduleId, r.queueName]));
+    return options.scheduleIds.map((scheduleId): ScheduleBatchItem => {
+      const queue = applied.get(scheduleId);
+      return queue !== undefined
+        ? { scheduleId, queue, outcome: BatchItemOutcome.APPLIED }
+        : { scheduleId, outcome: BatchItemOutcome.NOT_FOUND };
+    });
   }
 
   // --- Events & hooks ---
@@ -555,45 +674,81 @@ export class PortQueue<TQueues extends string = string> {
    */
   async pauseQueue(options: { queue: TQueues | string; mode?: PauseMode }): Promise<void> {
     this.requireStarted('pauseQueue');
+    const [item] = await this.pauseQueues({
+      queues: [options.queue],
+      ...(options.mode ? { mode: options.mode } : {}),
+    });
+    if (item?.outcome !== BatchItemOutcome.APPLIED) throw new QueueNotFoundError(options.queue);
+  }
+
+  /**
+   * Pause many queues in **one** statement, with the same `mode` and rules as {@link pauseQueue}.
+   * Returns one item per name, in the order given: `APPLIED`, or `NOT_FOUND` for a name nothing has
+   * ever used — reported, not thrown, so one stale name never blocks the rest.
+   */
+  async pauseQueues(options: {
+    queues: Array<TQueues | string>;
+    mode?: PauseMode;
+  }): Promise<QueueBatchItem[]> {
+    this.requireStarted('pauseQueues');
+    assertBatchIds(options.queues, 'pauseQueues({ queues })');
     const mode = options.mode ?? PauseMode.PROCESSING;
-    // `setPaused` throws when no row matched, so everything after it describes a write that
-    // happened: the cache is refreshed and the event is emitted only on success. The `if (row)` that
-    // used to guard the cache update was dead code reading as though null were tolerated.
-    const row = await this.setPaused(options.queue, true, mode === PauseMode.ALL);
-    this.runtime.registry.update(row);
-    this.events.emit(PortQueueEvent.QUEUE_PAUSED, { queue: options.queue, mode });
+    const applied = await this.setPaused(options.queues, true, mode === PauseMode.ALL);
+    for (const queue of applied) this.events.emit(PortQueueEvent.QUEUE_PAUSED, { queue, mode });
+    return this.queueItems(options.queues, applied);
   }
 
   /** Resume claiming (and accepting) on this queue. See {@link pauseQueue} for what it touches. */
   async resumeQueue(options: { queue: TQueues | string }): Promise<void> {
     this.requireStarted('resumeQueue');
-    const row = await this.setPaused(options.queue, false, false);
-    this.runtime.registry.update(row);
-    this.runtime.wakeup.signal(options.queue);
-    this.events.emit(PortQueueEvent.QUEUE_RESUMED, { queue: options.queue });
+    const [item] = await this.resumeQueues({ queues: [options.queue] });
+    if (item?.outcome !== BatchItemOutcome.APPLIED) throw new QueueNotFoundError(options.queue);
+  }
+
+  /** Resume many queues in **one** statement. Same per-name result as {@link pauseQueues}. */
+  async resumeQueues(options: { queues: Array<TQueues | string> }): Promise<QueueBatchItem[]> {
+    this.requireStarted('resumeQueues');
+    assertBatchIds(options.queues, 'resumeQueues({ queues })');
+    const applied = await this.setPaused(options.queues, false, false);
+    for (const queue of applied) {
+      this.runtime.wakeup.signal(queue);
+      this.events.emit(PortQueueEvent.QUEUE_RESUMED, { queue });
+    }
+    return this.queueItems(options.queues, applied);
   }
 
   /**
-   * Write both pause flags and return the updated row, so the cached flags this process's workers
-   * read are refreshed without a second query. Throws {@link QueueNotFoundError} when the name
-   * matched nothing — there is no "paused nothing" outcome to report.
+   * Write both pause flags on every named queue in one statement and return the names it updated.
+   * The returned rows refresh the cached flags this process's workers read, so no second query is
+   * needed.
    */
   private async setPaused(
-    queue: string,
+    queues: string[],
     processingPaused: boolean,
     acceptingPaused: boolean,
-  ): Promise<QueueRow> {
+  ): Promise<Set<string>> {
+    if (!queues.length) return new Set();
     // A queue declared here may not have written its row yet (it is created on first use), so
     // ensure it before pausing. `ensure` only creates the row; it never writes queue options.
-    if (this.runtime.registry.isRegistered(queue)) await this.runtime.registry.ensure(queue);
-    const row = await this.runtime.driver.setQueuePaused({
-      queueName: queue,
+    for (const queue of new Set(queues)) {
+      if (this.runtime.registry.isRegistered(queue)) await this.runtime.registry.ensure(queue);
+    }
+    const rows = await this.runtime.driver.setQueuesPaused({
+      queueNames: queues,
       processingPaused,
       acceptingPaused,
       now: this.runtime.clock.now(),
     });
-    if (!row) throw new QueueNotFoundError(queue);
-    return row;
+    for (const row of rows) this.runtime.registry.update(row);
+    return new Set(rows.map((row) => row.name));
+  }
+
+  /** One item per requested name: `APPLIED` when its row was updated, `NOT_FOUND` otherwise. */
+  private queueItems(queues: string[], applied: ReadonlySet<string>): QueueBatchItem[] {
+    return queues.map((queue) => ({
+      queue,
+      outcome: applied.has(queue) ? BatchItemOutcome.APPLIED : BatchItemOutcome.NOT_FOUND,
+    }));
   }
 
   /**
@@ -628,31 +783,58 @@ export class PortQueue<TQueues extends string = string> {
   /** Stop the named instance from claiming jobs (persisted; the target picks it up on heartbeat). */
   async pauseInstance(options: { instanceKey: string }): Promise<void> {
     this.requireStarted('pauseInstance');
-    await this.runtime.driver.setInstancePaused({
-      instanceKey: options.instanceKey,
-      processingPaused: true,
-      now: this.runtime.clock.now(),
-    });
-    // If pausing ourselves, reflect it immediately rather than waiting for the next beat.
-    if (this.runtime.instances?.instanceKey === options.instanceKey) {
-      await this.runtime.instances.beat();
+    await this.pauseInstances({ instanceKeys: [options.instanceKey] });
+  }
+
+  /**
+   * Pause many instances in **one** statement. Returns one item per key, in the order given:
+   * `APPLIED`, or `NOT_FOUND` for a key no instance has registered under.
+   */
+  async pauseInstances(options: { instanceKeys: string[] }): Promise<InstanceBatchItem[]> {
+    this.requireStarted('pauseInstances');
+    assertBatchIds(options.instanceKeys, 'pauseInstances({ instanceKeys })');
+    const applied = await this.setInstancesPaused(options.instanceKeys, true);
+    for (const instanceKey of applied) {
+      this.events.emit(PortQueueEvent.INSTANCE_PAUSED, { instanceKey });
     }
-    this.events.emit(PortQueueEvent.INSTANCE_PAUSED, { instanceKey: options.instanceKey });
+    return this.instanceItems(options.instanceKeys, applied);
   }
 
   /** Resume the named instance's job claiming. */
   async resumeInstance(options: { instanceKey: string }): Promise<void> {
     this.requireStarted('resumeInstance');
-    await this.runtime.driver.setInstancePaused({
-      instanceKey: options.instanceKey,
-      processingPaused: false,
-      now: this.runtime.clock.now(),
-    });
-    if (this.runtime.instances?.instanceKey === options.instanceKey) {
-      await this.runtime.instances.beat();
+    await this.resumeInstances({ instanceKeys: [options.instanceKey] });
+  }
+
+  /** Resume many instances in **one** statement. Same per-key result as {@link pauseInstances}. */
+  async resumeInstances(options: { instanceKeys: string[] }): Promise<InstanceBatchItem[]> {
+    this.requireStarted('resumeInstances');
+    assertBatchIds(options.instanceKeys, 'resumeInstances({ instanceKeys })');
+    const applied = await this.setInstancesPaused(options.instanceKeys, false);
+    if (applied.size) this.runtime.wakeup.signalAll();
+    for (const instanceKey of applied) {
+      this.events.emit(PortQueueEvent.INSTANCE_RESUMED, { instanceKey });
     }
-    this.runtime.wakeup.signalAll();
-    this.events.emit(PortQueueEvent.INSTANCE_RESUMED, { instanceKey: options.instanceKey });
+    return this.instanceItems(options.instanceKeys, applied);
+  }
+
+  /** Write the pause flag on every named instance in one statement; returns the keys it updated. */
+  private async setInstancesPaused(
+    instanceKeys: string[],
+    processingPaused: boolean,
+  ): Promise<Set<string>> {
+    if (!instanceKeys.length) return new Set();
+    const applied = new Set(
+      await this.runtime.driver.setInstancesPaused({
+        instanceKeys,
+        processingPaused,
+        now: this.runtime.clock.now(),
+      }),
+    );
+    // If this process is among them, reflect it immediately rather than waiting for the next beat.
+    const own = this.runtime.instances?.instanceKey;
+    if (own !== undefined && applied.has(own)) await this.runtime.instances!.beat();
+    return applied;
   }
 
   /**
@@ -663,19 +845,58 @@ export class PortQueue<TQueues extends string = string> {
    */
   async removeInstance(options: { instanceKey: string }): Promise<boolean> {
     this.requireStarted('removeInstance');
-    const row = await this.runtime.driver.getInstance({ instanceKey: options.instanceKey });
-    if (!row) return false;
-    const now = this.runtime.clock.now();
+    const [item] = await this.removeInstances({ instanceKeys: [options.instanceKey] });
+    if (item?.outcome === BatchItemOutcome.REFUSED) {
+      throw new InstanceActiveError(options.instanceKey);
+    }
+    return item?.outcome === BatchItemOutcome.APPLIED;
+  }
+
+  /**
+   * Remove many long-inactive instances' monitoring rows in **one** delete, with the same 30-minute
+   * rule as {@link removeInstance}. Returns one item per key, in the order given: `APPLIED`,
+   * `REFUSED` for an instance seen too recently (reported, not thrown), or `NOT_FOUND`.
+   */
+  async removeInstances(options: { instanceKeys: string[] }): Promise<InstanceBatchItem[]> {
+    this.requireStarted('removeInstances');
+    assertBatchIds(options.instanceKeys, 'removeInstances({ instanceKeys })');
+    if (!options.instanceKeys.length) return [];
+    const rows = await this.runtime.driver.getInstancesByKeys({
+      instanceKeys: options.instanceKeys,
+    });
     const staleAfterMs = secondsToMs(
       INSTANCE_REMOVAL_STALE_SECONDS,
       'instance removal staleness window',
     );
-    if (row.lastSeenAt >= now - staleAfterMs) {
-      throw new InstanceActiveError(options.instanceKey);
+    const seenBefore = this.runtime.clock.now() - staleAfterMs;
+    const stale = rows.filter((row) => row.lastSeenAt < seenBefore).map((row) => row.instanceKey);
+    // The delete re-checks the staleness in SQL, so an instance that heartbeat since the read
+    // survives it and reports `REFUSED` like any other recently-seen one.
+    const removed = new Set(
+      stale.length
+        ? await this.runtime.driver.deleteInstances({ instanceKeys: stale, seenBefore })
+        : [],
+    );
+    for (const instanceKey of removed) {
+      this.events.emit(PortQueueEvent.INSTANCE_REMOVED, { instanceKey });
     }
-    const ok = await this.runtime.driver.deleteInstance({ instanceKey: options.instanceKey });
-    if (ok) this.events.emit(PortQueueEvent.INSTANCE_REMOVED, { instanceKey: options.instanceKey });
-    return ok;
+    const existing = new Set(rows.map((row) => row.instanceKey));
+    return options.instanceKeys.map((instanceKey) => ({
+      instanceKey,
+      outcome: removed.has(instanceKey)
+        ? BatchItemOutcome.APPLIED
+        : existing.has(instanceKey)
+          ? BatchItemOutcome.REFUSED
+          : BatchItemOutcome.NOT_FOUND,
+    }));
+  }
+
+  /** One item per requested key: `APPLIED` when its row was updated, `NOT_FOUND` otherwise. */
+  private instanceItems(instanceKeys: string[], applied: ReadonlySet<string>): InstanceBatchItem[] {
+    return instanceKeys.map((instanceKey) => ({
+      instanceKey,
+      outcome: applied.has(instanceKey) ? BatchItemOutcome.APPLIED : BatchItemOutcome.NOT_FOUND,
+    }));
   }
 
   /**

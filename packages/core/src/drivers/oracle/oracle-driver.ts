@@ -936,6 +936,19 @@ export class OracleDriver extends BaseDriver implements Driver {
     return res.rows[0] ? this.mapJob(res.rows[0]) : null;
   }
 
+  async findJobRefs(options: { jobIds: string[]; tx?: TransactionHandle }): Promise<JobRef[]> {
+    if (!options.jobIds.length) return [];
+    return this.overIdChunks(options.jobIds, async (jobIds) => {
+      const res = await this.runMaybeTx(
+        `SELECT ${JobColumn.ID}, ${JobColumn.QUEUE_NAME} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.ID} IN (${this.phList(jobIds.length)})`,
+        jobIds,
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapJobRef(r));
+    });
+  }
+
   /**
    * WHERE clauses for a job filter, appending each value to `params`. Shared by `getJobs` and
    * `countJobs` so a page and its total can never disagree about what they select. `search` is
@@ -1279,31 +1292,47 @@ export class OracleDriver extends BaseDriver implements Driver {
     now: number;
     tx?: TransactionHandle;
   }): Promise<QueueRow | null> {
-    const sets: string[] = [];
-    const params: unknown[] = [];
-    if (options.processingPaused !== undefined) {
-      sets.push(`${QueueColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
-      params.push(this.boolIn(options.processingPaused));
-    }
-    if (options.acceptingPaused !== undefined) {
-      sets.push(`${QueueColumn.ACCEPTING_PAUSED} = ${this.ph(params.length)}`);
-      params.push(this.boolIn(options.acceptingPaused));
-    }
-    sets.push(`${QueueColumn.UPDATED_AT} = ${this.ph(params.length)}`);
-    params.push(options.now);
-    const namePh = this.ph(params.length);
-    params.push(options.queueName);
-    // No row-set RETURNING: update, then read the row back in the same transaction.
-    return this.inTx(options.tx, async (run) => {
-      await run(
-        `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE ${QueueColumn.NAME} = ${namePh}`,
-        params,
-      );
-      const res = await run(
-        `SELECT * FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} = ${this.ph(0)}`,
-        [options.queueName],
-      );
-      return res.rows[0] ? this.mapQueue(res.rows[0]) : null;
+    const { queueName, ...rest } = options;
+    const [row] = await this.setQueuesPaused({ ...rest, queueNames: [queueName] });
+    return row ?? null;
+  }
+
+  async setQueuesPaused(options: {
+    queueNames: string[];
+    processingPaused?: boolean;
+    acceptingPaused?: boolean;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<QueueRow[]> {
+    if (!options.queueNames.length) return [];
+    // Chunked so one statement can never carry more names than the engine allows in an
+    // `IN (...)` list. A capped batch is a single chunk, and so a single statement.
+    return this.overIdChunks(options.queueNames, async (queueNames) => {
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      if (options.processingPaused !== undefined) {
+        sets.push(`${QueueColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
+        params.push(this.boolIn(options.processingPaused));
+      }
+      if (options.acceptingPaused !== undefined) {
+        sets.push(`${QueueColumn.ACCEPTING_PAUSED} = ${this.ph(params.length)}`);
+        params.push(this.boolIn(options.acceptingPaused));
+      }
+      sets.push(`${QueueColumn.UPDATED_AT} = ${this.ph(params.length)}`);
+      params.push(options.now);
+      const namesPh = this.phList(queueNames.length, params.length);
+      // No row-set RETURNING: update, then read the rows back in the same transaction.
+      return this.inTx(options.tx, async (run) => {
+        await run(
+          `UPDATE ${this.t(TableName.QUEUE)} SET ${sets.join(', ')} WHERE ${QueueColumn.NAME} IN (${namesPh})`,
+          [...params, ...queueNames],
+        );
+        const res = await run(
+          `SELECT * FROM ${this.t(TableName.QUEUE)} WHERE ${QueueColumn.NAME} IN (${this.phList(queueNames.length)})`,
+          queueNames,
+        );
+        return res.rows.map((r) => this.mapQueue(r));
+      });
     });
   }
 
@@ -1466,25 +1495,99 @@ export class OracleDriver extends BaseDriver implements Driver {
     return res.rows[0] ? this.mapInstance(res.rows[0]) : null;
   }
 
+  async getInstancesByKeys(options: {
+    instanceKeys: string[];
+    tx?: TransactionHandle;
+  }): Promise<InstanceRow[]> {
+    if (!options.instanceKeys.length) return [];
+    return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
+      const res = await this.runMaybeTx(
+        `SELECT * FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} IN (${this.phList(instanceKeys.length)})`,
+        instanceKeys,
+        options.tx,
+      );
+      return res.rows.map((r) => this.mapInstance(r));
+    });
+  }
+
   async setInstancePaused(options: {
     instanceKey: string;
     processingPaused: boolean;
     now: number;
   }): Promise<void> {
-    await this.runMaybeTx(
-      `UPDATE ${this.t(TableName.INSTANCE)} SET ${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ` +
-        `${InstanceColumn.UPDATED_AT} = ${this.ph(1)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(2)}`,
-      [this.boolIn(options.processingPaused), options.now, options.instanceKey],
-    );
+    await this.setInstancesPaused({
+      instanceKeys: [options.instanceKey],
+      processingPaused: options.processingPaused,
+      now: options.now,
+    });
+  }
+
+  async setInstancesPaused(options: {
+    instanceKeys: string[];
+    processingPaused: boolean;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]> {
+    if (!options.instanceKeys.length) return [];
+    return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
+      const sets =
+        `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
+      const params = [this.boolIn(options.processingPaused), options.now, ...instanceKeys];
+      // No row-set RETURNING: update, then read the keys back in the same transaction.
+      return this.inTx(options.tx, async (run) => {
+        await run(
+          `UPDATE ${this.t(TableName.INSTANCE)} SET ${sets} ` +
+            `WHERE ${InstanceColumn.INSTANCE_KEY} IN (${this.phList(instanceKeys.length, 2)})`,
+          params,
+        );
+        const res = await run(
+          `SELECT ${InstanceColumn.INSTANCE_KEY} FROM ${this.t(TableName.INSTANCE)} ` +
+            `WHERE ${InstanceColumn.INSTANCE_KEY} IN (${this.phList(instanceKeys.length)})`,
+          instanceKeys,
+        );
+        return res.rows.map((r) => this.mapInstanceKey(r));
+      });
+    });
   }
 
   async deleteInstance(options: { instanceKey: string; tx?: TransactionHandle }): Promise<boolean> {
-    const res = await this.runMaybeTx(
-      `DELETE FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} = ${this.ph(0)}`,
-      [options.instanceKey],
-      options.tx,
-    );
-    return res.rowCount > 0;
+    const removed = await this.deleteInstances({
+      instanceKeys: [options.instanceKey],
+      ...(options.tx ? { tx: options.tx } : {}),
+    });
+    return removed.length > 0;
+  }
+
+  async deleteInstances(options: {
+    instanceKeys: string[];
+    seenBefore?: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]> {
+    if (!options.instanceKeys.length) return [];
+    return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
+      const params: unknown[] = [...instanceKeys];
+      let guard = '';
+      if (options.seenBefore !== undefined) {
+        guard = ` AND ${InstanceColumn.LAST_SEEN_AT} < ${this.ph(params.length)}`;
+        params.push(options.seenBefore);
+      }
+      // No row-set RETURNING: lock and read the rows, then delete exactly those keys. Only the instance
+      // (monitoring) row goes: jobs record processed_on_instance_key as a plain string (no FK).
+      return this.inTx(options.tx, async (run) => {
+        const sel = await run(
+          `SELECT ${InstanceColumn.INSTANCE_KEY} FROM ${this.t(TableName.INSTANCE)} ` +
+            `WHERE ${InstanceColumn.INSTANCE_KEY} IN (${this.phList(instanceKeys.length)})${guard} FOR UPDATE`,
+          params,
+        );
+        const keys = sel.rows.map((r) => this.mapInstanceKey(r));
+        if (!keys.length) return [];
+        await run(
+          `DELETE FROM ${this.t(TableName.INSTANCE)} WHERE ${InstanceColumn.INSTANCE_KEY} IN (${this.phList(keys.length)})`,
+          keys,
+        );
+        return keys;
+      });
+    });
   }
 
   // --- Retention ---

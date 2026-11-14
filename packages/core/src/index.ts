@@ -10,6 +10,7 @@ export type { Job, JobHandler } from './jobs/job';
 export { JobStatus } from './jobs/job-state.enum';
 export {
   BackoffStrategy,
+  BatchItemOutcome,
   CancelOutcome,
   FailureDetail,
   PauseMode,
@@ -62,6 +63,12 @@ export {
 // Result & snapshot types
 export type {
   AddJobResult,
+  BatchItemResult,
+  InstanceBatchItem,
+  JobBatchItem,
+  QueueBatchItem,
+  RetriedJobItem,
+  ScheduleBatchItem,
   JobSnapshot,
   ScheduleInfo,
   QueueInfo,

@@ -329,6 +329,12 @@ export interface Driver {
    * in-flight transaction queues *behind* it and deadlocks the connection for good.
    */
   getJob(options: { jobId: string; tx?: TransactionHandle }): Promise<JobRecord | null>;
+  /**
+   * Which of these ids name a row, with each row's queue — a lean existence check over one `IN`
+   * list. A batch reads it on its refusal path only, to tell an id that names nothing from one whose
+   * row the action refused.
+   */
+  findJobRefs(options: { jobIds: string[]; tx?: TransactionHandle }): Promise<JobRef[]>;
   /** A page of job rows, always newest-first by `created_at`. There is no caller-chosen order. */
   getJobs(options: JobListFilter & { limit: number; offset: number }): Promise<JobRecord[]>;
   countJobsByStatus(options: {
@@ -402,6 +408,17 @@ export interface Driver {
     now: number;
     tx?: TransactionHandle;
   }): Promise<QueueRow | null>;
+  /**
+   * Write the pause flags on many queues in one statement, returning each updated row. A name with
+   * no row is simply absent from the result.
+   */
+  setQueuesPaused(options: {
+    queueNames: string[];
+    processingPaused?: boolean;
+    acceptingPaused?: boolean;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<QueueRow[]>;
   ensureQueue(options: {
     name: string;
     options?: QueueOptions;
@@ -430,13 +447,35 @@ export interface Driver {
   /** Total instances matching a {@link listInstances} filter, ignoring paging. */
   countInstances(options?: InstanceListFilter): Promise<number>;
   getInstance(options: { instanceKey: string }): Promise<InstanceRow | null>;
+  /** Many instance rows by key, in one statement. A key with no row is simply absent. */
+  getInstancesByKeys(options: {
+    instanceKeys: string[];
+    tx?: TransactionHandle;
+  }): Promise<InstanceRow[]>;
   setInstancePaused(options: {
     instanceKey: string;
     processingPaused: boolean;
     now: number;
   }): Promise<void>;
+  /** Write the pause flag on many instances in one statement, returning the keys it updated. */
+  setInstancesPaused(options: {
+    instanceKeys: string[];
+    processingPaused: boolean;
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]>;
   /** Delete an instance row by key (manual admin removal of a long-inactive instance). */
   deleteInstance(options: { instanceKey: string; tx?: TransactionHandle }): Promise<boolean>;
+  /**
+   * Delete many instance rows in one statement, returning the keys that went away. With
+   * `seenBefore`, only rows whose `last_seen_at` is older than it are removed — so an instance that
+   * heartbeat between the caller's staleness check and this delete survives it.
+   */
+  deleteInstances(options: {
+    instanceKeys: string[];
+    seenBefore?: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]>;
 
   // Retention
   /**
