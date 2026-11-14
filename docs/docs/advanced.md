@@ -91,7 +91,11 @@ caller's transaction. The interface groups its methods by concern:
   reported rather than carried forward, but only idempotent DDL survives the re-run.
 
   Concurrency follows the same shape: where the engine has a named lock (`pg_try_advisory_lock`,
-  MySQL's `GET_LOCK`) one instance migrates and the rest wait. Where it does not — Oracle, SQLite,
+  MySQL's `GET_LOCK`) one instance migrates and the rest wait, taking the lock over if it frees up
+  while their schema is still behind. The key is `[<schema>.]<prefix>migrate`: those locks are
+  database- or server-wide, so it is scoped by schema to keep two deployments sharing a database from
+  waiting on each other — a driver's `tryAdvisoryLock` must treat the key as opaque and may hash it to
+  fit the engine's name limit. Where it does not — Oracle, SQLite,
   PGLite — every instance applies, which is safe for idempotent DDL. For a multi-instance Oracle
   deployment, run `portqueue migrate` once before starting workers.
 
