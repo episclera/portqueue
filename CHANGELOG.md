@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 (2026-11-14)
+
+### Documentation
+
+* list each plural method as its own api reference entry after its singular ([f8fbaca](https://github.com/episclera/portqueue/commit/f8fbaca8e0db4335ca81d83e76a58de5d8c7f915))
+
 ## 1.1.0 (2026-11-14)
 
 ### Features
