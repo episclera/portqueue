@@ -33,9 +33,17 @@ declare global {
 /**
  * The runtime config the server injected into the shell. The fallback is only for a dev build served
  * without the shell — a real page always carries the injected object.
+ *
+ * The fallback deliberately knows no batch cap. The cap is core's `MAX_BATCH_IDS`, which only the
+ * server can read, and copying the number here is the drift `DashboardConfigDto.maxBatchIds` exists
+ * to prevent. Without a shell there is no cap to show, and the server still refuses an oversized
+ * batch with a 400 that names its limit.
  */
 export const config: DashboardConfigDto = (typeof window !== 'undefined' &&
-  window.__PORTQUEUE_DASHBOARD__) || { basePath: '/portqueue', maxBatchIds: 1000 };
+  window.__PORTQUEUE_DASHBOARD__) || {
+  basePath: '/portqueue',
+  maxBatchIds: Number.POSITIVE_INFINITY,
+};
 
 /** The axios client. Exported so tests can stub its adapter. */
 export const http: AxiosInstance = axios.create({

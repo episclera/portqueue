@@ -79,6 +79,21 @@ describe('owns', () => {
     expect(engine.owns(undefined)).toBe(false);
   });
 
+  it('owns every path when mounted at the root', () => {
+    // `normalizeBase('/')` keeps the single slash, and `${basePath}/` is then `//` — a prefix no real
+    // path has, so a root mount used to own `/` and nothing under it.
+    const { pq } = fakePq();
+    const engine = createEngine({
+      driver: {} as never,
+      basePath: '/',
+      client: stubClient(pq),
+      logger: { warn: () => {} },
+    });
+    expect(engine.owns('/')).toBe(true);
+    expect(engine.owns('/api/config')).toBe(true);
+    expect(engine.owns('/jobs/job-1?tab=logs')).toBe(true);
+  });
+
   it('normalizes the mount it was given', () => {
     const { pq } = fakePq();
     const engine = createEngine({
@@ -129,7 +144,21 @@ describe('failure paths', () => {
 
   it('turns an unexpected throw into a 500 rather than an unhandled rejection', async () => {
     // `serveSafely` is what every adapter calls, precisely so a bug in a route cannot take the host
-    // process down with it.
+    // process down with it. A route that throws is the case: nothing between it and the engine
+    // catches.
+    const pq = {
+      _dashboard: {
+        getStats: async () => {
+          throw new Error('route bug');
+        },
+      },
+    } as never;
+    const res = await serve(engineWith(stubClient(pq)), { url: `${BASE_PATH}/api/stats` });
+    expect(res.status).toBe(500);
+    expect(JSON.parse(res.body)).toEqual({ error: 'Internal dashboard error' });
+  });
+
+  it('answers 503 when the client cannot connect, so the browser can retry', async () => {
     const exploding: DashboardClient = {
       get: () => {
         throw new Error('boom');

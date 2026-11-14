@@ -53,8 +53,10 @@ export interface ActionPayloadDto {
   instanceKey?: string;
   jobId?: string;
   /**
-   * Many job ids for a bulk retry / cancel / remove. The server applies them in **one transaction**,
-   * so the batch either lands whole or not at all. Capped at {@link MAX_BATCH_IDS} ids per request.
+   * Many job ids for a bulk retry / cancel / remove. The server hands the whole set to **one**
+   * statement; an id it refuses (gone, or an `ACTIVE` row) is skipped rather than failing the rest,
+   * and `affected` says how many landed. Capped at core's `MAX_BATCH_IDS` per request — the client
+   * learns the number from `DashboardConfigDto.maxBatchIds`.
    */
   jobIds?: string[];
   scheduleId?: string;

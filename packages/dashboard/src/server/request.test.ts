@@ -70,6 +70,34 @@ describe('readBody', () => {
   });
 });
 
+describe('readBody after a host body parser', () => {
+  /** A request whose stream something upstream has already read to the end. */
+  async function drained(body: unknown): Promise<IncomingMessage> {
+    const stream = Readable.from([Buffer.from('ignored')]);
+    for await (const chunk of stream) void chunk;
+    return Object.assign(stream, { headers: {}, body }) as unknown as IncomingMessage;
+  }
+
+  it('re-serializes a parsed object instead of waiting for an end that already fired', async () => {
+    await expect(readBody(await drained({ queue: 'emails' }))).resolves.toBe('{"queue":"emails"}');
+  });
+
+  it('passes a raw string or buffer through', async () => {
+    await expect(readBody(await drained('{"a":1}'))).resolves.toBe('{"a":1}');
+    await expect(readBody(await drained(Buffer.from('{"a":2}')))).resolves.toBe('{"a":2}');
+  });
+
+  it('reads nothing left behind as an empty body, which the router answers with a 400', async () => {
+    await expect(readBody(await drained(undefined))).resolves.toBe('');
+  });
+
+  it('holds a pre-parsed body to the same cap', async () => {
+    await expect(readBody(await drained('x'.repeat(MAX_BODY_BYTES + 1)))).rejects.toThrow(
+      BodyTooLargeError,
+    );
+  });
+});
+
 describe('normalizeBase', () => {
   it('adds the leading slash and drops a trailing one', () => {
     expect(normalizeBase('portqueue')).toBe('/portqueue');

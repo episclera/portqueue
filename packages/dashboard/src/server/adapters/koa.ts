@@ -12,6 +12,11 @@ export function createKoaMiddleware(engine: DashboardEngine): KoaMiddleware {
       return;
     }
     ctx.respond = false; // we write to the raw response directly
+    // A body parser above us (`koa-bodyparser`, `@koa/bodyparser`) drained the raw stream and left
+    // the result on `ctx.request`; hand it to the reader, which looks for it on the raw request.
+    const parsed = (ctx as { request?: { body?: unknown } }).request?.body;
+    const raw = ctx.req as typeof ctx.req & { body?: unknown };
+    if (parsed !== undefined && raw.body === undefined) raw.body = parsed;
     await engine.serve(ctx.req, ctx.res);
   };
 }

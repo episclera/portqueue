@@ -92,6 +92,37 @@ describe('POST /api/actions — job actions', () => {
     expect(rec.batches).toHaveLength(0);
   });
 
+  it('accepts a batch exactly at the id cap', async () => {
+    const { pq, rec } = fakePq();
+    const jobIds = Array.from({ length: MAX_BATCH_IDS }, (_, i) => `job-${i}`);
+    const res = await postAction(pq, { kind: ActionKind.REMOVE, jobIds });
+    expect(res.status).toBe(200);
+    expect(rec.batches[0]?.jobIds).toHaveLength(MAX_BATCH_IDS);
+  });
+
+  it('refuses a jobIds that is not a list of non-empty strings', async () => {
+    // A bare string has a `.length` too, and used to reach core as a list of its characters.
+    for (const jobIds of ['abc', [1, 2], ['a', ''], { 0: 'a' }]) {
+      const { pq, rec } = fakePq();
+      const res = await postAction(pq, { kind: ActionKind.REMOVE, jobIds });
+      expect(res.status).toBe(400);
+      expect(rec.batches).toHaveLength(0);
+    }
+  });
+
+  it('carries the whole batch in one call, so a refused id cannot half-apply the rest', async () => {
+    const { pq, rec } = fakePq({ batchResult: { affected: 2, requested: 3 } });
+    const res = await postAction(pq, { kind: ActionKind.RETRY, jobIds: ['a', 'b', 'c'] });
+    expect(rec.batches).toHaveLength(1);
+    expect(res.body).toMatchObject({ ok: true, affected: 2, requested: 3 });
+  });
+
+  it('reports a CANCEL that only signalled as ok, with nothing counted as cancelled', async () => {
+    const { pq } = fakePq({ batchResult: { affected: 0, requested: 2, signalled: 2 } });
+    const res = await postAction(pq, { kind: ActionKind.CANCEL, jobIds: ['a', 'b'] });
+    expect(res.body).toEqual({ ok: true, affected: 0, requested: 2, signalled: 2 });
+  });
+
   it('names cancelled and merely-signalled jobs apart', async () => {
     // "Cancelled 3" for three jobs that were only asked to stop is the claim this splits up.
     const { pq } = fakePq({ batchResult: { affected: 1, requested: 3, signalled: 2 } });

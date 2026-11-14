@@ -35,18 +35,21 @@ export function requireInstanceKey(action: ActionPayloadDto): Checked<string> {
  * taking separate paths through the handler.
  */
 export function requireJobIds(action: ActionPayloadDto): Checked<string[]> {
-  const ids = action.jobIds?.length ? action.jobIds : action.jobId ? [action.jobId] : [];
-  return checkIds(ids, 'jobId(s)');
+  return checkIds(idsOf(action.jobIds, action.jobId), 'jobId(s)');
 }
 
 /** The schedule ids a removal applies to — same one-or-many normalization as the job ids. */
 export function requireScheduleIds(action: ActionPayloadDto): Checked<string[]> {
-  const ids = action.scheduleIds?.length
-    ? action.scheduleIds
-    : action.scheduleId
-      ? [action.scheduleId]
-      : [];
-  return checkIds(ids, 'scheduleId(s)');
+  return checkIds(idsOf(action.scheduleIds, action.scheduleId), 'scheduleId(s)');
+}
+
+/**
+ * The list form when there is one, else the single id as a list of one. Returned as `unknown`: the
+ * body is whatever the request sent, and {@link checkIds} is what proves it is a list of ids.
+ */
+function idsOf(many: unknown, one: unknown): unknown {
+  if (many !== undefined && !(Array.isArray(many) && many.length === 0)) return many;
+  return one === undefined || one === '' ? [] : [one];
 }
 
 /** One schedule id, for the actions that address exactly one. */
@@ -64,8 +67,13 @@ export function requireScheduleId(action: ActionPayloadDto): Checked<string> {
  * than a driver error an operator has to interpret. The client stops a selection growing past the
  * same cap, so reaching this means a hand-made request.
  */
-function checkIds(ids: string[], what: string): Checked<string[]> {
+function checkIds(ids: unknown, what: string): Checked<string[]> {
+  // A string's `.length` would pass the checks below and reach core as a list of characters.
+  if (!Array.isArray(ids)) return invalid(`Invalid ${what}: expected a list of ids`);
   if (!ids.length) return invalid(`Missing ${what}`);
+  if (!ids.every((id): id is string => typeof id === 'string' && id.length > 0)) {
+    return invalid(`Invalid ${what}: every id must be a non-empty string`);
+  }
   if (ids.length > MAX_BATCH_IDS) {
     return invalid(`Too many ids: ${ids.length} — the limit is ${MAX_BATCH_IDS} per request`);
   }

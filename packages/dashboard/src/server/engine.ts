@@ -68,11 +68,13 @@ export function createEngine(
   /**
    * Whether a URL falls under the mount. The query string is stripped first, so this compares paths
    * — `/portqueue` exactly, or something below it. There is no third `basePath?` case: after the
-   * split, a path cannot contain a `?`.
+   * split, a path cannot contain a `?`. A root mount (`/`) owns everything.
    */
   function owns(url: string | undefined): boolean {
     if (!url) return false;
     const path = url.split('?')[0] ?? '';
+    // A root mount owns every path; `${basePath}/` would be `//` there and match nothing but `/`.
+    if (basePath === '/') return path.startsWith('/');
     return path === basePath || path.startsWith(`${basePath}/`);
   }
 

@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { Code, Table, Tag } from '@portqueue/ui';
 import type { DropdownItem, TableColumn } from '@portqueue/ui';
 import { ActionKind, type ScheduleDto, type SchedulePageDto } from '../../shared/dto';
-import { api } from '../queries/api';
+import { api, config } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
@@ -230,7 +230,13 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
               />
             )
           }
-          rowSelection={{ selectedKeys: selected, onChange: setSelected }}
+          rowSelection={{
+            selectedKeys: selected,
+            onChange: setSelected,
+            // A bulk removal is one statement too, under the same cap as the jobs table's actions.
+            maxSelected: config.maxBatchIds,
+            maxSelectedHint: `You can act on ${config.maxBatchIds} schedules at a time — the limit is what one database statement can carry. Clear a selection to pick another.`,
+          }}
         />
       </TableCard>
 

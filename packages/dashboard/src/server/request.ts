@@ -12,6 +12,10 @@ import { MAX_BODY_BYTES } from '../shared/constants';
  * nothing accumulates in memory either way.
  */
 export function readBody(req: IncomingMessage): Promise<string> {
+  // A body parser mounted above the dashboard (`express.json()` is in most host apps) has already
+  // drained the stream, so `end` has fired and will not fire again — waiting for it hung the request
+  // forever. Recover what that parser left on `req.body` instead.
+  if (req.readableEnded) return alreadyRead(req);
   return new Promise((resolveBody, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
@@ -35,6 +39,22 @@ export function readBody(req: IncomingMessage): Promise<string> {
     });
     req.on('error', reject);
   });
+}
+
+/**
+ * The body a host's parser already consumed, back as the string the router expects, under the same
+ * cap. A parsed object is re-serialized — it came from JSON, so this round-trips — and nothing at all
+ * reads as an empty body, which the router answers with a 400 rather than a hang.
+ */
+function alreadyRead(req: IncomingMessage): Promise<string> {
+  const parsed = (req as IncomingMessage & { body?: unknown }).body;
+  let text: string;
+  if (parsed === undefined || parsed === null) text = '';
+  else if (typeof parsed === 'string') text = parsed;
+  else if (Buffer.isBuffer(parsed)) text = parsed.toString('utf8');
+  else text = JSON.stringify(parsed);
+  if (Buffer.byteLength(text) > MAX_BODY_BYTES) return Promise.reject(new BodyTooLargeError());
+  return Promise.resolve(text);
 }
 
 /** Why {@link readBody} rejected: the body passed the cap, and the answer is a 413. */

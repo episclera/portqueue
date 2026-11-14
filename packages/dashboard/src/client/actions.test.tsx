@@ -12,6 +12,7 @@ import '@testing-library/jest-dom';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { ActionKind } from '../shared/dto';
 import { createHarness, page, type StubOptions } from '../test-support/render';
+import { config } from './queries/api';
 
 const QUEUES = page([
   {
@@ -244,6 +245,34 @@ describe('bulk job actions', () => {
     expect(await screen.findByText('Requeued 1 of 3 jobs.')).toBeInTheDocument();
   });
 
+  /** Select the one job row and run "Cancel selected" against the given server result. */
+  async function bulkCancel(actionResult: unknown): Promise<void> {
+    const h = harness({ actionResult });
+    h.renderApp('#/queues/emails');
+    await screen.findByText('Results (1)');
+    fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
+    fireEvent.click(await screen.findByRole('button', { name: /Bulk actions \(1\)/ }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Cancel selected/ }));
+    await waitFor(() => expect(h.posts).toHaveLength(1));
+  }
+
+  it('names running jobs that were only asked to stop apart from the cancelled ones', async () => {
+    // Counting signalled jobs as cancelled is how a toast said "Cancelled 3 jobs" for three jobs
+    // that went on to complete normally.
+    await bulkCancel({ ok: true, affected: 1, requested: 3, signalled: 2 });
+    expect(
+      await screen.findByText('Cancelled 1 job. 2 running jobs were asked to stop.'),
+    ).toBeInTheDocument();
+  });
+
+  it('says only that the jobs were asked to stop when nothing was cancelled outright', async () => {
+    // "Cancelled 0 jobs." in front of it would read as a failure; nothing has settled yet.
+    await bulkCancel({ ok: true, affected: 0, requested: 2, signalled: 2 });
+    expect(await screen.findByText('2 running jobs were asked to stop.')).toBeInTheDocument();
+    expect(screen.queryByText(/Cancelled 0/)).not.toBeInTheDocument();
+  });
+
   it('surfaces the server’s own message when a batch fails', async () => {
     const h = harness({
       failures: { '/actions': { status: 409, body: { error: 'queue is paused' } } },
@@ -254,6 +283,53 @@ describe('bulk job actions', () => {
     fireEvent.click(rowAction('Retry'));
 
     expect(await screen.findByText('queue is paused')).toBeInTheDocument();
+  });
+});
+
+describe('the batch cap on a selection', () => {
+  // The cap is the server's (core's MAX_BATCH_IDS, delivered in the injected config). Lowered here
+  // so a page of two rows can reach it.
+  const original = config.maxBatchIds;
+  beforeEach(() => {
+    config.maxBatchIds = 1;
+  });
+  afterEach(() => {
+    config.maxBatchIds = original;
+  });
+
+  /** Hover a checkbox's tooltip trigger (the span the hint wraps it in) and read the bubble. */
+  async function hintOn(checkbox: HTMLElement): Promise<string> {
+    fireEvent.mouseEnter(checkbox.closest('span')!.parentElement!);
+    return (await screen.findByRole('tooltip')).textContent ?? '';
+  }
+
+  it('stops the jobs table at the cap, and says why on the refused checkbox', async () => {
+    const other = { ...JOB, id: 'job-second-000' };
+    const h = harness({ responses: { ...RESPONSES, '/jobs': page([JOB, other]) } });
+    h.renderApp('#/queues/emails');
+    await screen.findByText('Results (2)');
+
+    // Select-all would pass the cap, so it is refused up front rather than selecting a prefix.
+    expect(screen.getByLabelText('Select all rows')).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
+    const refused = screen.getByLabelText(`Select row ${other.id}`);
+    expect(refused).toBeDisabled();
+    expect(await hintOn(refused)).toMatch(/act on 1 jobs at a time/);
+    // Only adding is blocked: the selected row can still be cleared.
+    expect(screen.getByLabelText(`Select row ${JOB.id}`)).not.toBeDisabled();
+  });
+
+  it('stops the schedules table at the same cap', async () => {
+    const other = { ...SCHEDULE, scheduleId: 'sch-2' };
+    const h = harness({ responses: { ...RESPONSES, '/schedules': page([SCHEDULE, other]) } });
+    h.renderApp('#/schedules');
+    await screen.findByText('Results (2)');
+
+    fireEvent.click(screen.getByLabelText(`Select row ${SCHEDULE.scheduleId}`));
+    const refused = screen.getByLabelText(`Select row ${other.scheduleId}`);
+    expect(refused).toBeDisabled();
+    expect(await hintOn(refused)).toMatch(/act on 1 schedules at a time/);
   });
 });
 

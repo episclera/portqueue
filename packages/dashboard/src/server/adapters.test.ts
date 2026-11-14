@@ -39,15 +39,32 @@ function dashboard(): Dashboard {
  * would think to provide (`setHeader`, `getHeader`, `writeHead`, `req.socket`, …). No port is bound:
  * the response's `write`/`end` are the only place bytes would leave, and both are intercepted.
  */
+interface Init {
+  method?: string;
+  body?: string;
+  /** Replaces the default headers (the marker plus `host`) when given. */
+  headers?: Record<string, string>;
+}
+
 function callHandler(
   handler: (req: IncomingMessage, res: ServerResponse) => void,
   path: string,
+  init: Init = {},
 ): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = new IncomingMessage(new Socket());
-    req.method = 'GET';
+    req.method = init.method ?? 'GET';
     req.url = path;
-    req.headers = { [REQUESTED_WITH_HEADER]: REQUESTED_WITH_MARKER, host: 'localhost' };
+    req.headers = init.headers ?? {
+      [REQUESTED_WITH_HEADER]: REQUESTED_WITH_MARKER,
+      host: 'localhost',
+      ...(init.body === undefined
+        ? {}
+        : {
+            'content-type': 'application/json',
+            'content-length': String(Buffer.byteLength(init.body)),
+          }),
+    };
     const res = new ServerResponse(req);
     const chunks: Buffer[] = [];
     res.write = ((chunk: unknown) => {
@@ -66,7 +83,7 @@ function callHandler(
       reject(err instanceof Error ? err : new Error(String(err)));
       return;
     }
-    // Nothing has a body, so the request stream ends immediately.
+    if (init.body !== undefined) req.push(Buffer.from(init.body));
     req.push(null);
   });
 }
@@ -189,6 +206,115 @@ describe('the raw-Node adapter', () => {
 function request(
   app: (req: IncomingMessage, res: ServerResponse) => void,
   path: string,
+  init: Init = {},
 ): Promise<{ status: number; body: string }> {
-  return callHandler(app, path);
+  return callHandler(app, path, init);
 }
+
+/**
+ * Mutations through each framework. A GET proves routing; only a POST proves the two things a
+ * framework can break on the way in — the CSRF marker surviving to the router, and the body still
+ * being readable when the dashboard reads it.
+ */
+describe('mutations through the real frameworks', () => {
+  const PAUSE_PATH = `${BASE_PATH}/api/actions/pause`;
+  const BODY = JSON.stringify({ queue: 'emails' });
+
+  function recordingDashboard(): { dash: Dashboard; calls: string[] } {
+    const { pq, rec } = fakePq();
+    return {
+      dash: createDashboard({ driver: {} as never, client: stubClient(pq) }),
+      calls: rec.calls,
+    };
+  }
+
+  it('Express: applies a marked mutation and refuses an unmarked one', async () => {
+    const { dash, calls } = recordingDashboard();
+    const app = express();
+    app.use(BASE_PATH, dash.express());
+    const ok = await request(app, PAUSE_PATH, { method: 'POST', body: BODY });
+    expect(ok.status).toBe(200);
+    const refused = await request(app, PAUSE_PATH, {
+      method: 'POST',
+      body: BODY,
+      headers: { host: 'localhost', 'content-type': 'application/json' },
+    });
+    expect(refused.status).toBe(403);
+    expect(calls).toEqual(['pauseQueue']);
+  });
+
+  it('Express: still reads the body when the host parsed it first with express.json()', async () => {
+    // The usual host app has `app.use(express.json())` above every route. That drains the request
+    // stream before the dashboard sees it, so a reader waiting for `end` would wait forever.
+    const { dash, calls } = recordingDashboard();
+    const app = express();
+    app.use(express.json());
+    app.use(BASE_PATH, dash.express());
+    const res = await request(app, PAUSE_PATH, { method: 'POST', body: BODY });
+    expect(res.status).toBe(200);
+    expect(calls).toEqual(['pauseQueue']);
+  });
+
+  it('Koa: applies a marked mutation and refuses an unmarked one', async () => {
+    const { dash, calls } = recordingDashboard();
+    const app = new Koa();
+    app.use(dash.koa());
+    const ok = await callHandler(app.callback(), PAUSE_PATH, { method: 'POST', body: BODY });
+    expect(ok.status).toBe(200);
+    const refused = await callHandler(app.callback(), PAUSE_PATH, {
+      method: 'POST',
+      body: BODY,
+      headers: { host: 'localhost' },
+    });
+    expect(refused.status).toBe(403);
+    expect(calls).toEqual(['pauseQueue']);
+  });
+
+  it('Fastify: applies a marked mutation and refuses an unmarked one', async () => {
+    const { dash, calls } = recordingDashboard();
+    const app = Fastify();
+    await app.register(dash.fastify());
+    const ok = await app.inject({
+      method: 'POST',
+      url: PAUSE_PATH,
+      payload: BODY,
+      headers: {
+        'content-type': 'application/json',
+        [REQUESTED_WITH_HEADER]: REQUESTED_WITH_MARKER,
+      },
+    });
+    expect(ok.statusCode).toBe(200);
+    const refused = await app.inject({
+      method: 'POST',
+      url: PAUSE_PATH,
+      payload: BODY,
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(refused.statusCode).toBe(403);
+    expect(calls).toEqual(['pauseQueue']);
+    await app.close();
+  });
+});
+
+describe('a Koa body parser above the dashboard', () => {
+  it('hands the body it parsed to the dashboard instead of leaving it waiting on a drained stream', async () => {
+    // Stands in for `koa-bodyparser`: drain the raw stream and park the result on `ctx.request`.
+    const { pq, rec } = fakePq();
+    const app = new Koa();
+    app.use(async (ctx, next) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of ctx.req) chunks.push(chunk as Buffer);
+      (ctx.request as unknown as { body: unknown }).body = JSON.parse(
+        Buffer.concat(chunks).toString('utf8'),
+      );
+      await next();
+    });
+    app.use(createDashboard({ driver: {} as never, client: stubClient(pq) }).koa());
+    const res = await callHandler(app.callback(), `${BASE_PATH}/api/actions/pause`, {
+      method: 'POST',
+      body: JSON.stringify({ queue: 'emails' }),
+    });
+    expect(res.status).toBe(200);
+    expect(rec.calls).toEqual(['pauseQueue']);
+  });
+});
