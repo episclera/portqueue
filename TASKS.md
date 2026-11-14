@@ -11,19 +11,6 @@ Baseline at the time of the audit: `npm test` → 17 suites, 165 tests. Now: 58 
 
 ## P1 — correctness and security
 
-### 1. The dashboard's mutation endpoint had no CSRF defence, despite shipping the header for one
-
-**Fixed.** `assertSameOrigin` in `routes/index.ts` refuses any non-GET without
-`x-requested-with: portqueue-dashboard`, before the request reaches the database or the body is
-parsed. A browser cannot set a custom header cross-origin without a preflight the mount never answers,
-so a form post or simple `fetch` from another page is rejected — which is what matters, because the
-host's auth middleware is exactly what replays cookies and Basic credentials.
-
-Each mutation also got **its own endpoint**: `POST /api/actions/<ActionKind>`, dispatched by the URL
-segment. `kind` left the request body (`ActionPayloadDto` is the body; `ActionRequestDto` is what the
-client's `api.action` takes and splits). No new `createDashboard` option — protecting the mount is
-still the host's middleware's job.
-
 ### 2. `Worker.stop()` released the lock of a job that was about to complete normally
 
 **Fixed, both ways the finding asked for.**
@@ -131,16 +118,6 @@ must be used.
 **Fixed**, including the resubscribe hazard the naive fix would have introduced (the entry is only
 dropped if it is still the same set). `pubsub/wakeup.test.ts` covers both.
 
-### 17. Dashboard bulk actions across queues were N requests, partially applied
-
-**Fixed.** One request carries the whole selection: `queue` left the job-batch actions entirely (an id
-identifies its row, and the driver's ref names the row's own queue), so there is nothing left to group
-by and one toast summarizes the result.
-
-### 18. `serveAsset` stat'd the bundle directory on every request
-
-**Fixed** — `hasBuiltClient()` memoizes the promise; the mount-time warning primes it.
-
 ### 19. `getJobs`' over-fetch trick reported a wrong `total` on the last page
 
 **Fixed** — `total` is always a `COUNT` over the same predicate as the page.
@@ -225,16 +202,6 @@ not serve it either — so the honest answer is the `LIMIT`, and `likePattern` n
 ### 33. `_dashboard.getJobs` hardcoded `50`
 
 **Fixed** — `DEFAULT_PAGE_LIMIT`.
-
-### 34. `readBody`'s 1 MB cap was a bare literal, and rejected without draining
-
-**Fixed** — `MAX_BODY_BYTES` lives in `shared/constants` (it is a property of the API the client
-talks to), and an oversized body is drained and discarded before the reader rejects, so the caller's
-413 reaches a connection that is still open.
-
-### 35. `owns()` matched `basePath` as a raw prefix
-
-**Fixed** — the dead `?` clause is gone, and `engine.test.ts` pins that `/portqueue-admin` is not ours.
 
 ### 39. `errorToMessage` stored full stacks by default
 
