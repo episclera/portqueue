@@ -1031,6 +1031,14 @@ export function runConformance(options: ConformanceOptions): void {
       expect((await driver.listQueues({ processingPaused: true })).map((q) => q.name)).toEqual([
         'alpha-billing',
       ]);
+      // An exact name list, in SQL; an empty one matches nothing.
+      expect(
+        (await driver.listQueues({ names: ['beta-email', 'alpha-billing', 'nope'] }))
+          .map((q) => q.name)
+          .sort(),
+      ).toEqual(['alpha-billing', 'beta-email']);
+      expect(await driver.listQueues({ names: [] })).toEqual([]);
+      expect(await driver.countQueues({ names: ['beta-email'] })).toBe(1);
     });
 
     it('pauses many queues in one statement, returning only the rows it updated', async () => {

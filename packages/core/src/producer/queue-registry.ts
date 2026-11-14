@@ -1,5 +1,5 @@
 import { secondsToMs } from '../util/seconds';
-import { DEFAULT_TICK_INTERVAL_SECONDS } from '../constants';
+import { DEFAULT_TICK_INTERVAL_SECONDS, MAX_BATCH_IDS } from '../constants';
 import { QueueNotFoundError } from '../errors/errors';
 import type { Driver } from '../drivers/driver.interface';
 import type { QueueRow } from '../jobs/job-record';
@@ -165,8 +165,13 @@ export class QueueRegistry {
     );
     if (!stale.size) return;
     try {
-      const rows = await this.driver.listQueues();
-      for (const row of rows) if (stale.has(row.name)) this.update(row);
+      // Only the stale names, filtered in SQL — never the whole queue table per tick. Sliced to the
+      // `IN`-list cap, so a process declaring more queues than that still issues valid statements.
+      const names = [...stale];
+      for (let i = 0; i < names.length; i += MAX_BATCH_IDS) {
+        const rows = await this.driver.listQueues({ names: names.slice(i, i + MAX_BATCH_IDS) });
+        for (const row of rows) this.update(row);
+      }
     } catch {
       // A transient read failure leaves the cached flags in place; the next tick tries again.
     }

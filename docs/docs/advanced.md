@@ -157,7 +157,7 @@ engine, a deadlock).
 - `countJobsByStatus({ queueName?, processedOnInstanceKey? }): Promise<Record<JobStatus, number>>`
 - `countJobsByStatusPerQueue({ queueNames }): Promise<Record<string, Record<JobStatus, number>>>` — the same breakdown for many queues in **one** grouped query, so a list page costs one count query rather than one per row. `countJobsByStatusPerInstance({ instanceKeys })` is its per-instance twin.
 - `countJobs(filter): Promise<number>` — total rows behind a `getJobs` filter (`search` included), ignoring paging.
-- `listQueues({ search?, processingPaused?, limit?, offset? }?): Promise<QueueRow[]>` — called with no options it returns every queue, which is what core's own reads want; the paging fields exist for list UIs. `countQueues(filter?)` gives the matching total.
+- `listQueues({ search?, processingPaused?, names?, limit?, offset? }?): Promise<QueueRow[]>` — called with no options it returns every queue; the paging fields exist for list UIs. `names` is an exact `IN` list (an empty one matches nothing), which the queue registry's periodic refresh uses so it never reads the whole table. `countQueues(filter?)` gives the matching total.
 - `listSchedules({ queueName?, enabled?, search?, limit?, offset? }): Promise<ScheduleRow[]>`, with `countSchedules(filter)`.
 - `getSchedule({ scheduleId }): Promise<ScheduleRow | null>`
 - `getDueSchedules({ now, limit }): Promise<ScheduleRow[]>`

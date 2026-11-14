@@ -55,6 +55,11 @@ export interface QueueListFilter {
   search?: string;
   /** Match only queues whose `processing_paused` equals this. */
   processingPaused?: boolean;
+  /**
+   * Match only these exact names (an empty list matches none). Callers keep it within
+   * `MAX_BATCH_IDS`, the `IN`-list ceiling every engine here accepts.
+   */
+  names?: string[];
 }
 
 /** Narrowing for {@link Driver.listSchedules} / {@link Driver.countSchedules}. */

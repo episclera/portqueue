@@ -1085,6 +1085,16 @@ export class OracleDriver extends BaseDriver implements Driver {
       clauses.push(`${QueueColumn.PROCESSING_PAUSED} = ${this.ph(params.length)}`);
       params.push(this.boolIn(options.processingPaused));
     }
+    // An exact name list, matched in SQL — the registry's refresh reads only the queues it declared
+    // rather than the whole table. An empty list matches nothing rather than everything.
+    if (options.names !== undefined) {
+      clauses.push(
+        options.names.length
+          ? `${QueueColumn.NAME} IN (${this.phList(options.names.length, params.length)})`
+          : '1 = 0',
+      );
+      params.push(...options.names);
+    }
     return clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   }
 

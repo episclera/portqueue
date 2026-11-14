@@ -19,16 +19,17 @@ function row(name: string, processingPaused = false): QueueRow {
 
 /** A driver that records each call and answers from an in-memory table. */
 function stubDriver(table: Map<string, QueueRow>) {
-  const calls = { ensureQueue: 0, listQueues: 0, getQueueByName: 0 };
+  const calls = { ensureQueue: 0, listQueues: 0, getQueueByName: 0, listedNames: [] as string[][] };
   const driver = {
     ensureQueue: async ({ name }: { name: string }) => {
       calls.ensureQueue += 1;
       if (!table.has(name)) table.set(name, row(name));
       return table.get(name)!;
     },
-    listQueues: async () => {
+    listQueues: async ({ names }: { names?: string[] } = {}) => {
       calls.listQueues += 1;
-      return [...table.values()];
+      if (names) calls.listedNames.push(names);
+      return [...table.values()].filter((r) => !names || names.includes(r.name));
     },
     getQueueByName: async ({ name }: { name: string }) => {
       calls.getQueueByName += 1;
@@ -55,6 +56,8 @@ describe('QueueRegistry', () => {
     await registry.refreshStale();
 
     expect(calls.listQueues).toBe(1);
+    // Filtered in SQL to the declared names — never the whole table.
+    expect(calls.listedNames).toEqual([names]);
     expect(calls.getQueueByName).toBe(0);
     expect(registry.pauseState('q3')?.processingPaused).toBe(true);
     expect(registry.pauseState('q17')?.processingPaused).toBe(true);

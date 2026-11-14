@@ -29,6 +29,7 @@ and clear the list (or note which entries still apply to the other engine).
 - The batch driver methods `findJobRefs`, `setQueuesPaused`, `getInstancesByKeys`,
   `setInstancesPaused` and `deleteInstances` (with its `seenBefore` guard), and the singular
   `setQueuePaused`/`setInstancePaused`/`deleteInstance` now delegating to them.
+- `listQueues`/`countQueues`' new `names` filter (`name IN (...)`, `1 = 0` for an empty list).
 - `insertJobs`' dedup lookups (and the per-queue `FOR UPDATE` lock) chunked by `overIdChunks`, so a
   keyed batch of more than 1000 jobs no longer raises ORA-01795 on Oracle.
 - MySQL only: the migration `GET_LOCK` name is scoped by `DATABASE()` when no `schema` is set, and
