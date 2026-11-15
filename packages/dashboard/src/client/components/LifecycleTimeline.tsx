@@ -40,10 +40,14 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
     return {
       key: `${m.label}-${m.at as string}`,
       color: m.color,
-      title: <Time value={m.at} />,
+      // Everything in `content`: an item `title` gets its own column on the left in antd's
+      // timeline, which pushed the whole timeline off the card's left edge.
       content: (
         <Flex vertical>
           <Typography.Text strong>{m.label}</Typography.Text>
+          <Typography.Text type="secondary">
+            <Time value={m.at} />
+          </Typography.Text>
           {prev && (
             <Typography.Text type="secondary">
               +{duration(prev.at, m.at)} since {prev.label.toLowerCase()}

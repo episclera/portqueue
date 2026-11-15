@@ -71,6 +71,12 @@ const TIMESTAMPS: { key: Extract<keyof JobDto, `${string}At` | 'startAfter'>; la
   { key: 'updatedAt', label: 'Updated at' },
 ];
 
+/**
+ * The Lifecycle card's fixed width beside Details on wide screens: a timeline is a narrow column of
+ * labels and timestamps, so a share of the row only added empty space; Details takes the rest.
+ */
+const LIFECYCLE_CARD_WIDTH = 360;
+
 /** Two columns from `sm` up, one on a phone. */
 const DESCRIPTION_COLUMNS = { xs: 1, sm: 2 };
 
@@ -290,13 +296,12 @@ export function JobDetailPage(): React.ReactElement {
       <PageHeader
         entity="Job"
         title={j.id}
-        copyable={{ text: j.id, label: 'job id' }}
         tags={<StatusTag status={rawStatus} label={status} />}
         extra={actions}
       />
       <PageBody>
         <Row gutter={[16, 16]}>
-          <Col xs={24} lg={14}>
+          <Col xs={24} lg={{ flex: '1 1 0' }} style={{ minWidth: 0 }}>
             <Card title="Details">
               <Flex vertical gap="middle">
                 <Descriptions column={DESCRIPTION_COLUMNS} items={details} />
@@ -324,7 +329,7 @@ export function JobDetailPage(): React.ReactElement {
               </Flex>
             </Card>
           </Col>
-          <Col xs={24} lg={10}>
+          <Col xs={24} lg={{ flex: `0 0 ${LIFECYCLE_CARD_WIDTH}px` }}>
             <Card title="Lifecycle">
               <LifecycleTimeline job={j} />
             </Card>

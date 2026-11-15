@@ -31,7 +31,7 @@ export interface ShellProps {
 }
 
 /** The sidebar's fixed width, in pixels. */
-const SIDER_WIDTH = 182;
+const SIDER_WIDTH = 200;
 
 const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode }[] = [
   { to: '/', label: 'Overview', icon: <OverviewIcon aria-hidden /> },
@@ -39,25 +39,15 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode }[] = [
   { to: '/schedules', label: 'Schedules', icon: <SchedulesIcon aria-hidden /> },
 ];
 
-/**
- * Sidebar footer links — docs site and repository, side by side. GitHub is icon-only (named by its
- * `aria-label` and tooltip): the sidebar is too narrow for two labelled buttons, and the mark is
- * recognisable on its own.
- */
-const EXTERNAL_LINKS: { href: string; label: string; icon: React.ReactNode; iconOnly?: boolean }[] =
-  [
-    {
-      href: 'https://episclera.github.io/portqueue/',
-      label: 'Docs',
-      icon: <DocsIcon aria-hidden />,
-    },
-    {
-      href: 'https://github.com/episclera/portqueue',
-      label: 'GitHub',
-      icon: <GithubIcon aria-hidden />,
-      iconOnly: true,
-    },
-  ];
+/** Sidebar footer links — docs site and repository, side by side. */
+const EXTERNAL_LINKS: { href: string; label: string; icon: React.ReactNode }[] = [
+  { href: 'https://episclera.github.io/portqueue/', label: 'Docs', icon: <DocsIcon aria-hidden /> },
+  {
+    href: 'https://github.com/episclera/portqueue',
+    label: 'GitHub',
+    icon: <GithubIcon aria-hidden />,
+  },
+];
 
 /** The nav item a path belongs to: `/` only on the overview itself, a section for its sub-pages. */
 function selectedKey(pathname: string): string[] {
@@ -84,35 +74,26 @@ function Navigation(): React.ReactElement {
       />
       <Flex
         gap={token.marginXS}
+        wrap
         style={{
           padding: token.paddingSM,
           borderTop: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
-        {EXTERNAL_LINKS.map((link) => {
-          // Both buttons size to their content with the same side padding, so the labelled Docs
-          // button and the icon-only GitHub one read as a pair rather than a bar and a square.
-          const button = (
-            <Button
-              key={link.href}
-              href={link.href}
-              target="_blank"
-              rel="noreferrer noopener"
-              icon={link.icon}
-              style={{ width: 'auto', paddingInline: token.paddingXS }}
-              {...(link.iconOnly ? { 'aria-label': link.label } : {})}
-            >
-              {link.iconOnly ? null : link.label}
-            </Button>
-          );
-          return link.iconOnly ? (
-            <Tooltip key={link.href} title={link.label}>
-              {button}
-            </Tooltip>
-          ) : (
-            button
-          );
-        })}
+        {/* Both size to their content with the same compact side padding, so they read as a
+            pair; the row wraps rather than clipping a label if fonts render wider. */}
+        {EXTERNAL_LINKS.map((link) => (
+          <Button
+            key={link.href}
+            href={link.href}
+            target="_blank"
+            rel="noreferrer noopener"
+            icon={link.icon}
+            style={{ paddingInline: token.paddingXS }}
+          >
+            {link.label}
+          </Button>
+        ))}
       </Flex>
     </Flex>
   );

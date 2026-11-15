@@ -87,7 +87,6 @@ export function QueueDetailPage(): React.ReactElement {
         entity="Queue"
         title={queue}
         tags={info ? <PauseStateTag row={info} /> : undefined}
-        subtitle="Jobs, activity and controls for this queue."
         extra={actions}
       />
       <PageBody>
