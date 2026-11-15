@@ -21,7 +21,6 @@ import {
   Row,
   Skeleton,
   Statistic,
-  Tag,
   Tooltip,
   Typography,
   theme,
@@ -30,13 +29,7 @@ import { ActionKind, type InstanceDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
-import {
-  ACTIONS_CONFIG,
-  INSTANCE_ACTIONS_COPY,
-  LIVENESS_CONFIG,
-  instanceRemovable,
-  pauseStateLabel,
-} from '../constants/labels';
+import { ACTIONS_CONFIG, INSTANCE_ACTIONS_COPY, instanceRemovable } from '../constants/labels';
 import { JobsTable } from '../components/JobsTable';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
@@ -45,6 +38,7 @@ import { METRIC_HINTS, formatPercent, metricTone, type MetricTone } from '../com
 import { PageBody, PageHeader } from '../components/layout';
 import { AppLink } from '../components/AppLink';
 import { InfoIcon } from '../icons';
+import { LivenessTag, PauseStateTag } from '../components/StateTags';
 
 /** Three cards on one row across a 24-column grid. */
 const CARD_SPAN = 8;
@@ -71,7 +65,11 @@ export function InstanceDetailPage(): React.ReactElement {
   if (instance.error) {
     return (
       <>
-        <PageHeader title="Instance" subtitle="This instance could not be loaded." />
+        <PageHeader
+          entity="Instance"
+          title={instanceKey}
+          subtitle="This instance could not be loaded."
+        />
         <PageBody>
           <ErrorState
             title="Could not load this instance"
@@ -88,7 +86,7 @@ export function InstanceDetailPage(): React.ReactElement {
   if (!i) {
     return (
       <>
-        <PageHeader title="Instance" subtitle="Loading this instance…" />
+        <PageHeader entity="Instance" title={instanceKey} subtitle="Loading this instance…" />
         <PageBody>
           <Card>
             <Skeleton active paragraph={{ rows: 4 }} />
@@ -188,24 +186,18 @@ export function InstanceDetailPage(): React.ReactElement {
   return (
     <>
       <PageHeader
-        title={
-          <Flex gap="middle" align="center" wrap>
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              Instance
-            </Typography.Title>
-            <Typography.Text code>{i.instanceKey}</Typography.Text>
-          </Flex>
+        entity="Instance"
+        title={i.instanceKey}
+        tags={
+          <>
+            <LivenessTag alive={i.alive} />
+            <PauseStateTag row={i} />
+          </>
         }
         subtitle={
-          <Flex gap="small" align="center" wrap component="span">
-            <Tag color={i.alive ? 'success' : 'default'}>
-              {i.alive ? LIVENESS_CONFIG.alive.label : LIVENESS_CONFIG.stale.label}
-            </Tag>
-            <Tag color={i.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(i)}</Tag>
-            <span>
-              Last seen <Time value={i.lastSeenAt} />
-            </span>
-          </Flex>
+          <span>
+            Last seen <Time value={i.lastSeenAt} />
+          </span>
         }
         extra={actions}
       />

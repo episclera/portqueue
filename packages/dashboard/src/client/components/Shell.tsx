@@ -89,30 +89,30 @@ function Navigation(): React.ReactElement {
           borderTop: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
-        {EXTERNAL_LINKS.map((link) =>
-          link.iconOnly ? (
-            <Tooltip key={link.href} title={link.label}>
-              <Button
-                href={link.href}
-                target="_blank"
-                rel="noreferrer noopener"
-                icon={link.icon}
-                aria-label={link.label}
-              />
-            </Tooltip>
-          ) : (
+        {EXTERNAL_LINKS.map((link) => {
+          // Both buttons size to their content with the same side padding, so the labelled Docs
+          // button and the icon-only GitHub one read as a pair rather than a bar and a square.
+          const button = (
             <Button
               key={link.href}
               href={link.href}
               target="_blank"
               rel="noreferrer noopener"
               icon={link.icon}
-              block
+              style={{ width: 'auto', paddingInline: token.paddingXS }}
+              {...(link.iconOnly ? { 'aria-label': link.label } : {})}
             >
-              {link.label}
+              {link.iconOnly ? null : link.label}
             </Button>
-          ),
-        )}
+          );
+          return link.iconOnly ? (
+            <Tooltip key={link.href} title={link.label}>
+              {button}
+            </Tooltip>
+          ) : (
+            button
+          );
+        })}
       </Flex>
     </Flex>
   );

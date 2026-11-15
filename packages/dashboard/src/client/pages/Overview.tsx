@@ -3,14 +3,14 @@
  * poll on the shared interval — they are the two things this page exists to keep current.
  */
 import React from 'react';
-import { Table, Tag } from 'antd';
+import { Table } from 'antd';
 import type { TableColumnType } from 'antd';
 import { ActionKind, type QueuePageDto, type QueueDto, type StatsDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
-import { ACTIONS_CONFIG, PAUSE_STATE_FILTER_OPTIONS, pauseStateLabel } from '../constants/labels';
+import { ACTIONS_CONFIG, PAUSE_STATE_FILTER_OPTIONS } from '../constants/labels';
 import { KpiCards } from '../components/KpiCards';
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
@@ -19,6 +19,7 @@ import { PageBody, PageHeader } from '../components/layout';
 import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
 import { AppLink } from '../components/AppLink';
+import { PauseStateTag } from '../components/StateTags';
 
 const FILTER_KEYS = ['state'] as const;
 
@@ -60,9 +61,7 @@ export function OverviewPage(): React.ReactElement {
     {
       title: 'State',
       key: 'state',
-      render: (_, r) => (
-        <Tag color={r.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(r)}</Tag>
-      ),
+      render: (_, r) => <PauseStateTag row={r} />,
     },
     ...countColumns<QueueDto>(),
     actionsColumn<QueueDto>((r) => (

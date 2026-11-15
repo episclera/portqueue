@@ -8,7 +8,7 @@
  * instance detail page carries the full jobs table instead.
  */
 import React from 'react';
-import { Table, Tag, Tooltip } from 'antd';
+import { Table, Tooltip } from 'antd';
 import type { TableColumnType } from 'antd';
 import { ActionKind, type InstanceDto, type InstancePageDto } from '../../shared/dto';
 import { api } from '../queries/api';
@@ -21,7 +21,6 @@ import {
   LIVENESS_CONFIG,
   PAUSE_STATE_FILTER_OPTIONS,
   instanceRemovable,
-  pauseStateLabel,
 } from '../constants/labels';
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
@@ -32,6 +31,7 @@ import { totalCount } from '../components/format';
 import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
 import { AppLink } from '../components/AppLink';
+import { LivenessTag, PauseStateTag } from '../components/StateTags';
 
 const FILTER_KEYS = ['liveness', 'state'] as const;
 
@@ -80,18 +80,12 @@ export function InstancesPage(): React.ReactElement {
     {
       title: 'Liveness',
       key: 'liveness',
-      render: (_, r) => (
-        <Tag color={r.alive ? 'success' : 'default'}>
-          {r.alive ? LIVENESS_CONFIG.alive.label : LIVENESS_CONFIG.stale.label}
-        </Tag>
-      ),
+      render: (_, r) => <LivenessTag alive={r.alive} />,
     },
     {
       title: 'State',
       key: 'state',
-      render: (_, r) => (
-        <Tag color={r.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(r)}</Tag>
-      ),
+      render: (_, r) => <PauseStateTag row={r} />,
     },
     {
       // Both health columns name their subject in the header, not only in the hover: the hover is

@@ -10,20 +10,20 @@
  */
 import React from 'react';
 import { useHistory, useParams } from 'react-router-dom';
-import { Button, Card, Descriptions, Flex, Popconfirm, Skeleton, Tag, Typography } from 'antd';
+import { Button, Card, Descriptions, Flex, Popconfirm, Skeleton, Typography } from 'antd';
 import type { DescriptionsProps } from 'antd';
 import { ActionKind, type ScheduleDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
-import { ACTIONS_CONFIG, SCHEDULE_STATES_CONFIG } from '../constants/labels';
+import { ACTIONS_CONFIG } from '../constants/labels';
 import { JobsTable } from '../components/JobsTable';
 import { cadence } from '../components/SchedulesPanel';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
-import { truncate } from '../components/format';
 import { PageBody, PageHeader } from '../components/layout';
 import { AppLink } from '../components/AppLink';
+import { ScheduleStateTag } from '../components/StateTags';
 
 /** A monospaced value — ids, keys, cron patterns. */
 const Mono = ({ children }: { children: React.ReactNode }): React.ReactElement => (
@@ -44,7 +44,11 @@ export function ScheduleDetailPage(): React.ReactElement {
   if (schedule.error) {
     return (
       <>
-        <PageHeader title="Schedule" subtitle="This schedule could not be loaded." />
+        <PageHeader
+          entity="Schedule"
+          title={scheduleId}
+          subtitle="This schedule could not be loaded."
+        />
         <PageBody>
           <ErrorState
             title="Could not load this schedule"
@@ -61,7 +65,7 @@ export function ScheduleDetailPage(): React.ReactElement {
   if (!s) {
     return (
       <>
-        <PageHeader title="Schedule" subtitle="Loading the definition…" />
+        <PageHeader entity="Schedule" title={scheduleId} subtitle="Loading the definition…" />
         <PageBody>
           <Card>
             <Skeleton active paragraph={{ rows: 4 }} />
@@ -134,9 +138,6 @@ export function ScheduleDetailPage(): React.ReactElement {
     </Flex>
   );
 
-  const stateLabel = s.enabled
-    ? SCHEDULE_STATES_CONFIG.enabled.label
-    : SCHEDULE_STATES_CONFIG.disabled.label;
   const queueLink = <AppLink to={`/queues/${encodeURIComponent(s.queue)}`}>{s.queue}</AppLink>;
 
   const definition: DescriptionsProps['items'] = [
@@ -146,7 +147,7 @@ export function ScheduleDetailPage(): React.ReactElement {
     { key: 'timezone', label: 'Timezone', children: s.timezone ?? 'UTC' },
     { key: 'next', label: 'Next run', children: <Time value={s.nextRunAt} /> },
     { key: 'last', label: 'Last run', children: <Time value={s.lastRunAt} /> },
-    { key: 'state', label: 'State', children: stateLabel },
+    { key: 'state', label: 'State', children: <ScheduleStateTag enabled={s.enabled} /> },
     {
       key: 'idempotency',
       label: 'Idempotency key',
@@ -157,21 +158,9 @@ export function ScheduleDetailPage(): React.ReactElement {
   return (
     <>
       <PageHeader
-        title={
-          <Flex gap="middle" align="center" wrap>
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              Schedule
-            </Typography.Title>
-            {/* Truncated like a job id: the full value is one line down in the Definition card. */}
-            <Mono>{truncate(s.scheduleId, 14, 8)}</Mono>
-          </Flex>
-        }
-        subtitle={
-          <Flex gap="small" align="center" component="span">
-            <Tag color={s.enabled ? 'success' : 'default'}>{stateLabel}</Tag>
-            {queueLink}
-          </Flex>
-        }
+        entity="Schedule"
+        title={s.scheduleId}
+        tags={<ScheduleStateTag enabled={s.enabled} />}
         extra={actions}
       />
       <PageBody>

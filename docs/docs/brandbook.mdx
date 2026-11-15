@@ -136,6 +136,14 @@ from antd rather than building its own, so every surface behaves the same way.
   link colour, never as a tag or a code chip. A value styled as a tag reads as a label, so nobody
   thinks to click it. A long id stays truncated; the full value is on hover. In the dashboard that
   link is `AppLink` (antd's `Typography.Link`, routed through the app).
+- **A state is a coloured tag.** Every status or state — a job's status, a queue's or instance's
+  pause state, liveness, whether a schedule is enabled — renders as a tag, in tables, page headers
+  and detail cards alike, and its colour says what it means: green is healthy and working, amber
+  is deliberately held back, red is refusing work, grey is inactive. Job statuses use the status
+  palette. A tag is never a link (see above), and a state is never plain text.
+- **A detail page's header names the record.** A small grey line says what it is (`Job`,
+  `Queue`, `Schedule`, `Instance`), the next line gives its full id or name in bold — never
+  truncated — with its state tags beside it.
 - **Explanations are visible.** When a statistic card needs explaining, the tooltip hangs off an
   info icon after the card's title (hover or keyboard focus), never off a hover over the whole
   card — a tooltip nobody can see is there is a tooltip nobody reads.

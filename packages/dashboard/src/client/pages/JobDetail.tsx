@@ -37,10 +37,10 @@ import { LifecycleTimeline } from '../components/LifecycleTimeline';
 import { AddJobForm } from '../components/AddJobForm';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
-import { truncate } from '../components/format';
 import { StatusTag } from '../components/StatusTag';
 import { PageBody, PageHeader } from '../components/layout';
 import { AppLink } from '../components/AppLink';
+import { FlagTag } from '../components/StateTags';
 
 /**
  * Statuses a job can never leave. Everything else — PENDING, ACTIVE, RETRY — can still change
@@ -139,7 +139,7 @@ export function JobDetailPage(): React.ReactElement {
   if (job.error) {
     return (
       <>
-        <PageHeader title="Job" subtitle="This job could not be loaded." />
+        <PageHeader entity="Job" title={jobId} subtitle="This job could not be loaded." />
         <PageBody>
           <ErrorState
             title="Could not load this job"
@@ -154,7 +154,7 @@ export function JobDetailPage(): React.ReactElement {
   if (job.isLoading && !job.data) {
     return (
       <>
-        <PageHeader title="Job" subtitle="Loading the record…" />
+        <PageHeader entity="Job" title={jobId} subtitle="Loading the record…" />
         <PageBody>
           <Card>
             <Skeleton active paragraph={{ rows: 6 }} />
@@ -238,8 +238,8 @@ export function JobDetailPage(): React.ReactElement {
   const details: DescriptionsProps['items'] = [
     { key: 'id', label: 'Job id', children: <Mono>{j.id}</Mono> },
     { key: 'queue', label: 'Queue', children: <AppLink to={queuePath}>{j.queue}</AppLink> },
-    { key: 'status', label: 'Status', children: status },
-    { key: 'stalled', label: 'Stalled', children: j.stalled ? 'Yes' : 'No' },
+    { key: 'status', label: 'Status', children: <StatusTag status={rawStatus} label={status} /> },
+    { key: 'stalled', label: 'Stalled', children: <FlagTag on={j.stalled} /> },
     { key: 'priority', label: 'Priority', children: j.priority },
     {
       key: 'attempts',
@@ -288,21 +288,10 @@ export function JobDetailPage(): React.ReactElement {
   return (
     <>
       <PageHeader
-        title={
-          <Typography.Title
-            level={4}
-            style={{ margin: 0, fontFamily: token.fontFamilyCode }}
-            copyable={{ text: j.id, tooltips: ['Copy job id', 'Copied'] }}
-          >
-            {truncate(j.id, 14, 8)}
-          </Typography.Title>
-        }
-        subtitle={
-          <Flex gap="small" align="center" component="span">
-            <StatusTag status={rawStatus} label={status} />
-            <AppLink to={queuePath}>{j.queue}</AppLink>
-          </Flex>
-        }
+        entity="Job"
+        title={j.id}
+        copyable={{ text: j.id, label: 'job id' }}
+        tags={<StatusTag status={rawStatus} label={status} />}
         extra={actions}
       />
       <PageBody>

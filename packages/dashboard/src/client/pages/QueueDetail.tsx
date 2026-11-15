@@ -13,10 +13,11 @@ import { ActionKind, type QueuePageDto, type StatsDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
-import { ACTIONS_CONFIG, PAUSE_MODES_CONFIG, pauseStateLabel } from '../constants/labels';
+import { ACTIONS_CONFIG, PAUSE_MODES_CONFIG } from '../constants/labels';
 import { KpiCards } from '../components/KpiCards';
 import { JobsTable } from '../components/JobsTable';
 import { AddJobForm } from '../components/AddJobForm';
+import { PauseStateTag } from '../components/StateTags';
 
 export function QueueDetailPage(): React.ReactElement {
   const { name } = useParams<{ name: string }>();
@@ -43,8 +44,6 @@ export function QueueDetailPage(): React.ReactElement {
     onClick: ({ key }) =>
       void run({ kind: ActionKind.PAUSE, queue, mode: key as PauseMode }, 'Paused'),
   };
-
-  const description = info ? pauseStateLabel(info) : 'Jobs, activity and controls for this queue.';
 
   const actions = (
     <Flex gap="small" align="center" wrap>
@@ -84,7 +83,13 @@ export function QueueDetailPage(): React.ReactElement {
 
   return (
     <>
-      <PageHeader title={queue} subtitle={description} extra={actions} />
+      <PageHeader
+        entity="Queue"
+        title={queue}
+        tags={info ? <PauseStateTag row={info} /> : undefined}
+        subtitle="Jobs, activity and controls for this queue."
+        extra={actions}
+      />
       <PageBody>
         <KpiCards
           stats={stats.data}

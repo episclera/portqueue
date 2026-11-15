@@ -5,7 +5,7 @@
  * Each schedule id links to its detail page, where the jobs it produced are listed.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { App, Table, Tag, Typography } from 'antd';
+import { App, Table, Typography } from 'antd';
 import type { TableColumnType } from 'antd';
 import { ActionKind, type ScheduleDto, type SchedulePageDto } from '../../shared/dto';
 import { api, config } from '../queries/api';
@@ -13,13 +13,14 @@ import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import { ACTIONS_CONFIG, SCHEDULE_STATES_CONFIG } from '../constants/labels';
-import { truncate } from './format';
 import { TABLE_PROPS, actionsColumn, cappedRowSelection, dateColumn } from './table-columns';
 import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
 import type { FilterDef } from './FiltersModal';
 import { BulkActionsButton, RowAction, RowActions, type BulkItem } from './RowActions';
 import { AppLink } from './AppLink';
+import { MiddleTruncate } from './MiddleTruncate';
+import { ScheduleStateTag } from './StateTags';
 
 export interface SchedulesPanelProps {
   /** Narrow to one queue's schedules. Omitted on the all-queues page. */
@@ -86,12 +87,8 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
       key: 'scheduleId',
       // Generated schedule ids are as long as job ids, and truncate the same way.
       render: (_, r) => (
-        <AppLink
-          to={`/schedules/${encodeURIComponent(r.scheduleId)}`}
-          title={r.scheduleId}
-          aria-label={r.scheduleId}
-        >
-          {truncate(r.scheduleId)}
+        <AppLink to={`/schedules/${encodeURIComponent(r.scheduleId)}`} aria-label={r.scheduleId}>
+          <MiddleTruncate value={r.scheduleId} />
         </AppLink>
       ),
     },
@@ -111,11 +108,7 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
     {
       title: 'State',
       key: 'enabled',
-      render: (_, r) => (
-        <Tag color={r.enabled ? 'success' : 'default'}>
-          {r.enabled ? SCHEDULE_STATES_CONFIG.enabled.label : SCHEDULE_STATES_CONFIG.disabled.label}
-        </Tag>
-      ),
+      render: (_, r) => <ScheduleStateTag enabled={r.enabled} />,
     },
     actionsColumn<ScheduleDto>((r) => (
       <RowActions>

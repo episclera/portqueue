@@ -8,7 +8,7 @@
  * schedule produced, `instanceKey` to the jobs one instance claimed.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { App, Table, Tooltip } from 'antd';
+import { App, Table } from 'antd';
 import type { TableColumnType } from 'antd';
 import { JobStatus } from '../queries/enums';
 import { ActionKind, type JobDto, type JobPageDto } from '../../shared/dto';
@@ -17,7 +17,6 @@ import { queryKeys, usePolledQuery } from '../queries/use-queries';
 import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import { ACTIONS_CONFIG, STALLED, STATUSES_CONFIG, statusLabel } from '../constants/labels';
-import { truncate } from './format';
 import { TABLE_PROPS, actionsColumn, cappedRowSelection, dateColumn } from './table-columns';
 import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
@@ -25,6 +24,7 @@ import { StatusTag } from './StatusTag';
 import type { FilterDef } from './FiltersModal';
 import { BulkActionsButton, RowAction, RowActions, type BulkItem } from './RowActions';
 import { AppLink } from './AppLink';
+import { MiddleTruncate } from './MiddleTruncate';
 
 export interface JobsTableProps {
   /** Narrow to one queue. Omitted on views that span queues. */
@@ -99,9 +99,9 @@ export function JobsTable({
       title: 'Job',
       key: 'id',
       render: (_, r) => (
-        // A plain link, truncated; the full id is on hover and in the accessible name.
-        <AppLink to={`/jobs/${encodeURIComponent(r.id)}`} title={r.id} aria-label={r.id}>
-          {truncate(r.id)}
+        // A plain link, truncated; the full id is in the tooltip and the accessible name.
+        <AppLink to={`/jobs/${encodeURIComponent(r.id)}`} aria-label={r.id}>
+          <MiddleTruncate value={r.id} />
         </AppLink>
       ),
     },
@@ -125,14 +125,12 @@ export function JobsTable({
       // Linked: "what else was that process doing?" is the next question, one click away.
       render: (_, r) =>
         r.processedOnInstanceKey ? (
-          <Tooltip title={r.processedOnInstanceKey} placement="bottom">
-            <AppLink
-              to={`/instances/${encodeURIComponent(r.processedOnInstanceKey)}`}
-              aria-label={r.processedOnInstanceKey}
-            >
-              {truncate(r.processedOnInstanceKey, 8, 4)}
-            </AppLink>
-          </Tooltip>
+          <AppLink
+            to={`/instances/${encodeURIComponent(r.processedOnInstanceKey)}`}
+            aria-label={r.processedOnInstanceKey}
+          >
+            <MiddleTruncate value={r.processedOnInstanceKey} head={8} tail={4} />
+          </AppLink>
         ) : (
           '—'
         ),

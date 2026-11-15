@@ -10,12 +10,28 @@ import { Flex, Typography, theme } from 'antd';
 
 export interface PageHeaderProps {
   title: React.ReactNode;
+  /**
+   * What kind of record the page is about — "Job", "Queue". Rendered as a small grey line above
+   * the `title`, which then names the record itself in bold. Omitted on list pages.
+   */
+  entity?: string;
+  /** Make the title copyable (a record id), with this text and these tooltips. */
+  copyable?: { text: string; label: string };
+  /** The record's status/state tags, on the title's own line — beside the name they describe. */
+  tags?: React.ReactNode;
   subtitle?: React.ReactNode;
   /** Right-aligned actions (buttons, menus). */
   extra?: React.ReactNode;
 }
 
-export function PageHeader({ title, subtitle, extra }: PageHeaderProps): React.ReactElement {
+export function PageHeader({
+  title,
+  entity,
+  copyable,
+  tags,
+  subtitle,
+  extra,
+}: PageHeaderProps): React.ReactElement {
   const { token } = theme.useToken();
   return (
     <Flex
@@ -31,13 +47,33 @@ export function PageHeader({ title, subtitle, extra }: PageHeaderProps): React.R
       }}
     >
       <Flex vertical gap={token.marginXXS} style={{ minWidth: 0 }}>
-        {typeof title === 'string' ? (
-          <Typography.Title level={3} style={{ margin: 0 }}>
+        {entity ? (
+          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+            {entity}
+          </Typography.Text>
+        ) : null}
+        <Flex align="center" gap={token.marginXS} wrap>
+          {/* Never truncated: the title is where a record's whole id or name is read. */}
+          <Typography.Title
+            level={3}
+            style={{ margin: 0, wordBreak: 'break-word' }}
+            {...(copyable
+              ? {
+                  copyable: {
+                    text: copyable.text,
+                    tooltips: [`Copy ${copyable.label}`, 'Copied'],
+                  },
+                }
+              : {})}
+          >
             {title}
           </Typography.Title>
-        ) : (
-          title
-        )}
+          {tags != null ? (
+            <Flex gap={token.marginXXS} align="center">
+              {tags}
+            </Flex>
+          ) : null}
+        </Flex>
         {subtitle != null ? <Typography.Text type="secondary">{subtitle}</Typography.Text> : null}
       </Flex>
       {extra != null ? <div>{extra}</div> : null}
