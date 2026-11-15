@@ -6,8 +6,7 @@
  * reads as a warning in a table and as fine on a detail page would be worse than no colour at all.
  */
 import React from 'react';
-import clsx from 'clsx';
-import styles from './metrics.module.css';
+import { Typography } from 'antd';
 
 /**
  * Where a reading stops being comfortable. One pair for both metrics: now that CPU is a share of
@@ -42,20 +41,32 @@ export function metricTone(value: number | null): MetricTone {
   return 'normal';
 }
 
-export interface MetricValueProps {
+export interface MetricValueProps extends React.HTMLAttributes<HTMLSpanElement> {
   /** The formatted text to show. */
   children: React.ReactNode;
   tone: MetricTone;
 }
 
-/** A metric reading, coloured only once it is worth an operator's attention. */
-export function MetricValue({ children, tone }: MetricValueProps): React.ReactElement {
+/**
+ * A metric reading, coloured only once it is worth an operator's attention. Forwards its ref and
+ * props because a `Tooltip` wraps it in both tables: antd anchors the bubble on the child's DOM node.
+ */
+export const MetricValue = React.forwardRef<HTMLSpanElement, MetricValueProps>(function MetricValue(
+  { children, tone, ...rest },
+  ref,
+): React.ReactElement {
   return (
-    <span
-      className={clsx(styles.toned, tone !== 'normal' && styles[tone])}
+    <Typography.Text
+      {...rest}
+      ref={ref}
+      {...(tone === 'normal' ? {} : { type: tone === 'warn' ? 'warning' : 'danger', strong: true })}
       title={tone === 'normal' ? undefined : `Running ${tone}`}
+      style={{
+        color: tone === 'normal' ? 'inherit' : undefined,
+        fontVariantNumeric: 'tabular-nums',
+      }}
     >
       {children}
-    </span>
+    </Typography.Text>
   );
-}
+});

@@ -4,17 +4,10 @@
  */
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import {
-  Button,
-  CaretDownIcon,
-  Content,
-  Dropdown,
-  Inline,
-  PageHeader,
-  Popconfirm,
-  Stack,
-} from '@portqueue/ui';
-import type { DropdownItem } from '@portqueue/ui';
+import { Button, Dropdown, Flex, Popconfirm } from 'antd';
+import type { MenuProps } from 'antd';
+import { CaretDownIcon } from '../icons';
+import { PageBody, PageHeader } from '../components/layout';
 import { PauseMode } from '../queries/enums';
 import { ActionKind, type QueuePageDto, type StatsDto } from '../../shared/dto';
 import { api } from '../queries/api';
@@ -42,24 +35,19 @@ export function QueueDetailPage(): React.ReactElement {
 
   const [addOpen, setAddOpen] = useState(false);
 
-  const pauseItems: DropdownItem[] = [
-    {
-      key: PauseMode.PROCESSING,
-      label: PAUSE_MODES_CONFIG[PauseMode.PROCESSING].label,
-      onClick: () =>
-        void run({ kind: ActionKind.PAUSE, queue, mode: PauseMode.PROCESSING }, 'Paused'),
-    },
-    {
-      key: PauseMode.ALL,
-      label: PAUSE_MODES_CONFIG[PauseMode.ALL].label,
-      onClick: () => void run({ kind: ActionKind.PAUSE, queue, mode: PauseMode.ALL }, 'Paused'),
-    },
-  ];
+  const pauseMenu: MenuProps = {
+    items: [PauseMode.PROCESSING, PauseMode.ALL].map((mode) => ({
+      key: mode,
+      label: PAUSE_MODES_CONFIG[mode].label,
+    })),
+    onClick: ({ key }) =>
+      void run({ kind: ActionKind.PAUSE, queue, mode: key as PauseMode }, 'Paused'),
+  };
 
   const description = info ? pauseStateLabel(info) : 'Jobs, activity and controls for this queue.';
 
   const actions = (
-    <Inline gap={2} align="center" wrap>
+    <Flex gap="small" align="center" wrap>
       {info?.processingPaused ? (
         <Button
           icon={ACTIONS_CONFIG.resume.icon}
@@ -68,44 +56,44 @@ export function QueueDetailPage(): React.ReactElement {
           {ACTIONS_CONFIG.resume.label}
         </Button>
       ) : (
-        <Dropdown items={pauseItems} align="right">
+        <Dropdown menu={pauseMenu} trigger={['click']} placement="bottomRight">
           <Button icon={ACTIONS_CONFIG.pause.icon}>
             {ACTIONS_CONFIG.pause.label} <CaretDownIcon aria-hidden />
           </Button>
         </Dropdown>
       )}
-      <Button variant="primary" icon={ACTIONS_CONFIG.add.icon} onClick={() => setAddOpen(true)}>
+      <Button type="primary" icon={ACTIONS_CONFIG.add.icon} onClick={() => setAddOpen(true)}>
         {ACTIONS_CONFIG.add.label}
       </Button>
       {info && (
         <Popconfirm
           title="Remove this queue from the database?"
           description="Refused while a running process still declares this queue. Job rows are untouched."
-          okDanger
+          okText="Remove queue"
+          cancelText="Keep"
+          okButtonProps={{ danger: true }}
           onConfirm={() => void run({ kind: ActionKind.REMOVE_QUEUE, queue }, 'Queue removed')}
         >
-          <Button variant="danger" icon={ACTIONS_CONFIG.remove.icon}>
+          <Button danger icon={ACTIONS_CONFIG.remove.icon}>
             Remove queue
           </Button>
         </Popconfirm>
       )}
-    </Inline>
+    </Flex>
   );
 
   return (
     <>
       <PageHeader title={queue} subtitle={description} extra={actions} />
-      <Content>
-        <Stack gap={4}>
-          <KpiCards
-            stats={stats.data}
-            loading={stats.isLoading}
-            error={stats.error}
-            onRetry={() => void stats.refetch()}
-          />
-          <JobsTable queue={queue} />
-        </Stack>
-      </Content>
+      <PageBody>
+        <KpiCards
+          stats={stats.data}
+          loading={stats.isLoading}
+          error={stats.error}
+          onRetry={() => void stats.refetch()}
+        />
+        <JobsTable queue={queue} />
+      </PageBody>
 
       <AddJobForm open={addOpen} queue={queue} onClose={() => setAddOpen(false)} />
     </>

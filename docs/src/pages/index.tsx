@@ -17,8 +17,8 @@ import { TeamGrid } from '@site/src/components/TeamGrid';
 import styles from './index.module.css';
 
 /**
- * The docs site has no dependency on `@portqueue/ui`, so it imports `@ant-design/icons`
- * directly (the dashboard goes through that package's curated `icons.ts` re-export instead).
+ * The docs site imports `@ant-design/icons` directly; it shares design tokens with the dashboard
+ * (`@portqueue/theme`), not components or the dashboard's curated `icons.ts` list.
  */
 const FEATURES: {
   icon: ComponentType;

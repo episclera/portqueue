@@ -1,29 +1,28 @@
 /**
- * The frame every table on the dashboard sits in. The top row carries the result count on the
- * left and the table's controls on the right (bulk actions, Filters, search); a second row lists
- * the applied filters as dismissible chips, so which filters are on is visible without opening
- * the dialog. The table spans the card's full width, and the footer always shows the numbered
- * pagination — even for a single page — so the card never changes height.
+ * The frame every table on the dashboard sits in: an antd `Card` whose header carries the result
+ * count on the left and the table's controls on the right (bulk actions, Filters, search). A second
+ * row lists the applied filters as closable tags, so which filters are on is visible without
+ * opening the dialog. The footer always shows the numbered pagination — even for a single page — so
+ * the card never changes height.
  *
- * The card owns three mutually exclusive body states: skeleton rows on first load, an error
- * notice when the query failed, and the table itself. A failure replaces the table rather than
- * sitting above stale rows — a stale row read as a current one is worse than no row at all.
+ * The card owns three mutually exclusive body states: a skeleton on first load, an error notice when
+ * the query failed, and the table itself. A failure replaces the table rather than sitting above
+ * stale rows — a stale row read as a current one is worse than no row at all.
  */
 import React, { useRef, useState } from 'react';
-import { Button, Card, CloseIcon, Pagination, ScrollShadow, SkeletonText } from '@portqueue/ui';
+import { Button, Card, Flex, Pagination, Skeleton, Tag, Typography, theme } from 'antd';
 import { ACTIONS_CONFIG } from '../constants/labels';
 import { PAGE_SIZE } from '../queries/use-table-params';
 import { SearchInput } from './SearchInput';
 import { ErrorState } from './states';
 import { FiltersModal, type FilterDef } from './FiltersModal';
-import styles from './TableCard.module.css';
 
 export interface TableCardProps {
   /** Total rows matching the query across every page (not just the visible one). */
   total: number;
   page: number;
   onPageChange: (page: number) => void;
-  /** First-load flag — renders skeleton rows in place of the table. */
+  /** First-load flag — renders a skeleton in place of the table. */
   loading?: boolean;
   /** Set when the query failed; renders the error notice instead of the table. */
   error?: unknown;
@@ -39,20 +38,18 @@ export interface TableCardProps {
     defs: FilterDef[];
     values: Record<string, string[] | undefined>;
     onChange: (values: Record<string, string[]>) => void;
-    /** Remove a single applied value — what a chip's close button does. */
+    /** Remove a single applied value — what a tag's close button does. */
     onClear: (key: string, value: string) => void;
   };
-  /** Leading control on the toolbar's right side — e.g. the bulk-actions button. */
+  /** Leading control on the header's right side — e.g. the bulk-actions button. */
   toolbarLeading?: React.ReactNode;
-  /** Label for the pagination landmark, e.g. "Jobs pagination". */
-  paginationLabel?: string;
   children: React.ReactNode;
 }
 
 const countFilters = (values: Record<string, string[] | undefined>): number =>
   Object.values(values).reduce((n, list) => n + (list?.length ?? 0), 0);
 
-/** Every applied filter, flattened to one chip per value with its human labels resolved. */
+/** Every applied filter, flattened to one tag per value with its human labels resolved. */
 function appliedChips(
   defs: FilterDef[],
   values: Record<string, string[] | undefined>,
@@ -78,32 +75,30 @@ export function TableCard({
   search,
   filters,
   toolbarLeading,
-  paginationLabel = 'Pagination',
   children,
 }: TableCardProps): React.ReactElement {
-  const rootRef = useRef<HTMLElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const { token } = theme.useToken();
   const activeFilters = filters ? countFilters(filters.values) : 0;
   const chips = filters ? appliedChips(filters.defs, filters.values) : [];
+  const padded = { padding: `${token.paddingSM}px ${token.padding}px` };
 
   // Turning the page scrolls the table's own top into view, not the whole document.
   const goToPage = (next: number): void => {
     onPageChange(next);
-    rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    rootRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   };
 
   return (
-    <Card ref={rootRef} bodyPadding={false}>
-      <div className={styles.toolbar}>
-        <span className={styles.results}>Results ({total})</span>
-        <div className={styles.controls}>
+    <Card
+      ref={rootRef}
+      title={`Results (${total})`}
+      extra={
+        <Flex gap="small" align="center" wrap>
           {toolbarLeading}
           {filters ? (
-            <Button
-              size="sm"
-              icon={ACTIONS_CONFIG.filters.icon}
-              onClick={() => setFiltersOpen(true)}
-            >
+            <Button icon={ACTIONS_CONFIG.filters.icon} onClick={() => setFiltersOpen(true)}>
               {ACTIONS_CONFIG.filters.label}
               {activeFilters > 0 ? ` (${activeFilters})` : ''}
             </Button>
@@ -115,51 +110,56 @@ export function TableCard({
               placeholder={search.placeholder}
             />
           ) : null}
-        </div>
-      </div>
-
+        </Flex>
+      }
+      styles={{ body: { padding: 0 }, header: { flexWrap: 'wrap', gap: token.marginSM } }}
+    >
       {chips.length > 0 && filters ? (
-        <div className={styles.chipBar}>
+        <Flex
+          gap="small"
+          wrap
+          align="center"
+          style={{ ...padded, borderBottom: `1px solid ${token.colorBorderSecondary}` }}
+        >
           {chips.map((chip) => (
-            <span key={`${chip.key}:${chip.value}`} className={styles.chip}>
-              <span>
-                <span className={styles.chipLabel}>{chip.label}:</span> {chip.valueLabel}
-              </span>
-              <button
-                className={styles.chipClear}
-                type="button"
-                aria-label={`Remove the ${chip.label} filter ${chip.valueLabel}`}
-                onClick={() => filters.onClear(chip.key, chip.value)}
-              >
-                <CloseIcon aria-hidden />
-              </button>
-            </span>
+            <Tag
+              key={`${chip.key}:${chip.value}`}
+              closable={{ 'aria-label': `Remove the ${chip.label} filter ${chip.valueLabel}` }}
+              onClose={(e) => {
+                e.preventDefault();
+                filters.onClear(chip.key, chip.value);
+              }}
+            >
+              <Typography.Text type="secondary">{chip.label}:</Typography.Text> {chip.valueLabel}
+            </Tag>
           ))}
-        </div>
+        </Flex>
       ) : null}
 
       {error ? (
-        <div className={styles.padded}>
+        <div style={{ padding: token.padding }}>
           <ErrorState title={errorTitle} error={error} {...(onRetry ? { onRetry } : {})} />
         </div>
       ) : loading ? (
-        <div className={styles.padded}>
-          <SkeletonText rows={6} />
+        <div style={{ padding: token.padding }}>
+          <Skeleton active title={false} paragraph={{ rows: 6 }} />
         </div>
       ) : (
-        // Tables run edge to edge; the fades mark a table wider than the card as scrollable.
-        <ScrollShadow>{children}</ScrollShadow>
+        children
       )}
 
-      <div className={styles.footer}>
+      <Flex
+        justify="flex-end"
+        style={{ ...padded, borderTop: `1px solid ${token.colorBorderSecondary}` }}
+      >
         <Pagination
-          page={page}
+          current={page}
           total={total}
           pageSize={PAGE_SIZE}
+          showSizeChanger={false}
           onChange={goToPage}
-          label={paginationLabel}
         />
-      </div>
+      </Flex>
 
       {filters ? (
         <FiltersModal

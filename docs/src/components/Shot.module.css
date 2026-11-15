@@ -20,10 +20,10 @@
   flex: 1 1 320px;
   max-width: 100%;
   padding: 0;
-  border: 1px solid var(--secondary);
+  border: 1px solid var(--pq-color-border);
   border-radius: 12px;
   overflow: hidden;
-  background: var(--surface);
+  background: var(--pq-color-surface);
   box-shadow: var(--ifm-global-shadow-lw);
   cursor: zoom-in;
   transition: box-shadow var(--ifm-transition-fast) ease-out;

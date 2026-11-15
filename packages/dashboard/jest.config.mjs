@@ -4,13 +4,16 @@ export default {
   // Default to Node; component tests opt into jsdom via a per-file docblock:
   //   /** @jest-environment jsdom */
   testEnvironment: 'node',
+  // jsdom gaps antd relies on (matchMedia, pseudo-element getComputedStyle); a no-op under node.
+  setupFiles: ['<rootDir>/src/test-support/jsdom-setup.ts'],
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.test.ts', '**/*.test.tsx'],
   moduleNameMapper: {
     // Resolve workspace siblings to their source so tests need no prior build.
     '^@portqueue/core$': '<rootDir>/../core/src/index.ts',
-    '^@portqueue/ui$': '<rootDir>/../ui/src/index.ts',
+    '^@portqueue/theme$': '<rootDir>/../theme/src/index.ts',
+    '^@portqueue/theme/theme\\.css$': '<rootDir>/../theme/src/theme.css',
     // @ant-design/icons resolves to its untranspiled `es/` build, which Jest won't transform
     // (node_modules is not in `transform`). Point it at the CJS build instead — Vite picks the
     // ESM one for the real bundle, so this only affects tests. The second rule is needed because

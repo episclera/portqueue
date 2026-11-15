@@ -10,20 +10,8 @@
  */
 import React from 'react';
 import { Link, useHistory, useParams } from 'react-router-dom';
-import {
-  Button,
-  Card,
-  Code,
-  Content,
-  Inline,
-  Mono,
-  PageHeader,
-  Popconfirm,
-  Skeleton,
-  Stack,
-  Tag,
-  Title,
-} from '@portqueue/ui';
+import { Button, Card, Descriptions, Flex, Popconfirm, Skeleton, Tag, Typography } from 'antd';
+import type { DescriptionsProps } from 'antd';
 import { ActionKind, type ScheduleDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
@@ -34,22 +22,12 @@ import { cadence } from '../components/SchedulesPanel';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
 import { truncate } from '../components/format';
-import styles from './ScheduleDetail.module.css';
+import { PageBody, PageHeader } from '../components/layout';
 
-function Item({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <div>
-      <dt className={styles.descLabel}>{label}</dt>
-      <dd className={styles.descValue}>{children}</dd>
-    </div>
-  );
-}
+/** A monospaced value — ids, keys, cron patterns. */
+const Mono = ({ children }: { children: React.ReactNode }): React.ReactElement => (
+  <Typography.Text code>{children}</Typography.Text>
+);
 
 export function ScheduleDetailPage(): React.ReactElement {
   const { id } = useParams<{ id: string }>();
@@ -66,16 +44,14 @@ export function ScheduleDetailPage(): React.ReactElement {
     return (
       <>
         <PageHeader title="Schedule" subtitle="This schedule could not be loaded." />
-        <Content>
-          <Stack gap={3}>
-            <ErrorState
-              title="Could not load this schedule"
-              error={schedule.error}
-              onRetry={() => void schedule.refetch()}
-            />
-            <Link to="/schedules">Back to schedules</Link>
-          </Stack>
-        </Content>
+        <PageBody>
+          <ErrorState
+            title="Could not load this schedule"
+            error={schedule.error}
+            onRetry={() => void schedule.refetch()}
+          />
+          <Link to="/schedules">Back to schedules</Link>
+        </PageBody>
       </>
     );
   }
@@ -85,14 +61,11 @@ export function ScheduleDetailPage(): React.ReactElement {
     return (
       <>
         <PageHeader title="Schedule" subtitle="Loading the definition…" />
-        <Content>
+        <PageBody>
           <Card>
-            <Stack gap={3}>
-              <Skeleton height={18} width="40%" />
-              <Skeleton height={100} />
-            </Stack>
+            <Skeleton active paragraph={{ rows: 4 }} />
           </Card>
-        </Content>
+        </PageBody>
       </>
     );
   }
@@ -107,7 +80,7 @@ export function ScheduleDetailPage(): React.ReactElement {
   };
 
   const actions = (
-    <Inline gap={2} wrap>
+    <Flex gap="small" wrap>
       {s.enabled ? (
         <Popconfirm
           title="Stop this schedule from firing?"
@@ -150,76 +123,69 @@ export function ScheduleDetailPage(): React.ReactElement {
         description="It stops firing permanently. Jobs it already created are kept."
         okText={ACTIONS_CONFIG.remove.label}
         cancelText="Keep"
-        okDanger
+        okButtonProps={{ danger: true }}
         onConfirm={() => void remove()}
       >
-        <Button variant="danger" icon={ACTIONS_CONFIG.remove.icon}>
+        <Button danger icon={ACTIONS_CONFIG.remove.icon}>
           {ACTIONS_CONFIG.remove.label}
         </Button>
       </Popconfirm>
-    </Inline>
+    </Flex>
   );
+
+  const stateLabel = s.enabled
+    ? SCHEDULE_STATES_CONFIG.enabled.label
+    : SCHEDULE_STATES_CONFIG.disabled.label;
+  const queueLink = <Link to={`/queues/${encodeURIComponent(s.queue)}`}>{s.queue}</Link>;
+
+  const definition: DescriptionsProps['items'] = [
+    { key: 'id', label: 'Schedule id', children: <Mono>{s.scheduleId}</Mono> },
+    { key: 'queue', label: 'Queue', children: queueLink },
+    { key: 'cadence', label: 'Cadence', children: s.cron ? <Mono>{s.cron}</Mono> : cadence(s) },
+    { key: 'timezone', label: 'Timezone', children: s.timezone ?? 'UTC' },
+    { key: 'next', label: 'Next run', children: <Time value={s.nextRunAt} /> },
+    { key: 'last', label: 'Last run', children: <Time value={s.lastRunAt} /> },
+    { key: 'state', label: 'State', children: stateLabel },
+    {
+      key: 'idempotency',
+      label: 'Idempotency key',
+      children: s.idempotencyKey ? <Mono>{s.idempotencyKey}</Mono> : '—',
+    },
+  ];
 
   return (
     <>
       <PageHeader
         title={
-          <Inline gap={3} align="center" wrap>
-            <Title level={4} as="span">
+          <Flex gap="middle" align="center" wrap>
+            <Typography.Title level={4} style={{ margin: 0 }}>
               Schedule
-            </Title>
+            </Typography.Title>
             {/* Truncated like a job id: the full value is one line down in the Definition card. */}
             <Mono>{truncate(s.scheduleId, 14, 8)}</Mono>
-          </Inline>
+          </Flex>
         }
         subtitle={
-          <Inline gap={2} align="center">
-            <Tag tone={s.enabled ? 'success' : 'neutral'}>
-              {s.enabled
-                ? SCHEDULE_STATES_CONFIG.enabled.label
-                : SCHEDULE_STATES_CONFIG.disabled.label}
-            </Tag>
-            <Link to={`/queues/${encodeURIComponent(s.queue)}`}>{s.queue}</Link>
-          </Inline>
+          <Flex gap="small" align="center" component="span">
+            <Tag color={s.enabled ? 'success' : 'default'}>{stateLabel}</Tag>
+            {queueLink}
+          </Flex>
         }
         extra={actions}
       />
-      <Content>
-        <Stack gap={4}>
-          <Card title="Definition">
-            <dl className={styles.descGrid}>
-              <Item label="Schedule id">
-                <Mono>{s.scheduleId}</Mono>
-              </Item>
-              <Item label="Queue">
-                <Link to={`/queues/${encodeURIComponent(s.queue)}`}>{s.queue}</Link>
-              </Item>
-              <Item label="Cadence">{s.cron ? <Code>{s.cron}</Code> : cadence(s)}</Item>
-              <Item label="Timezone">{s.timezone ?? 'UTC'}</Item>
-              <Item label="Next run">
-                <Time value={s.nextRunAt} />
-              </Item>
-              <Item label="Last run">
-                <Time value={s.lastRunAt} />
-              </Item>
-              <Item label="State">
-                {s.enabled
-                  ? SCHEDULE_STATES_CONFIG.enabled.label
-                  : SCHEDULE_STATES_CONFIG.disabled.label}
-              </Item>
-              <Item label="Idempotency key">
-                {s.idempotencyKey ? <Mono>{s.idempotencyKey}</Mono> : '—'}
-              </Item>
-            </dl>
-          </Card>
+      <PageBody>
+        <Card title="Definition">
+          <Descriptions column={{ xs: 1, sm: 2, lg: 3 }} items={definition} />
+        </Card>
 
-          <Stack gap={2}>
-            <Title level={5}>Jobs produced</Title>
-            {/* Its own URL param prefix, so this table's paging never collides with another. */}
-            <JobsTable queue={s.queue} scheduleId={s.scheduleId} prefix="scheduleJobs" />
-          </Stack>
-        </Stack>
-      </Content>
+        <Flex vertical gap="small">
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            Jobs produced
+          </Typography.Title>
+          {/* Its own URL param prefix, so this table's paging never collides with another. */}
+          <JobsTable queue={s.queue} scheduleId={s.scheduleId} prefix="scheduleJobs" />
+        </Flex>
+      </PageBody>
     </>
   );
 }

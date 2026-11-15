@@ -1,6 +1,6 @@
 /**
  * Shared harness for the client render tests: a stubbed axios adapter plus the provider stack the
- * app expects (theme, toasts, query cache, live toggle).
+ * app expects (antd's theme and `App`, the query cache, the live toggle).
  *
  * The stub replaces axios' **adapter** rather than `global.fetch`, so requests still travel the
  * real client — including the response interceptor that turns a server's `{ error }` body into
@@ -10,11 +10,12 @@
 import React from 'react';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, ToastProvider } from '@portqueue/ui';
+import { App as AntApp, ConfigProvider } from 'antd';
 import type { AxiosAdapter, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { App } from '../client/App';
 import { LiveProvider } from '../client/components/LiveProvider';
 import { http } from '../client/queries/api';
+import { themeConfig } from '../client/theme';
 
 /** A request the stub captured, in the terms a test asserts on. */
 export interface CapturedRequest {
@@ -106,15 +107,17 @@ export function createHarness(options: StubOptions = {}): Harness {
       defaultOptions: { queries: { retry: false, staleTime: 0, gcTime: 0 } },
     });
     render(
-      <ThemeProvider mode="light">
-        <ToastProvider>
+      // Motion off: antd's enter/leave animations would otherwise keep a closed popover in the DOM
+      // until a transition jsdom never runs has finished.
+      <ConfigProvider theme={themeConfig('light', true)}>
+        <AntApp>
           <QueryClientProvider client={client}>
             <LiveProvider>
-              <App onThemeChange={() => {}} />
+              <App mode="light" onThemeChange={() => {}} />
             </LiveProvider>
           </QueryClientProvider>
-        </ToastProvider>
-      </ThemeProvider>,
+        </AntApp>
+      </ConfigProvider>,
     );
   };
 

@@ -4,8 +4,8 @@
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Content, PageHeader, Stack, Table, Tag } from '@portqueue/ui';
-import type { TableColumn } from '@portqueue/ui';
+import { Table, Tag } from 'antd';
+import type { TableColumnType } from 'antd';
 import { ActionKind, type QueuePageDto, type QueueDto, type StatsDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
@@ -15,7 +15,8 @@ import { ACTIONS_CONFIG, PAUSE_STATE_FILTER_OPTIONS, pauseStateLabel } from '../
 import { KpiCards } from '../components/KpiCards';
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
-import { countColumns } from '../components/table-columns';
+import { TABLE_PROPS, actionsColumn, countColumns } from '../components/table-columns';
+import { PageBody, PageHeader } from '../components/layout';
 import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
 
@@ -50,101 +51,91 @@ export function OverviewPage(): React.ReactElement {
   const rows = queues.data?.items ?? [];
   const total = queues.data?.total ?? 0;
 
-  const columns: TableColumn<QueueDto>[] = [
+  const columns: TableColumnType<QueueDto>[] = [
     {
       title: 'Queue',
       key: 'name',
-      render: (r) => <Link to={`/queues/${encodeURIComponent(r.name)}`}>{r.name}</Link>,
+      render: (_, r) => <Link to={`/queues/${encodeURIComponent(r.name)}`}>{r.name}</Link>,
     },
     {
       title: 'State',
       key: 'state',
-      render: (r) => (
-        <Tag tone={r.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(r)}</Tag>
+      render: (_, r) => (
+        <Tag color={r.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(r)}</Tag>
       ),
     },
     ...countColumns<QueueDto>(),
-    {
-      title: 'Actions',
-      key: 'actions',
-      // Buttons hug the right edge; the title stays on the left, where it reads as this column's.
-      align: 'right',
-      headerAlign: 'left',
-      render: (r) => (
-        <RowActions>
-          {r.processingPaused ? (
-            <RowAction
-              icon={ACTIONS_CONFIG.resume.icon}
-              label={ACTIONS_CONFIG.resume.label}
-              onClick={() => void run({ kind: ActionKind.RESUME, queue: r.name }, 'Resumed')}
-            />
-          ) : (
-            <RowAction
-              icon={ACTIONS_CONFIG.pause.icon}
-              label={ACTIONS_CONFIG.pause.label}
-              confirm={{ title: 'Pause processing on this queue?' }}
-              onClick={() => void run({ kind: ActionKind.PAUSE, queue: r.name }, 'Paused')}
-            />
-          )}
-        </RowActions>
-      ),
-    },
+    actionsColumn<QueueDto>((r) => (
+      <RowActions>
+        {r.processingPaused ? (
+          <RowAction
+            icon={ACTIONS_CONFIG.resume.icon}
+            label={ACTIONS_CONFIG.resume.label}
+            onClick={() => void run({ kind: ActionKind.RESUME, queue: r.name }, 'Resumed')}
+          />
+        ) : (
+          <RowAction
+            icon={ACTIONS_CONFIG.pause.icon}
+            label={ACTIONS_CONFIG.pause.label}
+            confirm={{ title: 'Pause processing on this queue?' }}
+            onClick={() => void run({ kind: ActionKind.PAUSE, queue: r.name }, 'Paused')}
+          />
+        )}
+      </RowActions>
+    )),
   ];
 
   return (
     <>
       <PageHeader title="Overview" subtitle="Live queue health across every queue." />
-      <Content>
-        <Stack gap={4}>
-          <KpiCards
-            stats={stats.data}
-            loading={stats.isLoading}
-            error={stats.error}
-            onRetry={() => void stats.refetch()}
-          />
+      <PageBody>
+        <KpiCards
+          stats={stats.data}
+          loading={stats.isLoading}
+          error={stats.error}
+          onRetry={() => void stats.refetch()}
+        />
 
-          <TableCard
-            total={total}
-            page={clampedPage(params.page, total)}
-            onPageChange={params.setPage}
-            loading={queues.isLoading}
-            error={queues.error}
-            errorTitle="Could not load queues"
-            onRetry={() => void queues.refetch()}
-            paginationLabel="Queues pagination"
-            search={{
-              value: params.search,
-              onChange: params.setSearch,
-              placeholder: 'Search queue name',
+        <TableCard
+          total={total}
+          page={clampedPage(params.page, total)}
+          onPageChange={params.setPage}
+          loading={queues.isLoading}
+          error={queues.error}
+          errorTitle="Could not load queues"
+          onRetry={() => void queues.refetch()}
+          search={{
+            value: params.search,
+            onChange: params.setSearch,
+            placeholder: 'Search queue name',
+          }}
+          filters={{
+            defs: FILTER_DEFS,
+            values: params.filters,
+            onChange: params.setFilters,
+            onClear: (key, value) => params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
+          }}
+        >
+          <Table<QueueDto>
+            {...TABLE_PROPS}
+            rowKey={(r) => r.name}
+            columns={columns}
+            dataSource={rows}
+            locale={{
+              emptyText: params.search ? (
+                <EmptyState message={`No queues match “${params.search}”.`} />
+              ) : (
+                <EmptyState
+                  message="No queues yet."
+                  hint="A queue appears here the first time your app adds a job to it — here's how to add your first one."
+                  docsHref={DOCS.firstQueue}
+                  docsLabel="Getting started"
+                />
+              ),
             }}
-            filters={{
-              defs: FILTER_DEFS,
-              values: params.filters,
-              onChange: params.setFilters,
-              onClear: (key, value) =>
-                params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
-            }}
-          >
-            <Table<QueueDto>
-              rowKey={(r) => r.name}
-              columns={columns}
-              data={rows}
-              empty={
-                params.search ? (
-                  <EmptyState message={`No queues match “${params.search}”.`} />
-                ) : (
-                  <EmptyState
-                    message="No queues yet."
-                    hint="A queue appears here the first time your app adds a job to it — here's how to add your first one."
-                    docsHref={DOCS.firstQueue}
-                    docsLabel="Getting started"
-                  />
-                )
-              }
-            />
-          </TableCard>
-        </Stack>
-      </Content>
+          />
+        </TableCard>
+      </PageBody>
     </>
   );
 }

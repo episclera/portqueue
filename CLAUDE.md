@@ -275,7 +275,14 @@ in three sections, and no section at all when there is nothing to put in it.
 - `packages/cli` → `@portqueue/cli`
   - `src/commands/` — **one file per command, with its test beside it**. `commands/index.ts` is the
     registry both dispatch and the generated help are derived from.
-- `packages/ui` → `@portqueue/ui` (private, never published)
+- `packages/theme` → `@portqueue/theme` (private, never published) — the design tokens and nothing
+  else: no components, no React. `src/tokens.json` is the one place a colour, radius, shadow, font
+  or duration is written; the package exports it raw, as a typed `tokens` object, and as
+  `theme.css` (`--pq-*` variables, dark under `data-theme="dark"`), which `npm run build -w
+  @portqueue/theme` generates from the JSON and lint checks is in sync. The dashboard renders with
+  **antd** and maps the tokens onto antd's theme in `dashboard/src/client/theme.ts`; the docs render
+  with Docusaurus and point Infima's variables at the `--pq-*` ones. Reach for an antd component
+  before writing one in the dashboard, and never hard-code a value a token covers.
 - `packages/eslint-config` → private shared lint base
 - `docs/` → Docusaurus site
 

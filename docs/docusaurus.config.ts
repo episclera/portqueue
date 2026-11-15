@@ -3,9 +3,6 @@ import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import sidebars from './sidebars';
 
-// Brand tokens mirrored from `@portqueue/ui` (`tokens.ts`).
-// Kept in sync manually here so the docs chrome (Infima) matches the dashboard
-// without importing `@portqueue/ui` into the static Docusaurus config.
 const REPO_URL = 'https://github.com/episclera/portqueue';
 
 // --- Footer "Docs" column, derived from the left sidebar ---------------------------------
@@ -139,7 +136,9 @@ const config: Config = {
           onUntruncatedBlogPosts: 'warn',
         },
         theme: {
-          customCss: './src/css/custom.css',
+          // The shared design tokens first (`--pq-*`, generated from @portqueue/theme's
+          // tokens.json), then the Infima mapping that reads them.
+          customCss: [require.resolve('@portqueue/theme/theme.css'), './src/css/custom.css'],
         },
       } satisfies Preset.Options,
     ],

@@ -7,7 +7,8 @@
  * the docs that show how.
  */
 import React from 'react';
-import { Alert, Button, OpenIcon, Stack, Text } from '@portqueue/ui';
+import { Alert, Button, Empty, Flex, Typography } from 'antd';
+import { OpenIcon } from '../icons';
 
 /** Where the docs live, so an empty state can point at the page that fixes it. */
 const DOCS_BASE = 'https://episclera.github.io/portqueue/docs';
@@ -43,21 +44,23 @@ export function ErrorState({ title, error, onRetry }: ErrorStateProps): React.Re
     <Alert
       type="error"
       title={title}
+      showIcon
       action={
         onRetry ? (
-          <Button size="sm" onClick={onRetry}>
+          <Button size="small" onClick={onRetry}>
             Retry
           </Button>
         ) : undefined
       }
-    >
-      <Stack gap={1}>
-        <Text small>{messageOf(error)}</Text>
-        <Text tone="muted" small>
-          The queue itself keeps running — this only affects what the dashboard can display.
-        </Text>
-      </Stack>
-    </Alert>
+      description={
+        <Flex vertical gap={4}>
+          <Typography.Text>{messageOf(error)}</Typography.Text>
+          <Typography.Text type="secondary">
+            The queue itself keeps running — this only affects what the dashboard can display.
+          </Typography.Text>
+        </Flex>
+      }
+    />
   );
 }
 
@@ -82,18 +85,23 @@ export function EmptyState({
   docsLabel = 'Read the guide',
 }: EmptyStateProps): React.ReactElement {
   return (
-    <Stack gap={1} align="center">
-      <Text tone="muted">{message}</Text>
-      {hint ? (
-        <Text tone="muted" small>
-          {hint}{' '}
-          {docsHref ? (
-            <a href={docsHref} target="_blank" rel="noreferrer noopener">
-              {docsLabel} <OpenIcon aria-hidden />
-            </a>
+    <Empty
+      image={Empty.PRESENTED_IMAGE_SIMPLE}
+      description={
+        <Flex vertical gap={4} align="center">
+          <Typography.Text type="secondary">{message}</Typography.Text>
+          {hint ? (
+            <Typography.Text type="secondary">
+              {hint}{' '}
+              {docsHref ? (
+                <Typography.Link href={docsHref} target="_blank" rel="noreferrer noopener">
+                  {docsLabel} <OpenIcon aria-hidden />
+                </Typography.Link>
+              ) : null}
+            </Typography.Text>
           ) : null}
-        </Text>
-      ) : null}
-    </Stack>
+        </Flex>
+      }
+    />
   );
 }

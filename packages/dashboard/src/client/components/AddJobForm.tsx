@@ -8,19 +8,7 @@
  * created a plain one-off job while the button read "Create schedule".
  */
 import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Field,
-  Form,
-  Inline,
-  Input,
-  InputNumber,
-  Modal,
-  Segmented,
-  Stack,
-  Textarea,
-} from '@portqueue/ui';
+import { Alert, Flex, Form, Input, InputNumber, Modal, Segmented } from 'antd';
 import { ActionKind, type ActionResultDto, type AddJobRequestDto } from '../../shared/dto';
 import { useAction } from '../queries/use-action';
 
@@ -226,20 +214,28 @@ export function AddJobForm({
     onCreated?.(result);
   };
 
-  const footer = (
-    <Inline gap={2} justify="flex-end">
-      <Button variant="text" onClick={onClose}>
-        Cancel
-      </Button>
-      <Button variant="primary" loading={submitting} onClick={() => void submit()}>
-        {mode === 'recurring' ? 'Create schedule' : 'Add job'}
-      </Button>
-    </Inline>
-  );
+  /**
+   * Error under the field when there is one, the hint otherwise — antd's `help` replaces `extra`
+   * visually, so passing both would stack them.
+   */
+  const feedback = (error: string | undefined, hint?: string) =>
+    error !== undefined
+      ? { validateStatus: 'error' as const, help: error }
+      : hint !== undefined
+        ? { extra: hint }
+        : {};
 
   return (
-    <Modal title={`Add job to “${queue}”`} open={open} onClose={onClose} footer={footer}>
-      <Stack gap={4}>
+    <Modal
+      title={`Add job to “${queue}”`}
+      open={open}
+      onCancel={onClose}
+      onOk={() => void submit()}
+      okText={mode === 'recurring' ? 'Create schedule' : 'Add job'}
+      confirmLoading={submitting}
+      destroyOnHidden
+    >
+      <Flex vertical gap="middle">
         <Segmented<Mode>
           value={mode}
           onChange={setMode}
@@ -248,60 +244,57 @@ export function AddJobForm({
             { label: 'Recurring', value: 'recurring' },
           ]}
         />
-        <Form onSubmit={(e) => e.preventDefault()}>
-          <Field label="Data (JSON)" required error={errors.data} htmlFor="add-job-data">
-            <Textarea
+        <Form layout="vertical" component="div">
+          <Form.Item label="Data (JSON)" required htmlFor="add-job-data" {...feedback(errors.data)}>
+            <Input.TextArea
               id="add-job-data"
               rows={5}
-              style={{ fontFamily: 'ui-monospace, monospace' }}
-              invalid={errors.data !== undefined}
+              style={{ fontFamily: 'var(--pq-font-mono)' }}
               value={data}
               onChange={(e) => setData(e.target.value)}
             />
-          </Field>
+          </Form.Item>
 
-          <Field
+          <Form.Item
             label="Priority"
-            hint="Higher runs first"
-            error={errors.priority}
             htmlFor="add-job-priority"
+            {...feedback(errors.priority, 'Higher runs first')}
           >
             <InputNumber
               id="add-job-priority"
+              style={{ width: '100%' }}
               value={priority}
               onChange={setPriority}
-              invalid={errors.priority !== undefined}
             />
-          </Field>
+          </Form.Item>
 
-          <Field
+          <Form.Item
             label="Max retry attempts"
-            hint="Leave empty to use the queue's default"
-            error={errors.retry}
             htmlFor="add-job-retry"
+            {...feedback(errors.retry, "Leave empty to use the queue's default")}
           >
             <InputNumber
               id="add-job-retry"
+              style={{ width: '100%' }}
               min={0}
               value={retryMaxAttempts}
               onChange={setRetryMaxAttempts}
-              invalid={errors.retry !== undefined}
             />
-          </Field>
+          </Form.Item>
 
-          <Field label="Idempotency key" htmlFor="add-job-idempotency">
+          <Form.Item label="Idempotency key" htmlFor="add-job-idempotency">
             <Input
               id="add-job-idempotency"
               placeholder="Optional; dedupes identical adds"
               value={idempotencyKey}
               onChange={(e) => setIdempotencyKey(e.target.value)}
             />
-          </Field>
+          </Form.Item>
 
-          <Field
+          <Form.Item
             label="Singleton key"
-            hint="At most one unfinished job may hold this key"
             htmlFor="add-job-singleton"
+            {...feedback(undefined, 'At most one unfinished job may hold this key')}
           >
             <Input
               id="add-job-singleton"
@@ -309,46 +302,49 @@ export function AddJobForm({
               value={singletonKey}
               onChange={(e) => setSingletonKey(e.target.value)}
             />
-          </Field>
+          </Form.Item>
 
-          <Field
+          <Form.Item
             label="Preferred instance pattern"
-            hint="A regular expression matching the instance keys allowed to run this job"
-            error={errors.pattern}
             htmlFor="add-job-instance"
+            {...feedback(
+              errors.pattern,
+              'A regular expression matching the instance keys allowed to run this job',
+            )}
           >
             <Input
               id="add-job-instance"
               placeholder="e.g. ^worker-eu-"
-              invalid={errors.pattern !== undefined}
               value={instancePattern}
               onChange={(e) => setInstancePattern(e.target.value)}
             />
-          </Field>
+          </Form.Item>
 
           {mode === 'once' ? (
-            <Field
+            <Form.Item
               label="Start after (seconds)"
-              hint="Optional delay from now. Every duration in PortQueue is seconds."
-              error={errors.startAfter}
               htmlFor="add-job-start-after"
+              {...feedback(
+                errors.startAfter,
+                'Optional delay from now. Every duration in PortQueue is seconds.',
+              )}
             >
               <InputNumber
                 id="add-job-start-after"
+                style={{ width: '100%' }}
                 min={0}
                 placeholder="e.g. 30"
-                invalid={errors.startAfter !== undefined}
                 value={startAfterSeconds}
                 onChange={setStartAfterSeconds}
               />
-            </Field>
+            </Form.Item>
           ) : (
             <>
               {/* One cadence, picked explicitly, and only the chosen field is rendered — so
                   "recurring with neither filled in" is not a state this form can reach. */}
-              <Field label="Cadence">
+              <Form.Item label="Cadence">
                 <Segmented<Cadence>
-                  size="sm"
+                  size="small"
                   value={cadence}
                   onChange={setCadence}
                   options={[
@@ -356,58 +352,55 @@ export function AddJobForm({
                     { label: 'Fixed interval', value: 'every' },
                   ]}
                 />
-              </Field>
+              </Form.Item>
 
               {cadence === 'cron' ? (
                 <>
-                  <Field
+                  <Form.Item
                     label="Cron expression"
                     required
-                    error={errors.cron}
-                    hint="Five fields: minute hour day month weekday"
                     htmlFor="add-job-cron"
+                    {...feedback(errors.cron, 'Five fields: minute hour day month weekday')}
                   >
                     <Input
                       id="add-job-cron"
                       placeholder="e.g. 0 * * * *"
-                      invalid={errors.cron !== undefined}
                       value={cron}
                       onChange={(e) => setCron(e.target.value)}
                     />
-                  </Field>
-                  <Field label="Timezone" htmlFor="add-job-tz">
+                  </Form.Item>
+                  <Form.Item label="Timezone" htmlFor="add-job-tz">
                     <Input
                       id="add-job-tz"
                       placeholder="IANA tz, e.g. UTC"
                       value={timezone}
                       onChange={(e) => setTimezone(e.target.value)}
                     />
-                  </Field>
+                  </Form.Item>
                 </>
               ) : (
-                <Field
+                <Form.Item
                   label="Every (seconds)"
                   required
-                  hint="Seconds between runs"
-                  error={errors.every}
                   htmlFor="add-job-every"
+                  {...feedback(errors.every, 'Seconds between runs')}
                 >
                   <InputNumber
                     id="add-job-every"
+                    style={{ width: '100%' }}
                     min={MIN_INTERVAL_SECONDS}
                     value={everySeconds}
                     onChange={setEverySeconds}
                     placeholder="e.g. 60"
-                    invalid={errors.every !== undefined}
                   />
-                </Field>
+                </Form.Item>
               )}
             </>
           )}
         </Form>
 
-        {errors.data ? <Alert type="error" showIcon message={errors.data} /> : null}
-      </Stack>
+        {errors.data ? <Alert type="error" showIcon title={errors.data} /> : null}
+      </Flex>
     </Modal>
   );
 }

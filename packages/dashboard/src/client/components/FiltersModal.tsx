@@ -8,8 +8,7 @@
  * comma-separated list, so a hand-written link with several values keeps working.
  */
 import React, { useEffect, useState } from 'react';
-import { Button, Inline, Modal, Select, Stack, Text } from '@portqueue/ui';
-import styles from './FiltersModal.module.css';
+import { Button, Flex, Form, Modal, Select, Typography } from 'antd';
 
 export interface FilterOption {
   label: string;
@@ -48,28 +47,24 @@ export function FiltersModal({
 }: FiltersModalProps): React.ReactElement {
   const [draft, setDraft] = useState<Record<string, string[]>>(() => seed(values));
 
-  // Re-seed whenever the dialog opens *or* the applied values change while it is open — a chip
+  // Re-seed whenever the dialog opens *or* the applied values change while it is open — a tag
   // dismissed in the toolbar behind the dialog must not leave the draft holding a stale filter.
-  // `serialized` compares by content: `values` is a fresh object every render, so depending on
-  // the object itself would re-seed on each keystroke and fight the user's edits.
+  // `serialized` stands in for `values`, deliberately: `values` is a fresh object every render, so
+  // depending on it directly would re-seed constantly and fight the user's edits.
   const serialized = JSON.stringify(values);
   useEffect(() => {
     if (open) setDraft(seed(values));
-    // `serialized` stands in for `values` here, deliberately: `values` is a fresh object every
-    // render, so depending on it directly would re-seed constantly and fight the user's edits.
   }, [open, serialized]);
 
   const footer = (
-    <Inline gap={2} justify="space-between" style={{ width: '100%' }}>
-      <Button variant="text" onClick={() => setDraft({})}>
+    <Flex justify="space-between" gap="small">
+      <Button type="text" onClick={() => setDraft({})}>
         Clear all
       </Button>
-      <Inline gap={2}>
-        <Button variant="text" onClick={onClose}>
-          Cancel
-        </Button>
+      <Flex gap="small">
+        <Button onClick={onClose}>Cancel</Button>
         <Button
-          variant="primary"
+          type="primary"
           onClick={() => {
             onApply(draft);
             onClose();
@@ -77,19 +72,20 @@ export function FiltersModal({
         >
           Apply filters
         </Button>
-      </Inline>
-    </Inline>
+      </Flex>
+    </Flex>
   );
 
   return (
-    <Modal open={open} onClose={onClose} title="Filters" footer={footer}>
-      <Stack gap={5}>
-        {defs.length === 0 ? <Text tone="muted">No filters available.</Text> : null}
+    <Modal open={open} onCancel={onClose} title="Filters" footer={footer} destroyOnHidden>
+      {defs.length === 0 ? (
+        <Typography.Text type="secondary">No filters available.</Typography.Text>
+      ) : null}
+      <Form layout="vertical" component="div">
         {defs.map((def) => (
-          <fieldset key={def.key} className={styles.group}>
-            <legend className={styles.groupLabel}>{def.label}</legend>
+          <Form.Item key={def.key} label={def.label} htmlFor={`filter-${def.key}`}>
             <Select<string>
-              block
+              id={`filter-${def.key}`}
               value={draft[def.key]?.[0] ?? ANY}
               onChange={(value) =>
                 setDraft((prev) => ({ ...prev, [def.key]: value === ANY ? [] : [value] }))
@@ -99,9 +95,9 @@ export function FiltersModal({
                 ...def.options.map((o) => ({ label: o.label, value: o.value })),
               ]}
             />
-          </fieldset>
+          </Form.Item>
         ))}
-      </Stack>
+      </Form>
     </Modal>
   );
 }

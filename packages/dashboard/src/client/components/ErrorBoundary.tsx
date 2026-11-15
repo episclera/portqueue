@@ -5,7 +5,8 @@
  * This has to be a class: `componentDidCatch`/`getDerivedStateFromError` have no hook equivalent.
  */
 import React from 'react';
-import { Alert, Button, Card, Content, Inline, Stack, Text } from '@portqueue/ui';
+import { Alert, Button, Card, Flex, Typography } from 'antd';
+import { PageBody } from './layout';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -22,22 +23,22 @@ interface ErrorBoundaryState {
 
 const Details = ({ error }: { error: Error }): React.ReactElement => (
   <Card>
-    <Stack gap={3}>
+    <Flex vertical gap="middle" align="flex-start">
       <Alert
         type="error"
+        showIcon
         title="Something went wrong rendering this page"
-        message={error.message || 'An unexpected error occurred.'}
+        description={error.message || 'An unexpected error occurred.'}
+        style={{ alignSelf: 'stretch' }}
       />
-      <Text tone="muted" small>
+      <Typography.Text type="secondary">
         The dashboard itself failed here — your queues and jobs are unaffected. Reloading usually
         clears it; if it happens consistently, the browser console has the full stack trace.
-      </Text>
-      <Inline gap={2}>
-        <Button variant="primary" onClick={() => window.location.reload()}>
-          Reload the dashboard
-        </Button>
-      </Inline>
-    </Stack>
+      </Typography.Text>
+      <Button type="primary" onClick={() => window.location.reload()}>
+        Reload the dashboard
+      </Button>
+    </Flex>
   </Card>
 );
 
@@ -63,9 +64,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   override render(): React.ReactNode {
     if (this.state.error) {
       return (
-        <Content>
+        <PageBody>
           <Details error={this.state.error} />
-        </Content>
+        </PageBody>
       );
     }
     return this.props.children;

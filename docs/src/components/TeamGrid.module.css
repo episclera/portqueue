@@ -21,8 +21,8 @@
   padding: 1.75rem 1.5rem;
   border-radius: 16px;
   text-align: center;
-  background: var(--surface);
-  border: 1px solid var(--secondary);
+  background: var(--pq-color-surface);
+  border: 1px solid var(--pq-color-border);
   box-shadow: var(--ifm-global-shadow-md);
 }
 
@@ -35,8 +35,8 @@
   place-items: center;
   font-weight: 800;
   font-size: 1.5rem;
-  color: var(--text);
-  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+  color: var(--pq-color-text);
+  background: linear-gradient(135deg, var(--pq-color-brand-hover), var(--pq-color-brand));
 }
 
 .name {

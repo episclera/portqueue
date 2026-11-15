@@ -1,8 +1,8 @@
 /**
  * Behavioural tests for the mutating controls: every row action, popover confirmation and bulk
  * action must reach `POST /api/actions` with the right body — and, since the overlays render
- * through body portals, the confirmation and menu layers must be reachable from `document.body`
- * rather than from inside the (clipped, scrollable) table.
+ * through body portals, the confirmation and menu layers must sit outside the (clipped,
+ * scrollable) table rather than inside it.
  *
  * The bulk cases matter most here: a batch is now **one** request carrying every id, so the
  * server can apply it in a single transaction. It used to be N sequential requests.
@@ -98,6 +98,32 @@ function rowAction(name: string): HTMLElement {
   return screen.getByRole('button', { name });
 }
 
+/**
+ * The open confirmation popover. antd's popconfirm is a popover, which carries `role="tooltip"`;
+ * a closed one stays mounted but hidden, so role queries stop seeing it once it is dismissed.
+ */
+function confirmPopover(): Promise<HTMLElement> {
+  return screen.findByRole('tooltip');
+}
+
+const popoverGone = (): Promise<void> =>
+  waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+
+/** The open dropdown menu — scoped, because the sidebar navigation is an antd menu too. */
+function dropdownMenu(): Promise<HTMLElement> {
+  return waitFor(() => {
+    const menu = document.querySelector<HTMLElement>(
+      '.ant-dropdown:not(.ant-dropdown-hidden) [role="menu"]',
+    );
+    expect(menu).not.toBeNull();
+    return menu!;
+  });
+}
+
+/** A row's selection checkbox, by role so the table's hidden measuring row is ignored. */
+const selectRow = (id: string): HTMLElement =>
+  screen.getByRole('checkbox', { name: `Select row ${id}` });
+
 beforeEach(() => window.localStorage.clear());
 
 describe('job row actions', () => {
@@ -125,10 +151,11 @@ describe('job row actions', () => {
 
     fireEvent.click(rowAction('Cancel'));
 
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     expect(popover).toHaveTextContent('Cancel this job?');
-    // Portalled: a direct child of <body>, not of the scrollable table wrapper.
-    expect(popover.parentElement).toBe(document.body);
+    // Portalled: rendered under <body>, not inside the scrollable table wrapper.
+    expect(document.body).toContainElement(popover);
+    expect(popover.closest('.ant-table')).toBeNull();
 
     fireEvent.click(within(popover).getByRole('button', { name: 'Cancel' }));
 
@@ -145,10 +172,10 @@ describe('job row actions', () => {
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Remove'));
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     fireEvent.click(within(popover).getByRole('button', { name: 'Keep' }));
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await popoverGone();
     expect(h.posts).toHaveLength(0);
   });
 
@@ -158,7 +185,7 @@ describe('job row actions', () => {
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Remove'));
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     expect(popover).toHaveTextContent('Remove this job permanently?');
 
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
@@ -176,14 +203,14 @@ describe('job row actions', () => {
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Remove'));
-    await screen.findByRole('dialog');
+    await confirmPopover();
     fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await popoverGone();
 
     fireEvent.click(rowAction('Remove'));
-    await screen.findByRole('dialog');
+    await confirmPopover();
     fireEvent.mouseDown(document.body);
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await popoverGone();
     expect(h.posts).toHaveLength(0);
   });
 });
@@ -194,11 +221,11 @@ describe('bulk job actions', () => {
     h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
-    fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
+    fireEvent.click(selectRow(JOB.id));
     fireEvent.click(await screen.findByRole('button', { name: /Bulk actions \(1\)/ }));
 
-    const menu = await screen.findByRole('menu');
-    expect(menu.parentElement).toBe(document.body);
+    const menu = await dropdownMenu();
+    expect(menu.closest('.ant-table')).toBeNull();
 
     fireEvent.click(within(menu).getByRole('menuitem', { name: /Retry selected/ }));
 
@@ -214,9 +241,9 @@ describe('bulk job actions', () => {
     h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
-    fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
+    fireEvent.click(selectRow(JOB.id));
     fireEvent.click(await screen.findByRole('button', { name: /Bulk actions \(1\)/ }));
-    const menu = await screen.findByRole('menu');
+    const menu = await dropdownMenu();
     fireEvent.click(within(menu).getByRole('menuitem', { name: /Remove selected/ }));
 
     const dialog = await screen.findByRole('dialog');
@@ -239,9 +266,9 @@ describe('bulk job actions', () => {
     h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
 
-    fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
+    fireEvent.click(selectRow(JOB.id));
     fireEvent.click(await screen.findByRole('button', { name: /Bulk actions \(1\)/ }));
-    const menu = await screen.findByRole('menu');
+    const menu = await dropdownMenu();
     fireEvent.click(within(menu).getByRole('menuitem', { name: /Retry selected/ }));
 
     expect(await screen.findByText('Requeued 1 of 3 jobs.')).toBeInTheDocument();
@@ -252,9 +279,9 @@ describe('bulk job actions', () => {
     const h = harness({ actionResult });
     h.renderApp('#/queues/emails');
     await screen.findByText('Results (1)');
-    fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
+    fireEvent.click(selectRow(JOB.id));
     fireEvent.click(await screen.findByRole('button', { name: /Bulk actions \(1\)/ }));
-    const menu = await screen.findByRole('menu');
+    const menu = await dropdownMenu();
     fireEvent.click(within(menu).getByRole('menuitem', { name: /Cancel selected/ }));
     await waitFor(() => expect(h.posts).toHaveLength(1));
   }
@@ -312,14 +339,14 @@ describe('the batch cap on a selection', () => {
     await screen.findByText('Results (2)');
 
     // Select-all would pass the cap, so it is refused up front rather than selecting a prefix.
-    expect(screen.getByLabelText('Select all rows')).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Select all rows' })).toBeDisabled();
 
-    fireEvent.click(screen.getByLabelText(`Select row ${JOB.id}`));
-    const refused = screen.getByLabelText(`Select row ${other.id}`);
+    fireEvent.click(selectRow(JOB.id));
+    const refused = selectRow(other.id);
     expect(refused).toBeDisabled();
     expect(await hintOn(refused)).toMatch(/act on 1 jobs at a time/);
     // Only adding is blocked: the selected row can still be cleared.
-    expect(screen.getByLabelText(`Select row ${JOB.id}`)).not.toBeDisabled();
+    expect(selectRow(JOB.id)).not.toBeDisabled();
   });
 
   it('stops the schedules table at the same cap', async () => {
@@ -328,8 +355,8 @@ describe('the batch cap on a selection', () => {
     h.renderApp('#/schedules');
     await screen.findByText('Results (2)');
 
-    fireEvent.click(screen.getByLabelText(`Select row ${SCHEDULE.scheduleId}`));
-    const refused = screen.getByLabelText(`Select row ${other.scheduleId}`);
+    fireEvent.click(selectRow(SCHEDULE.scheduleId));
+    const refused = selectRow(other.scheduleId);
     expect(refused).toBeDisabled();
     expect(await hintOn(refused)).toMatch(/act on 1 schedules at a time/);
   });
@@ -342,7 +369,7 @@ describe('queue row actions', () => {
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Pause'));
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     expect(popover).toHaveTextContent('Pause processing on this queue?');
 
     fireEvent.click(within(popover).getByRole('button', { name: 'Pause' }));
@@ -360,7 +387,7 @@ describe('schedule actions', () => {
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Disable'));
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     fireEvent.click(within(popover).getByRole('button', { name: 'Disable' }));
 
     await waitFor(() => expect(h.posts).toHaveLength(1));
@@ -376,9 +403,9 @@ describe('schedule actions', () => {
     h.renderApp('#/schedules');
     await screen.findByText('Results (1)');
 
-    fireEvent.click(screen.getByLabelText(`Select row ${SCHEDULE.scheduleId}`));
+    fireEvent.click(selectRow(SCHEDULE.scheduleId));
     fireEvent.click(await screen.findByRole('button', { name: /Bulk actions \(1\)/ }));
-    const menu = await screen.findByRole('menu');
+    const menu = await dropdownMenu();
     fireEvent.click(within(menu).getByRole('menuitem', { name: /Remove selected/ }));
 
     const dialog = await screen.findByRole('dialog');
@@ -417,8 +444,8 @@ describe('detail page redirects', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Clone/ }));
     const modal = await screen.findByRole('dialog');
-    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
-    fireEvent.change(within(modal).getByLabelText(/Cron expression/), {
+    fireEvent.click(within(modal).getByRole('radio', { name: 'Recurring' }));
+    fireEvent.change(within(modal).getByRole('textbox', { name: /Cron expression/ }), {
       target: { value: '0 * * * *' },
     });
     fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
@@ -432,7 +459,7 @@ describe('detail page redirects', () => {
     await screen.findByRole('button', { name: /Remove/ });
 
     fireEvent.click(screen.getByRole('button', { name: /Remove/ }));
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
 
     await waitFor(() => expect(window.location.hash).toBe(`#/queues/${JOB.queue}`));
@@ -445,7 +472,7 @@ describe('detail page redirects', () => {
     await screen.findByRole('button', { name: /Remove/ });
 
     fireEvent.click(screen.getByRole('button', { name: /Remove/ }));
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
 
     expect(await screen.findByText(/still running/i)).toBeInTheDocument();
@@ -459,7 +486,7 @@ describe('detail page redirects', () => {
     const [remove] = await screen.findAllByRole('button', { name: /Remove/ });
 
     fireEvent.click(remove!);
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
 
     await waitFor(() => expect(window.location.hash).toBe('#/schedules'));
@@ -470,7 +497,7 @@ describe('detail page redirects', () => {
     const [remove] = await screen.findAllByRole('button', { name: /^Remove$/ });
 
     fireEvent.click(remove!);
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     expect(popover).toHaveTextContent('Remove this inactive instance from monitoring?');
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
 
@@ -514,7 +541,7 @@ describe('add job form', () => {
     const h = harness();
     const modal = await openForm(h);
 
-    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
+    fireEvent.click(within(modal).getByRole('radio', { name: 'Recurring' }));
     fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
 
     expect(await within(modal).findByText(/cron expression is required/i)).toBeInTheDocument();
@@ -554,8 +581,8 @@ describe('add job form', () => {
     const h = harness();
     const modal = await openForm(h);
 
-    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
-    fireEvent.change(within(modal).getByLabelText(/Cron expression/), {
+    fireEvent.click(within(modal).getByRole('radio', { name: 'Recurring' }));
+    fireEvent.change(within(modal).getByRole('textbox', { name: /Cron expression/ }), {
       target: { value: '0 0 *' },
     });
     fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
@@ -568,8 +595,8 @@ describe('add job form', () => {
     const h = harness();
     const modal = await openForm(h);
 
-    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
-    fireEvent.change(within(modal).getByLabelText(/Cron expression/), {
+    fireEvent.click(within(modal).getByRole('radio', { name: 'Recurring' }));
+    fireEvent.change(within(modal).getByRole('textbox', { name: /Cron expression/ }), {
       target: { value: '0 * * * *' },
     });
     fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
@@ -586,13 +613,15 @@ describe('add job form', () => {
     const h = harness();
     const modal = await openForm(h);
 
-    fireEvent.click(within(modal).getByRole('tab', { name: 'Recurring' }));
-    expect(within(modal).getByLabelText(/Cron expression/)).toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole('radio', { name: 'Recurring' }));
+    expect(within(modal).getByRole('textbox', { name: /Cron expression/ })).toBeInTheDocument();
     expect(within(modal).queryByLabelText(/Every \(seconds\)/)).not.toBeInTheDocument();
 
-    fireEvent.click(within(modal).getByRole('tab', { name: 'Fixed interval' }));
+    fireEvent.click(within(modal).getByRole('radio', { name: 'Fixed interval' }));
     expect(within(modal).getByLabelText(/Every \(seconds\)/)).toBeInTheDocument();
-    expect(within(modal).queryByLabelText(/Cron expression/)).not.toBeInTheDocument();
+    expect(
+      within(modal).queryByRole('textbox', { name: /Cron expression/ }),
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -602,7 +631,7 @@ describe('instance detail actions', () => {
     // Exact names: the shell's live control is also called "Pause auto-updates".
     fireEvent.click(await screen.findByRole('button', { name: 'Pause' }));
 
-    const popover = await screen.findByRole('dialog');
+    const popover = await confirmPopover();
     expect(popover).toHaveTextContent('Pause job processing on this instance?');
     fireEvent.click(within(popover).getByRole('button', { name: 'Pause' }));
 

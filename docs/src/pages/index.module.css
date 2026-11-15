@@ -34,7 +34,7 @@
   font-weight: 800;
   letter-spacing: -0.03em;
   margin: 0;
-  color: var(--primary-dark);
+  color: var(--pq-color-brand-hover);
 }
 
 .heroTagline {
@@ -70,33 +70,33 @@
 .cta:hover {
   text-decoration: none;
   transform: translateY(-1px);
-  border-color: var(--primary);
+  border-color: var(--pq-color-brand);
 }
 
 /* On the green primary fill, text is always the near-black brand text (never white),
    in both light and dark themes; the surface secondary follows the theme text colour. */
 .ctaPrimary,
 .ctaPrimary:hover {
-  color: #1b1f1d;
+  color: var(--pq-color-on-brand);
 }
 
 .ctaPrimary {
-  border: 1px solid var(--primary);
-  background: var(--primary);
+  border: 1px solid var(--pq-color-brand);
+  background: var(--pq-color-brand);
 }
 
 .ctaPrimary:hover {
-  background: var(--primary-dark);
+  background: var(--pq-color-brand-hover);
 }
 
 .ctaSecondary,
 .ctaSecondary:hover {
-  color: var(--text);
-  background: var(--surface);
+  color: var(--pq-color-text);
+  background: var(--pq-color-surface);
 }
 
 .ctaSecondary {
-  border: 1px solid var(--secondary);
+  border: 1px solid var(--pq-color-border);
 }
 
 .section {
@@ -135,8 +135,8 @@
   flex-direction: column;
   padding: 1.6rem;
   border-radius: 16px;
-  background: var(--surface);
-  border: 1px solid var(--secondary);
+  background: var(--pq-color-surface);
+  border: 1px solid var(--pq-color-border);
   box-shadow: var(--ifm-global-shadow-md);
   transition:
     transform 200ms ease,
@@ -159,7 +159,7 @@
   font-size: 1.75rem;
   margin-bottom: 0.5rem;
   display: block;
-  color: var(--primary-dark);
+  color: var(--pq-color-brand-hover);
 }
 
 .featureTitle {
@@ -179,10 +179,10 @@
   align-self: flex-start;
   font-weight: 700;
   font-size: 0.9rem;
-  color: var(--primary-dark);
+  color: var(--pq-color-brand-hover);
 }
 
 .featureLink:hover {
   text-decoration: none;
-  color: var(--primary);
+  color: var(--pq-color-brand);
 }

@@ -1,13 +1,13 @@
 /**
- * Action hook: wraps mutating API calls with toast feedback and a cache invalidation, so every
+ * Action hook: wraps mutating API calls with toast feedback (antd's `message`) and a cache invalidation, so every
  * page showing affected data refetches once the mutation lands.
  *
  * Bulk actions are **one request**: the server applies every id in a single transaction and
  * reports how many rows it changed. That replaces the old fan-out of N sequential requests, which
  * produced N error toasts on a bad batch and no summary of what actually happened.
  */
-import { useToast } from '@portqueue/ui';
 import { useCallback } from 'react';
+import { App } from 'antd';
 import { api } from './api';
 import { useRefreshAll } from './use-queries';
 import type { ActionRequestDto, ActionResultDto } from '../../shared/dto';
@@ -37,7 +37,7 @@ export interface ActionRunner {
 }
 
 export function useAction(): ActionRunner {
-  const toast = useToast();
+  const { message: toast } = App.useApp();
   const refresh = useRefreshAll();
 
   const run = useCallback(

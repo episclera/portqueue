@@ -1,10 +1,10 @@
 /* A CSS Module, not styled-components, so these rules ship in the static build (see pages/index.module.css). */
 
 .chip {
-  border: 1px solid var(--secondary);
+  border: 1px solid var(--pq-color-border);
   border-radius: 12px;
   overflow: hidden;
-  background: var(--surface);
+  background: var(--pq-color-surface);
   min-width: 180px;
   flex: 1 1 180px;
 }
@@ -15,13 +15,8 @@
   display: flex;
   align-items: flex-end;
   padding: 8px;
-  color: #1b1f1d;
   font-family: var(--ifm-font-family-monospace);
   font-size: 12px;
-}
-
-.sampleDark {
-  color: #edefec;
 }
 
 .meta {
@@ -31,7 +26,7 @@
 .note {
   margin: 4px 0 0;
   font-size: 12.5px;
-  color: var(--text-muted);
+  color: var(--pq-color-text-muted);
 }
 
 .row {

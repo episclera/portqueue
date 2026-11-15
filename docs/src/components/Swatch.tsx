@@ -1,10 +1,11 @@
 import React from 'react';
-import clsx from 'clsx';
+import { tokens } from '@portqueue/theme';
 import styles from './Swatch.module.css';
 
 /**
  * Presentational swatch for the Brandbook page — a colour chip plus its token name, hex, and
- * usage note. Styled by a CSS Module against the shared palette CSS variables.
+ * usage note. Styled by a CSS Module against the shared `--pq-*` variables; the label on the chip
+ * takes the light or dark theme's text colour from `@portqueue/theme`, whichever reads on `hex`.
  */
 export function Swatch({
   name,
@@ -19,7 +20,10 @@ export function Swatch({
 }): React.ReactElement {
   return (
     <div className={styles.chip}>
-      <div className={clsx(styles.sample, dark && styles.sampleDark)} style={{ background: hex }}>
+      <div
+        className={styles.sample}
+        style={{ background: hex, color: (dark ? tokens.modes.dark : tokens.modes.light).text }}
+      >
         {hex}
       </div>
       <div className={styles.meta}>

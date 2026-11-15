@@ -6,8 +6,8 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Code, Table, Tag } from '@portqueue/ui';
-import type { DropdownItem, TableColumn } from '@portqueue/ui';
+import { App, Table, Tag, Typography } from 'antd';
+import type { TableColumnType } from 'antd';
 import { ActionKind, type ScheduleDto, type SchedulePageDto } from '../../shared/dto';
 import { api, config } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
@@ -15,12 +15,11 @@ import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import { ACTIONS_CONFIG, SCHEDULE_STATES_CONFIG } from '../constants/labels';
 import { truncate } from './format';
-import { dateColumn } from './table-columns';
+import { TABLE_PROPS, actionsColumn, cappedRowSelection, dateColumn } from './table-columns';
 import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
 import type { FilterDef } from './FiltersModal';
-import { BulkActionsButton, ConfirmModal, RowAction, RowActions } from './RowActions';
-import styles from './SchedulesPanel.module.css';
+import { BulkActionsButton, RowAction, RowActions, type BulkItem } from './RowActions';
 
 export interface SchedulesPanelProps {
   /** Narrow to one queue's schedules. Omitted on the all-queues page. */
@@ -49,11 +48,11 @@ export function cadence(row: ScheduleDto): string {
 
 export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactElement {
   const { run, runBatch } = useAction();
+  const { modal } = App.useApp();
   const params = useTableParams('schedules', FILTER_KEYS);
   const state = params.filters.state?.[0];
 
   const [selected, setSelected] = useState<string[]>([]);
-  const [confirmBulkRemove, setConfirmBulkRemove] = useState(false);
 
   const listParams = {
     limit: PAGE_SIZE,
@@ -81,95 +80,89 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
     });
   }, [rows]);
 
-  const columns: TableColumn<ScheduleDto>[] = [
+  const columns: TableColumnType<ScheduleDto>[] = [
     {
       title: 'Schedule',
       key: 'scheduleId',
-      render: (r) => (
-        <Link className={styles.monoLink} to={`/schedules/${encodeURIComponent(r.scheduleId)}`}>
-          {truncate(r.scheduleId)}
+      // Generated schedule ids are as long as job ids, and truncate the same way.
+      render: (_, r) => (
+        <Link to={`/schedules/${encodeURIComponent(r.scheduleId)}`} aria-label={r.scheduleId}>
+          <Typography.Text code>{truncate(r.scheduleId)}</Typography.Text>
         </Link>
       ),
     },
     {
       title: 'Queue',
       key: 'queue',
-      render: (r) => <Link to={`/queues/${encodeURIComponent(r.queue)}`}>{r.queue}</Link>,
+      render: (_, r) => <Link to={`/queues/${encodeURIComponent(r.queue)}`}>{r.queue}</Link>,
     },
     {
       title: 'Cadence',
       key: 'cadence',
-      render: (r) => (r.cron ? <Code>{r.cron}</Code> : cadence(r)),
+      render: (_, r) => (r.cron ? <Typography.Text code>{r.cron}</Typography.Text> : cadence(r)),
     },
-    { title: 'Timezone', key: 'timezone', render: (r) => r.timezone ?? 'UTC' },
+    { title: 'Timezone', key: 'timezone', render: (_, r) => r.timezone ?? 'UTC' },
     dateColumn<ScheduleDto>('Next Run', 'nextRunAt', (r) => r.nextRunAt),
     dateColumn<ScheduleDto>('Last Run', 'lastRunAt', (r) => r.lastRunAt),
     {
       title: 'State',
       key: 'enabled',
-      render: (r) => (
-        <Tag tone={r.enabled ? 'success' : 'neutral'}>
+      render: (_, r) => (
+        <Tag color={r.enabled ? 'success' : 'default'}>
           {r.enabled ? SCHEDULE_STATES_CONFIG.enabled.label : SCHEDULE_STATES_CONFIG.disabled.label}
         </Tag>
       ),
     },
-    {
-      title: 'Actions',
-      key: 'actions',
-      // Buttons hug the right edge; the title stays on the left, where it reads as this column's.
-      align: 'right',
-      headerAlign: 'left',
-      render: (r: ScheduleDto) => (
-        <RowActions>
-          {/* Disabling is the reversible alternative to removing: the definition stays, it just
+    actionsColumn<ScheduleDto>((r) => (
+      <RowActions>
+        {/* Disabling is the reversible alternative to removing: the definition stays, it just
               stops firing. Worth offering first when someone wants a schedule to stop. */}
-          {r.enabled ? (
-            <RowAction
-              icon={ACTIONS_CONFIG.pause.icon}
-              label="Disable"
-              confirm={{ title: 'Stop this schedule from firing?' }}
-              onClick={() =>
-                void run(
-                  {
-                    kind: ActionKind.SET_SCHEDULE_ENABLED,
-                    scheduleId: r.scheduleId,
-                    enabled: false,
-                  },
-                  'Schedule disabled',
-                )
-              }
-            />
-          ) : (
-            <RowAction
-              icon={ACTIONS_CONFIG.resume.icon}
-              label="Enable"
-              onClick={() =>
-                void run(
-                  {
-                    kind: ActionKind.SET_SCHEDULE_ENABLED,
-                    scheduleId: r.scheduleId,
-                    enabled: true,
-                  },
-                  'Schedule enabled',
-                )
-              }
-            />
-          )}
+        {r.enabled ? (
           <RowAction
-            danger
-            icon={ACTIONS_CONFIG.remove.icon}
-            label={ACTIONS_CONFIG.remove.label}
-            confirm={{ title: 'Remove this schedule?' }}
+            icon={ACTIONS_CONFIG.pause.icon}
+            label="Disable"
+            confirm={{ title: 'Stop this schedule from firing?' }}
             onClick={() =>
               void run(
-                { kind: ActionKind.REMOVE_SCHEDULE, scheduleId: r.scheduleId },
-                'Schedule removed',
+                {
+                  kind: ActionKind.SET_SCHEDULE_ENABLED,
+                  scheduleId: r.scheduleId,
+                  enabled: false,
+                },
+                'Schedule disabled',
               )
             }
           />
-        </RowActions>
-      ),
-    },
+        ) : (
+          <RowAction
+            icon={ACTIONS_CONFIG.resume.icon}
+            label="Enable"
+            onClick={() =>
+              void run(
+                {
+                  kind: ActionKind.SET_SCHEDULE_ENABLED,
+                  scheduleId: r.scheduleId,
+                  enabled: true,
+                },
+                'Schedule enabled',
+              )
+            }
+          />
+        )}
+        <RowAction
+          danger
+          icon={ACTIONS_CONFIG.remove.icon}
+          label={ACTIONS_CONFIG.remove.label}
+          confirm={{ title: 'Remove this schedule?' }}
+          onClick={() =>
+            void run(
+              { kind: ActionKind.REMOVE_SCHEDULE, scheduleId: r.scheduleId },
+              'Schedule removed',
+            )
+          }
+        />
+      </RowActions>
+    )),
   ];
 
   const removeSelected = async (): Promise<void> => {
@@ -180,75 +173,73 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
     setSelected([]);
   };
 
-  const bulkItems: DropdownItem[] = [
+  const bulkItems: BulkItem[] = [
     {
       key: 'remove',
       label: `${ACTIONS_CONFIG.remove.label} selected`,
       icon: ACTIONS_CONFIG.remove.icon,
       danger: true,
-      onClick: () => setConfirmBulkRemove(true),
+      onClick: () =>
+        void modal.confirm({
+          title: `Remove ${selected.length} schedule(s)?`,
+          content:
+            'The selected recurring definitions stop firing. Jobs they already created are kept.',
+          okText: ACTIONS_CONFIG.remove.label,
+          okButtonProps: { danger: true },
+          onOk: () => removeSelected(),
+        }),
     },
   ];
 
   return (
-    <>
-      <TableCard
-        total={total}
-        page={clampedPage(params.page, total)}
-        onPageChange={params.setPage}
-        loading={schedules.isLoading}
-        error={schedules.error}
-        errorTitle="Could not load schedules"
-        onRetry={() => void schedules.refetch()}
-        paginationLabel="Schedules pagination"
-        search={{
-          value: params.search,
-          onChange: params.setSearch,
-          placeholder: 'Search id, queue or cadence',
+    <TableCard
+      total={total}
+      page={clampedPage(params.page, total)}
+      onPageChange={params.setPage}
+      loading={schedules.isLoading}
+      error={schedules.error}
+      errorTitle="Could not load schedules"
+      onRetry={() => void schedules.refetch()}
+      search={{
+        value: params.search,
+        onChange: params.setSearch,
+        placeholder: 'Search id, queue or cadence',
+      }}
+      filters={{
+        defs: FILTER_DEFS,
+        values: params.filters,
+        onChange: params.setFilters,
+        onClear: (key, value) => params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
+      }}
+      toolbarLeading={<BulkActionsButton count={selected.length} items={bulkItems} />}
+    >
+      <Table<ScheduleDto>
+        {...TABLE_PROPS}
+        rowKey={(r) => r.scheduleId}
+        columns={columns}
+        dataSource={rows}
+        locale={{
+          emptyText: params.search ? (
+            <EmptyState message={`No schedules match “${params.search}”.`} />
+          ) : (
+            <EmptyState
+              message="No recurring schedules."
+              hint="Pass `schedule: { cron }` or `schedule: { startEverySeconds }` to addJob to create one — here's how."
+              docsHref={DOCS.scheduling}
+              docsLabel="Scheduling guide"
+            />
+          ),
         }}
-        filters={{
-          defs: FILTER_DEFS,
-          values: params.filters,
-          onChange: params.setFilters,
-          onClear: (key, value) => params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
-        }}
-        toolbarLeading={<BulkActionsButton count={selected.length} items={bulkItems} />}
-      >
-        <Table<ScheduleDto>
-          rowKey={(r) => r.scheduleId}
-          columns={columns}
-          data={rows}
-          empty={
-            params.search ? (
-              <EmptyState message={`No schedules match “${params.search}”.`} />
-            ) : (
-              <EmptyState
-                message="No recurring schedules."
-                hint="Pass `schedule: { cron }` or `schedule: { startEverySeconds }` to addJob to create one — here's how."
-                docsHref={DOCS.scheduling}
-                docsLabel="Scheduling guide"
-              />
-            )
-          }
-          rowSelection={{
-            selectedKeys: selected,
-            onChange: setSelected,
-            // A bulk removal is one statement too, under the same cap as the jobs table's actions.
-            maxSelected: config.maxBatchIds,
-            maxSelectedHint: `You can act on ${config.maxBatchIds} schedules at a time — the limit is what one database statement can carry. Clear a selection to pick another.`,
-          }}
-        />
-      </TableCard>
-
-      <ConfirmModal
-        open={confirmBulkRemove}
-        title={`Remove ${selected.length} schedule(s)?`}
-        description="The selected recurring definitions stop firing. Jobs they already created are kept."
-        okText={ACTIONS_CONFIG.remove.label}
-        okDanger
-        onClose={() => setConfirmBulkRemove(false)}
-        onConfirm={() => void removeSelected()}
+        // A bulk removal is one statement too, under the same cap as the jobs table's actions.
+        rowSelection={cappedRowSelection({
+          rows,
+          keyOf: (r) => r.scheduleId,
+          selected,
+          onChange: setSelected,
+          max: config.maxBatchIds,
+          hint: `You can act on ${config.maxBatchIds} schedules at a time — the limit is what one database statement can carry. Clear a selection to pick another.`,
+        })}
       />
-    </>
+    </TableCard>
   );
 }

@@ -13,23 +13,19 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useHistory, useParams } from 'react-router-dom';
 import {
+  App,
   Button,
   Card,
   Col,
-  Content,
-  CopyButton,
-  Inline,
-  Mono,
-  PageHeader,
+  Descriptions,
+  Flex,
   Popconfirm,
   Row,
   Skeleton,
-  Stack,
-  StatusTag,
-  Title,
-  useToast,
-} from '@portqueue/ui';
-import clsx from 'clsx';
+  Typography,
+  theme,
+} from 'antd';
+import type { DescriptionsProps } from 'antd';
 import { JobStatus } from '../queries/enums';
 import type { JobDto } from '../../shared/dto';
 import { ActionKind } from '../../shared/dto';
@@ -42,7 +38,8 @@ import { AddJobForm } from '../components/AddJobForm';
 import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
 import { truncate } from '../components/format';
-import styles from './JobDetail.module.css';
+import { StatusTag } from '../components/StatusTag';
+import { PageBody, PageHeader } from '../components/layout';
 
 /**
  * Statuses a job can never leave. Everything else — PENDING, ACTIVE, RETRY — can still change
@@ -73,20 +70,13 @@ const TIMESTAMPS: { key: Extract<keyof JobDto, `${string}At` | 'startAfter'>; la
   { key: 'updatedAt', label: 'Updated at' },
 ];
 
-function Item({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}): React.ReactElement {
-  return (
-    <div>
-      <dt className={styles.descLabel}>{label}</dt>
-      <dd className={styles.descValue}>{children}</dd>
-    </div>
-  );
-}
+/** Two columns from `sm` up, one on a phone. */
+const DESCRIPTION_COLUMNS = { xs: 1, sm: 2 };
+
+/** A monospaced value — ids, keys, patterns. */
+const Mono = ({ children }: { children: React.ReactNode }): React.ReactElement => (
+  <Typography.Text code>{children}</Typography.Text>
+);
 
 /**
  * A value that may be absent — renders the em dash the rest of the UI uses for "nothing". Given
@@ -130,7 +120,8 @@ export function JobDetailPage(): React.ReactElement {
   const jobId = decodeURIComponent(id);
   const { run } = useAction();
   const history = useHistory();
-  const toast = useToast();
+  const { message: toast } = App.useApp();
+  const { token } = theme.useToken();
 
   // Poll only while the record can still change. TanStack keeps the previous data across the
   // switch, so a job settling mid-view simply stops refetching rather than remounting.
@@ -153,16 +144,14 @@ export function JobDetailPage(): React.ReactElement {
     return (
       <>
         <PageHeader title="Job" subtitle="This job could not be loaded." />
-        <Content>
-          <Stack gap={3}>
-            <ErrorState
-              title="Could not load this job"
-              error={job.error}
-              onRetry={() => void job.refetch()}
-            />
-            <Link to="/">Back to overview</Link>
-          </Stack>
-        </Content>
+        <PageBody>
+          <ErrorState
+            title="Could not load this job"
+            error={job.error}
+            onRetry={() => void job.refetch()}
+          />
+          <Link to="/">Back to overview</Link>
+        </PageBody>
       </>
     );
   }
@@ -170,25 +159,22 @@ export function JobDetailPage(): React.ReactElement {
     return (
       <>
         <PageHeader title="Job" subtitle="Loading the record…" />
-        <Content>
+        <PageBody>
           <Card>
-            <Stack gap={3}>
-              <Skeleton height={18} width="40%" />
-              <Skeleton height={120} />
-            </Stack>
+            <Skeleton active paragraph={{ rows: 6 }} />
           </Card>
-        </Content>
+        </PageBody>
       </>
     );
   }
   const j = job.data;
   if (!j) {
     return (
-      <Content>
+      <PageBody>
         <Card>
-          <Skeleton height={120} />
+          <Skeleton active paragraph={{ rows: 6 }} />
         </Card>
-      </Content>
+      </PageBody>
     );
   }
 
@@ -216,7 +202,7 @@ export function JobDetailPage(): React.ReactElement {
   };
 
   const actions = (
-    <Inline gap={2} wrap>
+    <Flex gap="small" wrap>
       <Button
         icon={ACTIONS_CONFIG.retry.icon}
         disabled={!isFailed && j.status === JobStatus.ACTIVE}
@@ -243,108 +229,123 @@ export function JobDetailPage(): React.ReactElement {
         title="Remove this job permanently?"
         okText={ACTIONS_CONFIG.remove.label}
         cancelText="Keep"
-        okDanger
+        okButtonProps={{ danger: true }}
         onConfirm={() => void remove()}
       >
-        <Button variant="danger" icon={ACTIONS_CONFIG.remove.icon}>
+        <Button danger icon={ACTIONS_CONFIG.remove.icon}>
           {ACTIONS_CONFIG.remove.label}
         </Button>
       </Popconfirm>
-    </Inline>
+    </Flex>
+  );
+
+  const details: DescriptionsProps['items'] = [
+    { key: 'id', label: 'Job id', children: <Mono>{j.id}</Mono> },
+    { key: 'queue', label: 'Queue', children: <Link to={queuePath}>{j.queue}</Link> },
+    { key: 'status', label: 'Status', children: status },
+    { key: 'stalled', label: 'Stalled', children: j.stalled ? 'Yes' : 'No' },
+    { key: 'priority', label: 'Priority', children: j.priority },
+    {
+      key: 'attempts',
+      label: 'Attempts',
+      children: `${j.retryAttempt} / ${j.retryMaxAttempts}`,
+    },
+    {
+      key: 'instance',
+      label: 'Processed on instance',
+      children: (
+        <Maybe value={j.processedOnInstanceKey} to={(v) => `/instances/${encodeURIComponent(v)}`} />
+      ),
+    },
+    {
+      key: 'pattern',
+      label: 'Preferred instance pattern',
+      children: <Maybe value={j.preferredInstanceKeyPattern} />,
+    },
+    { key: 'lockedUntil', label: 'Locked until', children: <Time value={j.lockedUntil} /> },
+    { key: 'idempotency', label: 'Idempotency key', children: <Maybe value={j.idempotencyKey} /> },
+    {
+      key: 'schedule',
+      label: 'Schedule',
+      // Straight to that schedule's own page, which lists the jobs it produced — the bare schedules
+      // list answered nothing about this job.
+      children: <Maybe value={j.scheduleId} to={(v) => `/schedules/${encodeURIComponent(v)}`} />,
+    },
+  ];
+
+  /** A payload or message block — monospaced, wrapped, never wider than the card. */
+  const pre = (text: string, danger = false): React.ReactElement => (
+    <pre
+      style={{
+        margin: 0,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        fontFamily: token.fontFamilyCode,
+        fontSize: token.fontSizeSM,
+        color: danger ? token.colorError : token.colorText,
+      }}
+    >
+      {text}
+    </pre>
   );
 
   return (
     <>
       <PageHeader
         title={
-          <Inline gap={3} align="center" wrap>
-            <Title className={styles.monoTitle} level={4} as="span">
-              {truncate(j.id, 14, 8)}
-            </Title>
-            <CopyButton value={j.id} label="job id" />
-          </Inline>
+          <Typography.Title
+            level={4}
+            style={{ margin: 0, fontFamily: token.fontFamilyCode }}
+            copyable={{ text: j.id, tooltips: ['Copy job id', 'Copied'] }}
+          >
+            {truncate(j.id, 14, 8)}
+          </Typography.Title>
         }
         subtitle={
-          <Inline gap={2} align="center">
+          <Flex gap="small" align="center" component="span">
             <StatusTag status={rawStatus} label={status} />
             <Link to={queuePath}>{j.queue}</Link>
-          </Inline>
+          </Flex>
         }
         extra={actions}
       />
-      <Content>
-        <Row gutter={16}>
-          <Col span={14}>
+      <PageBody>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={14}>
             <Card title="Details">
-              <dl className={styles.descGrid}>
-                <Item label="Job id">
-                  <Mono>{j.id}</Mono>
-                </Item>
-                <Item label="Queue">
-                  <Link to={queuePath}>{j.queue}</Link>
-                </Item>
-                <Item label="Status">{status}</Item>
-                <Item label="Stalled">{j.stalled ? 'Yes' : 'No'}</Item>
-                <Item label="Priority">{j.priority}</Item>
-                <Item label="Attempts">
-                  {j.retryAttempt} / {j.retryMaxAttempts}
-                </Item>
-                <Item label="Processed on instance">
-                  <Maybe
-                    value={j.processedOnInstanceKey}
-                    to={(v) => `/instances/${encodeURIComponent(v)}`}
+              <Flex vertical gap="middle">
+                <Descriptions column={DESCRIPTION_COLUMNS} items={details} />
+                {j.failureMessage && (
+                  <Card type="inner" size="small" title="Failure message">
+                    {pre(j.failureMessage, true)}
+                  </Card>
+                )}
+                <Card type="inner" size="small" title="Data">
+                  {pre(formatPayload(j.data))}
+                </Card>
+                <Card type="inner" size="small" title="Return value">
+                  {pre(formatPayload(j.returnValue))}
+                </Card>
+                <Card type="inner" size="small" title="Timestamps">
+                  <Descriptions
+                    column={DESCRIPTION_COLUMNS}
+                    items={TIMESTAMPS.map((t) => ({
+                      key: t.key,
+                      label: t.label,
+                      children: <Time value={j[t.key]} />,
+                    }))}
                   />
-                </Item>
-                <Item label="Preferred instance pattern">
-                  <Maybe value={j.preferredInstanceKeyPattern} />
-                </Item>
-                <Item label="Locked until">
-                  <Time value={j.lockedUntil} />
-                </Item>
-                <Item label="Idempotency key">
-                  <Maybe value={j.idempotencyKey} />
-                </Item>
-                <Item label="Schedule">
-                  {/* Straight to that schedule's own page, which lists the jobs it produced —
-                      the bare schedules list answered nothing about this job. */}
-                  <Maybe value={j.scheduleId} to={(v) => `/schedules/${encodeURIComponent(v)}`} />
-                </Item>
-              </dl>
-              {j.failureMessage && (
-                <div className={styles.innerCard}>
-                  <div className={styles.innerCardTitle}>Failure message</div>
-                  <pre className={clsx(styles.pre, styles.preDanger)}>{j.failureMessage}</pre>
-                </div>
-              )}
-              <div className={styles.innerCard}>
-                <div className={styles.innerCardTitle}>Data</div>
-                <pre className={styles.pre}>{formatPayload(j.data)}</pre>
-              </div>
-              <div className={styles.innerCard}>
-                <div className={styles.innerCardTitle}>Return value</div>
-                <pre className={styles.pre}>{formatPayload(j.returnValue)}</pre>
-              </div>
-              <div className={styles.innerCard}>
-                <div className={styles.innerCardTitle}>Timestamps</div>
-                <div className={styles.innerCardBody}>
-                  <dl className={styles.descGrid}>
-                    {TIMESTAMPS.map((t) => (
-                      <Item key={t.key} label={t.label}>
-                        <Time value={j[t.key]} />
-                      </Item>
-                    ))}
-                  </dl>
-                </div>
-              </div>
+                </Card>
+              </Flex>
             </Card>
           </Col>
-          <Col span={10}>
+          <Col xs={24} lg={10}>
             <Card title="Lifecycle">
               <LifecycleTimeline job={j} />
             </Card>
           </Col>
         </Row>
-      </Content>
+      </PageBody>
 
       <AddJobForm
         open={cloneOpen}

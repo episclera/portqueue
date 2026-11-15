@@ -16,20 +16,16 @@ import {
   Button,
   Card,
   Col,
-  Content,
-  Inline,
-  Mono,
-  PageHeader,
+  Flex,
   Popconfirm,
   Row,
   Skeleton,
-  Stack,
   Statistic,
   Tag,
-  Title,
   Tooltip,
-} from '@portqueue/ui';
-import type { StatisticTone } from '@portqueue/ui';
+  Typography,
+  theme,
+} from 'antd';
 import { ActionKind, type InstanceDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
@@ -46,22 +42,24 @@ import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
 import { totalCount } from '../components/format';
 import { METRIC_HINTS, formatPercent, metricTone, type MetricTone } from '../components/metrics';
+import { PageBody, PageHeader } from '../components/layout';
 
 /** Three cards on one row across a 24-column grid. */
 const CARD_SPAN = 8;
-
-/** The metric colouring maps onto the card component's own tones. */
-const CARD_TONE: Record<MetricTone, StatisticTone> = {
-  normal: 'default',
-  warn: 'warning',
-  danger: 'danger',
-};
 
 export function InstanceDetailPage(): React.ReactElement {
   const { key } = useParams<{ key: string }>();
   const instanceKey = decodeURIComponent(key);
   const { run } = useAction();
   const history = useHistory();
+  const { token } = theme.useToken();
+
+  /** The metric colouring, in the theme's semantic colours. */
+  const toneColor: Record<MetricTone, string | undefined> = {
+    normal: undefined,
+    warn: token.colorWarning,
+    danger: token.colorError,
+  };
 
   // Polled: every heartbeat moves `lastSeenAt` and the health numbers.
   const instance = usePolledQuery<InstanceDto>(queryKeys.instance(instanceKey), () =>
@@ -72,16 +70,14 @@ export function InstanceDetailPage(): React.ReactElement {
     return (
       <>
         <PageHeader title="Instance" subtitle="This instance could not be loaded." />
-        <Content>
-          <Stack gap={3}>
-            <ErrorState
-              title="Could not load this instance"
-              error={instance.error}
-              onRetry={() => void instance.refetch()}
-            />
-            <Link to="/instances">Back to instances</Link>
-          </Stack>
-        </Content>
+        <PageBody>
+          <ErrorState
+            title="Could not load this instance"
+            error={instance.error}
+            onRetry={() => void instance.refetch()}
+          />
+          <Link to="/instances">Back to instances</Link>
+        </PageBody>
       </>
     );
   }
@@ -91,29 +87,26 @@ export function InstanceDetailPage(): React.ReactElement {
     return (
       <>
         <PageHeader title="Instance" subtitle="Loading this instance…" />
-        <Content>
+        <PageBody>
           <Card>
-            <Stack gap={3}>
-              <Skeleton height={18} width="40%" />
-              <Skeleton height={100} />
-            </Stack>
+            <Skeleton active paragraph={{ rows: 4 }} />
           </Card>
-        </Content>
+        </PageBody>
       </>
     );
   }
 
-  const cards: { label: string; value: string; tone: StatisticTone; hint: string }[] = [
+  const cards: { label: string; value: string; color: string | undefined; hint: string }[] = [
     {
       label: 'CPU (process)',
       value: formatPercent(i.cpuPercent),
-      tone: CARD_TONE[metricTone(i.cpuPercent)],
+      color: toneColor[metricTone(i.cpuPercent)],
       hint: METRIC_HINTS.cpu,
     },
     {
       label: 'Memory (process)',
       value: formatPercent(i.memoryPercent),
-      tone: CARD_TONE[metricTone(i.memoryPercent)],
+      color: toneColor[metricTone(i.memoryPercent)],
       hint: METRIC_HINTS.memory,
     },
     {
@@ -121,7 +114,7 @@ export function InstanceDetailPage(): React.ReactElement {
       // things — and so it doesn't collide with the "Jobs processed" heading below.
       label: 'Processed',
       value: String(totalCount(i.counts)),
-      tone: 'default',
+      color: undefined,
       hint: 'Every job this instance has claimed, in any state',
     },
   ];
@@ -141,7 +134,7 @@ export function InstanceDetailPage(): React.ReactElement {
    */
   const removable = instanceRemovable(i);
   const actions = (
-    <Inline gap={2} align="center" wrap>
+    <Flex gap="small" align="center" wrap>
       {i.processingPaused ? (
         <Button
           icon={ACTIONS_CONFIG.resume.icon}
@@ -166,7 +159,11 @@ export function InstanceDetailPage(): React.ReactElement {
       {/* Disabled rather than hidden, as in the table: a button that materialises half an hour
           later is worse than one that says what it is waiting for. */}
       <Tooltip
-        title={removable ? ACTIONS_CONFIG.remove.label : INSTANCE_ACTIONS_COPY.removeBlocked(i.removableAfter)}
+        title={
+          removable
+            ? ACTIONS_CONFIG.remove.label
+            : INSTANCE_ACTIONS_COPY.removeBlocked(i.removableAfter)
+        }
         placement="bottom"
       >
         <Popconfirm
@@ -174,64 +171,69 @@ export function InstanceDetailPage(): React.ReactElement {
           description={INSTANCE_ACTIONS_COPY.removeConfirmDescription}
           okText={ACTIONS_CONFIG.remove.label}
           cancelText="Keep"
-          okDanger
+          okButtonProps={{ danger: true }}
           onConfirm={() => void remove()}
+          disabled={!removable}
         >
-          <Button variant="danger" icon={ACTIONS_CONFIG.remove.icon} disabled={!removable}>
+          <Button danger icon={ACTIONS_CONFIG.remove.icon} disabled={!removable}>
             {ACTIONS_CONFIG.remove.label}
           </Button>
         </Popconfirm>
       </Tooltip>
-    </Inline>
+    </Flex>
   );
 
   return (
     <>
       <PageHeader
         title={
-          <Inline gap={3} align="center" wrap>
-            <Title level={4} as="span">
+          <Flex gap="middle" align="center" wrap>
+            <Typography.Title level={4} style={{ margin: 0 }}>
               Instance
-            </Title>
-            <Mono>{i.instanceKey}</Mono>
-          </Inline>
+            </Typography.Title>
+            <Typography.Text code>{i.instanceKey}</Typography.Text>
+          </Flex>
         }
         subtitle={
-          <Inline gap={2} align="center" wrap>
-            <Tag tone={i.alive ? 'success' : 'neutral'}>
+          <Flex gap="small" align="center" wrap component="span">
+            <Tag color={i.alive ? 'success' : 'default'}>
               {i.alive ? LIVENESS_CONFIG.alive.label : LIVENESS_CONFIG.stale.label}
             </Tag>
-            <Tag tone={i.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(i)}</Tag>
+            <Tag color={i.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(i)}</Tag>
             <span>
               Last seen <Time value={i.lastSeenAt} />
             </span>
-          </Inline>
+          </Flex>
         }
         extra={actions}
       />
-      <Content>
-        <Stack gap={4}>
-          <Row gutter={16}>
-            {cards.map((card) => (
-              <Col key={card.label} span={CARD_SPAN}>
-                <Card>
-                  {/* Hover says what the number is: both health cards read this Node process, and
-                      an operator who takes them for the machine's load misreads them. */}
-                  <Tooltip title={card.hint} placement="bottom" block>
-                    <Statistic label={card.label} value={card.value} tone={card.tone} />
-                  </Tooltip>
-                </Card>
-              </Col>
-            ))}
-          </Row>
+      <PageBody>
+        <Row gutter={[16, 16]}>
+          {cards.map((card) => (
+            <Col key={card.label} xs={24} md={CARD_SPAN}>
+              <Card>
+                {/* Hover says what the number is: both health cards read this Node process, and
+                    an operator who takes them for the machine's load misreads them. */}
+                <Tooltip title={card.hint} placement="bottom">
+                  <Statistic
+                    title={card.label}
+                    value={card.value}
+                    styles={{ content: { color: card.color } }}
+                  />
+                </Tooltip>
+              </Card>
+            </Col>
+          ))}
+        </Row>
 
-          <Stack gap={2}>
-            <Title level={5}>Jobs processed</Title>
-            {/* Its own URL param prefix, so this table's paging never collides with another. */}
-            <JobsTable instanceKey={i.instanceKey} prefix="instanceJobs" />
-          </Stack>
-        </Stack>
-      </Content>
+        <Flex vertical gap="small">
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            Jobs processed
+          </Typography.Title>
+          {/* Its own URL param prefix, so this table's paging never collides with another. */}
+          <JobsTable instanceKey={i.instanceKey} prefix="instanceJobs" />
+        </Flex>
+      </PageBody>
     </>
   );
 }

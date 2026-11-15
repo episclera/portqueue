@@ -7,7 +7,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { ThemeProvider } from '@portqueue/ui';
 import { Time } from './Time';
 import { formatDateTime, formatDateTimeParts } from './format';
 
@@ -43,12 +42,7 @@ describe('<Time>', () => {
 
   describe('stacked', () => {
     const ISO = new Date(2026, 2, 12, 13, 23, 1).toISOString();
-    const renderStacked = (): HTMLElement =>
-      render(
-        <ThemeProvider mode="light">
-          <Time value={ISO} stacked />
-        </ThemeProvider>,
-      ).container;
+    const renderStacked = (): HTMLElement => render(<Time value={ISO} stacked />).container;
 
     it('puts the timezone on its own line, below the instant', () => {
       const container = renderStacked();
@@ -71,11 +65,7 @@ describe('<Time>', () => {
     });
 
     it('still renders the em dash for a missing value', () => {
-      const { container } = render(
-        <ThemeProvider mode="light">
-          <Time value={null} stacked />
-        </ThemeProvider>,
-      );
+      const { container } = render(<Time value={null} stacked />);
       expect(container.textContent).toBe('—');
     });
   });

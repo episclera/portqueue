@@ -1,7 +1,7 @@
 /** Search box with the magnifier inside the field. Debounced so typing doesn't spam the URL. */
 import React, { useEffect, useState } from 'react';
-import { CloseIcon, Input, SearchIcon } from '@portqueue/ui';
-import styles from './SearchInput.module.css';
+import { Input } from 'antd';
+import { SearchIcon } from '../icons';
 
 export interface SearchInputProps {
   value: string;
@@ -29,29 +29,19 @@ export function SearchInput({
   }, [draft, value, onChange]);
 
   return (
-    <div className={styles.wrapper}>
-      <SearchIcon className={styles.icon} aria-hidden />
-      <Input
-        className={styles.field}
-        inputSize="sm"
-        value={draft}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        onChange={(e) => setDraft(e.target.value)}
-      />
-      {draft ? (
-        <button
-          className={styles.clear}
-          type="button"
-          aria-label="Clear search"
-          onClick={() => {
-            setDraft('');
-            onChange('');
-          }}
-        >
-          <CloseIcon aria-hidden />
-        </button>
-      ) : null}
-    </div>
+    <Input
+      allowClear
+      value={draft}
+      placeholder={placeholder}
+      aria-label={placeholder}
+      prefix={<SearchIcon aria-hidden />}
+      style={{ width: 280 }}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        // Clearing is not typing: an emptied box (the clear button, or the last backspace) takes
+        // effect at once rather than after the debounce.
+        if (!e.target.value) onChange('');
+      }}
+    />
   );
 }

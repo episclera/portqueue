@@ -28,7 +28,7 @@ export default defineConfig({
         'react-dom/client',
         'react/jsx-runtime',
         '@portqueue/core',
-        '@portqueue/ui',
+        '@portqueue/theme',
         'react-router-dom',
       ],
     },

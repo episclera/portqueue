@@ -74,7 +74,8 @@ Packages:
 - `packages/core` → `@portqueue/core` — the library + bundled first-party drivers.
 - `packages/dashboard` → `@portqueue/dashboard` — the pluggable React dashboard.
 - `packages/cli` → `@portqueue/cli` — the command-line tool.
-- `packages/ui` → `@portqueue/ui` — shared theme/components (private, never published).
+- `packages/theme` → `@portqueue/theme` — the shared design tokens as JSON, typed JS and CSS
+  variables (private, never published).
 - `docs/` → this Docusaurus site.
 
 ## Conventions
@@ -97,8 +98,10 @@ Meet the people behind it on the [Team](./team.mdx) page.
 
 ## Working on the UI
 
-When implementing anything user-facing — the dashboard, docs, or shared `@portqueue/ui`
-components — consult the [Brandbook](./brandbook.mdx) first. It's the source of truth for the
-palette, typography, iconography, tone, and component style, so contributions stay visually
-consistent. Icons come from `@portqueue/ui`'s curated `src/icons.ts` re-export of
-`@ant-design/icons` — never emoji, and never a direct import of the icon package.
+When implementing anything user-facing — the dashboard or the docs — consult the
+[Brandbook](./brandbook.mdx) first. It's the source of truth for the palette, typography,
+iconography and tone, so contributions stay visually consistent. The dashboard is built from
+[antd](https://ant.design) components — reach for one before writing your own — themed from
+`@portqueue/theme`; never hard-code a colour or size that a token covers. Dashboard icons come from
+its curated `src/client/icons.ts` re-export of `@ant-design/icons` — never emoji, and never a
+direct import of the icon package.

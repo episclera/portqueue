@@ -18,13 +18,16 @@ import {
   ResumeIcon,
   RetryIcon,
   SearchIcon,
-} from '@portqueue/ui';
+} from '../icons';
 import { JobStatus, PauseMode } from '../queries/enums';
 import { formatDateTime } from '../components/format';
 
 export interface DisplayConfig {
   label: string;
-  /** Optional icon element, used where an icon reads better than text. */
+  /**
+   * Optional icon element, used where an icon reads better than text. `aria-hidden`, so a button
+   * carrying one is named by its label alone rather than "redo Retry".
+   */
   icon?: ReactNode;
 }
 
@@ -109,31 +112,31 @@ export interface ToggleConfig extends DisplayConfig {
 export const LIVE_TOGGLE_CONFIG = {
   live: {
     label: 'Pause',
-    icon: <PauseIcon />,
+    icon: <PauseIcon aria-hidden />,
     hint: 'Auto-updates are on (every 15s) — pause to freeze the data',
   },
   paused: {
     label: 'Resume',
-    icon: <ResumeIcon />,
+    icon: <ResumeIcon aria-hidden />,
     hint: 'Auto-updates are paused — data is frozen until you resume',
   },
 } satisfies Record<string, ToggleConfig>;
 
 /** Row / bulk action icons, so every table spells an action the same way. */
 export const ACTIONS_CONFIG = {
-  retry: { label: 'Retry', icon: <RetryIcon /> },
-  cancel: { label: 'Cancel', icon: <CancelIcon /> },
-  remove: { label: 'Remove', icon: <RemoveIcon /> },
-  pause: { label: 'Pause', icon: <PauseIcon /> },
-  resume: { label: 'Resume', icon: <ResumeIcon /> },
-  open: { label: 'Open', icon: <OpenIcon /> },
-  add: { label: 'Add job', icon: <AddIcon /> },
-  filters: { label: 'Filters', icon: <FiltersIcon /> },
-  search: { label: 'Search', icon: <SearchIcon /> },
-  refresh: { label: 'Refresh', icon: <RefreshIcon /> },
-  copy: { label: 'Copy', icon: <CopyIcon /> },
-  clone: { label: 'Clone', icon: <CloneIcon /> },
-  bulk: { label: 'Bulk actions', icon: <BulkIcon /> },
+  retry: { label: 'Retry', icon: <RetryIcon aria-hidden /> },
+  cancel: { label: 'Cancel', icon: <CancelIcon aria-hidden /> },
+  remove: { label: 'Remove', icon: <RemoveIcon aria-hidden /> },
+  pause: { label: 'Pause', icon: <PauseIcon aria-hidden /> },
+  resume: { label: 'Resume', icon: <ResumeIcon aria-hidden /> },
+  open: { label: 'Open', icon: <OpenIcon aria-hidden /> },
+  add: { label: 'Add job', icon: <AddIcon aria-hidden /> },
+  filters: { label: 'Filters', icon: <FiltersIcon aria-hidden /> },
+  search: { label: 'Search', icon: <SearchIcon aria-hidden /> },
+  refresh: { label: 'Refresh', icon: <RefreshIcon aria-hidden /> },
+  copy: { label: 'Copy', icon: <CopyIcon aria-hidden /> },
+  clone: { label: 'Clone', icon: <CloneIcon aria-hidden /> },
+  bulk: { label: 'Bulk actions', icon: <BulkIcon aria-hidden /> },
 } satisfies Record<string, DisplayConfig>;
 
 /** Pause state of a queue-like row, as a single labelled state. */

@@ -1,0 +1,24 @@
+{
+  "name": "@portqueue/theme",
+  "version": "0.1.0",
+  "description": "PortQueue design tokens — colours, type, spacing and motion as JSON, typed JS and CSS variables — shared by the dashboard and the docs site. Private, never published.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme.css": "./src/theme.css",
+    "./tokens.json": "./src/tokens.json"
+  },
+  "scripts": {
+    "build": "node scripts/build-css.mjs && tsc --noEmit",
+    "lint": "node scripts/build-css.mjs --check && tsc --noEmit && eslint src"
+  },
+  "devDependencies": {
+    "@portqueue/eslint-config": "*",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.0"
+  }
+}

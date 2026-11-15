@@ -1,23 +1,11 @@
 /**
- * Table action controls: icon-only row actions (with a tooltip that opens below the button so
- * it can't be clipped by the row above), the bulk-actions button that only appears once rows
- * are selected, and the confirmation dialog those bulk actions share.
+ * Table action controls: icon-only row actions (each with a tooltip, and an optional confirmation
+ * popover), and the bulk-actions menu that only appears once rows are selected.
  */
 import React from 'react';
-import {
-  Button,
-  CaretDownIcon,
-  Dropdown,
-  IconButton,
-  Inline,
-  Modal,
-  Popconfirm,
-  Text,
-  Tooltip,
-  type DropdownItem,
-} from '@portqueue/ui';
+import { Button, Dropdown, Flex, Popconfirm, Tooltip } from 'antd';
+import { CaretDownIcon } from '../icons';
 import { ACTIONS_CONFIG } from '../constants/labels';
-import styles from './RowActions.module.css';
 
 export interface RowActionProps {
   icon: React.ReactNode;
@@ -38,38 +26,36 @@ export function RowAction({
   confirm,
 }: RowActionProps): React.ReactElement {
   const button = (
-    <IconButton
-      className={styles.actionButton}
-      size="sm"
-      variant={danger ? 'danger' : 'text'}
+    <Button
+      type="text"
+      size="small"
+      danger={danger}
       disabled={disabled}
+      icon={icon}
       aria-label={label}
       onClick={confirm ? undefined : onClick}
-    >
-      <span aria-hidden>{icon}</span>
-    </IconButton>
-  );
-
-  const trigger = confirm ? (
-    <Popconfirm
-      title={confirm.title}
-      description={confirm.description}
-      okText={label}
-      // Not "Cancel" — the confirm button is already labelled with the action, which for the
-      // cancel-job row action would leave two identically named buttons in the popover.
-      cancelText="Keep"
-      okDanger={danger}
-      onConfirm={onClick}
-    >
-      {button}
-    </Popconfirm>
-  ) : (
-    button
+    />
   );
 
   return (
     <Tooltip title={label} placement="bottom">
-      {trigger}
+      {confirm ? (
+        <Popconfirm
+          title={confirm.title}
+          description={confirm.description}
+          okText={label}
+          // Not "Cancel" — the confirm button is already labelled with the action, which for the
+          // cancel-job row action would leave two identically named buttons in the popover.
+          cancelText="Keep"
+          okButtonProps={{ danger }}
+          onConfirm={onClick}
+          disabled={disabled}
+        >
+          {button}
+        </Popconfirm>
+      ) : (
+        button
+      )}
     </Tooltip>
   );
 }
@@ -77,16 +63,24 @@ export function RowAction({
 /** Row-actions cell — a tight row of icon buttons. */
 export function RowActions({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
-    <Inline gap={1} align="center">
+    <Flex gap={4} align="center" justify="flex-end">
       {children}
-    </Inline>
+    </Flex>
   );
+}
+
+export interface BulkItem {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+  danger?: boolean;
+  onClick: () => void;
 }
 
 export interface BulkActionsButtonProps {
   /** Number of selected rows; the button hides itself at 0. */
   count: number;
-  items: DropdownItem[];
+  items: BulkItem[];
 }
 
 /** Bulk-actions trigger: first control on the toolbar row, shown only with a live selection. */
@@ -96,57 +90,16 @@ export function BulkActionsButton({
 }: BulkActionsButtonProps): React.ReactElement | null {
   if (count === 0) return null;
   return (
-    <Dropdown items={items}>
-      <Button size="sm" icon={ACTIONS_CONFIG.bulk.icon}>
+    <Dropdown
+      trigger={['click']}
+      menu={{
+        items: items.map(({ key, label, icon, danger }) => ({ key, label, icon, danger })),
+        onClick: ({ key }) => items.find((item) => item.key === key)?.onClick(),
+      }}
+    >
+      <Button icon={ACTIONS_CONFIG.bulk.icon}>
         {ACTIONS_CONFIG.bulk.label} ({count}) <CaretDownIcon aria-hidden />
       </Button>
     </Dropdown>
-  );
-}
-
-export interface ConfirmModalProps {
-  open: boolean;
-  title: string;
-  description: React.ReactNode;
-  onConfirm: () => void;
-  onClose: () => void;
-  okText?: string;
-  okDanger?: boolean;
-}
-
-/** Confirmation dialog for a bulk action, where a row-level Popconfirm has nothing to anchor to. */
-export function ConfirmModal({
-  open,
-  title,
-  description,
-  onConfirm,
-  onClose,
-  okText = 'Confirm',
-  okDanger = false,
-}: ConfirmModalProps): React.ReactElement {
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={title}
-      footer={
-        <>
-          <Button variant="text" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant={okDanger ? 'danger' : 'primary'}
-            onClick={() => {
-              onClose();
-              onConfirm();
-            }}
-          >
-            {okText}
-          </Button>
-        </>
-      }
-    >
-      <Text>{description}</Text>
-    </Modal>
   );
 }

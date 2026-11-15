@@ -1,0 +1,99 @@
+/*
+ * GENERATED from tokens.json by scripts/build-css.mjs — do not edit by hand.
+ *
+ * The PortQueue theme as CSS custom properties, shared by the dashboard and the docs site.
+ * Light is the default; dark applies under `data-theme="dark"` on any ancestor (in practice
+ * <html>), which is the attribute Docusaurus already sets and the dashboard sets to match.
+ * Breakpoints are not here: `@media` cannot read `var()`, so they live in tokens.json only.
+ */
+
+:root,
+[data-theme='light'] {
+  --pq-color-brand: #a9d8b8;
+  --pq-color-brand-hover: #6fa184;
+  --pq-color-accent: #8fb8d8;
+  --pq-color-success: #a9d8b8;
+  --pq-color-danger: #d98a8a;
+  --pq-color-danger-hover: #b5645f;
+  --pq-color-warning: #e0ae72;
+  --pq-color-warning-hover: #c68a4e;
+  --pq-color-info: #8fb8d8;
+  --pq-color-bg: #f2f3f1;
+  --pq-color-surface: #ffffff;
+  --pq-color-surface-alt: #dde3de;
+  --pq-color-text: #1b1f1d;
+  --pq-color-text-muted: rgba(27, 31, 29, 0.68);
+  --pq-color-text-faint: rgba(27, 31, 29, 0.5);
+  --pq-color-border: #dde3de;
+  --pq-color-border-strong: #c9d1cb;
+  --pq-color-on-brand: #1b1f1d;
+  --pq-color-brand-solid: #a9d8b8;
+  --pq-color-brand-solid-hover: #6fa184;
+  --pq-color-link: #6fa184;
+  --pq-color-info-text: #4f86ad;
+  --pq-color-warning-text: #b47a3c;
+  --pq-color-danger-text: #a85450;
+  --pq-color-overlay: rgba(9, 12, 18, 0.45);
+  --pq-color-status-pending: #8a908c;
+  --pq-color-status-active: #5b87a8;
+  --pq-color-status-completed: #6fa184;
+  --pq-color-status-failed: #b5645f;
+  --pq-color-status-retry: #c68a4e;
+  --pq-color-status-cancelled: #9aa09c;
+  --pq-color-status-expired: #9aa09c;
+  --pq-color-status-stalled: #9a7aa0;
+  --pq-radius-sm: 6px;
+  --pq-radius-md: 10px;
+  --pq-radius-lg: 16px;
+  --pq-radius-pill: 999px;
+  --pq-space-1: 4px;
+  --pq-space-2: 8px;
+  --pq-space-3: 12px;
+  --pq-space-4: 16px;
+  --pq-space-5: 20px;
+  --pq-space-6: 24px;
+  --pq-space-8: 32px;
+  --pq-space-10: 40px;
+  --pq-space-12: 48px;
+  --pq-font-size-sm: 12px;
+  --pq-font-size-md: 14px;
+  --pq-font-size-lg: 16px;
+  --pq-font-size-xl: 20px;
+  --pq-font-size-xxl: 24px;
+  --pq-font-size-display: 32px;
+  --pq-font-body:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Inter',
+    system-ui, sans-serif;
+  --pq-font-display: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --pq-font-mono:
+    'JetBrains Mono', 'SF Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  --pq-line-height: 1.6;
+  --pq-shadow-sm: 0 1px 2px rgba(27, 31, 29, 0.05), 0 1px 3px rgba(27, 31, 29, 0.08);
+  --pq-shadow-md: 0 4px 12px rgba(27, 31, 29, 0.07), 0 2px 6px rgba(27, 31, 29, 0.05);
+  --pq-shadow-lg: 0 12px 32px rgba(27, 31, 29, 0.1), 0 6px 16px rgba(27, 31, 29, 0.07);
+  --pq-motion-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --pq-motion-fast: 120ms;
+  --pq-motion-base: 200ms;
+  --pq-motion-slow: 320ms;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --pq-color-bg: #171a19;
+  --pq-color-surface: #1f2422;
+  --pq-color-surface-alt: #272d2a;
+  --pq-color-text: #edefec;
+  --pq-color-text-muted: rgba(237, 239, 236, 0.68);
+  --pq-color-text-faint: rgba(237, 239, 236, 0.5);
+  --pq-color-border: #2c332f;
+  --pq-color-border-strong: #3a423d;
+  --pq-color-on-brand: #1b1f1d;
+  --pq-color-brand-solid: #6fa184;
+  --pq-color-brand-solid-hover: #a9d8b8;
+  --pq-color-link: #a9d8b8;
+  --pq-color-info-text: #8fb8d8;
+  --pq-color-warning-text: #c68a4e;
+  --pq-color-danger-text: #c98a86;
+  --pq-color-overlay: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}

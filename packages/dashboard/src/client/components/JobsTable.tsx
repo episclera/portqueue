@@ -9,8 +9,8 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { StatusTag, Table, Tooltip } from '@portqueue/ui';
-import type { DropdownItem, TableColumn } from '@portqueue/ui';
+import { App, Table, Tooltip, Typography } from 'antd';
+import type { TableColumnType } from 'antd';
 import { JobStatus } from '../queries/enums';
 import { ActionKind, type JobDto, type JobPageDto } from '../../shared/dto';
 import { api, config } from '../queries/api';
@@ -19,12 +19,12 @@ import { useAction } from '../queries/use-action';
 import { PAGE_SIZE, clampedPage, useTableParams } from '../queries/use-table-params';
 import { ACTIONS_CONFIG, STALLED, STATUSES_CONFIG, statusLabel } from '../constants/labels';
 import { truncate } from './format';
-import { dateColumn } from './table-columns';
+import { TABLE_PROPS, actionsColumn, cappedRowSelection, dateColumn } from './table-columns';
 import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
+import { StatusTag } from './StatusTag';
 import type { FilterDef } from './FiltersModal';
-import { BulkActionsButton, ConfirmModal, RowAction, RowActions } from './RowActions';
-import styles from './JobsTable.module.css';
+import { BulkActionsButton, RowAction, RowActions, type BulkItem } from './RowActions';
 
 export interface JobsTableProps {
   /** Narrow to one queue. Omitted on views that span queues. */
@@ -57,11 +57,11 @@ export function JobsTable({
   prefix = 'jobs',
 }: JobsTableProps): React.ReactElement {
   const { run, runBatch } = useAction();
+  const { modal } = App.useApp();
   const params = useTableParams(prefix, FILTER_KEYS);
   const statusesKey = (params.filters.status ?? []).join(',');
 
   const [selected, setSelected] = useState<string[]>([]);
-  const [confirmBulkRemove, setConfirmBulkRemove] = useState(false);
 
   const listParams = {
     ...(queue ? { queue } : {}),
@@ -94,20 +94,20 @@ export function JobsTable({
     });
   }, [rows]);
 
-  const columns: TableColumn<JobDto>[] = [
+  const columns: TableColumnType<JobDto>[] = [
     {
       title: 'Job',
       key: 'id',
-      render: (r) => (
-        <Link className={styles.monoLink} to={`/jobs/${encodeURIComponent(r.id)}`}>
-          {truncate(r.id)}
+      render: (_, r) => (
+        <Link to={`/jobs/${encodeURIComponent(r.id)}`}>
+          <Typography.Text code>{truncate(r.id)}</Typography.Text>
         </Link>
       ),
     },
     {
       title: 'Status',
       key: 'status',
-      render: (r) => {
+      render: (_, r) => {
         const status = r.stalled ? STALLED : r.status;
         return <StatusTag status={status} label={statusLabel(status)} />;
       },
@@ -115,21 +115,21 @@ export function JobsTable({
     {
       title: 'Attempt',
       key: 'attempt',
-      render: (r) => `${r.retryAttempt}/${r.retryMaxAttempts}`,
+      render: (_, r) => `${r.retryAttempt}/${r.retryMaxAttempts}`,
     },
     { title: 'Priority', dataIndex: 'priority', key: 'priority' },
     {
       title: 'Processed On Instance',
       key: 'processedOnInstanceKey',
       // Linked: "what else was that process doing?" is the next question, one click away.
-      render: (r) =>
+      render: (_, r) =>
         r.processedOnInstanceKey ? (
           <Tooltip title={r.processedOnInstanceKey} placement="bottom">
             <Link
-              className={styles.monoLink}
               to={`/instances/${encodeURIComponent(r.processedOnInstanceKey)}`}
+              aria-label={r.processedOnInstanceKey}
             >
-              {truncate(r.processedOnInstanceKey, 8, 4)}
+              <Typography.Text code>{truncate(r.processedOnInstanceKey, 8, 4)}</Typography.Text>
             </Link>
           </Tooltip>
         ) : (
@@ -140,37 +140,30 @@ export function JobsTable({
     dateColumn<JobDto>('Start After', 'startAfter', (r) => r.startAfter),
     dateColumn<JobDto>('Completed At', 'completedAt', (r) => r.completedAt),
     dateColumn<JobDto>('Failed At', 'failedAt', (r) => r.failedAt),
-    {
-      title: 'Actions',
-      key: 'actions',
-      // Buttons hug the right edge; the title stays on the left, where it reads as this column's.
-      align: 'right',
-      headerAlign: 'left',
-      render: (r: JobDto) => (
-        <RowActions>
-          <RowAction
-            icon={ACTIONS_CONFIG.retry.icon}
-            label={ACTIONS_CONFIG.retry.label}
-            disabled={r.status === JobStatus.ACTIVE}
-            onClick={() => void run({ kind: ActionKind.RETRY, jobId: r.id }, 'Retry queued')}
-          />
-          <RowAction
-            icon={ACTIONS_CONFIG.cancel.icon}
-            label={ACTIONS_CONFIG.cancel.label}
-            disabled={!CANCELLABLE.includes(r.status as JobStatus)}
-            confirm={{ title: 'Cancel this job?' }}
-            onClick={() => void run({ kind: ActionKind.CANCEL, jobId: r.id }, 'Cancelled')}
-          />
-          <RowAction
-            danger
-            icon={ACTIONS_CONFIG.remove.icon}
-            label={ACTIONS_CONFIG.remove.label}
-            confirm={{ title: 'Remove this job permanently?' }}
-            onClick={() => void run({ kind: ActionKind.REMOVE, jobId: r.id }, 'Removed')}
-          />
-        </RowActions>
-      ),
-    },
+    actionsColumn<JobDto>((r) => (
+      <RowActions>
+        <RowAction
+          icon={ACTIONS_CONFIG.retry.icon}
+          label={ACTIONS_CONFIG.retry.label}
+          disabled={r.status === JobStatus.ACTIVE}
+          onClick={() => void run({ kind: ActionKind.RETRY, jobId: r.id }, 'Retry queued')}
+        />
+        <RowAction
+          icon={ACTIONS_CONFIG.cancel.icon}
+          label={ACTIONS_CONFIG.cancel.label}
+          disabled={!CANCELLABLE.includes(r.status as JobStatus)}
+          confirm={{ title: 'Cancel this job?' }}
+          onClick={() => void run({ kind: ActionKind.CANCEL, jobId: r.id }, 'Cancelled')}
+        />
+        <RowAction
+          danger
+          icon={ACTIONS_CONFIG.remove.icon}
+          label={ACTIONS_CONFIG.remove.label}
+          confirm={{ title: 'Remove this job permanently?' }}
+          onClick={() => void run({ kind: ActionKind.REMOVE, jobId: r.id }, 'Removed')}
+        />
+      </RowActions>
+    )),
   ];
 
   /**
@@ -187,7 +180,7 @@ export function JobsTable({
     setSelected([]);
   };
 
-  const bulkItems: DropdownItem[] = [
+  const bulkItems: BulkItem[] = [
     {
       key: 'retry',
       label: `${ACTIONS_CONFIG.retry.label} selected`,
@@ -205,71 +198,65 @@ export function JobsTable({
       label: `${ACTIONS_CONFIG.remove.label} selected`,
       icon: ACTIONS_CONFIG.remove.icon,
       danger: true,
-      onClick: () => setConfirmBulkRemove(true),
+      onClick: () =>
+        void modal.confirm({
+          title: `Remove ${selected.length} job(s)?`,
+          content: 'This permanently deletes the selected job rows. It cannot be undone.',
+          okText: ACTIONS_CONFIG.remove.label,
+          okButtonProps: { danger: true },
+          onOk: () => runBulk(ActionKind.REMOVE, 'Removed'),
+        }),
     },
   ];
 
   return (
-    <>
-      <TableCard
-        total={total}
-        page={clampedPage(params.page, total)}
-        onPageChange={params.setPage}
-        loading={jobs.isLoading}
-        error={jobs.error}
-        errorTitle="Could not load jobs"
-        onRetry={() => void jobs.refetch()}
-        paginationLabel="Jobs pagination"
-        search={{
-          value: params.search,
-          onChange: params.setSearch,
-          placeholder: 'Search id, status, key, error or payload',
+    <TableCard
+      total={total}
+      page={clampedPage(params.page, total)}
+      onPageChange={params.setPage}
+      loading={jobs.isLoading}
+      error={jobs.error}
+      errorTitle="Could not load jobs"
+      onRetry={() => void jobs.refetch()}
+      search={{
+        value: params.search,
+        onChange: params.setSearch,
+        placeholder: 'Search id, status, key, error or payload',
+      }}
+      filters={{
+        defs: FILTER_DEFS,
+        values: params.filters,
+        onChange: params.setFilters,
+        onClear: (key, value) => params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
+      }}
+      toolbarLeading={<BulkActionsButton count={selected.length} items={bulkItems} />}
+    >
+      <Table<JobDto>
+        {...TABLE_PROPS}
+        rowKey={(r) => r.id}
+        columns={columns}
+        dataSource={rows}
+        locale={{
+          emptyText: params.search ? (
+            <EmptyState message={`No jobs match “${params.search}”.`} />
+          ) : (
+            <EmptyState
+              message="No jobs yet."
+              hint="Jobs appear here as your app produces them — here's how to add one."
+              docsHref={DOCS.producing}
+              docsLabel="Producing jobs"
+            />
+          ),
         }}
-        filters={{
-          defs: FILTER_DEFS,
-          values: params.filters,
-          onChange: params.setFilters,
-          onClear: (key, value) => params.clearFilter(key as (typeof FILTER_KEYS)[number], value),
-        }}
-        toolbarLeading={<BulkActionsButton count={selected.length} items={bulkItems} />}
-      >
-        <Table<JobDto>
-          rowKey={(r) => r.id}
-          columns={columns}
-          data={rows}
-          empty={
-            params.search ? (
-              <EmptyState message={`No jobs match “${params.search}”.`} />
-            ) : (
-              <EmptyState
-                message="No jobs yet."
-                hint="Jobs appear here as your app produces them — here's how to add one."
-                docsHref={DOCS.producing}
-                docsLabel="Producing jobs"
-              />
-            )
-          }
-          rowSelection={{
-            selectedKeys: selected,
-            onChange: setSelected,
-            // A bulk action is one statement, and the smallest engine limit on the ids one statement
-            // can bind is everyone's limit. The server refuses more too; this is the same number,
-            // delivered with the page rather than copied into the client.
-            maxSelected: config.maxBatchIds,
-            maxSelectedHint: `You can act on ${config.maxBatchIds} jobs at a time — the limit is what one database statement can carry. Clear a selection to pick another.`,
-          }}
-        />
-      </TableCard>
-
-      <ConfirmModal
-        open={confirmBulkRemove}
-        title={`Remove ${selected.length} job(s)?`}
-        description="This permanently deletes the selected job rows. It cannot be undone."
-        okText={ACTIONS_CONFIG.remove.label}
-        okDanger
-        onClose={() => setConfirmBulkRemove(false)}
-        onConfirm={() => void runBulk(ActionKind.REMOVE, 'Removed')}
+        rowSelection={cappedRowSelection({
+          rows,
+          keyOf: (r) => r.id,
+          selected,
+          onChange: setSelected,
+          max: config.maxBatchIds,
+          hint: `You can act on ${config.maxBatchIds} jobs at a time — the limit is what one database statement can carry. Clear a selection to pick another.`,
+        })}
       />
-    </>
+    </TableCard>
   );
 }

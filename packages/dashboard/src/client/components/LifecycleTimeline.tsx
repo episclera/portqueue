@@ -4,8 +4,9 @@
  * every job (single-function or multi-step).
  */
 import React from 'react';
-import { Tag, Text, Timeline, tokens } from '@portqueue/ui';
-import type { TimelineItem } from '@portqueue/ui';
+import { Flex, Tag, Timeline, Typography } from 'antd';
+import type { TimelineItemProps } from 'antd';
+import { tokens } from '@portqueue/theme';
 import type { JobDto } from '../../shared/dto';
 import { STALLED, statusLabel } from '../constants/labels';
 import { duration } from './format';
@@ -19,14 +20,14 @@ interface Milestone {
 
 export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement {
   const milestones: Milestone[] = [
-    { label: 'Created', at: job.createdAt, color: tokens.color.status.PENDING },
-    { label: 'Started', at: job.startedAt, color: tokens.color.status.ACTIVE },
-    { label: 'Retried', at: job.retriedAt, color: tokens.color.status.RETRY },
-    { label: 'Stalled', at: job.stalledAt, color: tokens.color.status.STALLED },
-    { label: 'Completed', at: job.completedAt, color: tokens.color.status.COMPLETED },
-    { label: 'Failed', at: job.failedAt, color: tokens.color.status.FAILED },
-    { label: 'Cancelled', at: job.cancelledAt, color: tokens.color.status.CANCELLED },
-    { label: 'Expired', at: job.expiredAt, color: tokens.color.status.EXPIRED },
+    { label: 'Created', at: job.createdAt, color: tokens.status.PENDING },
+    { label: 'Started', at: job.startedAt, color: tokens.status.ACTIVE },
+    { label: 'Retried', at: job.retriedAt, color: tokens.status.RETRY },
+    { label: 'Stalled', at: job.stalledAt, color: tokens.status.STALLED },
+    { label: 'Completed', at: job.completedAt, color: tokens.status.COMPLETED },
+    { label: 'Failed', at: job.failedAt, color: tokens.status.FAILED },
+    { label: 'Cancelled', at: job.cancelledAt, color: tokens.status.CANCELLED },
+    { label: 'Expired', at: job.expiredAt, color: tokens.status.EXPIRED },
   ].filter((m) => m.at) as Milestone[];
 
   // Sort by time so out-of-declaration-order events (e.g. retried before completed) line up.
@@ -34,23 +35,21 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
     (a, b) => new Date(a.at as string).getTime() - new Date(b.at as string).getTime(),
   );
 
-  const items: TimelineItem[] = milestones.map((m, i) => {
+  const items: TimelineItemProps[] = milestones.map((m, i) => {
     const prev = i > 0 ? milestones[i - 1] : undefined;
     return {
       key: `${m.label}-${m.at as string}`,
       color: m.color,
-      label: <Time value={m.at} />,
-      children: (
-        <div>
-          <Text strong>{m.label}</Text>
+      title: <Time value={m.at} />,
+      content: (
+        <Flex vertical>
+          <Typography.Text strong>{m.label}</Typography.Text>
           {prev && (
-            <div>
-              <Text tone="muted" small>
-                +{duration(prev.at, m.at)} since {prev.label.toLowerCase()}
-              </Text>
-            </div>
+            <Typography.Text type="secondary">
+              +{duration(prev.at, m.at)} since {prev.label.toLowerCase()}
+            </Typography.Text>
           )}
-        </div>
+        </Flex>
       ),
     };
   });
@@ -60,18 +59,18 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
   const rawStatus = job.stalled ? STALLED : job.status;
 
   return (
-    <div>
-      <div style={{ marginBottom: 12 }}>
-        <Tag tone="info">Now: {statusLabel(rawStatus)}</Tag>{' '}
-        <Text tone="muted">
+    <Flex vertical gap="middle">
+      <Flex align="center" gap="small">
+        <Tag color="processing">Now: {statusLabel(rawStatus)}</Tag>
+        <Typography.Text type="secondary">
           Attempt {job.retryAttempt} / {job.retryMaxAttempts}
-        </Text>
-      </div>
+        </Typography.Text>
+      </Flex>
       {items.length ? (
         <Timeline items={items} />
       ) : (
-        <Text tone="muted">No lifecycle events yet.</Text>
+        <Typography.Text type="secondary">No lifecycle events yet.</Typography.Text>
       )}
-    </div>
+    </Flex>
   );
 }

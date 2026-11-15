@@ -9,8 +9,8 @@
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Content, Mono, PageHeader, Table, Tag, Tooltip } from '@portqueue/ui';
-import type { TableColumn } from '@portqueue/ui';
+import { Table, Tag, Tooltip, Typography } from 'antd';
+import type { TableColumnType } from 'antd';
 import { ActionKind, type InstanceDto, type InstancePageDto } from '../../shared/dto';
 import { api } from '../queries/api';
 import { queryKeys, usePolledQuery } from '../queries/use-queries';
@@ -26,7 +26,8 @@ import {
 } from '../constants/labels';
 import { TableCard } from '../components/TableCard';
 import { RowAction, RowActions } from '../components/RowActions';
-import { dateColumn } from '../components/table-columns';
+import { TABLE_PROPS, actionsColumn, dateColumn } from '../components/table-columns';
+import { PageBody, PageHeader } from '../components/layout';
 import { METRIC_HINTS, MetricValue, formatPercent, metricTone } from '../components/metrics';
 import { totalCount } from '../components/format';
 import { DOCS, EmptyState } from '../components/states';
@@ -68,21 +69,21 @@ export function InstancesPage(): React.ReactElement {
   const rows = instances.data?.items ?? [];
   const total = instances.data?.total ?? 0;
 
-  const columns: TableColumn<InstanceDto>[] = [
+  const columns: TableColumnType<InstanceDto>[] = [
     {
       title: 'Instance',
       key: 'instanceKey',
-      render: (r) => (
+      render: (_, r) => (
         <Link to={`/instances/${encodeURIComponent(r.instanceKey)}`}>
-          <Mono>{r.instanceKey}</Mono>
+          <Typography.Text code>{r.instanceKey}</Typography.Text>
         </Link>
       ),
     },
     {
       title: 'Liveness',
       key: 'liveness',
-      render: (r) => (
-        <Tag tone={r.alive ? 'success' : 'neutral'}>
+      render: (_, r) => (
+        <Tag color={r.alive ? 'success' : 'default'}>
           {r.alive ? LIVENESS_CONFIG.alive.label : LIVENESS_CONFIG.stale.label}
         </Tag>
       ),
@@ -90,8 +91,8 @@ export function InstancesPage(): React.ReactElement {
     {
       title: 'State',
       key: 'state',
-      render: (r) => (
-        <Tag tone={r.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(r)}</Tag>
+      render: (_, r) => (
+        <Tag color={r.processingPaused ? 'warning' : 'success'}>{pauseStateLabel(r)}</Tag>
       ),
     },
     {
@@ -101,7 +102,7 @@ export function InstancesPage(): React.ReactElement {
       title: 'CPU (process)',
       key: 'cpuPercent',
       align: 'right',
-      render: (r) => (
+      render: (_, r) => (
         <Tooltip title={METRIC_HINTS.cpu} placement="bottom">
           <MetricValue tone={metricTone(r.cpuPercent)}>{formatPercent(r.cpuPercent)}</MetricValue>
         </Tooltip>
@@ -111,7 +112,7 @@ export function InstancesPage(): React.ReactElement {
       title: 'Memory (process)',
       key: 'memoryPercent',
       align: 'right',
-      render: (r) => (
+      render: (_, r) => (
         <Tooltip title={METRIC_HINTS.memory} placement="bottom">
           <MetricValue tone={metricTone(r.memoryPercent)}>
             {formatPercent(r.memoryPercent)}
@@ -123,65 +124,59 @@ export function InstancesPage(): React.ReactElement {
       title: 'Processed',
       key: 'processed',
       align: 'right',
-      render: (r) => totalCount(r.counts),
+      render: (_, r) => totalCount(r.counts),
     },
     // The clock time of the last heartbeat. Whether that is recent is what the Liveness column
     // already answers, so this column doesn't need to count on its own.
     dateColumn<InstanceDto>('Last Seen', 'lastSeenAt', (r) => r.lastSeenAt),
-    {
-      title: 'Actions',
-      key: 'actions',
-      // Buttons hug the right edge; the title stays on the left, where it reads as this column's.
-      align: 'right',
-      headerAlign: 'left',
-      render: (r: InstanceDto) => {
-        const removable = instanceRemovable(r);
-        return (
-          <RowActions>
-            {r.processingPaused ? (
-              <RowAction
-                icon={ACTIONS_CONFIG.resume.icon}
-                label={ACTIONS_CONFIG.resume.label}
-                onClick={() =>
-                  void run(
-                    { kind: ActionKind.RESUME_INSTANCE, instanceKey: r.instanceKey },
-                    'Resumed',
-                  )
-                }
-              />
-            ) : (
-              <RowAction
-                icon={ACTIONS_CONFIG.pause.icon}
-                label={ACTIONS_CONFIG.pause.label}
-                confirm={{ title: INSTANCE_ACTIONS_COPY.pauseConfirm }}
-                onClick={() =>
-                  void run(
-                    { kind: ActionKind.PAUSE_INSTANCE, instanceKey: r.instanceKey },
-                    'Paused',
-                  )
-                }
-              />
-            )}
+    actionsColumn<InstanceDto>((r) => {
+      const removable = instanceRemovable(r);
+      return (
+        <RowActions>
+          {r.processingPaused ? (
             <RowAction
-              danger
-              disabled={!removable}
-              icon={ACTIONS_CONFIG.remove.icon}
-              label={removable ? ACTIONS_CONFIG.remove.label : INSTANCE_ACTIONS_COPY.removeBlocked(r.removableAfter)}
-              confirm={{
-                title: INSTANCE_ACTIONS_COPY.removeConfirm,
-                description: INSTANCE_ACTIONS_COPY.removeConfirmDescription,
-              }}
+              icon={ACTIONS_CONFIG.resume.icon}
+              label={ACTIONS_CONFIG.resume.label}
               onClick={() =>
                 void run(
-                  { kind: ActionKind.REMOVE_INSTANCE, instanceKey: r.instanceKey },
-                  'Instance removed',
+                  { kind: ActionKind.RESUME_INSTANCE, instanceKey: r.instanceKey },
+                  'Resumed',
                 )
               }
             />
-          </RowActions>
-        );
-      },
-    },
+          ) : (
+            <RowAction
+              icon={ACTIONS_CONFIG.pause.icon}
+              label={ACTIONS_CONFIG.pause.label}
+              confirm={{ title: INSTANCE_ACTIONS_COPY.pauseConfirm }}
+              onClick={() =>
+                void run({ kind: ActionKind.PAUSE_INSTANCE, instanceKey: r.instanceKey }, 'Paused')
+              }
+            />
+          )}
+          <RowAction
+            danger
+            disabled={!removable}
+            icon={ACTIONS_CONFIG.remove.icon}
+            label={
+              removable
+                ? ACTIONS_CONFIG.remove.label
+                : INSTANCE_ACTIONS_COPY.removeBlocked(r.removableAfter)
+            }
+            confirm={{
+              title: INSTANCE_ACTIONS_COPY.removeConfirm,
+              description: INSTANCE_ACTIONS_COPY.removeConfirmDescription,
+            }}
+            onClick={() =>
+              void run(
+                { kind: ActionKind.REMOVE_INSTANCE, instanceKey: r.instanceKey },
+                'Instance removed',
+              )
+            }
+          />
+        </RowActions>
+      );
+    }),
   ];
 
   return (
@@ -190,7 +185,7 @@ export function InstancesPage(): React.ReactElement {
         title="Instances"
         subtitle="Liveness, the health of each instance's process at its last heartbeat, and jobs processed across the cluster."
       />
-      <Content>
+      <PageBody>
         <TableCard
           total={total}
           page={clampedPage(params.page, total)}
@@ -199,7 +194,6 @@ export function InstancesPage(): React.ReactElement {
           error={instances.error}
           errorTitle="Could not load instances"
           onRetry={() => void instances.refetch()}
-          paginationLabel="Instances pagination"
           search={{
             value: params.search,
             onChange: params.setSearch,
@@ -213,11 +207,12 @@ export function InstancesPage(): React.ReactElement {
           }}
         >
           <Table<InstanceDto>
+            {...TABLE_PROPS}
             rowKey={(r) => r.instanceKey}
             columns={columns}
-            data={rows}
-            empty={
-              params.search ? (
+            dataSource={rows}
+            locale={{
+              emptyText: params.search ? (
                 <EmptyState message={`No instances match “${params.search}”.`} />
               ) : (
                 <EmptyState
@@ -226,11 +221,11 @@ export function InstancesPage(): React.ReactElement {
                   docsHref={DOCS.scaleHorizontally}
                   docsLabel="Scaling horizontally"
                 />
-              )
-            }
+              ),
+            }}
           />
         </TableCard>
-      </Content>
+      </PageBody>
     </>
   );
 }

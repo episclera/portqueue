@@ -27,8 +27,8 @@
  * and harder to read. Running text keeps the inline form.
  */
 import React from 'react';
+import { Typography } from 'antd';
 import { formatDateTime, formatDateTimeParts } from './format';
-import styles from './Time.module.css';
 
 export interface TimeProps {
   /** An ISO timestamp. `null`/`undefined` renders the em dash the rest of the UI uses. */
@@ -50,9 +50,12 @@ export function Time({ value, stacked = false }: TimeProps): React.ReactElement 
     // Non-null: `ms` is already known to parse.
     const { instant, offset } = formatDateTimeParts(ms)!;
     return (
-      <time className={styles.stack} dateTime={iso} title={iso}>
+      // Two lines that stay tight together — they are one value, not two rows.
+      <time dateTime={iso} title={iso} style={{ display: 'inline-block', lineHeight: 1.3 }}>
         {instant}
-        <span className={styles.offset}>{offset}</span>
+        <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+          {offset}
+        </Typography.Text>
       </time>
     );
   }

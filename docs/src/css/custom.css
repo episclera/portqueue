@@ -1,114 +1,62 @@
 /**
- * PortQueue docs theme — maps Docusaurus Infima variables to the shared PortQueue design
- * tokens (mirrors `@portqueue/ui` src/theme/tokens.ts — the single source of truth for the
- * palette). Calm, muted system: dominant light grey, desaturated green primary, near-black
- * text, low-contrast semantic colours always paired with dark text. Reduced-motion aware.
+ * PortQueue docs theme — maps Docusaurus's Infima variables onto the shared design tokens. The
+ * tokens themselves come from `@portqueue/theme` (its generated `theme.css`, loaded before this file
+ * by `customCss` in docusaurus.config.ts), so no colour is written here: a palette change is a
+ * `tokens.json` edit and reaches the dashboard and this site together. `theme.css` keys its dark
+ * values on `[data-theme='dark']`, the attribute Docusaurus already sets, so the variables below
+ * follow the colour mode with no second block for most of them.
+ *
+ * Infima wants a ladder of shades around its primary colour; those are mixed from the one token
+ * rather than hand-picked, so they cannot drift from it.
  */
 
 :root {
-  /* Shared design tokens, exposed as CSS variables (same names the dashboard uses). */
-  --bg: #f2f3f1;
-  --surface: #ffffff;
-  --primary: #a9d8b8;
-  --primary-dark: #6fa184;
-  --secondary: #dde3de;
-  --text: #1b1f1d;
-  --text-muted: rgba(27, 31, 29, 0.68);
-  --danger: #d98a8a;
-  --danger-dark: #b5645f;
-  --warning: #e0ae72;
-  --warning-dark: #c68a4e;
-  --info: #8fb8d8;
-
-  /* Interactive/text green uses the darker tone for AA contrast; fills use --primary. */
-  --ifm-color-primary: #6fa184;
-  --ifm-color-primary-dark: #5c8a70;
-  --ifm-color-primary-darker: #547e66;
-  --ifm-color-primary-darkest: #456a55;
-  --ifm-color-primary-light: #a9d8b8;
-  --ifm-color-primary-lighter: #bbe1c7;
-  --ifm-color-primary-lightest: #d6eedd;
+  /* Interactive/text green: the darker tone on light surfaces, the lighter one on dark. */
+  --ifm-color-primary: var(--pq-color-link);
+  --ifm-color-primary-dark: color-mix(in srgb, var(--pq-color-link) 90%, black);
+  --ifm-color-primary-darker: color-mix(in srgb, var(--pq-color-link) 82%, black);
+  --ifm-color-primary-darkest: color-mix(in srgb, var(--pq-color-link) 68%, black);
+  --ifm-color-primary-light: color-mix(in srgb, var(--pq-color-link) 80%, white);
+  --ifm-color-primary-lighter: color-mix(in srgb, var(--pq-color-link) 68%, white);
+  --ifm-color-primary-lightest: color-mix(in srgb, var(--pq-color-link) 45%, white);
   /* Dark text on the muted green/semantic fills (never white) — WCAG AA. */
-  --ifm-button-color: #1b1f1d;
+  --ifm-button-color: var(--pq-color-on-brand);
 
   /* Muted semantic colours (admonitions, badges). */
-  --ifm-color-success: #6fa184;
-  --ifm-color-warning: #c68a4e;
-  --ifm-color-danger: #b5645f;
-  --ifm-color-info: #8fb8d8;
-
-  /* Admonition heading colours — banners stay white; only the title takes the level colour.
-     Slightly deepened over the muted tokens above so the title reads on a white surface. */
-  --pq-admonition-info: #4f86ad;
-  --pq-admonition-warning: #b47a3c;
-  --pq-admonition-danger: #a85450;
+  --ifm-color-success: var(--pq-color-brand-hover);
+  --ifm-color-warning: var(--pq-color-warning-hover);
+  --ifm-color-danger: var(--pq-color-danger-hover);
+  --ifm-color-info: var(--pq-color-info);
 
   /* Neutral fields. */
-  --ifm-background-color: #f2f3f1;
-  --ifm-background-surface-color: #ffffff;
-  --ifm-font-color-base: #1b1f1d;
-  --ifm-code-background: #dde3de;
-  --ifm-color-emphasis-300: #dde3de;
+  --ifm-background-color: var(--pq-color-bg);
+  --ifm-background-surface-color: var(--pq-color-surface);
+  --ifm-font-color-base: var(--pq-color-text);
+  --ifm-code-background: var(--pq-color-surface-alt);
+  --ifm-color-emphasis-300: var(--pq-color-border);
 
   /* Rounded surfaces + soft depth over hard borders. */
-  --ifm-global-radius: 10px;
-  --ifm-card-border-radius: 16px;
-  --ifm-button-border-radius: 10px;
-  --ifm-code-border-radius: 8px;
-  --ifm-global-shadow-lw: 0 1px 2px rgba(27, 31, 29, 0.05), 0 1px 3px rgba(27, 31, 29, 0.08);
-  --ifm-global-shadow-md: 0 4px 12px rgba(27, 31, 29, 0.07), 0 2px 6px rgba(27, 31, 29, 0.05);
-  --ifm-global-shadow-tl: 0 12px 32px rgba(27, 31, 29, 0.1), 0 6px 16px rgba(27, 31, 29, 0.07);
+  --ifm-global-radius: var(--pq-radius-md);
+  --ifm-card-border-radius: var(--pq-radius-lg);
+  --ifm-button-border-radius: var(--pq-radius-md);
+  --ifm-code-border-radius: var(--pq-radius-sm);
+  --ifm-global-shadow-lw: var(--pq-shadow-sm);
+  --ifm-global-shadow-md: var(--pq-shadow-md);
+  --ifm-global-shadow-tl: var(--pq-shadow-lg);
 
-  /* Spacious typography (4px base scale). */
-  --ifm-font-family-base:
-    system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji',
-    'Segoe UI Emoji';
-  --ifm-font-family-monospace:
-    ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+  /* Typography — the same stacks the dashboard uses. */
+  --ifm-font-family-base: var(--pq-font-body);
+  --ifm-font-family-monospace: var(--pq-font-mono);
   --ifm-line-height-base: 1.7;
   --ifm-heading-font-weight: 700;
   --ifm-spacing-horizontal: 1.25rem;
   --ifm-navbar-height: 4rem;
 
   --ifm-code-font-size: 92%;
-  --docusaurus-highlighted-code-line-bg: rgba(111, 161, 132, 0.14);
+  --docusaurus-highlighted-code-line-bg: color-mix(in srgb, var(--pq-color-link) 15%, transparent);
 
-  /* Motion tokens mirrored from tokens.motion. */
-  --ifm-transition-fast: 120ms;
-  --ifm-transition-slow: 320ms;
-}
-
-[data-theme='dark'] {
-  --bg: #171a19;
-  --surface: #1f2422;
-  --secondary: #2c332f;
-  --text: #edefec;
-  --text-muted: rgba(237, 239, 236, 0.68);
-
-  /* On dark surfaces the lighter green reads well as interactive text. */
-  --ifm-color-primary: #a9d8b8;
-  --ifm-color-primary-dark: #8ec9a1;
-  --ifm-color-primary-darker: #6fa184;
-  --ifm-color-primary-darkest: #5c8a70;
-  --ifm-color-primary-light: #bbe1c7;
-  --ifm-color-primary-lighter: #cfead8;
-  --ifm-color-primary-lightest: #e4f4e9;
-
-  /* Keep dark text on the green button fill in dark mode too (never white). */
-  --ifm-button-color: #1b1f1d;
-
-  /* Admonition heading colours on dark surfaces — the muted tokens read well here. */
-  --pq-admonition-info: #8fb8d8;
-  --pq-admonition-warning: #c68a4e;
-  --pq-admonition-danger: #c98a86;
-
-  --ifm-background-color: #171a19;
-  --ifm-background-surface-color: #1f2422;
-  --ifm-font-color-base: #edefec;
-  --ifm-code-background: #272d2a;
-  --ifm-color-emphasis-300: #2c332f;
-
-  --docusaurus-highlighted-code-line-bg: rgba(169, 216, 184, 0.15);
+  --ifm-transition-fast: var(--pq-motion-fast);
+  --ifm-transition-slow: var(--pq-motion-slow);
 }
 
 /* Sticky navbar with a soft shadow — kept fully opaque so content never shows through it. */
@@ -148,8 +96,8 @@
 .navbar__search-input,
 .DocSearch-Button {
   border: none;
-  border-radius: 999px;
-  background-color: rgba(16, 24, 40, 0.05);
+  border-radius: var(--pq-radius-pill);
+  background-color: var(--pq-color-bg);
   box-shadow: var(--ifm-global-shadow-lw);
 }
 
@@ -175,7 +123,7 @@
 /* Code blocks: rounded, soft shadow. */
 .theme-code-block,
 pre[class*='language-'] {
-  border-radius: 12px;
+  border-radius: var(--pq-radius-md);
   box-shadow: var(--ifm-global-shadow-md);
 }
 
@@ -191,7 +139,7 @@ pre[class*='language-'] {
   background-color: var(--ifm-background-surface-color);
   border: 1px solid var(--ifm-color-emphasis-300);
   border-left: 0;
-  border-radius: 12px;
+  border-radius: var(--pq-radius-md);
   box-shadow: var(--ifm-global-shadow-lw);
   color: var(--ifm-color-content);
 }
@@ -202,22 +150,20 @@ pre[class*='language-'] {
 }
 .theme-admonition-info > div:first-child,
 .theme-admonition-tip > div:first-child {
-  color: var(--pq-admonition-info);
+  color: var(--pq-color-info-text);
 }
 .theme-admonition-warning > div:first-child,
 .theme-admonition-caution > div:first-child {
-  color: var(--pq-admonition-warning);
+  color: var(--pq-color-warning-text);
 }
 .theme-admonition-danger > div:first-child {
-  color: var(--pq-admonition-danger);
+  color: var(--pq-color-danger-text);
 }
 
-/* Light footer with a soft top separation. */
+/* Light footer on the surface colour, separated from the page by a hairline. */
 .footer--light {
-  background-color: #f0f2f6;
-}
-[data-theme='dark'] .footer--light {
-  background-color: #0e1119;
+  background-color: var(--pq-color-surface);
+  border-top: 1px solid var(--pq-color-border);
 }
 
 /* Sidebar polish. */

@@ -1,9 +1,10 @@
 import base from '@portqueue/eslint-config';
 
-/** The dashboard takes every icon from `@portqueue/ui`'s curated set, never straight from the
- *  icon package — see the Brandbook's iconography rules. */
-const iconsOnlyFromUi = {
+/** The dashboard takes every icon from its curated set in `src/client/icons.ts`, never straight
+ *  from the icon package — see the Brandbook's iconography rules. */
+const iconsOnlyFromCuratedSet = {
   files: ['src/**/*.{ts,tsx}'],
+  ignores: ['src/client/icons.ts'],
   rules: {
     'no-restricted-imports': [
       'error',
@@ -11,7 +12,7 @@ const iconsOnlyFromUi = {
         patterns: [
           {
             group: ['@ant-design/icons', '@ant-design/icons/*'],
-            message: "Import icons from '@portqueue/ui', not @ant-design/icons.",
+            message: "Import icons from 'src/client/icons.ts', not @ant-design/icons.",
           },
         ],
       },
@@ -19,4 +20,4 @@ const iconsOnlyFromUi = {
   },
 };
 
-export default [...base, { ignores: ['dist/**'] }, iconsOnlyFromUi];
+export default [...base, { ignores: ['dist/**'] }, iconsOnlyFromCuratedSet];

@@ -140,8 +140,8 @@ describe('overview page', () => {
     expect(screen.getByLabelText('Search queue name')).toBeInTheDocument();
     // A single page still renders its pagination, with both steps disabled.
     expect(screen.getByRole('button', { name: 'Page 1' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Previous Page' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next Page' })).toBeDisabled();
   });
 
   it('pages the queues table on the server rather than fetching every row', async () => {
@@ -198,14 +198,17 @@ describe('queue detail page', () => {
     expect(await screen.findByRole('heading', { name: 'emails' })).toBeInTheDocument();
     expect(await screen.findByText('Results (42)')).toBeInTheDocument();
 
-    expect(await screen.findByText('Processed On Instance')).toBeInTheDocument();
+    // Headers by role: antd's scrollable table repeats each title in an `aria-hidden` measuring
+    // row, so a plain text query would find every header twice.
+    const header = (name: string) => screen.queryByRole('columnheader', { name });
+    expect(
+      await screen.findByRole('columnheader', { name: 'Processed On Instance' }),
+    ).toBeInTheDocument();
     // The preferred-instance pattern is detail-page material, not a jobs-table column.
-    expect(screen.queryByText('Preferred Instance Pattern')).not.toBeInTheDocument();
-    expect(screen.getByText('Start After')).toBeInTheDocument();
-    expect(screen.getByText('Created At')).toBeInTheDocument();
-    expect(screen.getByText('Completed At')).toBeInTheDocument();
-    expect(screen.getByText('Failed At')).toBeInTheDocument();
-    expect(screen.getByText('Actions')).toBeInTheDocument();
+    expect(header('Preferred Instance Pattern')).not.toBeInTheDocument();
+    for (const name of ['Start After', 'Created At', 'Completed At', 'Failed At', 'Actions']) {
+      expect(header(name)).toBeInTheDocument();
+    }
 
     // Statuses render through the label config, never as a raw enum value.
     expect(screen.queryByText('FAILED')).not.toBeInTheDocument();
@@ -220,7 +223,7 @@ describe('queue detail page', () => {
 
     await screen.findByText('Results (42)');
     for (const title of ['Created At', 'Start After', 'Completed At', 'Failed At']) {
-      const header = screen.getByText(title).closest('th');
+      const header = screen.getByRole('columnheader', { name: title });
       // Asserted against the constant, not a literal: what matters is that every date column
       // shares one floor, not what this month's number happens to be.
       expect(header).toHaveStyle({ minWidth: `${DATE_COLUMN_MIN_WIDTH}px` });
@@ -427,8 +430,8 @@ describe('instances page', () => {
       responses: { ...RESPONSES, '/instances/worker-eu-1': INSTANCE },
     }).renderApp('#/instances/worker-eu-1');
 
-    // The tooltip's trigger is the wrapper around the card body, so hover it rather than the label.
-    const cpuCard = (await screen.findByText('CPU (process)')).closest('span');
+    // The tooltip's trigger is the whole statistic, so hover it rather than the label.
+    const cpuCard = (await screen.findByText('CPU (process)')).closest('.ant-statistic');
     fireEvent.mouseEnter(cpuCard!);
 
     const tip = await screen.findByRole('tooltip');

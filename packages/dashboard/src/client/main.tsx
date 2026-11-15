@@ -1,14 +1,16 @@
 /**
- * Client entry. Mounts the SPA: the shared `@portqueue/ui` theme (the visitor's
- * own choice, or the OS preference), the toast provider, the TanStack Query cache, and the global
+ * Client entry. Mounts the SPA: antd themed from `@portqueue/theme` (the visitor's own light/dark
+ * choice, or the OS preference), antd's `App` for toasts, the TanStack Query cache, and the global
  * LiveProvider.
  */
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, ToastProvider, useThemeMode } from '@portqueue/ui';
+import { App as AntApp, ConfigProvider } from 'antd';
+import '@portqueue/theme/theme.css';
 import { App } from './App';
 import { LiveProvider } from './components/LiveProvider';
+import { themeConfig, useThemeMode } from './theme';
 import { DASHBOARD_TITLE } from '../shared/constants';
 
 /**
@@ -38,17 +40,17 @@ const queryClient = new QueryClient({
 function Root(): React.ReactElement {
   // The visitor owns the theme: the header switcher, persisted in localStorage, over the OS
   // preference until they pick one. The host has no say — see `DashboardConfigDto`.
-  const { effective, setMode } = useThemeMode();
+  const { effective, reducedMotion, setMode } = useThemeMode();
   return (
-    <ThemeProvider mode={effective} applyGlobalStyles>
-      <ToastProvider>
+    <ConfigProvider theme={themeConfig(effective, reducedMotion)}>
+      <AntApp>
         <QueryClientProvider client={queryClient}>
           <LiveProvider>
-            <App onThemeChange={setMode} />
+            <App mode={effective} onThemeChange={setMode} />
           </LiveProvider>
         </QueryClientProvider>
-      </ToastProvider>
-    </ThemeProvider>
+      </AntApp>
+    </ConfigProvider>
   );
 }
 

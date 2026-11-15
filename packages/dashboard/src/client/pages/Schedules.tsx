@@ -1,6 +1,6 @@
 /** Schedules page: every recurring definition across queues, server-paged and polled. */
 import React from 'react';
-import { Content, PageHeader } from '@portqueue/ui';
+import { PageBody, PageHeader } from '../components/layout';
 import { SchedulesPanel } from '../components/SchedulesPanel';
 
 export function SchedulesPage(): React.ReactElement {
@@ -10,9 +10,9 @@ export function SchedulesPage(): React.ReactElement {
         title="Schedules"
         subtitle="Recurring definitions and when they next fire, across every queue."
       />
-      <Content>
+      <PageBody>
         <SchedulesPanel />
-      </Content>
+      </PageBody>
     </>
   );
 }
