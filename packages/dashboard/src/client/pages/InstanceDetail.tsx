@@ -11,7 +11,7 @@
  * can't answer at all: "this one looks busy — busy with what?"
  */
 import React from 'react';
-import { Link, useHistory, useParams } from 'react-router-dom';
+import { useHistory, useParams } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -43,6 +43,8 @@ import { Time } from '../components/Time';
 import { totalCount } from '../components/format';
 import { METRIC_HINTS, formatPercent, metricTone, type MetricTone } from '../components/metrics';
 import { PageBody, PageHeader } from '../components/layout';
+import { AppLink } from '../components/AppLink';
+import { InfoIcon } from '../icons';
 
 /** Three cards on one row across a 24-column grid. */
 const CARD_SPAN = 8;
@@ -76,7 +78,7 @@ export function InstanceDetailPage(): React.ReactElement {
             error={instance.error}
             onRetry={() => void instance.refetch()}
           />
-          <Link to="/instances">Back to instances</Link>
+          <AppLink to="/instances">Back to instances</AppLink>
         </PageBody>
       </>
     );
@@ -212,15 +214,22 @@ export function InstanceDetailPage(): React.ReactElement {
           {cards.map((card) => (
             <Col key={card.label} xs={24} md={CARD_SPAN}>
               <Card>
-                {/* Hover says what the number is: both health cards read this Node process, and
-                    an operator who takes them for the machine's load misreads them. */}
-                <Tooltip title={card.hint} placement="bottom">
-                  <Statistic
-                    title={card.label}
-                    value={card.value}
-                    styles={{ content: { color: card.color } }}
-                  />
-                </Tooltip>
+                {/* The explanation sits on a visible info icon after the title, not on a hover
+                    over the whole card: a card-wide tooltip is invisible until stumbled on, and
+                    both health cards need saying — they read this Node process, and an operator
+                    who takes them for the machine's load misreads them. */}
+                <Statistic
+                  title={
+                    <Flex gap={6} align="center" component="span">
+                      {card.label}
+                      <Tooltip title={card.hint} trigger={['hover', 'focus']}>
+                        <InfoIcon tabIndex={0} aria-label={`About ${card.label}`} />
+                      </Tooltip>
+                    </Flex>
+                  }
+                  value={card.value}
+                  styles={{ content: { color: card.color } }}
+                />
               </Card>
             </Col>
           ))}

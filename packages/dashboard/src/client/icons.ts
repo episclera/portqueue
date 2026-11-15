@@ -30,6 +30,7 @@ export {
   GithubOutlined as GithubIcon,
   MenuOutlined as MenuIcon,
   // Controls & affordances
+  InfoCircleOutlined as InfoIcon,
   DownOutlined as CaretDownIcon,
   MoonOutlined as DarkModeIcon,
   SunOutlined as LightModeIcon,

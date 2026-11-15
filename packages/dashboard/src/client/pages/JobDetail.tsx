@@ -11,7 +11,7 @@
  * since the removed job's own page has nothing left to render.
  */
 import React, { useEffect, useState } from 'react';
-import { Link, useHistory, useParams } from 'react-router-dom';
+import { useHistory, useParams } from 'react-router-dom';
 import {
   App,
   Button,
@@ -40,6 +40,7 @@ import { Time } from '../components/Time';
 import { truncate } from '../components/format';
 import { StatusTag } from '../components/StatusTag';
 import { PageBody, PageHeader } from '../components/layout';
+import { AppLink } from '../components/AppLink';
 
 /**
  * Statuses a job can never leave. Everything else — PENDING, ACTIVE, RETRY — can still change
@@ -91,13 +92,8 @@ function Maybe({
   to?: (value: string) => string;
 }): React.ReactElement {
   if (!value) return <>—</>;
-  return to ? (
-    <Link to={to(value)}>
-      <Mono>{value}</Mono>
-    </Link>
-  ) : (
-    <Mono>{value}</Mono>
-  );
+  // A value that leads somewhere is a link, never a code chip — see `AppLink`.
+  return to ? <AppLink to={to(value)}>{value}</AppLink> : <Mono>{value}</Mono>;
 }
 
 /**
@@ -150,7 +146,7 @@ export function JobDetailPage(): React.ReactElement {
             error={job.error}
             onRetry={() => void job.refetch()}
           />
-          <Link to="/">Back to overview</Link>
+          <AppLink to="/">Back to overview</AppLink>
         </PageBody>
       </>
     );
@@ -241,7 +237,7 @@ export function JobDetailPage(): React.ReactElement {
 
   const details: DescriptionsProps['items'] = [
     { key: 'id', label: 'Job id', children: <Mono>{j.id}</Mono> },
-    { key: 'queue', label: 'Queue', children: <Link to={queuePath}>{j.queue}</Link> },
+    { key: 'queue', label: 'Queue', children: <AppLink to={queuePath}>{j.queue}</AppLink> },
     { key: 'status', label: 'Status', children: status },
     { key: 'stalled', label: 'Stalled', children: j.stalled ? 'Yes' : 'No' },
     { key: 'priority', label: 'Priority', children: j.priority },
@@ -304,7 +300,7 @@ export function JobDetailPage(): React.ReactElement {
         subtitle={
           <Flex gap="small" align="center" component="span">
             <StatusTag status={rawStatus} label={status} />
-            <Link to={queuePath}>{j.queue}</Link>
+            <AppLink to={queuePath}>{j.queue}</AppLink>
           </Flex>
         }
         extra={actions}

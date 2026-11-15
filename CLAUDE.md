@@ -283,6 +283,11 @@ in three sections, and no section at all when there is nothing to put in it.
   **antd** and maps the tokens onto antd's theme in `dashboard/src/client/theme.ts`; the docs render
   with Docusaurus and point Infima's variables at the `--pq-*` ones. Reach for an antd component
   before writing one in the dashboard, and never hard-code a value a token covers.
+  **Anything that takes the user to another page looks like a link** — `AppLink`
+  (`dashboard/src/client/components/AppLink.tsx`, antd's `Typography.Link` routed through
+  react-router), never a tag, a code chip or a bare `<a>`: a value styled as a tag reads as a label,
+  so nobody clicks it. Truncated ids stay truncated, with the full value in `title`/`aria-label`.
+  The only exceptions are the sidebar menu and the logo, which antd's `Menu`/the header style.
 - `packages/eslint-config` → private shared lint base
 - `docs/` → Docusaurus site
 

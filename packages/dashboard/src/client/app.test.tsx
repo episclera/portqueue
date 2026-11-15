@@ -253,6 +253,17 @@ describe('queue detail page', () => {
     expect(await screen.findByRole('button', { name: /Bulk actions \(1\)/ })).toBeInTheDocument();
   });
 
+  it('renders every cell that opens a page as a link, never as a tag', async () => {
+    // A value styled as a code chip reads as a label, so nobody thinks to click it.
+    harness().renderApp('#/queues/emails');
+    await screen.findByText('Results (42)');
+    for (const name of [JOB.id, JOB.processedOnInstanceKey]) {
+      const link = screen.getByRole('link', { name });
+      expect(link).toHaveClass('ant-typography');
+      expect(link.querySelector('code')).toBeNull();
+    }
+  });
+
   it('links the instance that claimed a row to that instance’s page', async () => {
     harness().renderApp('#/queues/emails');
 
@@ -425,14 +436,13 @@ describe('instances page', () => {
     expect(screen.getByText('94.2%')).toBeInTheDocument();
   });
 
-  it('says on hover that the health cards read this process, not the machine', async () => {
+  it('explains on an info icon that the health cards read this process, not the machine', async () => {
     harness({
       responses: { ...RESPONSES, '/instances/worker-eu-1': INSTANCE },
     }).renderApp('#/instances/worker-eu-1');
 
-    // The tooltip's trigger is the whole statistic, so hover it rather than the label.
-    const cpuCard = (await screen.findByText('CPU (process)')).closest('.ant-statistic');
-    fireEvent.mouseEnter(cpuCard!);
+    // The explanation hangs off a visible info icon beside the title, not off the whole card.
+    fireEvent.mouseEnter(await screen.findByRole('img', { name: 'About CPU (process)' }));
 
     const tip = await screen.findByRole('tooltip');
     expect(tip).toHaveTextContent(/this Node process/i);

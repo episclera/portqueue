@@ -4,7 +4,7 @@
  * react-router v5; every component is antd, themed from `@portqueue/theme` in `theme.ts`.
  */
 import React from 'react';
-import { HashRouter, Link, Route, Switch as RouteSwitch, useLocation } from 'react-router-dom';
+import { HashRouter, Route, Switch as RouteSwitch, useLocation } from 'react-router-dom';
 import { Typography } from 'antd';
 import { Shell } from './components/Shell';
 import { PageBody } from './components/layout';
@@ -17,6 +17,7 @@ import { SchedulesPage } from './pages/Schedules';
 import { ScheduleDetailPage } from './pages/ScheduleDetail';
 import { InstancesPage } from './pages/Instances';
 import { InstanceDetailPage } from './pages/InstanceDetail';
+import { AppLink } from './components/AppLink';
 
 export interface AppProps {
   /** The theme in effect — what the header toggle shows. */
@@ -43,7 +44,7 @@ function Routes(): React.ReactElement {
         <Route>
           <PageBody>
             <Typography.Title level={3}>Not found</Typography.Title>
-            <Link to="/">Back to overview</Link>
+            <AppLink to="/">Back to overview</AppLink>
           </PageBody>
         </Route>
       </RouteSwitch>

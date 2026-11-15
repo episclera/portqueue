@@ -8,7 +8,6 @@
  * instance detail page carries the full jobs table instead.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Table, Tag, Tooltip } from 'antd';
 import type { TableColumnType } from 'antd';
 import { ActionKind, type InstanceDto, type InstancePageDto } from '../../shared/dto';
@@ -32,6 +31,7 @@ import { METRIC_HINTS, MetricValue, formatPercent, metricTone } from '../compone
 import { totalCount } from '../components/format';
 import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
+import { AppLink } from '../components/AppLink';
 
 const FILTER_KEYS = ['liveness', 'state'] as const;
 
@@ -74,7 +74,7 @@ export function InstancesPage(): React.ReactElement {
       title: 'Instance',
       key: 'instanceKey',
       render: (_, r) => (
-        <Link to={`/instances/${encodeURIComponent(r.instanceKey)}`}>{r.instanceKey}</Link>
+        <AppLink to={`/instances/${encodeURIComponent(r.instanceKey)}`}>{r.instanceKey}</AppLink>
       ),
     },
     {

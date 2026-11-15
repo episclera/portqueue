@@ -5,7 +5,6 @@
  * Each schedule id links to its detail page, where the jobs it produced are listed.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { App, Table, Tag, Typography } from 'antd';
 import type { TableColumnType } from 'antd';
 import { ActionKind, type ScheduleDto, type SchedulePageDto } from '../../shared/dto';
@@ -20,6 +19,7 @@ import { TableCard } from './TableCard';
 import { DOCS, EmptyState } from './states';
 import type { FilterDef } from './FiltersModal';
 import { BulkActionsButton, RowAction, RowActions, type BulkItem } from './RowActions';
+import { AppLink } from './AppLink';
 
 export interface SchedulesPanelProps {
   /** Narrow to one queue's schedules. Omitted on the all-queues page. */
@@ -86,19 +86,19 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
       key: 'scheduleId',
       // Generated schedule ids are as long as job ids, and truncate the same way.
       render: (_, r) => (
-        <Link
+        <AppLink
           to={`/schedules/${encodeURIComponent(r.scheduleId)}`}
           title={r.scheduleId}
           aria-label={r.scheduleId}
         >
           {truncate(r.scheduleId)}
-        </Link>
+        </AppLink>
       ),
     },
     {
       title: 'Queue',
       key: 'queue',
-      render: (_, r) => <Link to={`/queues/${encodeURIComponent(r.queue)}`}>{r.queue}</Link>,
+      render: (_, r) => <AppLink to={`/queues/${encodeURIComponent(r.queue)}`}>{r.queue}</AppLink>,
     },
     {
       title: 'Cadence',

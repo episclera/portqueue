@@ -9,7 +9,7 @@
  * nothing left to show.
  */
 import React from 'react';
-import { Link, useHistory, useParams } from 'react-router-dom';
+import { useHistory, useParams } from 'react-router-dom';
 import { Button, Card, Descriptions, Flex, Popconfirm, Skeleton, Tag, Typography } from 'antd';
 import type { DescriptionsProps } from 'antd';
 import { ActionKind, type ScheduleDto } from '../../shared/dto';
@@ -23,6 +23,7 @@ import { ErrorState } from '../components/states';
 import { Time } from '../components/Time';
 import { truncate } from '../components/format';
 import { PageBody, PageHeader } from '../components/layout';
+import { AppLink } from '../components/AppLink';
 
 /** A monospaced value — ids, keys, cron patterns. */
 const Mono = ({ children }: { children: React.ReactNode }): React.ReactElement => (
@@ -50,7 +51,7 @@ export function ScheduleDetailPage(): React.ReactElement {
             error={schedule.error}
             onRetry={() => void schedule.refetch()}
           />
-          <Link to="/schedules">Back to schedules</Link>
+          <AppLink to="/schedules">Back to schedules</AppLink>
         </PageBody>
       </>
     );
@@ -136,7 +137,7 @@ export function ScheduleDetailPage(): React.ReactElement {
   const stateLabel = s.enabled
     ? SCHEDULE_STATES_CONFIG.enabled.label
     : SCHEDULE_STATES_CONFIG.disabled.label;
-  const queueLink = <Link to={`/queues/${encodeURIComponent(s.queue)}`}>{s.queue}</Link>;
+  const queueLink = <AppLink to={`/queues/${encodeURIComponent(s.queue)}`}>{s.queue}</AppLink>;
 
   const definition: DescriptionsProps['items'] = [
     { key: 'id', label: 'Schedule id', children: <Mono>{s.scheduleId}</Mono> },

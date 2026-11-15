@@ -8,7 +8,6 @@
  * schedule produced, `instanceKey` to the jobs one instance claimed.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { App, Table, Tooltip } from 'antd';
 import type { TableColumnType } from 'antd';
 import { JobStatus } from '../queries/enums';
@@ -25,6 +24,7 @@ import { DOCS, EmptyState } from './states';
 import { StatusTag } from './StatusTag';
 import type { FilterDef } from './FiltersModal';
 import { BulkActionsButton, RowAction, RowActions, type BulkItem } from './RowActions';
+import { AppLink } from './AppLink';
 
 export interface JobsTableProps {
   /** Narrow to one queue. Omitted on views that span queues. */
@@ -100,9 +100,9 @@ export function JobsTable({
       key: 'id',
       render: (_, r) => (
         // A plain link, truncated; the full id is on hover and in the accessible name.
-        <Link to={`/jobs/${encodeURIComponent(r.id)}`} title={r.id} aria-label={r.id}>
+        <AppLink to={`/jobs/${encodeURIComponent(r.id)}`} title={r.id} aria-label={r.id}>
           {truncate(r.id)}
-        </Link>
+        </AppLink>
       ),
     },
     {
@@ -126,12 +126,12 @@ export function JobsTable({
       render: (_, r) =>
         r.processedOnInstanceKey ? (
           <Tooltip title={r.processedOnInstanceKey} placement="bottom">
-            <Link
+            <AppLink
               to={`/instances/${encodeURIComponent(r.processedOnInstanceKey)}`}
               aria-label={r.processedOnInstanceKey}
             >
               {truncate(r.processedOnInstanceKey, 8, 4)}
-            </Link>
+            </AppLink>
           </Tooltip>
         ) : (
           '—'

@@ -3,7 +3,6 @@
  * poll on the shared interval — they are the two things this page exists to keep current.
  */
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Table, Tag } from 'antd';
 import type { TableColumnType } from 'antd';
 import { ActionKind, type QueuePageDto, type QueueDto, type StatsDto } from '../../shared/dto';
@@ -19,6 +18,7 @@ import { TABLE_PROPS, actionsColumn, countColumns } from '../components/table-co
 import { PageBody, PageHeader } from '../components/layout';
 import { DOCS, EmptyState } from '../components/states';
 import type { FilterDef } from '../components/FiltersModal';
+import { AppLink } from '../components/AppLink';
 
 const FILTER_KEYS = ['state'] as const;
 
@@ -55,7 +55,7 @@ export function OverviewPage(): React.ReactElement {
     {
       title: 'Queue',
       key: 'name',
-      render: (_, r) => <Link to={`/queues/${encodeURIComponent(r.name)}`}>{r.name}</Link>,
+      render: (_, r) => <AppLink to={`/queues/${encodeURIComponent(r.name)}`}>{r.name}</AppLink>,
     },
     {
       title: 'State',

@@ -131,6 +131,14 @@ from antd rather than building its own, so every surface behaves the same way.
   for a tick and the tooltip for "Copied". Never let a copy look identical before and after.
 - **Every mutation reports its outcome** in a toast (antd's `message`) — including the partial
   ones: "Removed 3 of 5 jobs." rather than a success that claims all five.
+- **A link looks like a link.** Anything that takes the user to another page — a job, queue,
+  schedule or instance named in a table, a header or a detail card — renders as a link in the
+  link colour, never as a tag or a code chip. A value styled as a tag reads as a label, so nobody
+  thinks to click it. A long id stays truncated; the full value is on hover. In the dashboard that
+  link is `AppLink` (antd's `Typography.Link`, routed through the app).
+- **Explanations are visible.** When a statistic card needs explaining, the tooltip hangs off an
+  info icon after the card's title (hover or keyboard focus), never off a hover over the whole
+  card — a tooltip nobody can see is there is a tooltip nobody reads.
 - **Clipped content scrolls.** A table wider than its card scrolls sideways inside it rather than
   squeezing its columns, so a timestamp never wraps mid-value.
 
