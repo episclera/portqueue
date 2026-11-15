@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 (2026-11-15)
+
+### Code Refactoring
+
+* **dashboard:** drop the legacy #/ link redirect ([b67e28e](https://github.com/episclera/portqueue/commit/b67e28e7e46795d683cc660a8cf32bdf5b092f60))
+
 ## 1.2.0 (2026-11-15)
 
 ### Features
