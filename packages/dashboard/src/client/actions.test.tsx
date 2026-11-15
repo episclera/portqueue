@@ -11,7 +11,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { ActionKind } from '../shared/dto';
-import { createHarness, page, type StubOptions } from '../test-support/render';
+import { createHarness, currentPath, page, type StubOptions } from '../test-support/render';
 import { config } from './queries/api';
 
 const QUEUES = page([
@@ -89,7 +89,7 @@ const openInstance = (over: Partial<typeof INSTANCE> = {}): ReturnType<typeof ha
   const h = harness({
     responses: { ...RESPONSES, [`/instances/${INSTANCE.instanceKey}`]: { ...INSTANCE, ...over } },
   });
-  h.renderApp(`#/instances/${INSTANCE.instanceKey}`);
+  h.renderApp(`/instances/${INSTANCE.instanceKey}`);
   return h;
 };
 
@@ -129,7 +129,7 @@ beforeEach(() => window.localStorage.clear());
 describe('job row actions', () => {
   it('retries a job straight away (no confirmation)', async () => {
     const h = harness();
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Retry'));
@@ -146,7 +146,7 @@ describe('job row actions', () => {
 
   it('cancels a job through its confirmation popover, which renders in a body portal', async () => {
     const h = harness();
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Cancel'));
@@ -168,7 +168,7 @@ describe('job row actions', () => {
 
   it('dismisses the confirmation popover without acting when the user backs out', async () => {
     const h = harness();
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Remove'));
@@ -181,7 +181,7 @@ describe('job row actions', () => {
 
   it('removes a job through its confirmation popover', async () => {
     const h = harness();
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Remove'));
@@ -199,7 +199,7 @@ describe('job row actions', () => {
 
   it('closes the popover on Escape and on an outside click', async () => {
     const h = harness();
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Remove'));
@@ -218,7 +218,7 @@ describe('job row actions', () => {
 describe('bulk job actions', () => {
   it('sends one request carrying every selected id, not one request per job', async () => {
     const h = harness();
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(selectRow(JOB.id));
@@ -238,7 +238,7 @@ describe('bulk job actions', () => {
 
   it('asks for confirmation in a modal before a bulk remove', async () => {
     const h = harness();
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(selectRow(JOB.id));
@@ -263,7 +263,7 @@ describe('bulk job actions', () => {
     // The server acted on fewer rows than were asked for — a settled job, a vanished one, an
     // ACTIVE row a removal refuses. One summary beats N toasts and beats claiming all succeeded.
     const h = harness({ actionResult: { ok: true, affected: 1, requested: 3 } });
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(selectRow(JOB.id));
@@ -277,7 +277,7 @@ describe('bulk job actions', () => {
   /** Select the one job row and run "Cancel selected" against the given server result. */
   async function bulkCancel(actionResult: unknown): Promise<void> {
     const h = harness({ actionResult });
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
     fireEvent.click(selectRow(JOB.id));
     fireEvent.click(await screen.findByRole('button', { name: /Bulk actions \(1\)/ }));
@@ -306,7 +306,7 @@ describe('bulk job actions', () => {
     const h = harness({
       failures: { '/actions': { status: 409, body: { error: 'queue is paused' } } },
     });
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Retry'));
@@ -335,7 +335,7 @@ describe('the batch cap on a selection', () => {
   it('stops the jobs table at the cap, and says why on the refused checkbox', async () => {
     const other = { ...JOB, id: 'job-second-000' };
     const h = harness({ responses: { ...RESPONSES, '/jobs': page([JOB, other]) } });
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (2)');
 
     // Select-all would pass the cap, so it is refused up front rather than selecting a prefix.
@@ -352,7 +352,7 @@ describe('the batch cap on a selection', () => {
   it('stops the schedules table at the same cap', async () => {
     const other = { ...SCHEDULE, scheduleId: 'sch-2' };
     const h = harness({ responses: { ...RESPONSES, '/schedules': page([SCHEDULE, other]) } });
-    h.renderApp('#/schedules');
+    h.renderApp('/schedules');
     await screen.findByText('Results (2)');
 
     fireEvent.click(selectRow(SCHEDULE.scheduleId));
@@ -365,7 +365,7 @@ describe('the batch cap on a selection', () => {
 describe('queue row actions', () => {
   it('pauses a queue from the overview table, after its confirmation popover', async () => {
     const h = harness();
-    h.renderApp('#/');
+    h.renderApp('/');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Pause'));
@@ -383,7 +383,7 @@ describe('schedule actions', () => {
   it('disables a schedule rather than only offering removal', async () => {
     // Disabling is the reversible alternative; remove was previously the only action available.
     const h = harness();
-    h.renderApp('#/schedules');
+    h.renderApp('/schedules');
     await screen.findByText('Results (1)');
 
     fireEvent.click(rowAction('Disable'));
@@ -400,7 +400,7 @@ describe('schedule actions', () => {
 
   it('removes selected schedules in one request', async () => {
     const h = harness();
-    h.renderApp('#/schedules');
+    h.renderApp('/schedules');
     await screen.findByText('Results (1)');
 
     fireEvent.click(selectRow(SCHEDULE.scheduleId));
@@ -427,19 +427,19 @@ describe('detail page redirects', () => {
    */
   it('follows the clone to its own job page', async () => {
     const h = harness({ actionResult: { ok: true, jobId: CLONE.id } });
-    h.renderApp(`#/jobs/${JOB.id}`);
+    h.renderApp(`/jobs/${JOB.id}`);
     await screen.findByRole('button', { name: /Clone/ });
 
     fireEvent.click(screen.getByRole('button', { name: /Clone/ }));
     const modal = await screen.findByRole('dialog');
     fireEvent.click(within(modal).getByRole('button', { name: 'Add job' }));
 
-    await waitFor(() => expect(window.location.hash).toBe(`#/jobs/${CLONE.id}`));
+    await waitFor(() => expect(currentPath()).toBe(`/jobs/${CLONE.id}`));
   });
 
   it('follows a cloned recurring definition to its schedule page', async () => {
     const h = harness({ actionResult: { ok: true, scheduleId: SCHEDULE.scheduleId } });
-    h.renderApp(`#/jobs/${JOB.id}`);
+    h.renderApp(`/jobs/${JOB.id}`);
     await screen.findByRole('button', { name: /Clone/ });
 
     fireEvent.click(screen.getByRole('button', { name: /Clone/ }));
@@ -450,25 +450,25 @@ describe('detail page redirects', () => {
     });
     fireEvent.click(within(modal).getByRole('button', { name: 'Create schedule' }));
 
-    await waitFor(() => expect(window.location.hash).toBe(`#/schedules/${SCHEDULE.scheduleId}`));
+    await waitFor(() => expect(currentPath()).toBe(`/schedules/${SCHEDULE.scheduleId}`));
   });
 
   it('leaves for the queue after the job is removed', async () => {
     const h = harness({ actionResult: { ok: true, affected: 1 } });
-    h.renderApp(`#/jobs/${JOB.id}`);
+    h.renderApp(`/jobs/${JOB.id}`);
     await screen.findByRole('button', { name: /Remove/ });
 
     fireEvent.click(screen.getByRole('button', { name: /Remove/ }));
     const popover = await confirmPopover();
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() => expect(window.location.hash).toBe(`#/queues/${JOB.queue}`));
+    await waitFor(() => expect(currentPath()).toBe(`/queues/${JOB.queue}`));
   });
 
   it('stays put, and says why, when the removal was refused', async () => {
     // Core never removes a running job. Redirecting on a refusal would claim it was gone.
     const h = harness({ actionResult: { ok: false, affected: 0 } });
-    h.renderApp(`#/jobs/${JOB.id}`);
+    h.renderApp(`/jobs/${JOB.id}`);
     await screen.findByRole('button', { name: /Remove/ });
 
     fireEvent.click(screen.getByRole('button', { name: /Remove/ }));
@@ -476,12 +476,12 @@ describe('detail page redirects', () => {
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
 
     expect(await screen.findByText(/still running/i)).toBeInTheDocument();
-    expect(window.location.hash).toBe(`#/jobs/${JOB.id}`);
+    expect(currentPath()).toBe(`/jobs/${JOB.id}`);
   });
 
   it('leaves for the schedules list after the schedule is removed', async () => {
     const h = harness();
-    h.renderApp(`#/schedules/${SCHEDULE.scheduleId}`);
+    h.renderApp(`/schedules/${SCHEDULE.scheduleId}`);
     // The page header's action, not the identically named one on a produced job's row below it.
     const [remove] = await screen.findAllByRole('button', { name: /Remove/ });
 
@@ -489,7 +489,7 @@ describe('detail page redirects', () => {
     const popover = await confirmPopover();
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() => expect(window.location.hash).toBe('#/schedules'));
+    await waitFor(() => expect(currentPath()).toBe('/schedules'));
   });
 
   it('leaves for the instances list after the instance is removed', async () => {
@@ -501,7 +501,7 @@ describe('detail page redirects', () => {
     expect(popover).toHaveTextContent('Remove this inactive instance from monitoring?');
     fireEvent.click(within(popover).getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() => expect(window.location.hash).toBe('#/instances'));
+    await waitFor(() => expect(currentPath()).toBe('/instances'));
     expect(h.lastAction()).toMatchObject({
       kind: ActionKind.REMOVE_INSTANCE,
       instanceKey: INSTANCE.instanceKey,
@@ -515,7 +515,7 @@ describe('add job form', () => {
    * "Add job" trigger shares its accessible name with the modal's submit button.
    */
   const openForm = async (h: ReturnType<typeof harness>): Promise<HTMLElement> => {
-    h.renderApp('#/queues/emails');
+    h.renderApp('/queues/emails');
     await screen.findByText('Results (1)');
     const [trigger] = screen.getAllByRole('button', { name: /Add job/ });
     fireEvent.click(trigger!);

@@ -96,53 +96,66 @@ export function safeResolve(root: string, relPath: string): string | null {
 }
 
 /**
- * Serve a static asset by relative path (already stripped of basePath). SPA fallback: unknown
- * non-file paths resolve to index.html so client-side routing works.
+ * The one folder the bundle's files live in. Vite writes every built file — the JS, the CSS — into
+ * `assets/` under content-hashed names, and the HTML shell is the only file outside it.
+ */
+const ASSETS_PREFIX = '/assets/';
+
+/**
+ * Whether a request is for a file of the bundle, decided by **where** it points, never by how its
+ * last segment looks.
+ *
+ * The dashboard routes with real paths (`/portqueue/instances/worker.eu-1`), and the records those
+ * paths name — queues, instance keys, schedules — are arbitrary strings that often contain dots
+ * (`emails.v2`, `billing.invoice.created`, `10.0.3.7`). Guessing "has an extension, so it's a file"
+ * sent every such page to a 404 on reload or from a shared link. The bundle's layout is fixed, so
+ * there is nothing to guess: under `assets/` is a file, everything else is a page of the app.
+ */
+export function isAssetPath(relPath: string): boolean {
+  return relPath.startsWith(ASSETS_PREFIX);
+}
+
+/**
+ * Serve a request under the mount (path already stripped of basePath): a bundle file from
+ * `assets/`, or the app's HTML shell for any other path, so client-side routing can take it from
+ * there. A missing file under `assets/` is a 404 — never the shell, which a browser would try to
+ * run as a script.
  */
 export async function serveAsset(
   relPath: string,
   config: DashboardConfigDto,
 ): Promise<AssetResult> {
-  const root = clientDistDir();
-  const built = await hasBuiltClient();
+  const asset = isAssetPath(relPath);
 
-  if (!built) {
-    // No bundle: serve the inline shell for any navigation, 404 for asset-looking requests.
-    if (extname(relPath) && relPath !== '/index.html') {
-      return { status: 404, body: 'Not found', contentType: 'text/plain; charset=utf-8' };
-    }
-    return htmlResult(inlineShell(config), config);
+  if (!(await hasBuiltClient())) {
+    // No bundle: the inline shell for any page, 404 for a file.
+    return asset ? notFound() : htmlResult(inlineShell(config), config);
   }
 
-  const requested = relPath === '/' ? '/index.html' : relPath;
-  const target = safeResolve(root, requested);
+  const root = clientDistDir();
+  if (!asset) {
+    const raw = (await readFile(join(root, 'index.html'))).toString('utf8');
+    return htmlResult(rewriteAssetUrls(raw, config.basePath), config);
+  }
+
+  // Resolved inside `assets/` itself, not the bundle root: `/assets/../index.html` must not reach
+  // the shell as a raw file (without its injected config and CSP) by walking back out.
+  const target = safeResolve(join(root, 'assets'), relPath.slice(ASSETS_PREFIX.length - 1));
   if (target === null) {
     return { status: 403, body: 'Forbidden', contentType: 'text/plain; charset=utf-8' };
   }
+  if (!(await exists(target))) return notFound();
 
-  if (await exists(target)) {
-    const ext = extname(target).toLowerCase();
-    const body = await readFile(target);
-    if (ext === '.html') {
-      return htmlResult(rewriteAssetUrls(body.toString('utf8'), config.basePath), config);
-    }
-    return {
-      status: 200,
-      body,
-      contentType: MIME[ext] ?? 'application/octet-stream',
-      // Content-hashed filenames make this safe: the browser never re-requests a cached bundle.
-      headers: { 'cache-control': IMMUTABLE_CACHE },
-    };
-  }
+  return {
+    status: 200,
+    body: await readFile(target),
+    contentType: MIME[extname(target).toLowerCase()] ?? 'application/octet-stream',
+    // Content-hashed filenames make this safe: the browser never re-requests a cached bundle.
+    headers: { 'cache-control': IMMUTABLE_CACHE },
+  };
+}
 
-  // SPA fallback: any non-asset path → index.html with injected config.
-  if (!extname(requested)) {
-    const indexPath = join(root, 'index.html');
-    if (await exists(indexPath)) {
-      const raw = (await readFile(indexPath)).toString('utf8');
-      return htmlResult(rewriteAssetUrls(raw, config.basePath), config);
-    }
-  }
+function notFound(): AssetResult {
   return { status: 404, body: 'Not found', contentType: 'text/plain; charset=utf-8' };
 }
 

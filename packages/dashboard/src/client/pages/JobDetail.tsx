@@ -75,7 +75,7 @@ const TIMESTAMPS: { key: Extract<keyof JobDto, `${string}At` | 'startAfter'>; la
  * The Lifecycle card's fixed width beside Details on wide screens: a timeline is a narrow column of
  * labels and timestamps, so a share of the row only added empty space; Details takes the rest.
  */
-const LIFECYCLE_CARD_WIDTH = 360;
+const LIFECYCLE_CARD_WIDTH = 410;
 
 /** Two columns from `sm` up, one on a phone. */
 const DESCRIPTION_COLUMNS = { xs: 1, sm: 2 };

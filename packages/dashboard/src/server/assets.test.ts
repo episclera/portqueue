@@ -1,5 +1,15 @@
 /** @jest-environment node */
-import { rewriteAssetUrls, safeResolve, serializeConfig, serveAsset } from './assets';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  isAssetPath,
+  resetBuiltClientCache,
+  rewriteAssetUrls,
+  safeResolve,
+  serializeConfig,
+  serveAsset,
+} from './assets';
 import type { DashboardConfigDto } from '../shared/dto';
 
 const config: DashboardConfigDto = { basePath: '/portqueue', maxBatchIds: 1000 };
@@ -16,6 +26,12 @@ describe('serveAsset (no built client)', () => {
     expect(html).toContain('/portqueue');
     // Runtime config is injected for the SPA to read on boot.
     expect(html).toContain('window.__PORTQUEUE_DASHBOARD__');
+  });
+
+  it('serves the inline shell for a deep link whose last segment contains a dot', async () => {
+    const asset = await serveAsset('/instances/worker.eu-1', config);
+    expect(asset.status).toBe(200);
+    expect(asset.contentType).toContain('text/html');
   });
 
   it('404s for an asset-looking path when no bundle is present', async () => {
@@ -42,6 +58,74 @@ describe('serveAsset (no built client)', () => {
   it('never caches HTML, since the injected config rides along with it', async () => {
     const asset = await serveAsset('/', config);
     expect(asset.headers?.['cache-control']).toBe('no-cache');
+  });
+});
+
+/**
+ * With a bundle present. The module resolves its bundle directory next to itself, so in tests that
+ * is `src/server/client`: a throwaway bundle is written there for this block and removed after.
+ */
+describe('serveAsset (built client)', () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), 'client');
+  const SHELL =
+    '<!doctype html><html><head></head><body><script src="./assets/index-abc.js"></script></body></html>';
+
+  beforeAll(async () => {
+    await mkdir(join(root, 'assets'), { recursive: true });
+    await writeFile(join(root, 'index.html'), SHELL);
+    await writeFile(join(root, 'assets', 'index-abc.js'), 'console.log(1)');
+    resetBuiltClientCache();
+  });
+
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+    resetBuiltClientCache();
+  });
+
+  it.each([
+    '/',
+    '/index.html',
+    '/queues/emails',
+    // The case the routing exists for: records named with dots are pages, not files.
+    '/queues/emails.v2',
+    '/queues/billing.invoice.created',
+    '/instances/worker.eu-1',
+    '/instances/10.0.3.7',
+    '/jobs/job-8f3a1c',
+  ])('serves the app shell, with its config, for %s', async (path) => {
+    const asset = await serveAsset(path, config);
+    expect(asset.status).toBe(200);
+    expect(asset.contentType).toContain('text/html');
+    const html = String(asset.body);
+    expect(html).toContain('window.__PORTQUEUE_DASHBOARD__');
+    // Asset URLs are absolute under the mount, so they resolve from any depth of deep link.
+    expect(html).toContain('src="/portqueue/assets/index-abc.js"');
+  });
+
+  it('serves a file from assets/ with a long-lived cache', async () => {
+    const asset = await serveAsset('/assets/index-abc.js', config);
+    expect(asset.status).toBe(200);
+    expect(asset.contentType).toContain('text/javascript');
+    expect(asset.headers?.['cache-control']).toContain('immutable');
+  });
+
+  it('404s for a missing file under assets/, rather than handing back the shell', async () => {
+    const asset = await serveAsset('/assets/index-missing.js', config);
+    expect(asset.status).toBe(404);
+  });
+
+  it('refuses to walk out of assets/, even to a file inside the bundle', async () => {
+    expect((await serveAsset('/assets/../index.html', config)).status).toBe(403);
+    expect((await serveAsset('/assets/../../package.json', config)).status).toBe(403);
+  });
+});
+
+describe('isAssetPath', () => {
+  it('is decided by the folder, never by the extension', () => {
+    expect(isAssetPath('/assets/index-abc.js')).toBe(true);
+    expect(isAssetPath('/instances/worker.eu-1')).toBe(false);
+    expect(isAssetPath('/queues/report.csv')).toBe(false);
+    expect(isAssetPath('/assetsx/app.js')).toBe(false);
   });
 });
 

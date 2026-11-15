@@ -14,7 +14,7 @@ import { App as AntApp, ConfigProvider } from 'antd';
 import type { AxiosAdapter, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { App } from '../client/App';
 import { LiveProvider } from '../client/components/LiveProvider';
-import { http } from '../client/queries/api';
+import { config, http } from '../client/queries/api';
 import { themeConfig } from '../client/theme';
 
 /** A request the stub captured, in the terms a test asserts on. */
@@ -43,7 +43,8 @@ export interface Harness {
    * the body. Each action has its own URL, so this is what the client actually asked for.
    */
   lastAction: () => unknown;
-  renderApp: (hash: string) => void;
+  /** Render the app at an in-app path, e.g. `/queues/emails` (the mount is prefixed for you). */
+  renderApp: (path: string) => void;
 }
 
 /** The action a mutation URL names — the segment after `/actions/`. */
@@ -99,8 +100,8 @@ export function createHarness(options: StubOptions = {}): Harness {
 
   http.defaults.adapter = adapter;
 
-  const renderApp = (hash: string): void => {
-    window.location.hash = hash;
+  const renderApp = (path: string): void => {
+    window.history.replaceState(null, '', `${config.basePath}${path}`);
     // A fresh cache per render, with retries off so a failure test asserts immediately rather
     // than after a backoff, and no stale window so each test starts from a real fetch.
     const client = new QueryClient({
@@ -132,6 +133,11 @@ export function createHarness(options: StubOptions = {}): Harness {
     },
     renderApp,
   };
+}
+
+/** Where the app is now, as an in-app path — the location with the mount stripped. */
+export function currentPath(): string {
+  return window.location.pathname.slice(config.basePath.length) || '/';
 }
 
 /** A page DTO wrapper, so fixtures read as the API's actual shape. */

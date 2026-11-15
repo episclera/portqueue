@@ -1,10 +1,10 @@
 /**
  * App shell + routing. The chrome (top bar, left sidebar, mobile drawer) lives in `Shell`;
  * each page renders its own full-width subheader band followed by its content. Uses
- * react-router v5; every component is antd, themed from `@portqueue/theme` in `theme.ts`.
+ * react-router v5 with clean URLs under the mount (see `routing.ts`); every component is antd, themed from `@portqueue/theme` in `theme.ts`.
  */
 import React from 'react';
-import { HashRouter, Route, Switch as RouteSwitch, useLocation } from 'react-router-dom';
+import { BrowserRouter, Route, Switch as RouteSwitch, useLocation } from 'react-router-dom';
 import { Typography } from 'antd';
 import { Shell } from './components/Shell';
 import { PageBody } from './components/layout';
@@ -18,6 +18,8 @@ import { ScheduleDetailPage } from './pages/ScheduleDetail';
 import { InstancesPage } from './pages/Instances';
 import { InstanceDetailPage } from './pages/InstanceDetail';
 import { AppLink } from './components/AppLink';
+import { config } from './queries/api';
+import { adoptLegacyHashUrl, routerBasename } from './routing';
 
 export interface AppProps {
   /** The theme in effect — what the header toggle shows. */
@@ -53,11 +55,13 @@ function Routes(): React.ReactElement {
 }
 
 export function App({ mode, onThemeChange }: AppProps): React.ReactElement {
+  // Before the router first reads the location, so an old `#/…` link opens the page it named.
+  adoptLegacyHashUrl(config.basePath);
   return (
-    <HashRouter>
+    <BrowserRouter basename={routerBasename(config.basePath)}>
       <Shell mode={mode} onThemeChange={onThemeChange}>
         <Routes />
       </Shell>
-    </HashRouter>
+    </BrowserRouter>
   );
 }
