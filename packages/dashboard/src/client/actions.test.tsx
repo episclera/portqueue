@@ -522,6 +522,26 @@ describe('add job form', () => {
     return screen.findByRole('dialog');
   };
 
+  it('validates the JSON live, before anything is submitted', async () => {
+    const h = harness();
+    const modal = await openForm(h);
+    const field = within(modal).getByLabelText(/Data \(JSON\)/);
+
+    // The prefilled `{}` parses, and the field says so.
+    expect(within(modal).getByText('Valid JSON')).toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: '{oops' } });
+    expect(within(modal).queryByText('Valid JSON')).not.toBeInTheDocument();
+    // The parser's own message, under the field.
+    expect(
+      await within(modal).findByText(/in JSON at position|Unexpected token/),
+    ).toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: '{"to": "ada@example.com"}' } });
+    expect(await within(modal).findByText('Valid JSON')).toBeInTheDocument();
+    expect(h.posts).toHaveLength(0);
+  });
+
   it('refuses to submit invalid JSON, without a round trip', async () => {
     const h = harness();
     const modal = await openForm(h);
@@ -531,7 +551,9 @@ describe('add job form', () => {
     });
     fireEvent.click(within(modal).getByRole('button', { name: 'Add job' }));
 
-    await waitFor(() => expect(within(modal).getAllByRole('alert').length).toBeGreaterThan(0));
+    expect(
+      await within(modal).findByText(/in JSON at position|Unexpected token/),
+    ).toBeInTheDocument();
     expect(h.posts).toHaveLength(0);
   });
 

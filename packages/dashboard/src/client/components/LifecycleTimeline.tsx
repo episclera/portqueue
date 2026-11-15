@@ -4,7 +4,8 @@
  * every job (single-function or multi-step).
  */
 import React from 'react';
-import { Flex, Tag, Timeline, Typography } from 'antd';
+import { Flex, Timeline, Typography } from 'antd';
+import { ToneTag } from './StateTags';
 import type { TimelineItemProps } from 'antd';
 import { tokens } from '@portqueue/theme';
 import type { JobDto } from '../../shared/dto';
@@ -65,7 +66,7 @@ export function LifecycleTimeline({ job }: { job: JobDto }): React.ReactElement 
   return (
     <Flex vertical gap="middle">
       <Flex align="center" gap="small">
-        <Tag color="processing">Now: {statusLabel(rawStatus)}</Tag>
+        <ToneTag tone="info">Now: {statusLabel(rawStatus)}</ToneTag>
         <Typography.Text type="secondary">
           Attempt {job.retryAttempt} / {job.retryMaxAttempts}
         </Typography.Text>

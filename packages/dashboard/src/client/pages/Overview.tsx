@@ -24,7 +24,7 @@ import { PauseStateTag } from '../components/StateTags';
 const FILTER_KEYS = ['state'] as const;
 
 /** The queue name gets the room in this table; the actions column holds one icon. */
-const QUEUE_COLUMN_MIN_WIDTH = 280;
+const QUEUE_COLUMN_MIN_WIDTH = 80;
 const ACTIONS_COLUMN_WIDTH = 96;
 
 // No "usage" filter: `inUse` means "declared in the process that produced this row", and the

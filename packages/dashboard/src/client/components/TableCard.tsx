@@ -10,7 +10,8 @@
  * stale rows — a stale row read as a current one is worse than no row at all.
  */
 import React, { useRef, useState } from 'react';
-import { Button, Card, Flex, Pagination, Skeleton, Tag, Typography, theme } from 'antd';
+import { Button, Card, Flex, Pagination, Skeleton, theme } from 'antd';
+import { ToneTag } from './StateTags';
 import { ACTIONS_CONFIG } from '../constants/labels';
 import { PAGE_SIZE } from '../queries/use-table-params';
 import { SearchInput } from './SearchInput';
@@ -122,7 +123,7 @@ export function TableCard({
           style={{ ...padded, borderBottom: `1px solid ${token.colorBorderSecondary}` }}
         >
           {chips.map((chip) => (
-            <Tag
+            <ToneTag
               key={`${chip.key}:${chip.value}`}
               closable={{ 'aria-label': `Remove the ${chip.label} filter ${chip.valueLabel}` }}
               onClose={(e) => {
@@ -130,8 +131,8 @@ export function TableCard({
                 filters.onClear(chip.key, chip.value);
               }}
             >
-              <Typography.Text type="secondary">{chip.label}:</Typography.Text> {chip.valueLabel}
-            </Tag>
+              {chip.label}: <strong>{chip.valueLabel}</strong>
+            </ToneTag>
           ))}
         </Flex>
       ) : null}

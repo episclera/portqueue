@@ -288,6 +288,12 @@ in three sections, and no section at all when there is nothing to put in it.
   react-router), never a tag, a code chip or a bare `<a>`: a value styled as a tag reads as a label,
   so nobody clicks it. Truncated ids stay truncated, with the full value in `title`/`aria-label`.
   The only exceptions are the sidebar menu and the logo, which antd's `Menu`/the header style.
+  **Every tag or badge has a border, and the border is exactly its text colour**, over a background
+  that is a much lighter tint of that same colour (`color-mix(… 10–12%, transparent)`), so the text
+  always reads. In the dashboard that look is built once, in `ToneTag`
+  (`dashboard/src/client/components/StateTags.tsx`), which `StatusTag`, the state tags and the
+  filter chips all use — lint forbids importing antd's `Tag` anywhere else. In the docs the same
+  rule holds for every badge class (`.api-badge`).
 - `packages/eslint-config` → private shared lint base
 - `docs/` → Docusaurus site
 

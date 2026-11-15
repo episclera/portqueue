@@ -3,8 +3,8 @@
  * mapping from status to colour, so a state looks the same in every table, header and card.
  */
 import React from 'react';
-import { Tag } from 'antd';
 import { statusColor } from '@portqueue/theme';
+import { ToneTag } from './StateTags';
 
 export interface StatusTagProps {
   /** The raw state value — this is what picks the colour. */
@@ -14,9 +14,5 @@ export interface StatusTagProps {
 }
 
 export function StatusTag({ status, label }: StatusTagProps): React.ReactElement {
-  return (
-    <Tag color={statusColor(status)} variant="outlined">
-      {label ?? status}
-    </Tag>
-  );
+  return <ToneTag color={statusColor(status)}>{label ?? status}</ToneTag>;
 }

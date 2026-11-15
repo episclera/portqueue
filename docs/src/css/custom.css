@@ -253,23 +253,27 @@ ul.tabs.pm-driver-sync {
   margin: 0.28rem 0;
   line-height: 1.5;
 }
-/* All badges are the same neutral grey pill — a non-clickable label, never a link. */
+/*
+ * All badges are the same neutral grey pill — a non-clickable label, never a link. Like every tag
+ * or badge here and in the dashboard, the border is exactly the text colour and the fill is a light
+ * tint of it, so the text reads and the badge always has an edge.
+ */
 .api-badge {
+  --api-badge-ink: var(--ifm-color-emphasis-800);
   display: inline-block;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.82rem;
   font-weight: 600;
   padding: 0.08rem 0.5rem;
-  border-radius: 6px;
-  background: var(--ifm-color-emphasis-100);
-  color: var(--ifm-color-emphasis-800);
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: var(--pq-radius-sm);
+  color: var(--api-badge-ink);
+  border: 1px solid var(--api-badge-ink);
+  background: color-mix(in srgb, var(--api-badge-ink) 10%, transparent);
   white-space: nowrap;
 }
-/* A scalar option / field — a lighter, outline-only variant of the same grey. */
+/* A scalar option / field — the same treatment in the body text colour, lighter weight. */
 .api-badge.is-opt {
-  background: transparent;
-  color: var(--ifm-color-content);
+  --api-badge-ink: var(--ifm-color-content);
   font-weight: 500;
 }
 /* Short trailing note after a badge (type, default, one-liner). Links inside render normally. */

@@ -253,6 +253,24 @@ describe('queue detail page', () => {
     expect(await screen.findByRole('button', { name: /Bulk actions \(1\)/ })).toBeInTheDocument();
   });
 
+  it('draws every tag with a border in its text colour', async () => {
+    harness().renderApp('#/queues/emails');
+    await screen.findByText('Results (42)');
+    // jsdom keeps `color` as rgb() but `border-color` as written, so compare normalised values.
+    // (The tinted background is a `color-mix()`, which jsdom drops, so it is not asserted here.)
+    const normalise = (value: string): string => {
+      const probe = document.createElement('i');
+      probe.style.color = value;
+      return probe.style.color;
+    };
+    const tags = [...document.querySelectorAll<HTMLElement>('.ant-tag')];
+    expect(tags.length).toBeGreaterThan(0);
+    for (const tag of tags) {
+      expect(tag.style.borderColor).not.toBe('');
+      expect(normalise(tag.style.borderColor)).toBe(normalise(tag.style.color));
+    }
+  });
+
   it('renders every cell that opens a page as a link, never as a tag', async () => {
     // A value styled as a code chip reads as a label, so nobody thinks to click it.
     harness().renderApp('#/queues/emails');

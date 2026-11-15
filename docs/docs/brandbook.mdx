@@ -136,6 +136,9 @@ from antd rather than building its own, so every surface behaves the same way.
   link colour, never as a tag or a code chip. A value styled as a tag reads as a label, so nobody
   thinks to click it. A long id stays truncated; the full value is on hover. In the dashboard that
   link is `AppLink` (antd's `Typography.Link`, routed through the app).
+- **Every tag has an edge.** A tag or badge always has a 1px border in exactly its text colour,
+  over a much lighter tint of that colour, so the text reads and the shape is clear on any
+  surface. No borderless fills, and no border paler than the text.
 - **A state is a coloured tag.** Every status or state — a job's status, a queue's or instance's
   pause state, liveness, whether a schedule is enabled — renders as a tag, in tables, page headers
   and detail cards alike, and its colour says what it means: green is healthy and working, amber

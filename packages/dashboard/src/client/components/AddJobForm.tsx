@@ -7,8 +7,8 @@
  * segmented control and shows only that field — the form once let both stay empty and quietly
  * created a plain one-off job while the button read "Create schedule".
  */
-import React, { useEffect, useState } from 'react';
-import { Alert, Flex, Form, Input, InputNumber, Modal, Segmented } from 'antd';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Flex, Form, Input, InputNumber, Modal, Segmented } from 'antd';
 import { ActionKind, type ActionResultDto, type AddJobRequestDto } from '../../shared/dto';
 import { useAction } from '../queries/use-action';
 
@@ -77,6 +77,18 @@ export function validateCron(expr: string): string | undefined {
   return undefined;
 }
 
+/** The JSON check the Data field runs on every keystroke, and submit runs once more. */
+export function checkJson(
+  text: string,
+): { ok: true; value: unknown } | { ok: false; message: string } {
+  if (!text.trim()) return { ok: false, message: 'Data is required.' };
+  try {
+    return { ok: true, value: JSON.parse(text) };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : 'Invalid JSON.' };
+  }
+}
+
 export function AddJobForm({
   open,
   queue,
@@ -104,6 +116,9 @@ export function AddJobForm({
 
   const [errors, setErrors] = useState<Errors>({});
 
+  // Live: the Data field says whether it parses as you type, rather than only on submit.
+  const json = useMemo(() => checkJson(data), [data]);
+
   // Re-seed the controlled fields whenever the modal (re)opens with new clone data.
   useEffect(() => {
     if (!open) return;
@@ -129,15 +144,9 @@ export function AddJobForm({
     const next: Errors = {};
     let parsed: unknown;
 
-    if (!data.trim()) {
-      next.data = 'Data is required.';
-    } else {
-      try {
-        parsed = JSON.parse(data);
-      } catch (e) {
-        next.data = e instanceof Error ? e.message : 'Invalid JSON.';
-      }
-    }
+    const json = checkJson(data);
+    if (json.ok) parsed = json.value;
+    else next.data = json.message;
 
     if (priority !== null && !Number.isInteger(priority)) {
       next.priority = 'Priority must be a whole number.';
@@ -245,7 +254,14 @@ export function AddJobForm({
           ]}
         />
         <Form layout="vertical" component="div">
-          <Form.Item label="Data (JSON)" required htmlFor="add-job-data" {...feedback(errors.data)}>
+          <Form.Item
+            label="Data (JSON)"
+            required
+            htmlFor="add-job-data"
+            hasFeedback
+            validateStatus={json.ok ? 'success' : 'error'}
+            help={json.ok ? 'Valid JSON' : json.message}
+          >
             <Input.TextArea
               id="add-job-data"
               rows={5}
@@ -398,8 +414,6 @@ export function AddJobForm({
             </>
           )}
         </Form>
-
-        {errors.data ? <Alert type="error" showIcon title={errors.data} /> : null}
       </Flex>
     </Modal>
   );
