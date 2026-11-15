@@ -9,7 +9,7 @@
  */
 import '@testing-library/jest-dom';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { createHarness, currentPath, page, type StubOptions } from '../test-support/render';
+import { createHarness, page, type StubOptions } from '../test-support/render';
 import { DATE_COLUMN_MIN_WIDTH } from './components/table-columns';
 import { formatDateTimeParts } from './components/format';
 
@@ -100,14 +100,6 @@ describe('app shell', () => {
       'href',
       '/portqueue/schedules',
     );
-    expect(window.location.hash).toBe('');
-  });
-
-  it('opens an old #/ link at the clean URL for the same page', async () => {
-    // A bookmark from the hash-routed dashboard: `/portqueue/#/queues/emails`.
-    harness().renderApp('/#/queues/emails');
-    expect(await screen.findByRole('heading', { name: 'emails' })).toBeInTheDocument();
-    expect(currentPath()).toBe('/queues/emails');
     expect(window.location.hash).toBe('');
   });
 

@@ -19,7 +19,7 @@ import { InstancesPage } from './pages/Instances';
 import { InstanceDetailPage } from './pages/InstanceDetail';
 import { AppLink } from './components/AppLink';
 import { config } from './queries/api';
-import { adoptLegacyHashUrl, routerBasename } from './routing';
+import { routerBasename } from './routing';
 
 export interface AppProps {
   /** The theme in effect — what the header toggle shows. */
@@ -55,8 +55,6 @@ function Routes(): React.ReactElement {
 }
 
 export function App({ mode, onThemeChange }: AppProps): React.ReactElement {
-  // Before the router first reads the location, so an old `#/…` link opens the page it named.
-  adoptLegacyHashUrl(config.basePath);
   return (
     <BrowserRouter basename={routerBasename(config.basePath)}>
       <Shell mode={mode} onThemeChange={onThemeChange}>

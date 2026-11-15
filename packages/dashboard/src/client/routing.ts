@@ -11,19 +11,3 @@
 export function routerBasename(basePath: string): string {
   return basePath === '/' ? '' : basePath.replace(/\/+$/, '');
 }
-
-/**
- * Turn a link from the hash-routed dashboard (`/portqueue#/jobs/abc`, `/portqueue/#/jobs/abc`)
- * into the clean URL for the same page, in place, before the router reads the location — so a
- * bookmark or a link pasted before the switch still opens what it pointed at. A no-op otherwise.
- */
-export function adoptLegacyHashUrl(basePath: string): void {
-  if (typeof window === 'undefined') return;
-  const { hash } = window.location;
-  if (!hash.startsWith('#/')) return;
-  window.history.replaceState(
-    window.history.state,
-    '',
-    `${routerBasename(basePath)}${hash.slice(1)}`,
-  );
-}

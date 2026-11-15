@@ -247,8 +247,7 @@ Every page has a real URL under it — `/portqueue/queues/emails`, `/portqueue/j
 can be bookmarked, reloaded and shared. That means **every path under `basePath` belongs to the
 dashboard**: a reverse proxy or a route in front of it must forward the whole prefix, not just the
 root. Only `basePath/assets/…` is served as files; any other path gets the app, so a queue or
-instance whose name contains a dot (`emails.v2`, `10.0.3.7`) still opens its page. A link from an
-older version of the dashboard (`/portqueue#/queues/emails`) is redirected to the clean URL.
+instance whose name contains a dot (`emails.v2`, `10.0.3.7`) still opens its page.
 :::
 
 :::danger The dashboard ships no authentication

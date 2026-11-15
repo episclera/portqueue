@@ -1,6 +1,6 @@
 /**
  * Table state that lives in the URL: page number, search term and applied filters. Keeping them
- * in the query string (`#/queues/emails?jobs.page=3&jobs.status=FAILED`) makes a table view
+ * in the query string (`/portqueue/queues/emails?jobs.page=3&jobs.status=FAILED`) makes a table view
  * linkable and survives a reload or a back/forward step.
  *
  * Each table on a page owns a `prefix` so two tables never collide.
