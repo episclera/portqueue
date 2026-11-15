@@ -83,6 +83,11 @@ export function themeConfig(mode: ThemeMode, reducedMotion = false): ThemeConfig
         itemBg: c.surface,
         itemSelectedColor: c.link,
       },
+      Table: {
+        // Every table sits edge to edge inside a card, which already rounds the frame; a rounded
+        // header row inside it would leave notches at the card's straight inner edges.
+        headerBorderRadius: 0,
+      },
     },
   };
 }

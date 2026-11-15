@@ -39,15 +39,25 @@ const NAV_ITEMS: { to: string; label: string; icon: React.ReactNode }[] = [
   { to: '/schedules', label: 'Schedules', icon: <SchedulesIcon aria-hidden /> },
 ];
 
-/** Sidebar footer links — docs site and repository, side by side. */
-const EXTERNAL_LINKS: { href: string; label: string; icon: React.ReactNode }[] = [
-  { href: 'https://episclera.github.io/portqueue/', label: 'Docs', icon: <DocsIcon aria-hidden /> },
-  {
-    href: 'https://github.com/episclera/portqueue',
-    label: 'GitHub',
-    icon: <GithubIcon aria-hidden />,
-  },
-];
+/**
+ * Sidebar footer links — docs site and repository, side by side. GitHub is icon-only (named by its
+ * `aria-label` and tooltip): the sidebar is too narrow for two labelled buttons, and the mark is
+ * recognisable on its own.
+ */
+const EXTERNAL_LINKS: { href: string; label: string; icon: React.ReactNode; iconOnly?: boolean }[] =
+  [
+    {
+      href: 'https://episclera.github.io/portqueue/',
+      label: 'Docs',
+      icon: <DocsIcon aria-hidden />,
+    },
+    {
+      href: 'https://github.com/episclera/portqueue',
+      label: 'GitHub',
+      icon: <GithubIcon aria-hidden />,
+      iconOnly: true,
+    },
+  ];
 
 /** The nav item a path belongs to: `/` only on the overview itself, a section for its sub-pages. */
 function selectedKey(pathname: string): string[] {
@@ -79,18 +89,30 @@ function Navigation(): React.ReactElement {
           borderTop: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
-        {EXTERNAL_LINKS.map((link) => (
-          <Button
-            key={link.href}
-            href={link.href}
-            target="_blank"
-            rel="noreferrer noopener"
-            icon={link.icon}
-            block
-          >
-            {link.label}
-          </Button>
-        ))}
+        {EXTERNAL_LINKS.map((link) =>
+          link.iconOnly ? (
+            <Tooltip key={link.href} title={link.label}>
+              <Button
+                href={link.href}
+                target="_blank"
+                rel="noreferrer noopener"
+                icon={link.icon}
+                aria-label={link.label}
+              />
+            </Tooltip>
+          ) : (
+            <Button
+              key={link.href}
+              href={link.href}
+              target="_blank"
+              rel="noreferrer noopener"
+              icon={link.icon}
+              block
+            >
+              {link.label}
+            </Button>
+          ),
+        )}
       </Flex>
     </Flex>
   );

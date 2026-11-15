@@ -9,7 +9,7 @@
  */
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Table, Tag, Tooltip, Typography } from 'antd';
+import { Table, Tag, Tooltip } from 'antd';
 import type { TableColumnType } from 'antd';
 import { ActionKind, type InstanceDto, type InstancePageDto } from '../../shared/dto';
 import { api } from '../queries/api';
@@ -74,9 +74,7 @@ export function InstancesPage(): React.ReactElement {
       title: 'Instance',
       key: 'instanceKey',
       render: (_, r) => (
-        <Link to={`/instances/${encodeURIComponent(r.instanceKey)}`}>
-          <Typography.Text code>{r.instanceKey}</Typography.Text>
-        </Link>
+        <Link to={`/instances/${encodeURIComponent(r.instanceKey)}`}>{r.instanceKey}</Link>
       ),
     },
     {

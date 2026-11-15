@@ -86,8 +86,12 @@ export function SchedulesPanel({ queue }: SchedulesPanelProps): React.ReactEleme
       key: 'scheduleId',
       // Generated schedule ids are as long as job ids, and truncate the same way.
       render: (_, r) => (
-        <Link to={`/schedules/${encodeURIComponent(r.scheduleId)}`} aria-label={r.scheduleId}>
-          <Typography.Text code>{truncate(r.scheduleId)}</Typography.Text>
+        <Link
+          to={`/schedules/${encodeURIComponent(r.scheduleId)}`}
+          title={r.scheduleId}
+          aria-label={r.scheduleId}
+        >
+          {truncate(r.scheduleId)}
         </Link>
       ),
     },

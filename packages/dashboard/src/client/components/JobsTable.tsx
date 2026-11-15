@@ -9,7 +9,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { App, Table, Tooltip, Typography } from 'antd';
+import { App, Table, Tooltip } from 'antd';
 import type { TableColumnType } from 'antd';
 import { JobStatus } from '../queries/enums';
 import { ActionKind, type JobDto, type JobPageDto } from '../../shared/dto';
@@ -99,8 +99,9 @@ export function JobsTable({
       title: 'Job',
       key: 'id',
       render: (_, r) => (
-        <Link to={`/jobs/${encodeURIComponent(r.id)}`}>
-          <Typography.Text code>{truncate(r.id)}</Typography.Text>
+        // A plain link, truncated; the full id is on hover and in the accessible name.
+        <Link to={`/jobs/${encodeURIComponent(r.id)}`} title={r.id} aria-label={r.id}>
+          {truncate(r.id)}
         </Link>
       ),
     },
@@ -129,7 +130,7 @@ export function JobsTable({
               to={`/instances/${encodeURIComponent(r.processedOnInstanceKey)}`}
               aria-label={r.processedOnInstanceKey}
             >
-              <Typography.Text code>{truncate(r.processedOnInstanceKey, 8, 4)}</Typography.Text>
+              {truncate(r.processedOnInstanceKey, 8, 4)}
             </Link>
           </Tooltip>
         ) : (
