@@ -23,6 +23,10 @@ import { PauseStateTag } from '../components/StateTags';
 
 const FILTER_KEYS = ['state'] as const;
 
+/** The queue name gets the room in this table; the actions column holds one icon. */
+const QUEUE_COLUMN_MIN_WIDTH = 280;
+const ACTIONS_COLUMN_WIDTH = 96;
+
 // No "usage" filter: `inUse` means "declared in the process that produced this row", and the
 // dashboard runs on its own client rather than the application's — so it has no way to know which
 // queues the workers declare.
@@ -56,6 +60,9 @@ export function OverviewPage(): React.ReactElement {
     {
       title: 'Queue',
       key: 'name',
+      // The name is what a reader scans for, so it gets the room; the counts stay compact.
+      onHeaderCell: () => ({ style: { minWidth: QUEUE_COLUMN_MIN_WIDTH } }),
+      onCell: () => ({ style: { minWidth: QUEUE_COLUMN_MIN_WIDTH } }),
       render: (_, r) => <AppLink to={`/queues/${encodeURIComponent(r.name)}`}>{r.name}</AppLink>,
     },
     {
@@ -64,24 +71,27 @@ export function OverviewPage(): React.ReactElement {
       render: (_, r) => <PauseStateTag row={r} />,
     },
     ...countColumns<QueueDto>(),
-    actionsColumn<QueueDto>((r) => (
-      <RowActions>
-        {r.processingPaused ? (
-          <RowAction
-            icon={ACTIONS_CONFIG.resume.icon}
-            label={ACTIONS_CONFIG.resume.label}
-            onClick={() => void run({ kind: ActionKind.RESUME, queue: r.name }, 'Resumed')}
-          />
-        ) : (
-          <RowAction
-            icon={ACTIONS_CONFIG.pause.icon}
-            label={ACTIONS_CONFIG.pause.label}
-            confirm={{ title: 'Pause processing on this queue?' }}
-            onClick={() => void run({ kind: ActionKind.PAUSE, queue: r.name }, 'Paused')}
-          />
-        )}
-      </RowActions>
-    )),
+    actionsColumn<QueueDto>(
+      (r) => (
+        <RowActions>
+          {r.processingPaused ? (
+            <RowAction
+              icon={ACTIONS_CONFIG.resume.icon}
+              label={ACTIONS_CONFIG.resume.label}
+              onClick={() => void run({ kind: ActionKind.RESUME, queue: r.name }, 'Resumed')}
+            />
+          ) : (
+            <RowAction
+              icon={ACTIONS_CONFIG.pause.icon}
+              label={ACTIONS_CONFIG.pause.label}
+              confirm={{ title: 'Pause processing on this queue?' }}
+              onClick={() => void run({ kind: ActionKind.PAUSE, queue: r.name }, 'Paused')}
+            />
+          )}
+        </RowActions>
+      ),
+      { align: 'left', width: ACTIONS_COLUMN_WIDTH },
+    ),
   ];
 
   return (

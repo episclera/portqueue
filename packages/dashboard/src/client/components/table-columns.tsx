@@ -64,14 +64,20 @@ export function dateColumn<T>(
 }
 
 /**
- * The trailing actions column: buttons hug the right edge, while the title stays on the left,
- * where it reads as this column's.
+ * The trailing actions column. By default the buttons hug the right edge while the title stays on
+ * the left, where it reads as this column's; `align: 'left'` puts the buttons under the title, and
+ * `width` caps a column that only ever holds an icon or two.
  */
-export function actionsColumn<T>(render: (row: T) => React.ReactNode): TableColumnType<T> {
+export function actionsColumn<T>(
+  render: (row: T) => React.ReactNode,
+  options: { align?: 'left' | 'right'; width?: number } = {},
+): TableColumnType<T> {
+  const { align = 'right', width } = options;
   return {
     title: 'Actions',
     key: 'actions',
-    align: 'right',
+    align,
+    ...(width !== undefined ? { width } : {}),
     onHeaderCell: () => ({ style: { textAlign: 'left' } }),
     render: (_, row) => render(row),
   };

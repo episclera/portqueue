@@ -149,7 +149,7 @@ export function TableCard({
       )}
 
       <Flex
-        justify="flex-end"
+        justify="center"
         style={{ ...padded, borderTop: `1px solid ${token.colorBorderSecondary}` }}
       >
         <Pagination

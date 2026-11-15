@@ -63,7 +63,8 @@ export function RowAction({
 /** Row-actions cell — a tight row of icon buttons. */
 export function RowActions({ children }: { children: React.ReactNode }): React.ReactElement {
   return (
-    <Flex gap={4} align="center" justify="flex-end">
+    // Inline, so the cell's own alignment (the column's `align`) decides which edge it sits on.
+    <Flex gap={4} align="center" style={{ display: 'inline-flex' }}>
       {children}
     </Flex>
   );
