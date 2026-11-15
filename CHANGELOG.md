@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0 (2026-11-15)
+
+### Features
+
+* **dashboard:** clean URLs under the mount, with files served only from assets/ ([74fd53e](https://github.com/episclera/portqueue/commit/74fd53e1d224f15bfb73185dfabd1eaa094b7ed4))
+* **dashboard:** rebuild the dashboard on antd and share design tokens via @portqueue/theme ([238da10](https://github.com/episclera/portqueue/commit/238da1048ba61a87e0afef249b74f1b9076840f8))
+
+### Bug Fixes
+
+* bordered tags everywhere, live JSON validation, narrower overview queue column ([71180a5](https://github.com/episclera/portqueue/commit/71180a5a01f90fd75df9fc22ac0634ebee400e08))
+* **dashboard:** centre table pagination and rebalance the overview's columns ([af3c236](https://github.com/episclera/portqueue/commit/af3c236cb070ae9daf489f796ddfa2182cdf5127))
+* **dashboard:** tidier detail headers, labelled sidebar links, left-aligned lifecycle card ([ba4f186](https://github.com/episclera/portqueue/commit/ba4f1868a651cc17625ba6bbc1079eb5a15942f1))
+* **dashboard:** coloured state tags everywhere, record-naming page headers, tooltip truncation ([e17920f](https://github.com/episclera/portqueue/commit/e17920f7af458d65ddcfd062c4ab91d7ec714337))
+* **dashboard:** render navigating values as links and put card hints on an info icon ([13a8f83](https://github.com/episclera/portqueue/commit/13a8f8321df2014a70234bdee0a97f16011a3336))
+* **dashboard:** plain links for table cells that open a page, icon-only GitHub link, square table headers ([9bfc57d](https://github.com/episclera/portqueue/commit/9bfc57d7f14c548d59dd39333101c0eddf3fa3d0))
+
 ## 1.1.1 (2026-11-14)
 
 ### Documentation
