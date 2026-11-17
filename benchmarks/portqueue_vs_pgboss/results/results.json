@@ -2,6 +2,7 @@
   "id": "portqueue_vs_pgboss",
   "title": "PortQueue vs pg-boss",
   "competitor": "pg-boss",
+  "engine": "PGLite",
   "runAt": null,
   "environment": null,
   "libraries": [

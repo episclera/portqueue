@@ -34,8 +34,9 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
   benchmarks, run them through the launcher (`npm run benchmark:<name>`, one per comparison — run
   them all in the same session, on the same machine, when asked for "the benchmarks"). The launcher
   rewrites the generated parts itself: `results/results.json`, the comparison README's results block
-  (Mermaid bar charts), the docs data under `docs/src/data/benchmarks/`, and the single summary bar
-  chart on the repo `README.md` and the docs homepage, with one bar per benchmarked library.
+  (Mermaid bar charts), the docs data under `docs/src/data/benchmarks/`, and the summary
+  bar charts on the repo `README.md` and the docs homepage: one chart per database driver, PortQueue
+  plus at most five benchmarked libraries, every bar labelled with its driver (`pg-boss (PGLite)`).
   Then update what it can't write: re-read the comparison README and `docs/docs/benchmarks.mdx` and
   fix any prose whose claims no longer match the new numbers. **Never hand-edit a number or a chart**:
   if a result looks wrong, fix the benchmark and rerun. Every run starts from a clean, in-memory
@@ -313,7 +314,7 @@ in three sections, and no section at all when there is nothing to put in it.
 - `packages/eslint-config` → private shared lint base
 - `benchmarks/` → head-to-head comparisons, one workspace package per library
   (`portqueue_vs_pgboss`, …). Launchers live in `scripts/benchmarks/`, and
-  `scripts/benchmarks/update-summary.mjs` rebuilds the cross-library summary chart.
+  `scripts/benchmarks/update-summary.mjs` rebuilds the cross-library summary charts (one per driver).
 - `docs/` → Docusaurus site
 
 ## Tooling

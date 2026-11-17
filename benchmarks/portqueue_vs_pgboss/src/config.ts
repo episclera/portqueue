@@ -96,6 +96,12 @@ export const SCENARIOS: ScenarioMeta[] = [
 /** The metric the repo README and the docs homepage chart, across every comparison. */
 export const HEADLINE_SCENARIO = Scenario.PROCESS;
 
+/**
+ * The database driver every library ran on in this comparison. The summary charts group by it, so
+ * bars are only ever compared against bars on the same driver.
+ */
+export const ENGINE = 'PGLite';
+
 /** Every scenario's raw measurement, as one child process reports it. */
 export interface Measurement {
   /** The value charted: jobs/s for throughput scenarios, milliseconds for latency. */

@@ -14,7 +14,7 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { TeamGrid } from '@site/src/components/TeamGrid';
-import { SummaryChart } from '@site/src/components/BenchmarkChart';
+import { SummaryCharts } from '@site/src/components/BenchmarkChart';
 import benchmarkSummary from '@site/src/data/benchmarks/summary.json';
 import styles from './index.module.css';
 
@@ -167,12 +167,12 @@ export default function Home(): ReactNode {
         <section id="benchmarks" className={styles.section}>
           <h2 className={styles.sectionTitle}>Benchmarks</h2>
           <p className={styles.sectionLead}>
-            Processing throughput against every library we benchmark, all on the same in-memory
-            PGLite engine. See <Link to="/docs/benchmarks">Benchmarks</Link> for every scenario and
-            how it is measured.
+            How PortQueue's processing throughput compares with other Node.js job queues. Each chart
+            compares libraries on the same database driver. See{' '}
+            <Link to="/docs/benchmarks">Benchmarks</Link> for every scenario and how it is measured.
           </p>
           <div className={styles.benchmarkChart}>
-            <SummaryChart summary={benchmarkSummary} />
+            <SummaryCharts summary={benchmarkSummary} />
           </div>
         </section>
 

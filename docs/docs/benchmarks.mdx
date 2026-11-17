@@ -7,7 +7,7 @@ keywords:
   [portqueue, benchmarks, pg-boss, job queue performance, throughput, latency, pglite, node.js]
 ---
 
-import { ComparisonCharts, SummaryChart } from '@site/src/components/BenchmarkChart';
+import { ComparisonCharts, SummaryCharts } from '@site/src/components/BenchmarkChart';
 import summary from '@site/src/data/benchmarks/summary.json';
 import pgboss from '@site/src/data/benchmarks/portqueue_vs_pgboss.json';
 
@@ -23,9 +23,10 @@ network in the measurement.
 
 ## At a glance
 
-Processing throughput, PortQueue against every library benchmarked here:
+Processing throughput, PortQueue against the libraries benchmarked here. There is one chart per
+database driver, so every bar in a chart ran on the same driver:
 
-<SummaryChart summary={summary} />
+<SummaryCharts summary={summary} />
 
 ## PortQueue vs pg-boss
 

@@ -2,9 +2,12 @@ import React from 'react';
 import styles from './BenchmarkChart.module.css';
 
 /**
- * Benchmark charts for the docs, drawn with plain CSS against the shared `--pq-*` tokens — no
- * charting dependency. The data is the JSON the benchmark runners write under
- * `docs/src/data/benchmarks/`, so a run updates every chart with no edit here.
+ * Benchmark charts for the docs: vertical bar charts drawn with plain CSS against the shared
+ * `--pq-*` tokens, with no charting dependency. The data is the JSON the benchmark runners write
+ * under `docs/src/data/benchmarks/`, so a run updates every chart with no edit here.
+ *
+ * Every bar is labelled with the database driver it ran on — "pg-boss (PGLite)" — and a chart only
+ * ever holds bars measured on the same driver.
  */
 
 export interface Bar {
@@ -37,21 +40,23 @@ export function BarChart({
       {bars.length === 0 ? (
         <p className={styles.empty}>Not run yet.</p>
       ) : (
-        <div className={styles.rows}>
+        <div className={styles.columns}>
           {bars.map((bar) => (
-            <div key={bar.label} className={styles.row}>
-              <div className={styles.label}>
-                {bar.label}
-                {bar.sublabel ? <span className={styles.sublabel}>{bar.sublabel}</span> : null}
-              </div>
+            <div key={bar.label} className={styles.column}>
+              <span className={styles.value}>
+                {bar.value.toLocaleString('en-US', { maximumFractionDigits: 1 })}
+              </span>
               <div className={styles.track}>
                 <div
                   className={bar.highlight ? styles.barHighlight : styles.bar}
-                  style={{ width: `${max > 0 ? Math.max((bar.value / max) * 100, 1) : 0}%` }}
+                  style={{ height: `${max > 0 ? Math.max((bar.value / max) * 100, 1) : 0}%` }}
+                  role="img"
+                  aria-label={`${bar.label}: ${bar.value} ${unit}`}
                 />
-                <span className={styles.value}>
-                  {bar.value.toLocaleString('en-US', { maximumFractionDigits: 1 })} {unit}
-                </span>
+              </div>
+              <div className={styles.label}>
+                {bar.label}
+                {bar.sublabel ? <span className={styles.sublabel}>{bar.sublabel}</span> : null}
               </div>
             </div>
           ))}
@@ -69,6 +74,7 @@ interface LibraryResult {
 export interface ComparisonRecord {
   id: string;
   title: string;
+  engine: string;
   runAt: string | null;
   environment: Record<string, string | number> | null;
   libraries: Array<{ key: string; name: string; version: string | null }>;
@@ -103,22 +109,24 @@ export function ComparisonCharts({ record }: { record: ComparisonRecord }): Reac
   return (
     <div>
       <RunInfo record={record} />
-      {record.scenarios.map((s) => (
-        <div key={s.key}>
-          <BarChart
-            title={s.title}
-            unit={s.unit}
-            higherIsBetter={s.higherIsBetter}
-            bars={s.results.map((r) => ({
-              label: library(r.library)?.name ?? r.library,
-              sublabel: library(r.library)?.version,
-              value: r.value,
-              highlight: r.library === 'portqueue',
-            }))}
-          />
-          <p className={styles.description}>{s.description}</p>
-        </div>
-      ))}
+      <div className={styles.grid}>
+        {record.scenarios.map((s) => (
+          <div key={s.key}>
+            <BarChart
+              title={s.title}
+              unit={s.unit}
+              higherIsBetter={s.higherIsBetter}
+              bars={s.results.map((r) => ({
+                label: `${library(r.library)?.name ?? r.library} (${record.engine})`,
+                sublabel: library(r.library)?.version,
+                value: r.value,
+                highlight: r.library === 'portqueue',
+              }))}
+            />
+            <p className={styles.description}>{s.description}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -126,25 +134,34 @@ export function ComparisonCharts({ record }: { record: ComparisonRecord }): Reac
 export interface BenchmarkSummary {
   runAt: string | null;
   metric: { title: string; unit: string; higherIsBetter: boolean; description: string } | null;
-  bars: Array<{ library: string; name: string; version: string | null; value: number }>;
+  charts: Array<{
+    engine: string;
+    bars: Array<{ library: string; name: string; version: string | null; value: number }>;
+  }>;
 }
 
-/** The single cross-comparison chart: PortQueue plus one bar per benchmarked library. */
-export function SummaryChart({ summary }: { summary: BenchmarkSummary }): React.ReactElement {
-  if (!summary.metric) {
+/** The headline metric, one chart per driver: PortQueue plus each library benchmarked on it. */
+export function SummaryCharts({ summary }: { summary: BenchmarkSummary }): React.ReactElement {
+  const { metric } = summary;
+  if (!metric || summary.charts.length === 0) {
     return <p className={styles.empty}>Benchmarks have not been run yet.</p>;
   }
   return (
-    <BarChart
-      title={summary.metric.title}
-      unit={summary.metric.unit}
-      higherIsBetter={summary.metric.higherIsBetter}
-      bars={summary.bars.map((b) => ({
-        label: b.name,
-        sublabel: b.version,
-        value: b.value,
-        highlight: b.library === 'portqueue',
-      }))}
-    />
+    <div className={styles.grid}>
+      {summary.charts.map((chart) => (
+        <BarChart
+          key={chart.engine}
+          title={`${metric.title} on ${chart.engine}`}
+          unit={metric.unit}
+          higherIsBetter={metric.higherIsBetter}
+          bars={chart.bars.map((b) => ({
+            label: `${b.name} (${chart.engine})`,
+            sublabel: b.version,
+            value: b.value,
+            highlight: b.library === 'portqueue',
+          }))}
+        />
+      ))}
+    </div>
   );
 }

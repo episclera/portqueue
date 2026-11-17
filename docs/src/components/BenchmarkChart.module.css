@@ -1,7 +1,13 @@
 /* A CSS Module, not styled-components, so these rules ship in the static build (see pages/index.module.css). */
 
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+}
+
 .chart {
-  margin: 1.5rem 0 0.5rem;
+  margin: 1rem 0 0.5rem;
   padding: 1rem 1.25rem;
   border: 1px solid var(--pq-color-border);
   border-radius: var(--pq-radius-lg);
@@ -19,45 +25,42 @@
   font-size: var(--pq-font-size-sm);
 }
 
-.rows {
+/* Vertical bars: one column per library, value on top, label underneath. */
+.columns {
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  justify-content: center;
+  align-items: stretch;
+  gap: 1.25rem;
 }
 
-.row {
-  display: grid;
-  grid-template-columns: minmax(7rem, 9rem) 1fr;
+.column {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
+  flex: 0 1 7rem;
+  min-width: 0;
 }
 
-.label {
-  display: flex;
-  flex-direction: column;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.sublabel {
-  font-weight: 400;
-  font-size: var(--pq-font-size-sm);
-  color: var(--pq-color-text-muted);
+.value {
   font-family: var(--pq-font-mono);
+  font-size: var(--pq-font-size-sm);
+  margin-bottom: 0.3rem;
+  white-space: nowrap;
 }
 
 .track {
+  height: 11rem;
+  width: 3.25rem;
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--pq-color-border-strong);
 }
 
 .bar,
 .barHighlight {
-  height: 1.5rem;
-  border-radius: var(--pq-radius-sm);
-  transition: width var(--pq-motion-base) var(--pq-motion-easing);
+  width: 100%;
+  border-radius: var(--pq-radius-sm) var(--pq-radius-sm) 0 0;
+  transition: height var(--pq-motion-base) var(--pq-motion-easing);
 }
 
 .bar {
@@ -68,10 +71,21 @@
   background: var(--pq-color-brand-solid);
 }
 
-.value {
-  white-space: nowrap;
-  font-family: var(--pq-font-mono);
+.label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-top: 0.4rem;
+  font-weight: 600;
   font-size: var(--pq-font-size-sm);
+  line-height: 1.25;
+}
+
+.sublabel {
+  font-weight: 400;
+  color: var(--pq-color-text-muted);
+  font-family: var(--pq-font-mono);
 }
 
 .empty,

@@ -14,7 +14,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { cpus, platform, arch } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { config, HEADLINE_SCENARIO, Library, Scenario, SCENARIOS } from './config.ts';
+import { config, ENGINE, HEADLINE_SCENARIO, Library, Scenario, SCENARIOS } from './config.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_DIR = resolve(HERE, '..');
@@ -47,6 +47,8 @@ export interface ComparisonRecord {
   title: string;
   /** The library PortQueue is compared with — the summary chart's bar for this comparison. */
   competitor: Library;
+  /** The database driver both libraries ran on; the summary charts group by it. */
+  engine: string;
   runAt: string | null;
   environment: Record<string, string | number> | null;
   libraries: Array<{ key: Library; name: string; package: string; version: string | null }>;
@@ -109,6 +111,7 @@ export async function writeReport(
     id: COMPARISON_ID,
     title: 'PortQueue vs pg-boss',
     competitor: Library.PGBOSS,
+    engine: ENGINE,
     runAt: new Date().toISOString(),
     environment: {
       node: process.version,
@@ -172,7 +175,7 @@ export function renderMarkdown(record: ComparisonRecord): string {
       '```mermaid',
       'xychart-beta',
       `    title "${s.title} (${s.unit}, ${better})"`,
-      `    x-axis [${s.results.map((r) => `"${name(r.library)}"`).join(', ')}]`,
+      `    x-axis [${s.results.map((r) => `"${name(r.library)} (${record.engine})"`).join(', ')}]`,
       `    y-axis "${s.unit}"`,
       `    bar [${s.results.map((r) => Math.round(r.value * 10) / 10).join(', ')}]`,
       '```',
