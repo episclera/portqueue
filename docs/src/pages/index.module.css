@@ -186,3 +186,8 @@
   text-decoration: none;
   color: var(--pq-color-brand);
 }
+
+.benchmarkChart {
+  max-width: 44rem;
+  margin: 0 auto;
+}

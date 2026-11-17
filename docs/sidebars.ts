@@ -37,7 +37,7 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'More',
-      items: ['examples', 'contributing', 'testing', 'advanced', 'brandbook', 'team'],
+      items: ['examples', 'benchmarks', 'contributing', 'testing', 'advanced', 'brandbook', 'team'],
     },
   ],
 };

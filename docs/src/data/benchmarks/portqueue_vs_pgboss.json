@@ -1,0 +1,56 @@
+{
+  "id": "portqueue_vs_pgboss",
+  "title": "PortQueue vs pg-boss",
+  "competitor": "pg-boss",
+  "runAt": null,
+  "environment": null,
+  "libraries": [
+    {
+      "key": "portqueue",
+      "name": "PortQueue",
+      "package": "@portqueue/core",
+      "version": null
+    },
+    {
+      "key": "pg-boss",
+      "name": "pg-boss",
+      "package": "pg-boss",
+      "version": null
+    }
+  ],
+  "headline": "process",
+  "scenarios": [
+    {
+      "key": "enqueue-single",
+      "title": "Adding jobs, one at a time",
+      "unit": "jobs/s",
+      "higherIsBetter": true,
+      "description": "2000 sequential `addJob` / `send` calls, each awaited.",
+      "results": []
+    },
+    {
+      "key": "enqueue-batch",
+      "title": "Adding jobs in batches",
+      "unit": "jobs/s",
+      "higherIsBetter": true,
+      "description": "20000 jobs through `addJobs` / `insert`, 1000 per call.",
+      "results": []
+    },
+    {
+      "key": "process",
+      "title": "Processing jobs",
+      "unit": "jobs/s",
+      "higherIsBetter": true,
+      "description": "10000 pre-seeded jobs drained by a no-op handler, 100 fetched per claim and in flight; timed until every job is settled.",
+      "results": []
+    },
+    {
+      "key": "latency",
+      "title": "Pickup latency (p50)",
+      "unit": "ms",
+      "higherIsBetter": false,
+      "description": "50 sequential jobs on an idle worker, timed from the add call to the handler starting.",
+      "results": []
+    }
+  ]
+}

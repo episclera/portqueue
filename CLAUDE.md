@@ -24,6 +24,22 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
   section of its own. **The API reference page (`docs/docs/api-reference.mdx`) is the exception**:
   there every plural gets its own item in the method tree, placed directly after its singular.
 - **Keep the examples list in sync.** Every time you add a new example under `examples/`, list it (with a link) on the Examples docs page (`docs/docs/examples.md`) and in the examples index (`examples/README.md`). Add a launcher under `scripts/examples/` and a matching `example:*` script in the root `package.json`.
+- **Keep the benchmarks list in sync.** A new comparison under `benchmarks/` (one folder per library,
+  `portqueue_vs_<name>`, a workspace package running the working-tree `@portqueue/core` on in-memory
+  PGLite) gets a row in `benchmarks/README.md`, a section on the Benchmarks docs page
+  (`docs/docs/benchmarks.mdx`), its own docs data file `docs/src/data/benchmarks/<folder>.json`, one
+  launcher `scripts/benchmarks/<folder>.sh` and a matching `benchmark:*` script in the root
+  `package.json`. Keep its scenarios identical to the existing ones so the numbers stay comparable.
+- **Running the benchmarks means publishing their results.** Every time you are asked to run the
+  benchmarks, run them through the launcher (`npm run benchmark:<name>`, one per comparison — run
+  them all in the same session, on the same machine, when asked for "the benchmarks"). The launcher
+  rewrites the generated parts itself: `results/results.json`, the comparison README's results block
+  (Mermaid bar charts), the docs data under `docs/src/data/benchmarks/`, and the single summary bar
+  chart on the repo `README.md` and the docs homepage, with one bar per benchmarked library.
+  Then update what it can't write: re-read the comparison README and `docs/docs/benchmarks.mdx` and
+  fix any prose whose claims no longer match the new numbers. **Never hand-edit a number or a chart**:
+  if a result looks wrong, fix the benchmark and rerun. Every run starts from a clean, in-memory
+  database, which `measure.ts` asserts. Report the headline numbers in the change report.
 
 ## Always end with a short change report
 Finish **every** prompt — fix, refactor, feature, docs tweak, anything that touched a file — with a
@@ -295,6 +311,9 @@ in three sections, and no section at all when there is nothing to put in it.
   filter chips all use — lint forbids importing antd's `Tag` anywhere else. In the docs the same
   rule holds for every badge class (`.api-badge`).
 - `packages/eslint-config` → private shared lint base
+- `benchmarks/` → head-to-head comparisons, one workspace package per library
+  (`portqueue_vs_pgboss`, …). Launchers live in `scripts/benchmarks/`, and
+  `scripts/benchmarks/update-summary.mjs` rebuilds the cross-library summary chart.
 - `docs/` → Docusaurus site
 
 ## Tooling

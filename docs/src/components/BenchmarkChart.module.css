@@ -1,0 +1,91 @@
+/* A CSS Module, not styled-components, so these rules ship in the static build (see pages/index.module.css). */
+
+.chart {
+  margin: 1.5rem 0 0.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--pq-color-border);
+  border-radius: var(--pq-radius-lg);
+  background: var(--pq-color-surface);
+}
+
+.title {
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.hint {
+  font-weight: 400;
+  color: var(--pq-color-text-muted);
+  font-size: var(--pq-font-size-sm);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 9rem) 1fr;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.sublabel {
+  font-weight: 400;
+  font-size: var(--pq-font-size-sm);
+  color: var(--pq-color-text-muted);
+  font-family: var(--pq-font-mono);
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.bar,
+.barHighlight {
+  height: 1.5rem;
+  border-radius: var(--pq-radius-sm);
+  transition: width var(--pq-motion-base) var(--pq-motion-easing);
+}
+
+.bar {
+  background: var(--pq-color-border-strong);
+}
+
+.barHighlight {
+  background: var(--pq-color-brand-solid);
+}
+
+.value {
+  white-space: nowrap;
+  font-family: var(--pq-font-mono);
+  font-size: var(--pq-font-size-sm);
+}
+
+.empty,
+.meta {
+  color: var(--pq-color-text-muted);
+  margin: 0;
+}
+
+.meta {
+  font-size: var(--pq-font-size-sm);
+  margin-bottom: 0.5rem;
+}
+
+.description {
+  font-size: var(--pq-font-size-sm);
+  color: var(--pq-color-text-muted);
+}

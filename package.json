@@ -11,6 +11,7 @@
   "workspaces": [
     "packages/*",
     "examples/*",
+    "benchmarks/*",
     "docs"
   ],
   "scripts": {
@@ -41,7 +42,8 @@
     "example:idempotency": "bash scripts/examples/idempotency-singleton.sh",
     "example:graceful": "bash scripts/examples/graceful-shutdown.sh",
     "example:postgresql": "bash scripts/examples/postgresql-connection.sh",
-    "example:transactional": "bash scripts/examples/transactional-enqueue.sh"
+    "example:transactional": "bash scripts/examples/transactional-enqueue.sh",
+    "benchmark:portqueue-vs-pgboss": "bash scripts/benchmarks/portqueue_vs_pgboss.sh"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -1,0 +1,96 @@
+---
+id: benchmarks
+title: Benchmarks
+sidebar_label: Benchmarks
+description: PortQueue benchmarked against other Node.js job queues — enqueue throughput, processing throughput and pickup latency, measured on the same in-memory PGLite engine.
+keywords:
+  [portqueue, benchmarks, pg-boss, job queue performance, throughput, latency, pglite, node.js]
+---
+
+import { ComparisonCharts, SummaryChart } from '@site/src/components/BenchmarkChart';
+import summary from '@site/src/data/benchmarks/summary.json';
+import pgboss from '@site/src/data/benchmarks/portqueue_vs_pgboss.json';
+
+# Benchmarks
+
+The repository has a
+[`benchmarks/`](https://github.com/episclera/portqueue/tree/main/benchmarks) folder with one
+head-to-head comparison per library. Every comparison is a workspace package, like the
+[examples](./examples.md), so it measures `@portqueue/core` **from the repository's working tree**
+and not a published release. Each one runs both libraries on the **same engine**: an in-memory
+[PGLite](https://pglite.dev) database (PostgreSQL compiled to WASM), so there is no server and no
+network in the measurement.
+
+## At a glance
+
+Processing throughput, PortQueue against every library benchmarked here:
+
+<SummaryChart summary={summary} />
+
+## PortQueue vs pg-boss
+
+[pg-boss](https://github.com/timgit/pg-boss) is the most widely used PostgreSQL-backed job queue for
+Node.js. PortQueue runs on its own PGLite driver. pg-boss gets the same PGLite instance through its
+`db` option, and an adapter maps its `executeSql` calls onto PGLite.
+
+<ComparisonCharts record={pgboss} />
+
+### Scenarios
+
+- **Adding jobs, one at a time** — sequential `pq.addJob` / `boss.send` calls, each awaited. This is
+  the cost of an API handler enqueueing one job per request.
+- **Adding jobs in batches** — `pq.addJobs` / `boss.insert`, 1000 jobs per call (PortQueue's
+  `MAX_BATCH_IDS`). This is the cost of a bulk import or a fan-out.
+- **Processing jobs** — pre-seeded jobs drained by a no-op handler, timed until every row reads
+  completed in the database. The handler does no work, so this measures what the queue itself
+  costs per job: claiming, running and settling. Seeding is not timed.
+- **Pickup latency** — one job at a time on an idle worker, timed from the add call to the handler
+  starting. This is how long a freshly added job waits before work begins. PortQueue wakes its
+  worker in process when a job is added. pg-boss polls, at most every 0.5 s (its minimum
+  `pollingIntervalSeconds`).
+
+### How it stays fair
+
+- **Same engine and version.** Both libraries use the same `@electric-sql/pglite`, in memory.
+- **Same timing code.** The scenarios are written once against a small `Contender` interface. Each
+  library only supplies `start`, `add`, `addMany`, `consume`, `waitForCompleted` and `stop`.
+- **A clean database every run.** Every measurement boots a new, empty, in-memory PGLite with
+  nothing on disk. Before timing anything it checks that the database holds zero jobs and aborts
+  otherwise.
+- **A fresh process for every run.** Each library × scenario × repeat runs in its own child process,
+  so no run inherits another's heap, JIT warm-up or database. The charts show the median run.
+- **Equal claim settings.** PortQueue runs `limiter: { concurrency: N, batchSize: N }`. pg-boss runs
+  one worker with `batchSize: N` whose handler runs the batch concurrently. Both fetch N jobs per
+  claim and keep N in flight (N = 100 by default).
+- **"Done" means settled in the database.** PortQueue counts `JOB_COMPLETED`, which fires only after
+  the row is settled. pg-boss emits nothing per job, so the benchmark waits until `pgboss.job`
+  reports every row `completed`.
+
+:::note What these numbers are not
+
+PGLite is a single connection inside one process. Neither library runs that way in production
+against a PostgreSQL server. The numbers compare the libraries' own overhead on an identical
+engine. They don't predict throughput against a networked database, where round-trip time
+dominates.
+
+:::
+
+## Run it yourself
+
+From the repository root. The launcher builds `@portqueue/core`, runs every scenario and rewrites
+all of the charts: the comparison's README, this page and the summary chart on the README and
+homepage.
+
+```bash
+npm run benchmark:portqueue-vs-pgboss
+npm run benchmark:portqueue-vs-pgboss -- latency   # only the named scenario(s)
+
+# or the shell script the npm script calls:
+./scripts/benchmarks/portqueue_vs_pgboss.sh
+```
+
+Sizes are set through environment variables (`BENCH_REPEATS`, `BENCH_PROCESS_JOBS`,
+`BENCH_CONCURRENCY`, …). The full list is in the comparison's
+[README](https://github.com/episclera/portqueue/tree/main/benchmarks/portqueue_vs_pgboss#running).
+There is one launcher per comparison under
+[`scripts/benchmarks/`](https://github.com/episclera/portqueue/tree/main/scripts/benchmarks).

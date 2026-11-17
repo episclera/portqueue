@@ -14,6 +14,8 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { TeamGrid } from '@site/src/components/TeamGrid';
+import { SummaryChart } from '@site/src/components/BenchmarkChart';
+import benchmarkSummary from '@site/src/data/benchmarks/summary.json';
 import styles from './index.module.css';
 
 /**
@@ -160,6 +162,18 @@ export default function Home(): ReactNode {
           <CodeBlock language="ts" title="app.ts">
             {QUICK_START}
           </CodeBlock>
+        </section>
+
+        <section id="benchmarks" className={styles.section}>
+          <h2 className={styles.sectionTitle}>Benchmarks</h2>
+          <p className={styles.sectionLead}>
+            Processing throughput against every library we benchmark, all on the same in-memory
+            PGLite engine. See <Link to="/docs/benchmarks">Benchmarks</Link> for every scenario and
+            how it is measured.
+          </p>
+          <div className={styles.benchmarkChart}>
+            <SummaryChart summary={benchmarkSummary} />
+          </div>
         </section>
 
         <section id="license" className={styles.section}>
