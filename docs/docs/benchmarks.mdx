@@ -43,6 +43,9 @@ up for PGLite: `backend: 'pglite'` with its official `fromPglite` adapter.
 - **Processing jobs** — pre-seeded jobs drained by a no-op handler, timed until every row reads
   completed in the database. The handler does no work, so this measures what the queue itself
   costs per job: claiming, running and settling. Seeding is not timed.
+  The libraries settle differently. pg-boss marks a whole fetched batch completed in one statement
+  once its handler resolves. PortQueue settles each job on its own, fenced to the claim that ran
+  it, so a job whose lock lapsed can't overwrite a newer run's result.
 - **Pickup latency** — one job at a time on an idle worker, timed from the add call to the handler
   starting. This is how long a freshly added job waits before work begins. Both libraries are set
   up to wake the worker at once. PortQueue does it in process. pg-boss uses LISTEN/NOTIFY, which

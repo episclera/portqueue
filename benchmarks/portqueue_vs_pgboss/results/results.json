@@ -3,20 +3,27 @@
   "title": "PortQueue vs pg-boss",
   "competitor": "pg-boss",
   "engine": "PGLite",
-  "runAt": null,
-  "environment": null,
+  "runAt": "2026-11-17T12:08:14.948Z",
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "darwin arm64",
+    "cpu": "Apple M1 Max",
+    "cores": 10,
+    "pglite": "0.2.17",
+    "repeats": 3
+  },
   "libraries": [
     {
       "key": "portqueue",
       "name": "PortQueue",
       "package": "@portqueue/core",
-      "version": null
+      "version": "1.2.1"
     },
     {
       "key": "pg-boss",
       "name": "pg-boss",
       "package": "pg-boss",
-      "version": null
+      "version": "12.38.2"
     }
   ],
   "headline": "process",
@@ -27,7 +34,24 @@
       "unit": "jobs/s",
       "higherIsBetter": true,
       "description": "2000 sequential `addJob` / `send` calls, each awaited.",
-      "results": []
+      "results": [
+        {
+          "library": "portqueue",
+          "value": 1711.6,
+          "extra": {
+            "elapsedMs": 1168.5,
+            "jobs": 2000
+          }
+        },
+        {
+          "library": "pg-boss",
+          "value": 1171.9,
+          "extra": {
+            "elapsedMs": 1706.6,
+            "jobs": 2000
+          }
+        }
+      ]
     },
     {
       "key": "enqueue-batch",
@@ -35,7 +59,24 @@
       "unit": "jobs/s",
       "higherIsBetter": true,
       "description": "20000 jobs through `addJobs` / `insert`, 1000 per call.",
-      "results": []
+      "results": [
+        {
+          "library": "portqueue",
+          "value": 19017.9,
+          "extra": {
+            "elapsedMs": 1051.6,
+            "jobs": 20000
+          }
+        },
+        {
+          "library": "pg-boss",
+          "value": 43292.6,
+          "extra": {
+            "elapsedMs": 462,
+            "jobs": 20000
+          }
+        }
+      ]
     },
     {
       "key": "process",
@@ -43,7 +84,26 @@
       "unit": "jobs/s",
       "higherIsBetter": true,
       "description": "10000 pre-seeded jobs drained by a no-op handler, 100 fetched per claim and in flight; timed until every job is settled.",
-      "results": []
+      "results": [
+        {
+          "library": "portqueue",
+          "value": 2673.1,
+          "extra": {
+            "elapsedMs": 3740.9,
+            "jobs": 10000,
+            "concurrency": 100
+          }
+        },
+        {
+          "library": "pg-boss",
+          "value": 17085.4,
+          "extra": {
+            "elapsedMs": 585.3,
+            "jobs": 10000,
+            "concurrency": 100
+          }
+        }
+      ]
     },
     {
       "key": "latency",
@@ -51,7 +111,28 @@
       "unit": "ms",
       "higherIsBetter": false,
       "description": "50 sequential jobs on an idle worker, timed from the add call to the handler starting.",
-      "results": []
+      "results": [
+        {
+          "library": "portqueue",
+          "value": 2.1,
+          "extra": {
+            "p50Ms": 2.1,
+            "p95Ms": 2.8,
+            "maxMs": 5.4,
+            "jobs": 50
+          }
+        },
+        {
+          "library": "pg-boss",
+          "value": 2.2,
+          "extra": {
+            "p50Ms": 2.2,
+            "p95Ms": 3.2,
+            "maxMs": 6.8,
+            "jobs": 50
+          }
+        }
+      ]
     }
   ]
 }
