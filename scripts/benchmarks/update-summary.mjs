@@ -14,7 +14,8 @@
  * publishing.
  *
  * Writes `docs/src/data/benchmarks/summary.json` and the block between the `benchmarks-summary`
- * markers in the repo README.
+ * markers in the repo README — the same `MAX_SUMMARY_CHARTS` charts in both, so the README always
+ * shows exactly what the docs homepage shows (in one row of small charts).
  */
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -35,6 +36,14 @@ const MAX_COMPARISONS_PER_CHART = 5;
  * benchmarked on that driver.
  */
 const SUMMARY_SCENARIOS = ['process', 'enqueue-batch', 'latency'];
+/**
+ * The summary shows at most this many charts — one row on the docs homepage and one row on the
+ * README. Both are written from the same capped list, so the two always show the same charts.
+ */
+const MAX_SUMMARY_CHARTS = 3;
+/** Size of each README chart, in px — three side by side must fit GitHub's content column. */
+const README_CHART_WIDTH = 280;
+const README_CHART_HEIGHT = 260;
 
 const files = (await readdir(DATA_DIR)).filter((f) => f.endsWith('.json') && f !== 'summary.json');
 const records = [];
@@ -58,7 +67,7 @@ const barFor = (record, scenarioKey, libraryKey) => {
 // For every driver, one chart per summary scenario: a bar is only ever compared with bars measured
 // on the same driver in the same scenario.
 const engines = [...new Set(ran.map((r) => r.engine))];
-const charts = engines.flatMap((engine) => {
+const allCharts = engines.flatMap((engine) => {
   const onEngine = ran.filter((r) => r.engine === engine);
   const shown = onEngine.slice(0, MAX_COMPARISONS_PER_CHART);
   return SUMMARY_SCENARIOS.flatMap((key) => {
@@ -82,6 +91,7 @@ const charts = engines.flatMap((engine) => {
     ];
   });
 });
+const charts = allCharts.slice(0, MAX_SUMMARY_CHARTS);
 
 const summary = {
   runAt: ran[0]?.runAt ?? null,
@@ -95,19 +105,27 @@ if (charts.length === 0) {
   block.push('_No benchmark results yet — run `npm run benchmark:portqueue-vs-pgboss`._');
 } else {
   const env = summary.environment;
+  // One row: an HTML table with a chart per cell. GitHub renders a fenced Mermaid block inside a
+  // cell as long as blank lines separate it from the tags.
+  block.push('<table>', '<tr>');
   for (const chart of charts) {
     const better = chart.higherIsBetter ? 'higher is better' : 'lower is better';
     block.push(
+      `<td width="${Math.floor(100 / charts.length)}%">`,
+      '',
       '```mermaid',
+      `%%{init: {"xyChart": {"width": ${README_CHART_WIDTH}, "height": ${README_CHART_HEIGHT}}}}%%`,
       'xychart-beta',
-      `    title "${chart.title} on ${chart.engine} (${chart.unit}, ${better})"`,
+      `    title "${chart.title}"`,
       `    x-axis [${chart.bars.map((b) => `"${b.name} (${chart.engine})"`).join(', ')}]`,
-      `    y-axis "${chart.unit}"`,
+      `    y-axis "${chart.unit}, ${better}"`,
       `    bar [${chart.bars.map((b) => Math.round(b.value * 10) / 10).join(', ')}]`,
       '```',
       '',
+      '</td>',
     );
   }
+  block.push('</tr>', '</table>', '');
   block.push(
     `Last run ${summary.runAt.slice(0, 10)}${env ? ` on ${env.cpu}, Node ${env.node}` : ''}. ` +
       'Every scenario and how it is measured: ' +

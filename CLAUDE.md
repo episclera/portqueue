@@ -38,6 +38,10 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
   bar charts on the repo `README.md` and the docs homepage: one chart per database driver and featured
   scenario (three, one row on the homepage — `SUMMARY_SCENARIOS` in `update-summary.mjs`), PortQueue
   plus at most five benchmarked libraries, every bar labelled with its driver (`pg-boss (PGLite)`).
+  **The README shows exactly the charts the docs homepage shows** — same set, same order, capped at
+  three (`MAX_SUMMARY_CHARTS`), small and in one row (an HTML table, one Mermaid chart per cell).
+  Both are written from one capped list in `update-summary.mjs`, so never add a chart to one
+  without the other.
   Then update what it can't write: re-read the comparison README and `docs/docs/benchmarks.mdx` and
   fix any prose whose claims no longer match the new numbers. **Never hand-edit a number or a chart**:
   if a result looks wrong, fix the benchmark and rerun. Every run starts from a clean, in-memory
