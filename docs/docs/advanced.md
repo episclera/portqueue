@@ -43,8 +43,8 @@ const pq = new PortQueue({ driver: new MyDriver() });
 `BaseDriver` (exported from `@portqueue/core`) carries everything that is **not** SQL, so a driver is
 only its statements:
 
-- **Row → record mapping** — `mapJob`, `mapQueue`, `mapSchedule`, `mapInstance`, and the `JOB_COLUMNS`
-  / `SCHEDULE_INSERT_COLUMNS` lists they pair with. A column added to the schema then appears in every
+- **Row → record mapping** — `mapJob`, `mapClaimedJob`, `mapQueue`, `mapSchedule`, `mapInstance`, and
+  the `JOB_COLUMNS` / `CLAIM_COLUMNS` / `SCHEDULE_INSERT_COLUMNS` lists they pair with. A column added to the schema then appears in every
   engine's insert, rather than needing to be remembered five times.
 - **Value conversion** — `toJson`/`fromJson`, `boolIn`/`boolOut`, `numOrNull`/`strOrNull`, `likePattern`,
   `emptyStatusCounts`, id generation.
@@ -120,14 +120,22 @@ engine, a deadlock).
 
 **Claiming & completing (hot path)**
 
-- `claimJobs({ queueName, limit, lockDurationSeconds, now, instanceKey? }): Promise<JobRecord[]>` —
+- `claimJobs({ queueName, limit, lockDurationSeconds, now, instanceKey? }): Promise<ClaimedJob[]>` —
   every claimed row must also carry a **fresh `lock_token`**, returned on the record. That token is the
-  fence below.
+  fence below. A claimed job is only the fields the worker reads: select `CLAIM_COLUMNS` and map each
+  row with `mapClaimedJob(row, { queueName, lockToken })`, which fills in the queue, the `ACTIVE`
+  status and the token from the claim itself. A full job record still fits the type.
 - `extendLock({ jobId, lockDurationSeconds, now, lockToken? }): Promise<boolean>` — false when the row
   is no longer this claim's to extend. A negative `lockDurationSeconds` releases the lock.
 - `completeJob({ jobId, returnValue?, now, lockToken?, tx? }): Promise<boolean>`
 - `retryJob({ jobId, nextRunAt, retryAttempt, lastError, now, lockToken? }): Promise<boolean>`
 - `failJob({ jobId, lastError, now, lockToken? }): Promise<boolean>`
+- `completeJobs?({ jobs: [{ jobId, returnValue?, lockToken? }], now, tx? }): Promise<string[]>` —
+  optional, and the worker's hot path when present. It settles many claimed jobs at once and returns
+  the ids it **did** settle. Each row is guarded exactly like `completeJob` guards one, so a stale
+  entry is skipped without affecting the others. `groupByLockToken` on `BaseDriver` splits a batch
+  by claim, so each group can be fenced with one `lock_token = ?`. Without it, the worker calls
+  `completeJob` once per job.
 
   The three settle methods must be **guarded on the claim** — `status = ACTIVE`, and the `lockToken`
   when one is given — and must report whether the row was actually settled. Status alone is not
@@ -305,7 +313,8 @@ runConformance({ name: 'my-engine', createDriver: () => new MyDriver() });
 Beyond the happy path it pins the guards core actually depends on, which are the ones a custom driver
 is most likely to get subtly wrong: `requeueJob`/`removeJob`/`cancelJob` refusing an `ACTIVE` row,
 `expireDueJobs` and `deleteFinishedJobs` (including per-row `retention_statuses`), `advanceSchedule`'s
-guarded claim, the `search` filter, and agreement between every list page and its `count*`.
+guarded claim, the `search` filter, agreement between every list page and its `count*`, and — when
+the driver implements it — `completeJobs` skipping a stale entry while settling the rest of its batch.
 
 The same kit validates the built-in drivers, so passing it means your engine behaves identically to
 PostgreSQL/SQLite from app code's perspective. PGLite and SQLite run it in CI; MySQL and Oracle are

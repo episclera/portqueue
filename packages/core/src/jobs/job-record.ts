@@ -55,6 +55,34 @@ export interface JobRecord {
   singletonKey: string | null;
 }
 
+/**
+ * What `Driver.claimJobs` returns: the fields of a job the worker needs once it has claimed it, and
+ * nothing else. A claim used to return all 34 columns of every row it took; the worker reads these
+ * 17, and three of them (`queueName`, `status`, `lockToken`) it already knows from the claim itself.
+ * Fewer columns is less for the engine to serialize and less to map on every claim. A full
+ * {@link JobRecord} satisfies this type, so a driver returning one still fits.
+ */
+export type ClaimedJob = Pick<
+  JobRecord,
+  | 'id'
+  | 'queueName'
+  | 'status'
+  | 'priority'
+  | 'data'
+  | 'createdAt'
+  | 'startAfter'
+  | 'lockToken'
+  | 'retryAttempt'
+  | 'retryMaxAttempts'
+  | 'retryDelaySeconds'
+  | 'retryBackoff'
+  | 'retryBackoffFactor'
+  | 'retryMaxDelaySeconds'
+  | 'retryJitter'
+  | 'idempotencyKey'
+  | 'scheduleId'
+>;
+
 /** The row to insert — a fully resolved job with defaults applied. */
 export interface NewJobRecord {
   id?: string;

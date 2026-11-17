@@ -222,6 +222,89 @@ export function runConformance(options: ConformanceOptions): void {
       expect(finished?.returnValue).toEqual({ from: 'second' });
     });
 
+    it('settles a batch with completeJobs, skipping only the entries whose claim was lost', async () => {
+      if (!driver.completeJobs) return; // optional: a driver without it settles one by one
+      const a = await driver.insertJob({ job: newJob(queueName, now) });
+      const b = await driver.insertJob({ job: newJob(queueName, now) });
+      const c = await driver.insertJob({ job: newJob(queueName, now) });
+      const claimed = await driver.claimJobs({ queueName, limit: 3, lockDurationSeconds: 30, now });
+      expect(claimed).toHaveLength(3);
+      const token = claimed[0]!.lockToken;
+      expect(claimed.every((j) => j.lockToken === token)).toBe(true);
+
+      const settled = await driver.completeJobs({
+        jobs: [
+          { jobId: a.id, returnValue: { n: 1 }, lockToken: token },
+          { jobId: b.id, lockToken: 'not-this-claim' }, // stale: must be skipped
+          { jobId: c.id, lockToken: token },
+          { jobId: 'no-such-job', lockToken: token }, // missing: must be skipped
+        ],
+        now: now + 1,
+      });
+      expect([...settled].sort()).toEqual([a.id, c.id].sort());
+
+      const [ra, rb, rc] = await Promise.all([a, b, c].map((j) => driver.getJob({ jobId: j.id })));
+      expect(ra?.status).toBe(JobStatus.COMPLETED);
+      expect(ra?.returnValue).toEqual({ n: 1 });
+      expect(ra?.lockToken).toBeNull();
+      expect(rb?.status).toBe(JobStatus.ACTIVE); // the stale entry touched nothing
+      expect(rc?.status).toBe(JobStatus.COMPLETED);
+      expect(rc?.returnValue).toBeNull();
+    });
+
+    it('settles a completeJobs batch spanning several claims, each fenced on its own token', async () => {
+      if (!driver.completeJobs) return;
+      const first = await driver.insertJob({ job: newJob(queueName, now) });
+      const [claimA] = await driver.claimJobs({
+        queueName,
+        limit: 1,
+        lockDurationSeconds: 30,
+        now,
+      });
+      const second = await driver.insertJob({ job: newJob(queueName, now) });
+      const [claimB] = await driver.claimJobs({
+        queueName,
+        limit: 1,
+        lockDurationSeconds: 30,
+        now,
+      });
+      expect(claimA!.lockToken).not.toBe(claimB!.lockToken);
+
+      const settled = await driver.completeJobs({
+        jobs: [
+          { jobId: first.id, returnValue: 'a', lockToken: claimA!.lockToken },
+          // The right job under the other claim's token: refused.
+          { jobId: second.id, returnValue: 'wrong', lockToken: claimA!.lockToken },
+          { jobId: second.id, returnValue: 'b', lockToken: claimB!.lockToken },
+        ],
+        now: now + 1,
+      });
+      expect([...settled].sort()).toEqual([first.id, second.id].sort());
+      expect((await driver.getJob({ jobId: first.id }))?.returnValue).toBe('a');
+      expect((await driver.getJob({ jobId: second.id }))?.returnValue).toBe('b');
+    });
+
+    it('settles a completeJobs batch at the id cap', async () => {
+      if (!driver.completeJobs) return;
+      const ids = (
+        await driver.insertJobs({
+          jobs: Array.from({ length: MAX_BATCH_IDS }, () => newJob(queueName, now)),
+        })
+      ).map((r) => r.id);
+      const claimed = await driver.claimJobs({
+        queueName,
+        limit: MAX_BATCH_IDS,
+        lockDurationSeconds: 30,
+        now,
+      });
+      expect(claimed).toHaveLength(MAX_BATCH_IDS);
+      const settled = await driver.completeJobs({
+        jobs: claimed.map((j) => ({ jobId: j.id, lockToken: j.lockToken })),
+        now: now + 1,
+      });
+      expect(new Set(settled)).toEqual(new Set(ids));
+    });
+
     it('refuses to fail or retry a job whose claim was lost', async () => {
       const stale = await driver.insertJob({ job: newJob(queueName, now) });
       const [first] = await driver.claimJobs({ queueName, limit: 1, lockDurationSeconds: 1, now });
@@ -436,7 +519,9 @@ export function runConformance(options: ConformanceOptions): void {
       await driver.upsertInstance({ instanceKey: 'inst-old', now });
       await driver.upsertInstance({ instanceKey: 'inst-new', now: now + 10_000 });
 
-      const rows = await driver.getInstancesByKeys({ instanceKeys: ['inst-old', 'inst-new', 'nope'] });
+      const rows = await driver.getInstancesByKeys({
+        instanceKeys: ['inst-old', 'inst-new', 'nope'],
+      });
       expect(rows.map((r) => r.instanceKey).sort()).toEqual(['inst-new', 'inst-old']);
 
       // A key with no row is simply absent from what the pause reports.
@@ -516,7 +601,9 @@ export function runConformance(options: ConformanceOptions): void {
         instanceKey: 'worker-eu-1',
       });
       expect(eu).toHaveLength(1);
-      expect(eu[0]!.processedOnInstanceKey).toBe('worker-eu-1');
+      // Recorded on the row itself: a claim returns only what the worker needs, not this column.
+      const stored = await driver.getJob({ jobId: eu[0]!.id });
+      expect(stored?.processedOnInstanceKey).toBe('worker-eu-1');
     });
 
     it('lets any instance claim a job with no preferred pattern', async () => {
@@ -716,7 +803,7 @@ export function runConformance(options: ConformanceOptions): void {
       expect(removed.map((r) => r.jobId)).toEqual([settled.id]);
     });
 
-    it('finds which job ids name a row, with each row\'s queue', async () => {
+    it("finds which job ids name a row, with each row's queue", async () => {
       // The refusal path of a batch reads this to tell "no such job" from "refused".
       const job = await driver.insertJob({ job: newJob(queueName, now) });
       expect(await driver.findJobRefs({ jobIds: [job.id, 'missing'] })).toEqual([

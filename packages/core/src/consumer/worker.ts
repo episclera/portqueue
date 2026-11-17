@@ -35,7 +35,17 @@ export interface WorkerConfig {
 export class Worker {
   private readonly execution: ExecutionService;
   private readonly limiter?: RateLimiterService;
+  /** Claimed jobs not yet settled: their handler is running, or its outcome is being written. */
   private activeCount = 0;
+  /**
+   * Handlers actually executing — what `concurrency` caps. A slot frees the moment a handler
+   * returns, not when its outcome has been written: settles are batched, and holding the slot
+   * through the write would halve every claim (half the slots would always be waiting on a settle).
+   * Shutdown still drains on {@link activeCount}, so no outcome is ever abandoned mid-write.
+   */
+  private runningCount = 0;
+  /** A slot-freed pump is already queued for the next turn (see {@link schedulePump}). */
+  private pumpScheduled = false;
   private stopping = false;
   private started = false;
   private queueName: string | null = null;
@@ -96,7 +106,7 @@ export class Worker {
     this.pumping = true;
     try {
       while (!this.stopping) {
-        const capacity = this.config.concurrency - this.activeCount;
+        const capacity = this.config.concurrency - this.runningCount;
         if (capacity <= 0) break;
         // Pressure is only ever high when the client was given a `systemLimiter`; without one this
         // reads false forever, which is why there is no per-worker opt-in to carry.
@@ -132,15 +142,24 @@ export class Worker {
 
         for (const record of jobs) {
           this.activeCount += 1;
+          this.runningCount += 1;
+          let slotFreed = false;
+          const freeSlot = (): void => {
+            if (slotFreed) return;
+            slotFreed = true;
+            this.runningCount -= 1;
+            // A freed slot may allow another claim — once every handler finishing in this turn has
+            // freed its own, so they share one claim instead of the first one claiming a single row.
+            this.schedulePump();
+          };
           void this.execution
-            .run(record)
+            .run(record, freeSlot)
             .catch((err) => {
               this.runtime.events.emit(PortQueueEvent.ERROR, { error: err, source: 'execution' });
             })
             .finally(() => {
               this.activeCount -= 1;
-              // A freed slot may allow another claim.
-              this.runtime.background.run(() => this.pump());
+              freeSlot();
             });
         }
       }
@@ -150,6 +169,20 @@ export class Worker {
     } finally {
       this.pumping = false;
     }
+  }
+
+  /**
+   * Pump on the next turn of the event loop, at most once per turn. Handlers that finish together
+   * (a claimed batch of short jobs does) free their slots in the same turn; pumping on the first of
+   * them claimed one row, and the rest a moment later — two statements where one does.
+   */
+  private schedulePump(): void {
+    if (this.pumpScheduled) return;
+    this.pumpScheduled = true;
+    setImmediate(() => {
+      this.pumpScheduled = false;
+      this.runtime.background.run(() => this.pump());
+    });
   }
 
   /** Re-pump once the rate limiter has a token. At most one such timer is ever outstanding. */

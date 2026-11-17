@@ -2,7 +2,7 @@ import { PortQueueEvent } from '../events/event-name.enum';
 import { secondsToMs } from '../util/seconds';
 import { LOCK_HEARTBEATS_PER_WINDOW, MIN_LOCK_HEARTBEAT_SECONDS } from '../constants';
 import type { Job, JobHandler } from '../jobs/job';
-import type { JobRecord } from '../jobs/job-record';
+import type { ClaimedJob } from '../jobs/job-record';
 import type { ErrorClass } from '../options/queue-options';
 import type { FailureDetail } from '../options/enums';
 import type { Runtime } from '../client/runtime';
@@ -39,7 +39,12 @@ export class ExecutionService {
     private readonly config: ExecutionConfig,
   ) {}
 
-  async run(record: JobRecord): Promise<void> {
+  /**
+   * Run one claimed job to its settled outcome. `onHandlerDone` fires the moment the handler has
+   * returned or thrown — before its outcome is written — so the worker can hand the slot to the next
+   * job while the settle is still in flight; the returned promise resolves once it is written.
+   */
+  async run(record: ClaimedJob, onHandlerDone: () => void = () => {}): Promise<void> {
     const startTs = this.runtime.clock.now();
     const controller = new AbortController();
     this.active.set(record.id, { controller, lockToken: record.lockToken });
@@ -57,10 +62,17 @@ export class ExecutionService {
 
     try {
       await this.runtime.hooks.runBeforeProcess(queueName, job);
-      const returnValue = await this.config.handler(job);
+      let returnValue: unknown;
+      try {
+        returnValue = await this.config.handler(job);
+      } finally {
+        onHandlerDone();
+      }
       const outcome = await this.completion.complete(record, queueName, returnValue, startTs);
       await this.runtime.hooks.runAfterProcess(queueName, job, outcome);
     } catch (err) {
+      // A BEFORE_PROCESS hook that threw never reached the handler; the slot is free either way.
+      onHandlerDone();
       const outcome = await this.completion.failOrRetry(
         record,
         queueName,
@@ -75,7 +87,7 @@ export class ExecutionService {
     }
   }
 
-  private buildJob(record: JobRecord, signal: AbortSignal): Job {
+  private buildJob(record: ClaimedJob, signal: AbortSignal): Job {
     const runtime = this.runtime;
     const lockDurationSeconds = this.config.lockDurationSeconds;
     return {
@@ -101,7 +113,7 @@ export class ExecutionService {
     };
   }
 
-  private startHeartbeat(record: JobRecord, controller: AbortController): NodeJS.Timeout {
+  private startHeartbeat(record: ClaimedJob, controller: AbortController): NodeJS.Timeout {
     // Beat at a fraction of the lock window, never faster than the floor, so a lock is renewed
     // several times before it could lapse.
     const intervalMs = Math.max(

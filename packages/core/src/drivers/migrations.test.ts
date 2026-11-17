@@ -36,26 +36,54 @@ describe('per-engine migrations (authored alongside each driver)', () => {
     // another. (PG-wire is the one place where the statement builders themselves are reused — see
     // the PGLite case below.)
     expect(new Set(sets).size).toBe(sets.length);
-    // Every set declares the same versions (the same logical schema). A migration is identified by
-    // its version alone — there is deliberately no checksum for anything to compare.
-    for (const set of sets) {
+    // Versions are contiguous from 1 and each engine's own: v1 is the same logical schema
+    // everywhere, and a later version may be engine-specific — PostgreSQL/PGLite's v2 only swaps in
+    // partial indexes, which the other engines cannot use. A migration is identified by its version
+    // alone — there is deliberately no checksum for anything to compare.
+    expect(POSTGRESQL_MIGRATIONS.map((m) => m.version)).toEqual([1, 2]);
+    expect(PGLITE_MIGRATIONS.map((m) => m.version)).toEqual([1, 2]);
+    for (const set of [SQLITE_MIGRATIONS, ORACLE_MIGRATIONS, MYSQL_MIGRATIONS]) {
       expect(set.map((m) => m.version)).toEqual([1]);
-      expect(set.every((m) => !('checksum' in m))).toBe(true);
     }
+    for (const set of sets) expect(set.every((m) => !('checksum' in m))).toBe(true);
   });
 
   it('each driver exposes runner steps built from its own migrations', () => {
     const drivers = [
-      [new PostgresqlDriver(), DatabaseEngine.POSTGRESQL],
-      [new PgliteDriver(), DatabaseEngine.PGLITE],
-      [new SqliteDriver(), DatabaseEngine.SQLITE],
-      [new OracleDriver(), DatabaseEngine.ORACLE],
-      [new MysqlDriver(), DatabaseEngine.MYSQL],
+      [new PostgresqlDriver(), DatabaseEngine.POSTGRESQL, POSTGRESQL_MIGRATIONS],
+      [new PgliteDriver(), DatabaseEngine.PGLITE, PGLITE_MIGRATIONS],
+      [new SqliteDriver(), DatabaseEngine.SQLITE, SQLITE_MIGRATIONS],
+      [new OracleDriver(), DatabaseEngine.ORACLE, ORACLE_MIGRATIONS],
+      [new MysqlDriver(), DatabaseEngine.MYSQL, MYSQL_MIGRATIONS],
     ] as const;
-    for (const [driver, engine] of drivers) {
+    for (const [driver, engine, set] of drivers) {
       expect(driver.engine).toBe(engine);
-      expect(driver.migrations.map((m) => m.version)).toEqual([1]);
+      expect(driver.migrations.map((m) => m.version)).toEqual(set.map((m) => m.version));
     }
+  });
+
+  it('PostgreSQL v2 rebuilds the claim, stalled and expiry indexes as partial indexes', () => {
+    const statements = POSTGRESQL_MIGRATIONS.find((m) => m.version === 2)!.statements(names);
+    expect(statements).toContain('DROP INDEX IF EXISTS pq_job_claim_idx');
+    expect(statements.join('\n')).toMatch(
+      /pq_job_claim_idx ON pq_job \(queue_name, priority DESC, start_after ASC\) WHERE status IN \('PENDING', 'RETRY'\)/,
+    );
+    expect(statements.join('\n')).toMatch(
+      /pq_job_stalled_idx ON pq_job \(locked_until\) WHERE status = 'ACTIVE'/,
+    );
+    expect(statements.join('\n')).toMatch(
+      /pq_job_expiry_idx ON pq_job \(status, expire_at\) WHERE expire_at IS NOT NULL/,
+    );
+    // With a schema, DROP INDEX names the index inside it (CREATE INDEX names it bare).
+    const scoped = POSTGRESQL_MIGRATIONS.find((m) => m.version === 2)!.statements({
+      ...names,
+      schema: 'jobs',
+    });
+    expect(scoped).toContain('DROP INDEX IF EXISTS jobs.pq_job_claim_idx');
+    // PGLite reuses the PostgreSQL builder for v2, as it does for v1.
+    expect(PGLITE_MIGRATIONS.find((m) => m.version === 2)!.statements).toBe(
+      POSTGRESQL_MIGRATIONS.find((m) => m.version === 2)!.statements,
+    );
   });
 
   it('PostgreSQL v1 creates every table with the pruned job shape and the schedule dedup token', () => {

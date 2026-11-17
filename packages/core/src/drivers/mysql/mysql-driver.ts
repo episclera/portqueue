@@ -18,6 +18,7 @@ import {
 } from '../table-names';
 import {
   BaseDriver,
+  CLAIM_COLUMNS,
   JOB_COLUMNS,
   SCHEDULE_INSERT_COLUMNS,
   type RawResult,
@@ -29,6 +30,7 @@ import { MS_PER_SECOND } from '../../util/seconds';
 import { toMigrationSteps } from '../shared/migration';
 import { MYSQL_MIGRATIONS } from './migrations';
 import type {
+  CompletedJobInput,
   Driver,
   DriverProbe,
   InstanceListFilter,
@@ -44,6 +46,7 @@ import type {
   Subscription,
 } from '../driver.interface';
 import type {
+  ClaimedJob,
   InsertedJobRow,
   InstanceMetrics,
   InstanceRow,
@@ -640,7 +643,7 @@ export class MysqlDriver extends BaseDriver implements Driver {
     lockDurationSeconds: number;
     now: number;
     instanceKey?: string | null;
-  }): Promise<JobRecord[]> {
+  }): Promise<ClaimedJob[]> {
     const { queueName, limit, lockDurationSeconds, now, instanceKey } = options;
     const lockedUntil = this.lockDeadline(now, lockDurationSeconds);
     // One token per claim call: every row this claim takes carries it, and every completion is
@@ -697,12 +700,12 @@ export class MysqlDriver extends BaseDriver implements Driver {
       // Read back only the rows this call actually claimed: the ones carrying *this* claim's token.
       // A row another claimer took first has a token of its own and is excluded.
       const res = await this.execute(
-        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ` +
+        `SELECT ${CLAIM_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ` +
           `WHERE ${JobColumn.ID} IN (${this.phList(ids.length)}) AND ${JobColumn.LOCK_TOKEN} = ${this.ph(ids.length)}`,
         [...ids, lockToken],
         session,
       );
-      return this.sortClaimed(res.rows.map((r) => this.mapJob(r)));
+      return this.sortClaimed(res.rows.map((r) => this.mapClaimedJob(r, { queueName, lockToken })));
     });
   }
 
@@ -766,6 +769,61 @@ export class MysqlDriver extends BaseDriver implements Driver {
       options.tx,
     );
     return res.rowCount > 0;
+  }
+
+  /**
+   * Settle a batch per claim token (and per id chunk). Without `RETURNING`, the rows that still pass
+   * the fence (`ACTIVE` and the group's token, exactly like {@link completeJob}) are locked first
+   * with `SELECT … FOR UPDATE`, then exactly those are updated — both inside one transaction, so the
+   * ids returned are the ids settled. Parameters are pushed in placeholder order.
+   */
+  async completeJobs(options: {
+    jobs: CompletedJobInput[];
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]> {
+    const settled: string[] = [];
+    for (const group of this.groupByLockToken(options.jobs)) {
+      const ids = await this.overIdChunks(group.items, async (chunk) =>
+        this.inTx(options.tx, async (run) => {
+          const selParams: unknown[] = chunk.map((job) => job.jobId);
+          const sel = await run(
+            `SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} ` +
+              `WHERE ${JobColumn.ID} IN (${this.phList(chunk.length)})${this.claimFence(selParams, group.lockToken)} FOR UPDATE`,
+            selParams,
+          );
+          const held = new Set(sel.rows.map((row) => String(row[JobColumn.ID])));
+          const owned = chunk.filter((job) => held.has(job.jobId));
+          if (!owned.length) return [];
+          const params: unknown[] = [JobStatus.COMPLETED];
+          const returnValue = this.returnValueExpression(owned, params);
+          const nowAt = params.length;
+          params.push(options.now, options.now);
+          const idsAt = params.length;
+          params.push(...owned.map((job) => job.jobId));
+          await run(
+            `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETURN_VALUE} = ${returnValue}, ` +
+              `${JobColumn.COMPLETED_AT} = ${this.ph(nowAt)}, ${JobColumn.UPDATED_AT} = ${this.ph(nowAt + 1)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+              `WHERE ${JobColumn.ID} IN (${this.phList(owned.length, idsAt)})`,
+            params,
+          );
+          return owned.map((job) => job.jobId);
+        }),
+      );
+      settled.push(...ids);
+    }
+    return settled;
+  }
+
+  /** `NULL` when no job in the chunk returned anything, otherwise a `CASE` on the id. */
+  private returnValueExpression(chunk: CompletedJobInput[], params: unknown[]): string {
+    const values = chunk.map((job) => this.toJson(job.returnValue));
+    if (values.every((value) => value === null)) return 'NULL';
+    const arms = chunk.map((job, i) => {
+      params.push(job.jobId, values[i]);
+      return `WHEN ${this.ph(params.length - 2)} THEN ${this.ph(params.length - 1)}`;
+    });
+    return `CASE ${JobColumn.ID} ${arms.join(' ')} ELSE NULL END`;
   }
 
   async retryJob(options: {
@@ -1553,8 +1611,7 @@ export class MysqlDriver extends BaseDriver implements Driver {
   }): Promise<string[]> {
     if (!options.instanceKeys.length) return [];
     return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
-      const sets =
-        `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
+      const sets = `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
       const params = [this.boolIn(options.processingPaused), options.now, ...instanceKeys];
       // No RETURNING: update, then read the keys back in the same transaction.
       return this.inTx(options.tx, async (run) => {

@@ -89,7 +89,9 @@ export class SchedulerService {
       data: schedule.data,
       startAfter: now,
       expireAt:
-        t?.expireInSeconds != null ? now + wholeSecondsToMs(t.expireInSeconds, 'expireInSeconds') : null,
+        t?.expireInSeconds != null
+          ? now + wholeSecondsToMs(t.expireInSeconds, 'expireInSeconds')
+          : null,
       retryAttempt: 0,
       retryMaxAttempts: schedule.retryMaxAttempts ?? DEFAULT_RETRY_MAX_ATTEMPTS,
       retryDelaySeconds: schedule.retryDelaySeconds ?? DEFAULT_RETRY_DELAY_SECONDS,
@@ -116,7 +118,9 @@ export class SchedulerService {
 
   private computeNext(schedule: ScheduleRow, now: number): number | null {
     if (schedule.cron) {
-      return new CronExpression(schedule.cron, schedule.timezone ?? DEFAULT_CRON_TIMEZONE).next(now);
+      return new CronExpression(schedule.cron, schedule.timezone ?? DEFAULT_CRON_TIMEZONE).next(
+        now,
+      );
     }
     if (schedule.everySeconds != null) {
       return now + wholeSecondsToMs(schedule.everySeconds, 'schedule.startEverySeconds');

@@ -378,6 +378,6 @@ in three sections, and no section at all when there is nothing to put in it.
 - The conformance kit is the contract, not a smoke test: it pins the guards core depends on
   (`requeueJob`/`removeJob`/`cancelJob` refusing an `ACTIVE` row, the claim fence refusing a
   settle whose `lockToken` is stale, bounded expiry and reclaim, per-row retention statuses,
-  `advanceSchedule`'s guarded claim, `setScheduleEnabled`, dedup under *concurrent* adds, the `search`
-  filter, agreement between every list page and its `count*`, and a batch at the id cap). A new driver
+  `advanceSchedule`'s guarded claim, `setScheduleEnabled`, dedup under *concurrent* adds, `completeJobs`
+  fencing each row of a batch on its own token, the `search` filter, agreement between every list page and its `count*`, and a batch at the id cap). A new driver
   method needs a case there.

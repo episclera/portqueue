@@ -17,6 +17,7 @@ import {
 } from '../table-names';
 import {
   BaseDriver,
+  CLAIM_COLUMNS,
   JOB_COLUMNS,
   SCHEDULE_INSERT_COLUMNS,
   type RawResult,
@@ -28,6 +29,7 @@ import { MS_PER_SECOND } from '../../util/seconds';
 import { toMigrationSteps } from '../shared/migration';
 import { SQLITE_MIGRATIONS } from './migrations';
 import type {
+  CompletedJobInput,
   Driver,
   DriverProbe,
   InstanceListFilter,
@@ -43,6 +45,7 @@ import type {
   Subscription,
 } from '../driver.interface';
 import type {
+  ClaimedJob,
   InsertedJobRow,
   InstanceMetrics,
   InstanceRow,
@@ -532,13 +535,13 @@ export class SqliteDriver extends BaseDriver implements Driver {
     lockDurationSeconds: number;
     now: number;
     instanceKey?: string | null;
-  }): Promise<JobRecord[]> {
+  }): Promise<ClaimedJob[]> {
     const { queueName, limit, lockDurationSeconds, now, instanceKey } = options;
     const lockedUntil = this.lockDeadline(now, lockDurationSeconds);
     // One token per claim call: every row this claim takes carries it, and every completion is
     // fenced on it (see `claimFence`). A later claim of the same row writes a different one.
     const lockToken = this.newId();
-    const cols = JOB_COLUMNS.join(', ');
+    const cols = CLAIM_COLUMNS.join(', ');
 
     // Single-instance mode: one guarded UPDATE ... RETURNING. SQLite has no row locks and needs
     // none — a write holds the database-wide write lock, so this single statement cannot interleave
@@ -566,7 +569,7 @@ export class SqliteDriver extends BaseDriver implements Driver {
           limit,
         ],
       );
-      return this.sortClaimed(res.rows.map((r) => this.mapJob(r)));
+      return this.sortClaimed(res.rows.map((r) => this.mapClaimedJob(r, { queueName, lockToken })));
     }
 
     // Multi-instance mode: affinity is a regex, which SQL cannot evaluate, so page through
@@ -602,7 +605,7 @@ export class SqliteDriver extends BaseDriver implements Driver {
         [...head, ...idList, JobStatus.PENDING, JobStatus.RETRY],
         session,
       );
-      return this.sortClaimed(upd.rows.map((r) => this.mapJob(r)));
+      return this.sortClaimed(upd.rows.map((r) => this.mapClaimedJob(r, { queueName, lockToken })));
     });
   }
 
@@ -666,6 +669,47 @@ export class SqliteDriver extends BaseDriver implements Driver {
       options.tx,
     );
     return res.rowCount > 0;
+  }
+
+  /**
+   * One guarded `UPDATE … RETURNING id` per claim token (and per id chunk), fenced per row like
+   * {@link completeJob}. Parameters are pushed in the order their `?` placeholders appear.
+   */
+  async completeJobs(options: {
+    jobs: CompletedJobInput[];
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]> {
+    const settled: string[] = [];
+    for (const group of this.groupByLockToken(options.jobs)) {
+      const ids = await this.overIdChunks(group.items, async (chunk) => {
+        const params: unknown[] = [JobStatus.COMPLETED];
+        const returnValue = this.returnValueExpression(chunk, params);
+        params.push(options.now, options.now, ...chunk.map((job) => job.jobId));
+        const res = await this.runMaybeTx(
+          `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ?, ${JobColumn.RETURN_VALUE} = ${returnValue}, ` +
+            `${JobColumn.COMPLETED_AT} = ?, ${JobColumn.UPDATED_AT} = ?, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+            `WHERE ${JobColumn.ID} IN (${this.phList(chunk.length)})${this.claimFence(params, group.lockToken)} ` +
+            `RETURNING ${JobColumn.ID}`,
+          params,
+          options.tx,
+        );
+        return res.rows.map((row) => String(row[JobColumn.ID]));
+      });
+      settled.push(...ids);
+    }
+    return settled;
+  }
+
+  /** `NULL` when no job in the chunk returned anything, otherwise a `CASE` on the id. */
+  private returnValueExpression(chunk: CompletedJobInput[], params: unknown[]): string {
+    const values = chunk.map((job) => this.toJson(job.returnValue));
+    if (values.every((value) => value === null)) return 'NULL';
+    const arms = chunk.map((job, i) => {
+      params.push(job.jobId, values[i]);
+      return 'WHEN ? THEN ?';
+    });
+    return `CASE ${JobColumn.ID} ${arms.join(' ')} ELSE NULL END`;
   }
 
   async retryJob(options: {
@@ -1417,8 +1461,7 @@ export class SqliteDriver extends BaseDriver implements Driver {
   }): Promise<string[]> {
     if (!options.instanceKeys.length) return [];
     return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
-      const sets =
-        `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
+      const sets = `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
       const params = [this.boolIn(options.processingPaused), options.now, ...instanceKeys];
       const res = await this.runMaybeTx(
         `UPDATE ${this.t(TableName.INSTANCE)} SET ${sets} ` +

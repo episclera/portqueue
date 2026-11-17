@@ -1,6 +1,7 @@
 import type { DatabaseEngine } from '../options/enums';
 import type { JobStatus } from '../jobs/job-state.enum';
 import type {
+  ClaimedJob,
   InsertedJobRow,
   InstanceMetrics,
   InstanceRow,
@@ -124,6 +125,14 @@ export interface RequeuedJobRef extends JobRef {
 }
 
 /** A schedule identified together with its queue, for the same reason {@link JobRef} exists. */
+/** One claimed job to settle as `COMPLETED` in a {@link Driver.completeJobs} batch. */
+export interface CompletedJobInput {
+  jobId: string;
+  returnValue?: unknown;
+  /** The token the claim wrote; given, the settle only applies while that claim still holds it. */
+  lockToken?: string | null;
+}
+
 export interface ScheduleRef {
   scheduleId: string;
   queueName: string;
@@ -254,7 +263,7 @@ export interface Driver {
     now: number;
     /** This instance's multi-instance key, or null when the process is unnamed. */
     instanceKey?: string | null;
-  }): Promise<JobRecord[]>;
+  }): Promise<ClaimedJob[]>;
   /**
    * Push a claimed job's lock out by `lockDurationSeconds` seconds; a negative value releases it.
    * Returns false when the row was no longer this claim's to extend.
@@ -280,6 +289,23 @@ export interface Driver {
     lockToken?: string | null;
     tx?: TransactionHandle;
   }): Promise<boolean>;
+  /**
+   * Settle many claimed jobs as `COMPLETED` at once — the plural of {@link completeJob}, and the
+   * worker's hot path: one statement per claim token rather than one per job.
+   *
+   * Every row is guarded exactly as {@link completeJob} guards one (`ACTIVE`, and its own
+   * `lockToken` when given), so a stale entry in the batch is skipped rather than settled, and
+   * skipping it never affects the others. Returns the ids that **were** settled; an id missing from
+   * the result lost its claim.
+   *
+   * Optional, so a custom driver written against the singular keeps working: without it the worker
+   * settles each job with {@link completeJob} on its own.
+   */
+  completeJobs?(options: {
+    jobs: CompletedJobInput[];
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]>;
   /** Arm a claimed job for another attempt. Guarded and reported like {@link completeJob}. */
   retryJob(options: {
     jobId: string;

@@ -17,6 +17,7 @@ import {
 } from '../table-names';
 import {
   BaseDriver,
+  CLAIM_COLUMNS,
   JOB_COLUMNS,
   SCHEDULE_INSERT_COLUMNS,
   type RawResult,
@@ -28,6 +29,7 @@ import { MS_PER_SECOND } from '../../util/seconds';
 import { toMigrationSteps } from '../shared/migration';
 import { POSTGRESQL_MIGRATIONS } from './migrations';
 import type {
+  CompletedJobInput,
   Driver,
   DriverProbe,
   InstanceListFilter,
@@ -43,6 +45,7 @@ import type {
   Subscription,
 } from '../driver.interface';
 import type {
+  ClaimedJob,
   InsertedJobRow,
   InstanceMetrics,
   InstanceRow,
@@ -54,6 +57,48 @@ import type {
 } from '../../jobs/job-record';
 import type { QueueOptions } from '../../options/queue-options';
 import type { TransactionHandle } from '../../tx/transaction-handle';
+
+/**
+ * The PostgreSQL type of every `job` column, for unpacking a JSON batch with `json_to_recordset`
+ * (see `insertJobs`). It mirrors the table's own DDL; a column added to the schema must be added
+ * here too, which the `Record<JobColumn, …>` type enforces.
+ */
+const JOB_COLUMN_TYPES: Record<JobColumn, string> = {
+  [JobColumn.ID]: 'text',
+  [JobColumn.QUEUE_NAME]: 'text',
+  [JobColumn.STATUS]: 'text',
+  [JobColumn.PRIORITY]: 'integer',
+  [JobColumn.DATA]: 'text',
+  [JobColumn.RETURN_VALUE]: 'text',
+  [JobColumn.CREATED_AT]: 'bigint',
+  [JobColumn.UPDATED_AT]: 'bigint',
+  [JobColumn.START_AFTER]: 'bigint',
+  [JobColumn.EXPIRE_AT]: 'bigint',
+  [JobColumn.STARTED_AT]: 'bigint',
+  [JobColumn.COMPLETED_AT]: 'bigint',
+  [JobColumn.FAILED_AT]: 'bigint',
+  [JobColumn.RETRIED_AT]: 'bigint',
+  [JobColumn.STALLED_AT]: 'bigint',
+  [JobColumn.CANCELLED_AT]: 'bigint',
+  [JobColumn.EXPIRED_AT]: 'bigint',
+  [JobColumn.LOCKED_UNTIL]: 'bigint',
+  [JobColumn.LOCK_TOKEN]: 'text',
+  [JobColumn.PREFERRED_INSTANCE_KEY_PATTERN]: 'text',
+  [JobColumn.PROCESSED_ON_INSTANCE_KEY]: 'text',
+  [JobColumn.RETRY_ATTEMPT]: 'integer',
+  [JobColumn.RETRY_MAX_ATTEMPTS]: 'integer',
+  [JobColumn.RETRY_DELAY_SECONDS]: 'bigint',
+  [JobColumn.RETRY_BACKOFF]: 'text',
+  [JobColumn.RETRY_BACKOFF_FACTOR]: 'real',
+  [JobColumn.RETRY_MAX_DELAY_SECONDS]: 'bigint',
+  [JobColumn.RETRY_JITTER]: 'smallint',
+  [JobColumn.FAILURE_MESSAGE]: 'text',
+  [JobColumn.RETENTION_TTL_SECONDS]: 'bigint',
+  [JobColumn.RETENTION_STATUSES]: 'integer',
+  [JobColumn.IDEMPOTENCY_KEY]: 'text',
+  [JobColumn.SCHEDULE_ID]: 'text',
+  [JobColumn.SINGLETON_KEY]: 'text',
+};
 
 export interface PostgresqlDriverOptions {
   connectionString?: string;
@@ -306,6 +351,23 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
   }): Promise<InsertedJobRow[]> {
     const { jobs, tx } = options;
     if (!jobs.length) return [];
+
+    // A batch carrying no dedup key reads nothing before it writes, and one that fits a single chunk
+    // is a single INSERT — a lone statement, atomic on its own, so it skips the BEGIN/COMMIT that
+    // were two extra round trips on every add.
+    const keyed = jobs.some((job) => job.idempotencyKey != null || job.singletonKey != null);
+    if (!keyed && this.chunkIds(jobs).length === 1) {
+      const results = new Array<InsertedJobRow | undefined>(jobs.length);
+      const fresh = jobs.map((job, index) => ({ index, ...this.jobInsertValues(job) }));
+      await this.insertFresh(
+        (sql, params) => this.runMaybeTx(sql, params, tx),
+        jobs,
+        fresh,
+        results,
+      );
+      return results as InsertedJobRow[];
+    }
+
     return this.inTx(tx, async (run) => {
       await this.lockQueuesForDedup(run, jobs);
       const deduped = await this.findDeduplicated(jobs, run);
@@ -322,45 +384,70 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
         fresh.push({ index, id, values });
       }
 
-      // Chunked so one statement never exceeds the engine's bound-parameter limit; each chunk is
-      // still a single multi-row insert.
-      for (const chunk of this.chunkForBind(fresh, JOB_COLUMNS.length)) {
-        if (!chunk.length) continue;
-        const params: unknown[] = [];
-        const tuples = chunk.map(({ values }) => {
-          const placeholders = this.phList(values.length, params.length);
-          params.push(...values);
-          return `(${placeholders})`;
-        });
-        try {
-          const inserted = await run(
-            `INSERT INTO ${this.t(TableName.JOB)} (${JOB_COLUMNS.join(', ')}) VALUES ${tuples.join(', ')} ` +
-              `RETURNING ${JobColumn.ID}, ${JobColumn.STATUS}, ${JobColumn.START_AFTER}`,
-            params,
-          );
-          // Paired back by id rather than by position, so nothing depends on RETURNING preserving
-          // the VALUES order.
-          const byId = new Map(inserted.rows.map((row) => [String(row[JobColumn.ID]), row]));
-          for (const { index, id } of chunk) {
-            const row = byId.get(id);
-            if (!row) throw new DriverQueryError(`Insert did not return job '${id}'.`);
-            results[index] = {
-              id,
-              status: row[JobColumn.STATUS] as JobStatus,
-              startAfter: Number(row[JobColumn.START_AFTER]),
-              deduplicated: false,
-            };
-          }
-        } catch (err) {
-          if (err instanceof DriverQueryError) throw err;
-          throw new DriverQueryError(
-            `Failed to insert ${chunk.length} job(s) on queue '${jobs[chunk[0]!.index]!.queueName}'.`,
-            err,
-          );
-        }
-      }
+      await this.insertFresh(run, jobs, fresh, results);
       return results as InsertedJobRow[];
     });
+  }
+
+  /**
+   * Insert rows that passed dedup, filling `results` at each row's input index. The whole chunk
+   * travels as **one** JSON parameter that `json_to_recordset` unpacks into rows, rather than a
+   * multi-row VALUES binding every column of every row: 34 columns × 1000 rows was 34 000 bound
+   * parameters, split across statements by the parameter limit, and parsing that many binds cost
+   * more than the insert itself — one JSON value inserts about twice as fast. No RETURNING either:
+   * the id, status and start time of every row are the values just sent, so the row count is the
+   * only thing worth checking.
+   */
+  private async insertFresh(
+    run: (sql: string, params: readonly unknown[]) => Promise<RawResult>,
+    jobs: NewJobRecord[],
+    fresh: Array<{ index: number; id: string; values: unknown[] }>,
+    results: Array<InsertedJobRow | undefined>,
+  ): Promise<void> {
+    const cols = JOB_COLUMNS.join(', ');
+    const recordset = JOB_COLUMNS.map((col) => `${col} ${JOB_COLUMN_TYPES[col]}`).join(', ');
+    for (const chunk of this.chunkIds(fresh)) {
+      if (!chunk.length) continue;
+      // A key left out reads as NULL in `json_to_recordset`, and most columns of a new job are NULL,
+      // so only set values are sent: a much smaller payload to build, transfer and parse.
+      const payload = JSON.stringify(
+        chunk.map(({ values }) => {
+          const row: Record<string, unknown> = {};
+          for (let i = 0; i < JOB_COLUMNS.length; i += 1) {
+            const value = values[i];
+            if (value != null) row[JOB_COLUMNS[i]!] = value;
+          }
+          return row;
+        }),
+      );
+      let inserted: RawResult;
+      try {
+        inserted = await run(
+          `INSERT INTO ${this.t(TableName.JOB)} (${cols}) ` +
+            `SELECT ${cols} FROM json_to_recordset(${this.ph(0)}::json) AS x(${recordset})`,
+          [payload],
+        );
+      } catch (err) {
+        throw new DriverQueryError(
+          `Failed to insert ${chunk.length} job(s) on queue '${jobs[chunk[0]!.index]!.queueName}'.`,
+          err,
+        );
+      }
+      if (inserted.rowCount !== chunk.length) {
+        throw new DriverQueryError(
+          `Inserted ${inserted.rowCount} of ${chunk.length} job(s) on queue '${jobs[chunk[0]!.index]!.queueName}'.`,
+        );
+      }
+      for (const { index, id } of chunk) {
+        const job = jobs[index]!;
+        results[index] = {
+          id,
+          status: job.status,
+          startAfter: job.startAfter,
+          deduplicated: false,
+        };
+      }
+    }
   }
 
   /**
@@ -575,44 +662,43 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
     lockDurationSeconds: number;
     now: number;
     instanceKey?: string | null;
-  }): Promise<JobRecord[]> {
+  }): Promise<ClaimedJob[]> {
     const { queueName, limit, lockDurationSeconds, now, instanceKey } = options;
     const lockedUntil = this.lockDeadline(now, lockDurationSeconds);
     // One token per claim call: every row this claim takes carries it, and every completion is
     // fenced on it (see `claimFence`). A later claim of the same row writes a different one.
     const lockToken = this.newId();
-    const cols = JOB_COLUMNS.join(', ');
+    const cols = CLAIM_COLUMNS.join(', ');
 
-    // Single-instance mode: one guarded UPDATE ... RETURNING inside a transaction. `SKIP LOCKED`
-    // makes the inner select skip rows another claimer already holds, and the outer UPDATE is what
-    // actually takes them — so no two workers can ever return the same row.
+    // Single-instance mode: one guarded UPDATE ... RETURNING. `SKIP LOCKED` makes the inner select
+    // skip rows another claimer already holds, and the outer UPDATE is what actually takes them — so
+    // no two workers can ever return the same row. It is a lone statement, so it is atomic on its own
+    // and runs without an explicit BEGIN/COMMIT: on the hot path those were two extra round trips per
+    // claim and bought nothing.
     if (!instanceKey) {
-      return this.transaction(async (session) => {
-        const res = await this.execute(
-          `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STARTED_AT} = ${this.ph(1)}, ` +
-            `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.LOCK_TOKEN} = ${this.ph(3)}, ${JobColumn.UPDATED_AT} = ${this.ph(4)} ` +
-            `WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} ` +
-            `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(5)} AND ${JobColumn.STATUS} IN (${this.ph(6)}, ${this.ph(7)}) ` +
-            `AND ${JobColumn.START_AFTER} <= ${this.ph(8)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(9)}) ` +
-            `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(10)} FOR UPDATE SKIP LOCKED) ` +
-            `RETURNING ${cols}`,
-          [
-            JobStatus.ACTIVE,
-            now,
-            lockedUntil,
-            lockToken,
-            now,
-            queueName,
-            JobStatus.PENDING,
-            JobStatus.RETRY,
-            now,
-            now,
-            limit,
-          ],
-          session,
-        );
-        return this.sortClaimed(res.rows.map((r) => this.mapJob(r)));
-      });
+      const res = await this.execute(
+        `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.STARTED_AT} = ${this.ph(1)}, ` +
+          `${JobColumn.LOCKED_UNTIL} = ${this.ph(2)}, ${JobColumn.LOCK_TOKEN} = ${this.ph(3)}, ${JobColumn.UPDATED_AT} = ${this.ph(4)} ` +
+          `WHERE ${JobColumn.ID} IN (SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} ` +
+          `WHERE ${JobColumn.QUEUE_NAME} = ${this.ph(5)} AND ${JobColumn.STATUS} IN (${this.ph(6)}, ${this.ph(7)}) ` +
+          `AND ${JobColumn.START_AFTER} <= ${this.ph(8)} AND (${JobColumn.EXPIRE_AT} IS NULL OR ${JobColumn.EXPIRE_AT} > ${this.ph(9)}) ` +
+          `ORDER BY ${JobColumn.PRIORITY} DESC, ${JobColumn.START_AFTER} ASC LIMIT ${this.ph(10)} FOR UPDATE SKIP LOCKED) ` +
+          `RETURNING ${cols}`,
+        [
+          JobStatus.ACTIVE,
+          now,
+          lockedUntil,
+          lockToken,
+          now,
+          queueName,
+          JobStatus.PENDING,
+          JobStatus.RETRY,
+          now,
+          now,
+          limit,
+        ],
+      );
+      return this.sortClaimed(res.rows.map((r) => this.mapClaimedJob(r, { queueName, lockToken })));
     }
 
     // Multi-instance mode: affinity is a regex, which portable SQL cannot evaluate, so page through
@@ -649,7 +735,7 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
         [...head, ...idList, JobStatus.PENDING, JobStatus.RETRY],
         session,
       );
-      return this.sortClaimed(upd.rows.map((r) => this.mapJob(r)));
+      return this.sortClaimed(upd.rows.map((r) => this.mapClaimedJob(r, { queueName, lockToken })));
     });
   }
 
@@ -713,6 +799,54 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
       options.tx,
     );
     return res.rowCount > 0;
+  }
+
+  /**
+   * One guarded `UPDATE … RETURNING id` per claim token (and per id chunk): every row in the group is
+   * fenced on that token and on `ACTIVE`, exactly like {@link completeJob}, and `RETURNING` names the
+   * rows that were settled. A lone statement per group, so no explicit transaction.
+   */
+  async completeJobs(options: {
+    jobs: CompletedJobInput[];
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]> {
+    const settled: string[] = [];
+    for (const group of this.groupByLockToken(options.jobs)) {
+      const ids = await this.overIdChunks(group.items, async (chunk) => {
+        const params: unknown[] = [JobStatus.COMPLETED, options.now, options.now];
+        const returnValue = this.returnValueExpression(chunk, params);
+        const idList = chunk.map((job) => {
+          params.push(job.jobId);
+          return this.ph(params.length - 1);
+        });
+        const res = await this.runMaybeTx(
+          `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETURN_VALUE} = ${returnValue}, ` +
+            `${JobColumn.COMPLETED_AT} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+            `WHERE ${JobColumn.ID} IN (${idList.join(', ')})${this.claimFence(params, group.lockToken)} ` +
+            `RETURNING ${JobColumn.ID}`,
+          params,
+          options.tx,
+        );
+        return res.rows.map((row) => String(row[JobColumn.ID]));
+      });
+      settled.push(...ids);
+    }
+    return settled;
+  }
+
+  /**
+   * The `return_value` a batch settle writes: `NULL` when no job in the chunk returned anything (the
+   * common case — a handler that returns nothing), otherwise a `CASE` on the id.
+   */
+  private returnValueExpression(chunk: CompletedJobInput[], params: unknown[]): string {
+    const values = chunk.map((job) => this.toJson(job.returnValue));
+    if (values.every((value) => value === null)) return 'NULL';
+    const arms = chunk.map((job, i) => {
+      params.push(job.jobId, values[i]);
+      return `WHEN ${this.ph(params.length - 2)} THEN ${this.ph(params.length - 1)}`;
+    });
+    return `CASE ${JobColumn.ID} ${arms.join(' ')} ELSE NULL END`;
   }
 
   async retryJob(options: {
@@ -1474,8 +1608,7 @@ export class PostgresqlDriver extends BaseDriver implements Driver {
   }): Promise<string[]> {
     if (!options.instanceKeys.length) return [];
     return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
-      const sets =
-        `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
+      const sets = `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
       const params = [this.boolIn(options.processingPaused), options.now, ...instanceKeys];
       const res = await this.runMaybeTx(
         `UPDATE ${this.t(TableName.INSTANCE)} SET ${sets} ` +

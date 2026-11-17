@@ -103,6 +103,7 @@ export type {
   PageWindow,
   JobListFilter,
   JobRef,
+  CompletedJobInput,
   StalledJobRef,
   RequeuedJobRef,
   ScheduleRef,
@@ -116,7 +117,12 @@ export { DriverContext } from './drivers/driver-context';
 export type { StorageOptions } from './drivers/driver-context';
 // The shared driver base: row mapping, value conversion and the affinity scan, for a custom driver
 // that wants them. Its SQL is entirely the subclass's own.
-export { BaseDriver, JOB_COLUMNS, SCHEDULE_INSERT_COLUMNS } from './drivers/shared/base-driver';
+export {
+  BaseDriver,
+  CLAIM_COLUMNS,
+  JOB_COLUMNS,
+  SCHEDULE_INSERT_COLUMNS,
+} from './drivers/shared/base-driver';
 export type { RawResult, Row, Session } from './drivers/shared/base-driver';
 export { toMigrationSteps, latestVersion } from './drivers/shared/migration';
 export type { FlavourMigration, MigrationNames } from './drivers/shared/migration';

@@ -17,6 +17,7 @@ import {
 } from '../table-names';
 import {
   BaseDriver,
+  CLAIM_COLUMNS,
   JOB_COLUMNS,
   SCHEDULE_INSERT_COLUMNS,
   type RawResult,
@@ -28,6 +29,7 @@ import { MS_PER_SECOND } from '../../util/seconds';
 import { toMigrationSteps } from '../shared/migration';
 import { ORACLE_MIGRATIONS } from './migrations';
 import type {
+  CompletedJobInput,
   Driver,
   DriverProbe,
   InstanceListFilter,
@@ -43,6 +45,7 @@ import type {
   Subscription,
 } from '../driver.interface';
 import type {
+  ClaimedJob,
   InsertedJobRow,
   InstanceMetrics,
   InstanceRow,
@@ -632,7 +635,7 @@ export class OracleDriver extends BaseDriver implements Driver {
     lockDurationSeconds: number;
     now: number;
     instanceKey?: string | null;
-  }): Promise<JobRecord[]> {
+  }): Promise<ClaimedJob[]> {
     const { queueName, limit, lockDurationSeconds, now, instanceKey } = options;
     const lockedUntil = this.lockDeadline(now, lockDurationSeconds);
     // One token per claim call: every row this claim takes carries it, and every completion is
@@ -690,12 +693,12 @@ export class OracleDriver extends BaseDriver implements Driver {
       // Read back only the rows this call actually claimed: the ones carrying *this* claim's token.
       // A row another claimer took first has a token of its own and is excluded.
       const res = await this.execute(
-        `SELECT ${JOB_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ` +
+        `SELECT ${CLAIM_COLUMNS.join(', ')} FROM ${this.t(TableName.JOB)} ` +
           `WHERE ${JobColumn.ID} IN (${this.phList(ids.length)}) AND ${JobColumn.LOCK_TOKEN} = ${this.ph(ids.length)}`,
         [...ids, lockToken],
         session,
       );
-      return this.sortClaimed(res.rows.map((r) => this.mapJob(r)));
+      return this.sortClaimed(res.rows.map((r) => this.mapClaimedJob(r, { queueName, lockToken })));
     });
   }
 
@@ -759,6 +762,66 @@ export class OracleDriver extends BaseDriver implements Driver {
       options.tx,
     );
     return res.rowCount > 0;
+  }
+
+  /**
+   * Settle a batch per claim token (and per id chunk). Without `RETURNING`, the rows that still pass
+   * the fence (`ACTIVE` and the group's token, exactly like {@link completeJob}) are locked first
+   * with `SELECT … FOR UPDATE`, then exactly those are updated — both inside one transaction, so the
+   * ids returned are the ids settled. Parameters are pushed in placeholder order.
+   */
+  async completeJobs(options: {
+    jobs: CompletedJobInput[];
+    now: number;
+    tx?: TransactionHandle;
+  }): Promise<string[]> {
+    const settled: string[] = [];
+    for (const group of this.groupByLockToken(options.jobs)) {
+      const ids = await this.overIdChunks(group.items, async (chunk) =>
+        this.inTx(options.tx, async (run) => {
+          const selParams: unknown[] = chunk.map((job) => job.jobId);
+          const sel = await run(
+            `SELECT ${JobColumn.ID} FROM ${this.t(TableName.JOB)} ` +
+              `WHERE ${JobColumn.ID} IN (${this.phList(chunk.length)})${this.claimFence(selParams, group.lockToken)} FOR UPDATE`,
+            selParams,
+          );
+          const held = new Set(sel.rows.map((row) => String(row[JobColumn.ID])));
+          const owned = chunk.filter((job) => held.has(job.jobId));
+          if (!owned.length) return [];
+          // `return_value` is a CLOB. A value bound straight to the column may be any length, but one
+          // inside a `CASE` is a SQL VARCHAR2 and capped at 4000 bytes — so jobs that returned
+          // nothing (the common case) settle together, and a job that returned a value gets its own
+          // UPDATE binding it to the column, in the same transaction.
+          const valued = owned.filter((job) => this.toJson(job.returnValue) !== null);
+          const bare = owned.filter((job) => this.toJson(job.returnValue) === null);
+          if (bare.length) {
+            await run(
+              `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETURN_VALUE} = NULL, ` +
+                `${JobColumn.COMPLETED_AT} = ${this.ph(1)}, ${JobColumn.UPDATED_AT} = ${this.ph(2)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+                `WHERE ${JobColumn.ID} IN (${this.phList(bare.length, 3)})`,
+              [JobStatus.COMPLETED, options.now, options.now, ...bare.map((job) => job.jobId)],
+            );
+          }
+          for (const job of valued) {
+            await run(
+              `UPDATE ${this.t(TableName.JOB)} SET ${JobColumn.STATUS} = ${this.ph(0)}, ${JobColumn.RETURN_VALUE} = ${this.ph(1)}, ` +
+                `${JobColumn.COMPLETED_AT} = ${this.ph(2)}, ${JobColumn.UPDATED_AT} = ${this.ph(3)}, ${JobColumn.LOCKED_UNTIL} = NULL, ${JobColumn.LOCK_TOKEN} = NULL ` +
+                `WHERE ${JobColumn.ID} = ${this.ph(4)}`,
+              [
+                JobStatus.COMPLETED,
+                this.toJson(job.returnValue),
+                options.now,
+                options.now,
+                job.jobId,
+              ],
+            );
+          }
+          return owned.map((job) => job.jobId);
+        }),
+      );
+      settled.push(...ids);
+    }
+    return settled;
   }
 
   async retryJob(options: {
@@ -1546,8 +1609,7 @@ export class OracleDriver extends BaseDriver implements Driver {
   }): Promise<string[]> {
     if (!options.instanceKeys.length) return [];
     return this.overIdChunks(options.instanceKeys, async (instanceKeys) => {
-      const sets =
-        `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
+      const sets = `${InstanceColumn.PROCESSING_PAUSED} = ${this.ph(0)}, ${InstanceColumn.UPDATED_AT} = ${this.ph(1)}`;
       const params = [this.boolIn(options.processingPaused), options.now, ...instanceKeys];
       // No row-set RETURNING: update, then read the keys back in the same transaction.
       return this.inTx(options.tx, async (run) => {

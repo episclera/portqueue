@@ -17,6 +17,7 @@ import {
 } from '../../constants';
 
 import type {
+  ClaimedJob,
   InstanceRow,
   JobRecord,
   NewJobRecord,
@@ -86,6 +87,28 @@ export const JOB_COLUMNS: readonly JobColumn[] = [
   JobColumn.IDEMPOTENCY_KEY,
   JobColumn.SCHEDULE_ID,
   JobColumn.SINGLETON_KEY,
+];
+
+/**
+ * The columns a claim returns — what {@link BaseDriver.mapClaimedJob} reads. `queue_name`, `status`
+ * and `lock_token` are absent on purpose: the claim set or filtered on all three, so the mapper takes
+ * them from the claim instead of the row.
+ */
+export const CLAIM_COLUMNS: readonly JobColumn[] = [
+  JobColumn.ID,
+  JobColumn.PRIORITY,
+  JobColumn.DATA,
+  JobColumn.CREATED_AT,
+  JobColumn.START_AFTER,
+  JobColumn.RETRY_ATTEMPT,
+  JobColumn.RETRY_MAX_ATTEMPTS,
+  JobColumn.RETRY_DELAY_SECONDS,
+  JobColumn.RETRY_BACKOFF,
+  JobColumn.RETRY_BACKOFF_FACTOR,
+  JobColumn.RETRY_MAX_DELAY_SECONDS,
+  JobColumn.RETRY_JITTER,
+  JobColumn.IDEMPOTENCY_KEY,
+  JobColumn.SCHEDULE_ID,
 ];
 
 /** The columns a schedule insert writes, in {@link BaseDriver.scheduleInsertValues} order. */
@@ -299,6 +322,28 @@ export abstract class BaseDriver {
     return out;
   }
 
+  /**
+   * Group a settle batch by the claim token each job carries, preserving input order within a group.
+   *
+   * A claim stamps one token on every row it takes, so a batch of completions spans only as many
+   * tokens as claims produced it — usually one or two. Grouping lets a driver fence a whole group with
+   * a single `lock_token = ?` instead of a per-row condition, which keeps the statement short and
+   * index-friendly. Entries without a token form their own group, fenced on status alone (exactly
+   * what the singular settle does for them).
+   */
+  protected groupByLockToken<T extends { lockToken?: string | null }>(
+    items: readonly T[],
+  ): Array<{ lockToken: string | null; items: T[] }> {
+    const groups = new Map<string | null, T[]>();
+    for (const item of items) {
+      const key = item.lockToken ?? null;
+      const list = groups.get(key);
+      if (list) list.push(item);
+      else groups.set(key, [item]);
+    }
+    return [...groups].map(([lockToken, list]) => ({ lockToken, items: list }));
+  }
+
   // --- Value conversion ---
 
   protected toJson(value: unknown): string | null {
@@ -410,6 +455,29 @@ export abstract class BaseDriver {
       idempotencyKey: this.strOrNull(row[JobColumn.IDEMPOTENCY_KEY]),
       scheduleId: this.strOrNull(row[JobColumn.SCHEDULE_ID]),
       singletonKey: this.strOrNull(row[JobColumn.SINGLETON_KEY]),
+    };
+  }
+
+  /** A claimed row ({@link CLAIM_COLUMNS}) plus what the claim itself knows about it. */
+  protected mapClaimedJob(row: Row, claim: { queueName: string; lockToken: string }): ClaimedJob {
+    return {
+      id: String(row[JobColumn.ID]),
+      queueName: claim.queueName,
+      status: JobStatus.ACTIVE,
+      priority: Number(row[JobColumn.PRIORITY]),
+      data: this.fromJson(row[JobColumn.DATA]),
+      createdAt: Number(row[JobColumn.CREATED_AT]),
+      startAfter: Number(row[JobColumn.START_AFTER]),
+      lockToken: claim.lockToken,
+      retryAttempt: Number(row[JobColumn.RETRY_ATTEMPT]),
+      retryMaxAttempts: Number(row[JobColumn.RETRY_MAX_ATTEMPTS]),
+      retryDelaySeconds: Number(row[JobColumn.RETRY_DELAY_SECONDS]),
+      retryBackoff: row[JobColumn.RETRY_BACKOFF] as BackoffStrategy,
+      retryBackoffFactor: this.numOrNull(row[JobColumn.RETRY_BACKOFF_FACTOR]),
+      retryMaxDelaySeconds: this.numOrNull(row[JobColumn.RETRY_MAX_DELAY_SECONDS]),
+      retryJitter: this.boolOut(row[JobColumn.RETRY_JITTER]),
+      idempotencyKey: this.strOrNull(row[JobColumn.IDEMPOTENCY_KEY]),
+      scheduleId: this.strOrNull(row[JobColumn.SCHEDULE_ID]),
     };
   }
 
@@ -592,7 +660,7 @@ export abstract class BaseDriver {
   }
 
   /** Claim order: highest priority first, then oldest due. Applied after a claim returns rows. */
-  protected sortClaimed(jobs: JobRecord[]): JobRecord[] {
+  protected sortClaimed<T extends Pick<JobRecord, 'priority' | 'startAfter'>>(jobs: T[]): T[] {
     return jobs.sort((a, b) => b.priority - a.priority || a.startAfter - b.startAfter);
   }
 }

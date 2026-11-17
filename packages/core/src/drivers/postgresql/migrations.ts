@@ -165,4 +165,48 @@ export function v1(names: MigrationNames): string[] {
   return statements;
 }
 
-export const POSTGRESQL_MIGRATIONS: FlavourMigration[] = [{ version: 1, statements: v1 }];
+/**
+ * Version 2 — partial indexes for the three hot predicates.
+ *
+ * - **The claim.** v1's `claim_idx` keyed on `status`, so the claim's `status IN ('PENDING','RETRY')`
+ *   matched two ranges of the index and PostgreSQL had to read and sort *every* waiting row before
+ *   it could apply the `LIMIT` — a claim got slower with every job in the backlog (10 ms at 10 000
+ *   waiting rows). Moving the status test into the index predicate leaves `(queue_name, priority
+ *   DESC, start_after)` as the key, which is exactly the claim's `ORDER BY`, so the scan stops after
+ *   `LIMIT` rows (0.2 ms at the same backlog). The claim binds its statuses as parameters; an
+ *   unnamed statement is planned with their values, which is what lets the planner prove the
+ *   predicate.
+ * - **The stalled sweep** only ever looks at `ACTIVE` rows, and **the expiry sweep** only at rows
+ *   that carry an `expire_at`, so both become partial too.
+ *
+ * Fewer rows in each index is also fewer index writes: every claim and settle changes `status`, which
+ * PostgreSQL cannot do as a HOT update, so each status change writes an entry into every index whose
+ * predicate the row satisfies. A finished row now sits in none of these three.
+ *
+ * Column names are literals, never the `*Column` enums: this is a frozen record of applied DDL.
+ */
+export function v2(names: MigrationNames): string[] {
+  const t = names.name;
+  const idx = names.derived;
+  // `DROP INDEX` names the index itself, which lives in its table's schema; `CREATE INDEX` names it
+  // bare (see v1).
+  const drop = (suffix: string): string =>
+    `DROP INDEX IF EXISTS ${names.schema ? `${names.schema}.` : ''}${idx(TableName.JOB, suffix)}`;
+  return [
+    drop('claim_idx'),
+    `CREATE INDEX IF NOT EXISTS ${idx(TableName.JOB, 'claim_idx')} ` +
+      `ON ${t(TableName.JOB)} (queue_name, priority DESC, start_after ASC) ` +
+      `WHERE status IN ('PENDING', 'RETRY')`,
+    drop('stalled_idx'),
+    `CREATE INDEX IF NOT EXISTS ${idx(TableName.JOB, 'stalled_idx')} ` +
+      `ON ${t(TableName.JOB)} (locked_until) WHERE status = 'ACTIVE'`,
+    drop('expiry_idx'),
+    `CREATE INDEX IF NOT EXISTS ${idx(TableName.JOB, 'expiry_idx')} ` +
+      `ON ${t(TableName.JOB)} (status, expire_at) WHERE expire_at IS NOT NULL`,
+  ];
+}
+
+export const POSTGRESQL_MIGRATIONS: FlavourMigration[] = [
+  { version: 1, statements: v1 },
+  { version: 2, statements: v2 },
+];

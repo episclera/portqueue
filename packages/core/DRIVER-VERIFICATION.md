@@ -34,6 +34,12 @@ and clear the list (or note which entries still apply to the other engine).
   keyed batch of more than 1000 jobs no longer raises ORA-01795 on Oracle.
 - MySQL only: the migration `GET_LOCK` name is scoped by `DATABASE()` when no `schema` is set, and
   hashed rather than truncated past 64 characters.
+- `completeJobs` (batched settles): `SELECT … FOR UPDATE` on the rows still passing the fence, then
+  one `UPDATE` of exactly those, per claim token. On Oracle, jobs that returned a value get their own
+  `UPDATE`, because a value inside a `CASE` would be a 4000-byte VARCHAR2 rather than the CLOB column.
+  Three conformance cases cover it.
+- `claimJobs` reading back `CLAIM_COLUMNS` (14 columns) instead of every column, mapped with
+  `mapClaimedJob`.
 
 ## Running it
 

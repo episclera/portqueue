@@ -21,10 +21,10 @@ describe('PgliteDriver extends PostgresqlDriver', () => {
     // Still PG-wire, so the claiming/returning paths stay on.
     expect(driver.capabilities[DriverCapability.SKIP_LOCKED]).toBe(true);
     expect(driver.capabilities[DriverCapability.RETURNING]).toBe(true);
-    expect(driver.migrations.map((m) => m.version)).toEqual([1]);
+    expect(driver.migrations.map((m) => m.version)).toEqual([1, 2]);
   });
 
-  it('boots its own connection, migrates to v1 and serves the inherited SQL', async () => {
+  it('boots its own connection, migrates to the latest version and serves the inherited SQL', async () => {
     const driver = new PgliteDriver();
     const pq = new PortQueue<'emails'>({ driver, logger: new NoopLogger() });
     await pq.init();
@@ -32,7 +32,7 @@ describe('PgliteDriver extends PostgresqlDriver', () => {
       const probe = await driver.probe();
       expect(probe.serverVersion).toBe('pglite');
       expect(probe.verifiedCapabilities).not.toContain(DriverCapability.LISTEN_NOTIFY);
-      expect(await driver.getSchemaVersion()).toBe(1);
+      expect(await driver.getSchemaVersion()).toBe(2);
 
       // The single v1 carries the schedule dedup column outright (no follow-up ALTER version).
       const cols = await driver.runInTransaction({

@@ -10,9 +10,10 @@ import {
 } from '../constants';
 import { FailureDetail } from '../options/enums';
 import type { ErrorClass } from '../options/queue-options';
-import type { JobRecord } from '../jobs/job-record';
+import type { ClaimedJob } from '../jobs/job-record';
 import type { Runtime } from '../client/runtime';
 import type { ProcessOutcome } from '../events/hooks';
+import { CompletionBatcher } from './completion-batcher';
 
 /**
  * Marks complete/failed/retry atomically and emits the matching event.
@@ -25,19 +26,23 @@ import type { ProcessOutcome } from '../events/hooks';
  * second run was still going.
  */
 export class CompletionService {
-  constructor(private readonly runtime: Runtime) {}
+  /** Successful settles are batched (see {@link CompletionBatcher}); failures and retries are not. */
+  private readonly batcher: CompletionBatcher;
+
+  constructor(private readonly runtime: Runtime) {
+    this.batcher = new CompletionBatcher(runtime.driver, runtime.clock);
+  }
 
   async complete(
-    record: JobRecord,
+    record: ClaimedJob,
     queueName: string,
     returnValue: unknown,
     startTs: number,
   ): Promise<ProcessOutcome> {
     const now = this.runtime.clock.now();
-    const settled = await this.runtime.driver.completeJob({
+    const settled = await this.batcher.complete({
       jobId: record.id,
       returnValue,
-      now,
       lockToken: record.lockToken,
     });
     if (!settled) return this.claimLost(record, queueName, { kind: 'completed', returnValue });
@@ -52,7 +57,7 @@ export class CompletionService {
 
   /** Decide retry-vs-fail after a handler throw. */
   async failOrRetry(
-    record: JobRecord,
+    record: ClaimedJob,
     queueName: string,
     error: unknown,
     dontAutoretryFor: Array<ErrorClass | string>,
@@ -117,7 +122,11 @@ export class CompletionService {
    * The outcome still describes what *this handler* did, which is what an `AFTER_PROCESS` hook is
    * asking about; what it no longer describes is the row, so nothing is emitted for the job.
    */
-  private claimLost(record: JobRecord, queueName: string, outcome: ProcessOutcome): ProcessOutcome {
+  private claimLost(
+    record: ClaimedJob,
+    queueName: string,
+    outcome: ProcessOutcome,
+  ): ProcessOutcome {
     this.runtime.events.emit(PortQueueEvent.ERROR, {
       error: new LockLostError(record.id, queueName),
       source: 'completion',

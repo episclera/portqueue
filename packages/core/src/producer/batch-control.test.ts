@@ -111,20 +111,20 @@ describe('batch job, schedule, queue and instance control (sqlite)', () => {
     const paused: string[] = [];
     h.pq.on(PortQueueEvent.QUEUE_PAUSED, (e) => paused.push(e.queue));
 
-    expect(await h.pq.pauseQueues({ queues: ['q1', 'ghost', 'q2'], mode: PauseMode.ALL })).toEqual(
-      [
-        { queue: 'q1', outcome: APPLIED },
-        { queue: 'ghost', outcome: NOT_FOUND },
-        { queue: 'q2', outcome: APPLIED },
-      ],
-    );
+    expect(await h.pq.pauseQueues({ queues: ['q1', 'ghost', 'q2'], mode: PauseMode.ALL })).toEqual([
+      { queue: 'q1', outcome: APPLIED },
+      { queue: 'ghost', outcome: NOT_FOUND },
+      { queue: 'q2', outcome: APPLIED },
+    ]);
     expect(paused.sort()).toEqual(['q1', 'q2']);
     expect(await h.pq.getQueue({ name: 'q2' })).toMatchObject({
       processingPaused: true,
       acceptingPaused: true,
     });
 
-    expect(await h.pq.resumeQueues({ queues: ['q2'] })).toEqual([{ queue: 'q2', outcome: APPLIED }]);
+    expect(await h.pq.resumeQueues({ queues: ['q2'] })).toEqual([
+      { queue: 'q2', outcome: APPLIED },
+    ]);
     expect(await h.pq.getQueue({ name: 'q2' })).toMatchObject({
       processingPaused: false,
       acceptingPaused: false,

@@ -425,7 +425,8 @@ export class PortQueue<TQueues extends string = string> {
       ...tx,
     });
     // One wakeup per distinct queue, not per job.
-    for (const queue of new Set(requeued.map((r) => r.queueName))) this.runtime.wakeup.signal(queue);
+    for (const queue of new Set(requeued.map((r) => r.queueName)))
+      this.runtime.wakeup.signal(queue);
     for (const ref of requeued) {
       this.events.emit(PortQueueEvent.JOB_ADDED, {
         jobId: ref.jobId,
