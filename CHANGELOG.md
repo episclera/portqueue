@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.5 (2026-11-17)
+
+### Documentation
+
+* **readme:** stack benchmark summary as text bars, one per line ([f39d867](https://github.com/episclera/portqueue/commit/f39d867acb093121142fddf23475952a98e08bfa))
+* **readme:** one row of small benchmark charts, homepage feature list, contributing before license ([f8641be](https://github.com/episclera/portqueue/commit/f8641be1f20be1f7a37753fc1d641c5addae0e21))
+* list Retention after Events and Hooks ([449d3bb](https://github.com/episclera/portqueue/commit/449d3bb0a688b896ac7b0818777138288d3621ad))
+* list Canceling jobs after Delayed & recurring jobs ([6d81a07](https://github.com/episclera/portqueue/commit/6d81a07deecd18c047959a9723e72010d2b168ed))
+* **production:** drop the checklist and cover splitting producers from consumers ([901e6a3](https://github.com/episclera/portqueue/commit/901e6a36e84ac423fd3d0cdb0c2066bc9c8c6193))
+* list Scale Horizontally after Going to Production ([3e77ce9](https://github.com/episclera/portqueue/commit/3e77ce9a8b3ffc515ece1179cc02196dae06c2ab))
+* rename the multi-server page to Scale Horizontally ([b64a5e1](https://github.com/episclera/portqueue/commit/b64a5e1dd0a1daef133a02971bd2b6c1f45f5f0a))
+* drop the Events vs Hooks page and move Events and Hooks into Core Guides ([90564a1](https://github.com/episclera/portqueue/commit/90564a1cf07b1e7e2237116ecb6d1b9d11c9d604))
+* **homepage:** simplify the speed feature card copy ([ca696c5](https://github.com/episclera/portqueue/commit/ca696c560fe0e4415a0c3cf57782c22c372f5c1b))
+
 ## 1.2.4 (2026-11-17)
 
 ### Documentation
