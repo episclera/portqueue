@@ -43,6 +43,22 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
   if a result looks wrong, fix the benchmark and rerun. Every run starts from a clean, in-memory
   database, which `measure.ts` asserts. Report the headline numbers in the change report.
 
+## Performance is a feature: benchmark every change
+- **After implementing anything that can affect speed** (core, a driver, the consumer or producer
+  path, a migration or index), run the benchmarks (`npm run benchmark:<name>`, every comparison) and
+  compare the new numbers with the ones last committed in git (`git diff` on
+  `benchmarks/*/results/results.json`). Report both sets of numbers in the change report.
+- **A regression needs the developer's permission.** If any number is worse than the committed one
+  beyond run-to-run noise (rerun a regressed scenario before calling it, since a single run can
+  swing), stop. Show the before and after, explain the likely cause, and **ask whether to commit
+  the slower work**. Do not commit it, and do not commit the regressed results, until they say so.
+  Faster or equal numbers are committed with the change as usual.
+- **Keep it fast, on your own initiative.** While working, look for ways to make PortQueue faster
+  without changing the public API: fewer statements and round trips, batched writes, indexes that
+  fit the hot queries, less work per job. When you find one, measure it, keep it if it wins, and say
+  so. Never trade a design invariant (the claim fence, dedup under concurrency, bound parameters)
+  for speed.
+
 ## Always end with a short change report
 Finish **every** prompt — fix, refactor, feature, docs tweak, anything that touched a file — with a
 brief report printed directly in the Claude Code console. Keep it scannable, not exhaustive:
