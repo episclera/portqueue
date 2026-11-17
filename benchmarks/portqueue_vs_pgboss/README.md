@@ -40,7 +40,7 @@ launcher then rebuilds the summary chart on the repo README and the docs homepag
 | --- | --- |
 | `enqueue-single` | Sequential `pq.addJob` / `boss.send` calls, each awaited |
 | `enqueue-batch` | `pq.addJobs` / `boss.insert`, 1000 jobs per call |
-| `process` | Draining pre-seeded jobs with a no-op handler, until every row reads completed. Seeding is not timed. pg-boss settles each fetched batch in one statement. PortQueue settles each job on its own, fenced to the claim that ran it |
+| `process` | Draining pre-seeded jobs with a no-op handler, until every row reads completed. Seeding is not timed. Both settle in batches: pg-boss one statement per fetched batch, PortQueue one per claim token for every job finished in the same tick, each row still fenced to the claim that ran it |
 | `latency` | One job at a time on an idle worker: from the add call to the handler starting (p50) |
 
 ## How it stays fair
@@ -84,13 +84,13 @@ xychart-beta
     title "Adding jobs, one at a time (jobs/s, higher is better)"
     x-axis ["PortQueue (PGLite)", "pg-boss (PGLite)"]
     y-axis "jobs/s"
-    bar [1711.6, 1171.9]
+    bar [2293.8, 1140.8]
 ```
 
 | Library | jobs/s | elapsedMs | jobs |
 | --- | ---: | ---: | ---: |
-| PortQueue | **1,711.6** | 1,168.5 | 2,000 |
-| pg-boss | **1,171.9** | 1,706.6 | 2,000 |
+| PortQueue | **2,293.8** | 871.9 | 2,000 |
+| pg-boss | **1,140.8** | 1,753.1 | 2,000 |
 
 ### Adding jobs in batches
 
@@ -101,13 +101,13 @@ xychart-beta
     title "Adding jobs in batches (jobs/s, higher is better)"
     x-axis ["PortQueue (PGLite)", "pg-boss (PGLite)"]
     y-axis "jobs/s"
-    bar [19017.9, 43292.6]
+    bar [76937.5, 41951.5]
 ```
 
 | Library | jobs/s | elapsedMs | jobs |
 | --- | ---: | ---: | ---: |
-| PortQueue | **19,017.9** | 1,051.6 | 20,000 |
-| pg-boss | **43,292.6** | 462 | 20,000 |
+| PortQueue | **76,937.5** | 260 | 20,000 |
+| pg-boss | **41,951.5** | 476.7 | 20,000 |
 
 ### Processing jobs
 
@@ -118,13 +118,13 @@ xychart-beta
     title "Processing jobs (jobs/s, higher is better)"
     x-axis ["PortQueue (PGLite)", "pg-boss (PGLite)"]
     y-axis "jobs/s"
-    bar [2673.1, 17085.4]
+    bar [20130.6, 17441]
 ```
 
 | Library | jobs/s | elapsedMs | jobs | concurrency |
 | --- | ---: | ---: | ---: | ---: |
-| PortQueue | **2,673.1** | 3,740.9 | 10,000 | 100 |
-| pg-boss | **17,085.4** | 585.3 | 10,000 | 100 |
+| PortQueue | **20,130.6** | 496.8 | 10,000 | 100 |
+| pg-boss | **17,441** | 573.4 | 10,000 | 100 |
 
 ### Pickup latency (p50)
 
@@ -135,12 +135,12 @@ xychart-beta
     title "Pickup latency (p50) (ms, lower is better)"
     x-axis ["PortQueue (PGLite)", "pg-boss (PGLite)"]
     y-axis "ms"
-    bar [2.1, 2.2]
+    bar [1.2, 2.3]
 ```
 
 | Library | ms | p50Ms | p95Ms | maxMs | jobs |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| PortQueue | **2.1** | 2.1 | 2.8 | 5.4 | 50 |
-| pg-boss | **2.2** | 2.2 | 3.2 | 6.8 | 50 |
+| PortQueue | **1.2** | 1.2 | 1.6 | 5.7 | 50 |
+| pg-boss | **2.3** | 2.3 | 3.4 | 6.4 | 50 |
 
 <!-- benchmark-results:end -->

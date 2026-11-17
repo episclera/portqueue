@@ -68,7 +68,7 @@ xychart-beta
     title "Processing jobs on PGLite (jobs/s, higher is better)"
     x-axis ["PortQueue (PGLite)", "pg-boss (PGLite)"]
     y-axis "jobs/s"
-    bar [2673.1, 17085.4]
+    bar [20130.6, 17441]
 ```
 
 ```mermaid
@@ -76,7 +76,7 @@ xychart-beta
     title "Adding jobs in batches on PGLite (jobs/s, higher is better)"
     x-axis ["PortQueue (PGLite)", "pg-boss (PGLite)"]
     y-axis "jobs/s"
-    bar [19017.9, 43292.6]
+    bar [76937.5, 41951.5]
 ```
 
 ```mermaid
@@ -84,7 +84,7 @@ xychart-beta
     title "Pickup latency (p50) on PGLite (ms, lower is better)"
     x-axis ["PortQueue (PGLite)", "pg-boss (PGLite)"]
     y-axis "ms"
-    bar [2.1, 2.2]
+    bar [1.2, 2.3]
 ```
 
 Last run 2026-11-17 on Apple M1 Max, Node v24.21.0. Every scenario and how it is measured: [Benchmarks](https://episclera.github.io/portqueue/docs/benchmarks).

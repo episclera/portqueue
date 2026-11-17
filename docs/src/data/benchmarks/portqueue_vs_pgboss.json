@@ -3,7 +3,7 @@
   "title": "PortQueue vs pg-boss",
   "competitor": "pg-boss",
   "engine": "PGLite",
-  "runAt": "2026-11-17T12:08:14.948Z",
+  "runAt": "2026-11-17T12:50:14.592Z",
   "environment": {
     "node": "v24.21.0",
     "platform": "darwin arm64",
@@ -37,17 +37,17 @@
       "results": [
         {
           "library": "portqueue",
-          "value": 1711.6,
+          "value": 2293.8,
           "extra": {
-            "elapsedMs": 1168.5,
+            "elapsedMs": 871.9,
             "jobs": 2000
           }
         },
         {
           "library": "pg-boss",
-          "value": 1171.9,
+          "value": 1140.8,
           "extra": {
-            "elapsedMs": 1706.6,
+            "elapsedMs": 1753.1,
             "jobs": 2000
           }
         }
@@ -62,17 +62,17 @@
       "results": [
         {
           "library": "portqueue",
-          "value": 19017.9,
+          "value": 76937.5,
           "extra": {
-            "elapsedMs": 1051.6,
+            "elapsedMs": 260,
             "jobs": 20000
           }
         },
         {
           "library": "pg-boss",
-          "value": 43292.6,
+          "value": 41951.5,
           "extra": {
-            "elapsedMs": 462,
+            "elapsedMs": 476.7,
             "jobs": 20000
           }
         }
@@ -87,18 +87,18 @@
       "results": [
         {
           "library": "portqueue",
-          "value": 2673.1,
+          "value": 20130.6,
           "extra": {
-            "elapsedMs": 3740.9,
+            "elapsedMs": 496.8,
             "jobs": 10000,
             "concurrency": 100
           }
         },
         {
           "library": "pg-boss",
-          "value": 17085.4,
+          "value": 17441,
           "extra": {
-            "elapsedMs": 585.3,
+            "elapsedMs": 573.4,
             "jobs": 10000,
             "concurrency": 100
           }
@@ -114,21 +114,21 @@
       "results": [
         {
           "library": "portqueue",
-          "value": 2.1,
+          "value": 1.2,
           "extra": {
-            "p50Ms": 2.1,
-            "p95Ms": 2.8,
-            "maxMs": 5.4,
+            "p50Ms": 1.2,
+            "p95Ms": 1.6,
+            "maxMs": 5.7,
             "jobs": 50
           }
         },
         {
           "library": "pg-boss",
-          "value": 2.2,
+          "value": 2.3,
           "extra": {
-            "p50Ms": 2.2,
-            "p95Ms": 3.2,
-            "maxMs": 6.8,
+            "p50Ms": 2.3,
+            "p95Ms": 3.4,
+            "maxMs": 6.4,
             "jobs": 50
           }
         }

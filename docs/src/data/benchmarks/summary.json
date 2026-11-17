@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-11-17T12:08:14.948Z",
+  "runAt": "2026-11-17T12:50:14.592Z",
   "environment": {
     "node": "v24.21.0",
     "platform": "darwin arm64",
@@ -21,14 +21,14 @@
           "library": "portqueue",
           "name": "PortQueue",
           "version": "1.2.1",
-          "value": 2673.1,
+          "value": 20130.6,
           "comparison": "portqueue_vs_pgboss"
         },
         {
           "library": "pg-boss",
           "name": "pg-boss",
           "version": "12.38.2",
-          "value": 17085.4,
+          "value": 17441,
           "comparison": "portqueue_vs_pgboss"
         }
       ]
@@ -45,14 +45,14 @@
           "library": "portqueue",
           "name": "PortQueue",
           "version": "1.2.1",
-          "value": 19017.9,
+          "value": 76937.5,
           "comparison": "portqueue_vs_pgboss"
         },
         {
           "library": "pg-boss",
           "name": "pg-boss",
           "version": "12.38.2",
-          "value": 43292.6,
+          "value": 41951.5,
           "comparison": "portqueue_vs_pgboss"
         }
       ]
@@ -69,14 +69,14 @@
           "library": "portqueue",
           "name": "PortQueue",
           "version": "1.2.1",
-          "value": 2.1,
+          "value": 1.2,
           "comparison": "portqueue_vs_pgboss"
         },
         {
           "library": "pg-boss",
           "name": "pg-boss",
           "version": "12.38.2",
-          "value": 2.2,
+          "value": 2.3,
           "comparison": "portqueue_vs_pgboss"
         }
       ]
