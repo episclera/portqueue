@@ -13,18 +13,16 @@ import pgboss from '@site/src/data/benchmarks/portqueue_vs_pgboss.json';
 
 # Benchmarks
 
-The repository has a
-[`benchmarks/`](https://github.com/episclera/portqueue/tree/main/benchmarks) folder with one
-head-to-head comparison per library. Every comparison is a workspace package, like the
-[examples](./examples.md), so it measures `@portqueue/core` **from the repository's working tree**
-and not a published release. Each one runs both libraries on the **same engine**: an in-memory
-[PGLite](https://pglite.dev) database (PostgreSQL compiled to WASM), so there is no server and no
-network in the measurement.
+The [`benchmarks/`](https://github.com/episclera/portqueue/tree/main/benchmarks) folder in the
+repository holds one head-to-head comparison per library. PortQueue runs there straight from the
+repository, not from the published package, so every run measures the latest code.
+
+Each comparison runs both libraries on the same machine with the same database driver. Each chart
+names the driver, for example **pg-boss (PGLite)**.
 
 ## At a glance
 
-Processing throughput, PortQueue against the libraries benchmarked here. There is one chart per
-database driver, so every bar in a chart ran on the same driver:
+Processing throughput, PortQueue against every library benchmarked here, one chart per driver:
 
 <SummaryCharts summary={summary} />
 
