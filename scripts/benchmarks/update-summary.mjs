@@ -15,7 +15,8 @@
  *
  * Writes `docs/src/data/benchmarks/summary.json` and the block between the `benchmarks-summary`
  * markers in the repo README — the same `MAX_SUMMARY_CHARTS` charts in both, so the README always
- * shows exactly what the docs homepage shows (in one row of small charts).
+ * shows exactly what the docs homepage shows. The homepage draws them in one row; the README stacks
+ * them one per line as text bars, since side-by-side charts get cut in GitHub's content column.
  */
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -37,13 +38,18 @@ const MAX_COMPARISONS_PER_CHART = 5;
  */
 const SUMMARY_SCENARIOS = ['process', 'enqueue-batch', 'latency'];
 /**
- * The summary shows at most this many charts — one row on the docs homepage and one row on the
+ * The summary shows at most this many charts — one row on the docs homepage, one per line on the
  * README. Both are written from the same capped list, so the two always show the same charts.
  */
 const MAX_SUMMARY_CHARTS = 3;
-/** Size of each README chart, in px — three side by side must fit GitHub's content column. */
-const README_CHART_WIDTH = 280;
-const README_CHART_HEIGHT = 260;
+/** Length of the longest README text bar, in characters — fits GitHub's content column with labels. */
+const README_BAR_WIDTH = 40;
+
+/** A bar's value for the README: thousands separated, one decimal below 100 (latencies). */
+const formatValue = (value) =>
+  value < 100
+    ? (Math.round(value * 10) / 10).toFixed(1)
+    : Math.round(value).toLocaleString('en-US');
 
 const files = (await readdir(DATA_DIR)).filter((f) => f.endsWith('.json') && f !== 'summary.json');
 const records = [];
@@ -105,27 +111,25 @@ if (charts.length === 0) {
   block.push('_No benchmark results yet — run `npm run benchmark:portqueue-vs-pgboss`._');
 } else {
   const env = summary.environment;
-  // One row: an HTML table with a chart per cell. GitHub renders a fenced Mermaid block inside a
-  // cell as long as blank lines separate it from the tags.
-  block.push('<table>', '<tr>');
+  // One chart per line, drawn as text bars in a fenced block. GitHub's content column is too narrow
+  // for side-by-side Mermaid charts (they get cut), and a monospace block renders the same everywhere.
   for (const chart of charts) {
     const better = chart.higherIsBetter ? 'higher is better' : 'lower is better';
-    block.push(
-      `<td width="${Math.floor(100 / charts.length)}%">`,
-      '',
-      '```mermaid',
-      `%%{init: {"xyChart": {"width": ${README_CHART_WIDTH}, "height": ${README_CHART_HEIGHT}}}}%%`,
-      'xychart-beta',
-      `    title "${chart.title}"`,
-      `    x-axis [${chart.bars.map((b) => `"${b.name} (${chart.engine})"`).join(', ')}]`,
-      `    y-axis "${chart.unit}, ${better}"`,
-      `    bar [${chart.bars.map((b) => Math.round(b.value * 10) / 10).join(', ')}]`,
-      '```',
-      '',
-      '</td>',
-    );
+    const max = Math.max(...chart.bars.map((b) => b.value));
+    const labels = chart.bars.map((b) => `${b.name} (${chart.engine})`);
+    const labelWidth = Math.max(...labels.map((l) => l.length));
+    const values = chart.bars.map((b) => formatValue(b.value));
+    const valueWidth = Math.max(...values.map((v) => v.length));
+    block.push(`**${chart.title}** (${chart.unit}, ${better})`, '', '```text');
+    chart.bars.forEach((b, i) => {
+      const filled = max > 0 ? Math.max(1, Math.round((b.value / max) * README_BAR_WIDTH)) : 0;
+      const bar = '█'.repeat(filled) + '░'.repeat(README_BAR_WIDTH - filled);
+      block.push(
+        `${labels[i].padEnd(labelWidth)}  ${bar}  ${values[i].padStart(valueWidth)} ${chart.unit}`,
+      );
+    });
+    block.push('```', '');
   }
-  block.push('</tr>', '</table>', '');
   block.push(
     `Last run ${summary.runAt.slice(0, 10)}${env ? ` on ${env.cpu}, Node ${env.node}` : ''}. ` +
       'Every scenario and how it is measured: ' +
