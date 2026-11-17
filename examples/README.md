@@ -42,5 +42,5 @@ DATABASE_URL=postgres://user:pass@localhost:5432/app npm run example:transaction
 
 Or from inside an example folder: `npm start` (dashboards, retries, idempotency, graceful, and the
 PostgreSQL examples) / `npm run delayed` / `npm run recurring` (job-scheduling). The launcher scripts
-live in [`scripts/dev/examples`](../scripts/dev/examples).
+live in [`scripts/examples`](../scripts/examples).
 

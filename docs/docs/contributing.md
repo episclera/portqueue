@@ -57,12 +57,12 @@ runConformance({
 ```
 
 Start one in Docker. Each engine has an `npm run` script and an equivalent shell script under
-`scripts/dev/db/` — use whichever you prefer:
+`scripts/db/` — use whichever you prefer:
 
 ```bash
-npm run db:postgresql:up          # or: ./scripts/dev/db/start-postgresql.sh   (stop: db:postgresql:down)
-npm run db:mysql:up       # or: ./scripts/dev/db/start-mysql.sh      (stop: db:mysql:down)
-npm run db:oracle:up      # or: ./scripts/dev/db/start-oracle.sh     (stop: db:oracle:down)
+npm run db:postgresql:up          # or: ./scripts/db/start-postgresql.sh   (stop: db:postgresql:down)
+npm run db:mysql:up       # or: ./scripts/db/start-mysql.sh      (stop: db:mysql:down)
+npm run db:oracle:up      # or: ./scripts/db/start-oracle.sh     (stop: db:oracle:down)
 ```
 
 There are also runnable [example apps](./examples.md) under `examples/` (dashboard servers,

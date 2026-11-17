@@ -1,7 +1,7 @@
 # PortQueue local dev services.
 #
 # PostgreSQL, MySQL and Oracle for local development and manual driver testing. Each service
-# is started independently — see scripts/dev/{start,stop}-{postgresql,mysql,oracle}.sh, or:
+# is started independently — see scripts/db/{start,stop}-{postgresql,mysql,oracle}.sh, or:
 #
 #   docker compose -f .docker/docker-compose.yml up -d postgresql
 #   docker compose -f .docker/docker-compose.yml up -d mysql

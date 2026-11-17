@@ -33,21 +33,21 @@ From the repo root. Every launcher rebuilds `@portqueue/core` and `@portqueue/da
 an example always runs the code in your working tree rather than a stale `dist/` — set
 `PORTQUEUE_SKIP_BUILD=1` to skip that when you haven't touched any package source. Each
 example has a root `npm run example:*` script; if you prefer, there's an equivalent shell script
-under [`scripts/dev/examples/`](https://github.com/episclera/portqueue/tree/main/scripts/dev/examples)
+under [`scripts/examples/`](https://github.com/episclera/portqueue/tree/main/scripts/examples)
 that does the same thing (some devs like running the `.sh` versions directly):
 
 ```bash
 npm run example:dashboard-node        # http://127.0.0.1:4321/portqueue
-./scripts/dev/examples/dashboard-node-server.sh
+./scripts/examples/dashboard-node-server.sh
 
 npm run example:dashboard-express     # http://127.0.0.1:4322/portqueue
-./scripts/dev/examples/dashboard-express.sh
+./scripts/examples/dashboard-express.sh
 
 npm run example:schedule-delayed
-./scripts/dev/examples/job-scheduling-delayed.sh
+./scripts/examples/job-scheduling-delayed.sh
 
 npm run example:schedule-recurring
-./scripts/dev/examples/job-scheduling-recurring.sh
+./scripts/examples/job-scheduling-recurring.sh
 
 npm run example:retries
 npm run example:idempotency

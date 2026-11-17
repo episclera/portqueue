@@ -6,7 +6,7 @@
 # a file-backed PGLite dir under the repo-root tmp/ (gitignored, same convention as scripts/cli),
 # and runs the workspace's npm script.
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Rebuild the runtime deps unconditionally. These are development launchers: a present `dist/` says
 # nothing about whether it matches the working tree, so "build only when missing" reliably runs an
