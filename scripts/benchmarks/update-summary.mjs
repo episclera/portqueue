@@ -120,7 +120,7 @@ if (charts.length === 0) {
     const labelWidth = Math.max(...labels.map((l) => l.length));
     const values = chart.bars.map((b) => formatValue(b.value));
     const valueWidth = Math.max(...values.map((v) => v.length));
-    block.push(`**${chart.title}** (${chart.unit}, ${better})`, '', '```text');
+    block.push(`**${chart.title} (${chart.unit}, ${better})**`, '', '```text');
     chart.bars.forEach((b, i) => {
       const filled = max > 0 ? Math.max(1, Math.round((b.value / max) * README_BAR_WIDTH)) : 0;
       const bar = '█'.repeat(filled) + '░'.repeat(README_BAR_WIDTH - filled);
