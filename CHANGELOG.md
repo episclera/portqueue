@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.6 (2026-11-17)
+
+### Documentation
+
+* **readme:** bold the unit and direction on benchmark chart titles ([3e86b06](https://github.com/episclera/portqueue/commit/3e86b06892ed79d8f44906732dab65b0b80164a1))
+
+### Continuous Integration
+
+* **production:** skip the release in a run superseded by a newer push ([1b1b4d6](https://github.com/episclera/portqueue/commit/1b1b4d680d18d40ce3ebaaeb2d8e89be6f8b3dee))
+
 ## 1.2.5 (2026-11-17)
 
 ### Documentation
