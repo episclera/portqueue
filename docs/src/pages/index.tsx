@@ -67,7 +67,7 @@ const FEATURES: {
   {
     icon: ThunderboltOutlined,
     title: 'Fast by Design',
-    body: 'Tens of thousands of jobs per second: batched claims and settles, one statement per batch, and indexes shaped to the hot queries. Benchmarked head-to-head against other queues, with every run published.',
+    body: 'Add and process tens of thousands of jobs per second. A robust benchmarking system backs every claim, and every feature is benchmarked before it ships.',
     to: '/docs/benchmarks',
     cta: 'See the benchmarks',
   },
