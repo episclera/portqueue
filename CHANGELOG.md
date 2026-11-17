@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.2.2 (2026-11-17)
+
+### Performance Improvements
+
+* **core:** batched settles, partial claim index (v2), lean claims and one-parameter batch inserts ([6bcf15e](https://github.com/episclera/portqueue/commit/6bcf15e02f462be093df93ccc51b1b06bcd642e2))
+
+### Code Refactoring
+
+* **scripts:** move examples and db launchers out of scripts/dev ([00bc4a8](https://github.com/episclera/portqueue/commit/00bc4a8c24f0efcbc2bb1dd04bfaf466fe262b03))
+
+### Documentation
+
+* **benchmarks:** bold the higher/lower is better hint on charts ([209d1a3](https://github.com/episclera/portqueue/commit/209d1a3b37224618b891a804ae54868ff50f8ff9))
+* **benchmarks:** PortQueue now leads pg-boss on every scenario ([1e714ec](https://github.com/episclera/portqueue/commit/1e714ecfd54a89a126e0888a27a400a828f2e52e))
+* **benchmarks:** drop the driver-label sentence ([8c3f70e](https://github.com/episclera/portqueue/commit/8c3f70e6321762849f896319a097fd9e33e311cc))
+* **claude:** benchmark every change and ask before committing a regression ([157be37](https://github.com/episclera/portqueue/commit/157be37d1c94ef9457920b9d6ab27997493b0398))
+* **benchmarks:** drop the Scenarios section and keep the fairness notes driver-neutral ([12962bb](https://github.com/episclera/portqueue/commit/12962bb264275c33f0a3a79c3cba4fd1f5ec5094))
+* **benchmarks:** three summary charts in one row on the homepage ([e396b19](https://github.com/episclera/portqueue/commit/e396b19aa5dcaa848b70c5419246522c73a25acd))
+* **benchmarks:** drop the At a glance section from the Benchmarks page ([3f5487f](https://github.com/episclera/portqueue/commit/3f5487f81a2cbf3db100479637e8fd91cbfb1043))
+* **benchmarks:** first PortQueue vs pg-boss results ([d5c5ade](https://github.com/episclera/portqueue/commit/d5c5ade98c1f4eaf2fdc50f8e983ba3939259837))
+* **benchmarks:** tighten the Benchmarks page intro ([496247e](https://github.com/episclera/portqueue/commit/496247e1dd74217d1af77f999a31ef11ab862e5b))
+
+### Miscellaneous Chores
+
+* **benchmarks:** one summary chart per driver, driver-labelled bars, max five libraries each ([9f22898](https://github.com/episclera/portqueue/commit/9f228982f0d1a7623054c7a0437e2e5ccc52a5d8))
+* **benchmarks:** run pg-boss 12 through its official fromPglite adapter ([7c8b862](https://github.com/episclera/portqueue/commit/7c8b8626650e28dd1553a5aa228489b2ed63417d))
+* **benchmarks:** add PortQueue vs pg-boss comparison on PGLite, with docs and summary chart ([a7522ab](https://github.com/episclera/portqueue/commit/a7522ab991110a0805f5a8220959a9fdd128b22e))
+
 ## 1.2.1 (2026-11-15)
 
 ### Code Refactoring
