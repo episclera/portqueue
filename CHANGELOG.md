@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.4 (2026-11-17)
+
+### Documentation
+
+* **homepage:** add a speed feature card and reorder the feature cards ([0a8d110](https://github.com/episclera/portqueue/commit/0a8d110a033e13263514c2e7e4a34edfdd612572))
+
 ## 1.2.3 (2026-11-17)
 
 ### Documentation
