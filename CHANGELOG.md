@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3 (2026-11-17)
+
+### Documentation
+
+* **blog:** how we made PortQueue 7.5x faster at processing jobs ([f8b400c](https://github.com/episclera/portqueue/commit/f8b400c4a1d23b5f13cb4ad1d2bc937efb559066))
+
 ## 1.2.2 (2026-11-17)
 
 ### Performance Improvements
