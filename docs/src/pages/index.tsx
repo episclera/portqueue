@@ -6,12 +6,12 @@ import CodeBlock from '@theme/CodeBlock';
 import clsx from 'clsx';
 import {
   ArrowRightOutlined,
-  ClearOutlined,
   ClockCircleOutlined,
   DatabaseOutlined,
   DashboardOutlined,
   GlobalOutlined,
   SafetyCertificateOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { TeamGrid } from '@site/src/components/TeamGrid';
 import { SummaryCharts } from '@site/src/components/BenchmarkChart';
@@ -44,6 +44,13 @@ const FEATURES: {
     cta: 'How it scales',
   },
   {
+    icon: DashboardOutlined,
+    title: 'A Powerful Dashboard & CLI',
+    body: 'A mountable React dashboard (plus a full CLI) to monitor and control both queues and instances live — pause, resume, retry, and watch throughput, with no third-party service.',
+    to: '/docs/dashboard',
+    cta: 'See the dashboard',
+  },
+  {
     icon: DatabaseOutlined,
     title: 'Database Agnostic',
     body: (
@@ -58,11 +65,11 @@ const FEATURES: {
     cta: 'Pick a driver',
   },
   {
-    icon: DashboardOutlined,
-    title: 'A Powerful Dashboard & CLI',
-    body: 'A mountable React dashboard (plus a full CLI) to monitor and control both queues and instances live — pause, resume, retry, and watch throughput, with no third-party service.',
-    to: '/docs/dashboard',
-    cta: 'See the dashboard',
+    icon: ThunderboltOutlined,
+    title: 'Fast by Design',
+    body: 'Tens of thousands of jobs per second: batched claims and settles, one statement per batch, and indexes shaped to the hot queries. Benchmarked head-to-head against other queues, with every run published.',
+    to: '/docs/benchmarks',
+    cta: 'See the benchmarks',
   },
   {
     icon: ClockCircleOutlined,
@@ -77,13 +84,6 @@ const FEATURES: {
     body: 'Automatic retries with backoff, stalled-job reclaim, liveness-aware fallback, and at-least-once delivery — with rich events and hooks for metrics and tracing.',
     to: '/docs/events-hooks/events',
     cta: 'Events & hooks',
-  },
-  {
-    icon: ClearOutlined,
-    title: 'Retention & Auto-Cleaning',
-    body: 'Your table never fills up on its own. Pick a retention mode per queue or per job — keep the history forever, or delete after a TTL — and PortQueue does the cleanup in the background.',
-    to: '/docs/guides/retention',
-    cta: 'Configure retention',
   },
 ];
 
