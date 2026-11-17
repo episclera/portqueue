@@ -5,7 +5,7 @@
   "description": "PortQueue vs pg-boss benchmark — enqueue, processing throughput and pickup latency, both on in-memory PGLite.",
   "type": "module",
   "engines": {
-    "node": ">=22.6.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "bench": "node src/run.ts",
@@ -14,7 +14,7 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",
     "@portqueue/core": "*",
-    "pg-boss": "^10.1.6"
+    "pg-boss": "^12.38.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -3,8 +3,9 @@
 How [`@portqueue/core`](../../packages/core) compares with [pg-boss](https://github.com/timgit/pg-boss),
 the most widely used PostgreSQL-backed job queue for Node.js. **Both run on the same engine**: an
 in-memory [PGLite](https://pglite.dev) database (PostgreSQL compiled to WASM), so there is no
-server to install and no network in the measurement. PortQueue uses its own `PgliteDriver`; pg-boss
-gets the same PGLite through its `db` option (see `src/libs/pgboss.ts`).
+server to install and no network in the measurement. PortQueue uses its own `PgliteDriver`. pg-boss (v12)
+runs the way its docs set it up for PGLite: `backend: 'pglite'` with the official `fromPglite`
+adapter (see `src/libs/pgboss.ts`).
 
 PortQueue comes from this repository's working tree (this folder is a workspace package), so the
 numbers describe the code you have checked out, not a published release.
@@ -59,9 +60,11 @@ launcher then rebuilds the summary chart on the repo README and the docs homepag
 - **"Done" means settled in the database.** PortQueue counts `JOB_COMPLETED`, which fires after the row
   is settled. pg-boss emits nothing per job, so it waits for its handlers and then for
   `pgboss.job` to report every row `completed`.
-- **Defaults otherwise.** pg-boss uses `pollingIntervalSeconds: 0.5`, its minimum, and has no
-  in-process wakeup, so its pickup latency follows that interval. PortQueue wakes its worker in
-  process when a job is added, and its 5 s poll is only a backstop.
+- **pg-boss tuned for its best showing.** `useListenNotify` and the queue's `notify: true` wake its
+  workers as soon as a job is added. PGLite supports LISTEN/NOTIFY in process, so this matches
+  PortQueue's in-process wakeup. `burstWhenBatchFull` keeps it fetching with no delay while
+  batches come back full, matching PortQueue's claim loop. `pollingIntervalSeconds: 0.5` (its
+  minimum) is only the backstop.
 
 PGLite runs single-connection inside one process, which is not how either library runs in
 production against a PostgreSQL server. The numbers compare the libraries' own overhead on the same

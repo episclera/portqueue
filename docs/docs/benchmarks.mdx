@@ -30,8 +30,8 @@ Processing throughput, PortQueue against every library benchmarked here:
 ## PortQueue vs pg-boss
 
 [pg-boss](https://github.com/timgit/pg-boss) is the most widely used PostgreSQL-backed job queue for
-Node.js. PortQueue runs on its own PGLite driver. pg-boss gets the same PGLite instance through its
-`db` option, and an adapter maps its `executeSql` calls onto PGLite.
+Node.js. PortQueue runs on its own PGLite driver. pg-boss (v12) runs the way its own docs set it
+up for PGLite: `backend: 'pglite'` with its official `fromPglite` adapter.
 
 <ComparisonCharts record={pgboss} />
 
@@ -45,9 +45,9 @@ Node.js. PortQueue runs on its own PGLite driver. pg-boss gets the same PGLite i
   completed in the database. The handler does no work, so this measures what the queue itself
   costs per job: claiming, running and settling. Seeding is not timed.
 - **Pickup latency** — one job at a time on an idle worker, timed from the add call to the handler
-  starting. This is how long a freshly added job waits before work begins. PortQueue wakes its
-  worker in process when a job is added. pg-boss polls, at most every 0.5 s (its minimum
-  `pollingIntervalSeconds`).
+  starting. This is how long a freshly added job waits before work begins. Both libraries are set
+  up to wake the worker at once. PortQueue does it in process. pg-boss uses LISTEN/NOTIFY, which
+  PGLite supports.
 
 ### How it stays fair
 
@@ -62,6 +62,9 @@ Node.js. PortQueue runs on its own PGLite driver. pg-boss gets the same PGLite i
 - **Equal claim settings.** PortQueue runs `limiter: { concurrency: N, batchSize: N }`. pg-boss runs
   one worker with `batchSize: N` whose handler runs the batch concurrently. Both fetch N jobs per
   claim and keep N in flight (N = 100 by default).
+- **pg-boss tuned for its best showing.** `useListenNotify` and the queue's `notify: true` wake
+  workers when a job is added, and `burstWhenBatchFull` keeps fetching with no delay while batches
+  come back full. PortQueue does both by default.
 - **"Done" means settled in the database.** PortQueue counts `JOB_COMPLETED`, which fires only after
   the row is settled. pg-boss emits nothing per job, so the benchmark waits until `pgboss.job`
   reports every row `completed`.
