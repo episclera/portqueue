@@ -28,8 +28,8 @@ const sidebars: SidebarsConfig = {
       label: 'Dashboard & CLI',
       items: ['dashboard', 'cli'],
     },
-    'scale-horizontally',
     'production',
+    'scale-horizontally',
     'api-reference',
     {
       type: 'category',
