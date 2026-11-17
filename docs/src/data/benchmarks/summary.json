@@ -1,12 +1,5 @@
 {
   "runAt": "2026-11-17T12:08:14.948Z",
-  "metric": {
-    "key": "process",
-    "title": "Processing jobs",
-    "unit": "jobs/s",
-    "higherIsBetter": true,
-    "description": "10000 pre-seeded jobs drained by a no-op handler, 100 fetched per claim and in flight; timed until every job is settled."
-  },
   "environment": {
     "node": "v24.21.0",
     "platform": "darwin arm64",
@@ -18,7 +11,11 @@
   "charts": [
     {
       "engine": "PGLite",
-      "runAt": "2026-11-17T12:08:14.948Z",
+      "scenario": "process",
+      "title": "Processing jobs",
+      "unit": "jobs/s",
+      "higherIsBetter": true,
+      "description": "10000 pre-seeded jobs drained by a no-op handler, 100 fetched per claim and in flight; timed until every job is settled.",
       "bars": [
         {
           "library": "portqueue",
@@ -32,6 +29,54 @@
           "name": "pg-boss",
           "version": "12.38.2",
           "value": 17085.4,
+          "comparison": "portqueue_vs_pgboss"
+        }
+      ]
+    },
+    {
+      "engine": "PGLite",
+      "scenario": "enqueue-batch",
+      "title": "Adding jobs in batches",
+      "unit": "jobs/s",
+      "higherIsBetter": true,
+      "description": "20000 jobs through `addJobs` / `insert`, 1000 per call.",
+      "bars": [
+        {
+          "library": "portqueue",
+          "name": "PortQueue",
+          "version": "1.2.1",
+          "value": 19017.9,
+          "comparison": "portqueue_vs_pgboss"
+        },
+        {
+          "library": "pg-boss",
+          "name": "pg-boss",
+          "version": "12.38.2",
+          "value": 43292.6,
+          "comparison": "portqueue_vs_pgboss"
+        }
+      ]
+    },
+    {
+      "engine": "PGLite",
+      "scenario": "latency",
+      "title": "Pickup latency (p50)",
+      "unit": "ms",
+      "higherIsBetter": false,
+      "description": "50 sequential jobs on an idle worker, timed from the add call to the handler starting.",
+      "bars": [
+        {
+          "library": "portqueue",
+          "name": "PortQueue",
+          "version": "1.2.1",
+          "value": 2.1,
+          "comparison": "portqueue_vs_pgboss"
+        },
+        {
+          "library": "pg-boss",
+          "name": "pg-boss",
+          "version": "12.38.2",
+          "value": 2.2,
           "comparison": "portqueue_vs_pgboss"
         }
       ]

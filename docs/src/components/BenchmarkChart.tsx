@@ -133,27 +133,32 @@ export function ComparisonCharts({ record }: { record: ComparisonRecord }): Reac
 
 export interface BenchmarkSummary {
   runAt: string | null;
-  metric: { title: string; unit: string; higherIsBetter: boolean; description: string } | null;
   charts: Array<{
     engine: string;
+    scenario: string;
+    title: string;
+    unit: string;
+    higherIsBetter: boolean;
     bars: Array<{ library: string; name: string; version: string | null; value: number }>;
   }>;
 }
 
-/** The headline metric, one chart per driver: PortQueue plus each library benchmarked on it. */
+/**
+ * The summary: for every driver, one chart per featured scenario, PortQueue plus each library
+ * benchmarked on that driver. Laid out three to a row.
+ */
 export function SummaryCharts({ summary }: { summary: BenchmarkSummary }): React.ReactElement {
-  const { metric } = summary;
-  if (!metric || summary.charts.length === 0) {
+  if (summary.charts.length === 0) {
     return <p className={styles.empty}>Benchmarks have not been run yet.</p>;
   }
   return (
-    <div className={styles.grid}>
+    <div className={styles.row}>
       {summary.charts.map((chart) => (
         <BarChart
-          key={chart.engine}
-          title={`${metric.title} on ${chart.engine}`}
-          unit={metric.unit}
-          higherIsBetter={metric.higherIsBetter}
+          key={`${chart.engine}-${chart.scenario}`}
+          title={`${chart.title} on ${chart.engine}`}
+          unit={chart.unit}
+          higherIsBetter={chart.higherIsBetter}
           bars={chart.bars.map((b) => ({
             label: `${b.name} (${chart.engine})`,
             sublabel: b.version,

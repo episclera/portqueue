@@ -35,7 +35,8 @@ This repo follows the `ai-utils` shared-lib guardrails. Key rules for any AI ass
   them all in the same session, on the same machine, when asked for "the benchmarks"). The launcher
   rewrites the generated parts itself: `results/results.json`, the comparison README's results block
   (Mermaid bar charts), the docs data under `docs/src/data/benchmarks/`, and the summary
-  bar charts on the repo `README.md` and the docs homepage: one chart per database driver, PortQueue
+  bar charts on the repo `README.md` and the docs homepage: one chart per database driver and featured
+  scenario (three, one row on the homepage — `SUMMARY_SCENARIOS` in `update-summary.mjs`), PortQueue
   plus at most five benchmarked libraries, every bar labelled with its driver (`pg-boss (PGLite)`).
   Then update what it can't write: re-read the comparison README and `docs/docs/benchmarks.mdx` and
   fix any prose whose claims no longer match the new numbers. **Never hand-edit a number or a chart**:

@@ -6,6 +6,24 @@
   gap: 1rem;
 }
 
+/* The summary: three charts to a row on a desktop, stacking on narrow screens. */
+.row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+@media (max-width: 996px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.row .chart {
+  margin: 0;
+}
+
 .chart {
   margin: 1rem 0 0.5rem;
   padding: 1rem 1.25rem;

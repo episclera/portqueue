@@ -167,9 +167,9 @@ export default function Home(): ReactNode {
         <section id="benchmarks" className={styles.section}>
           <h2 className={styles.sectionTitle}>Benchmarks</h2>
           <p className={styles.sectionLead}>
-            How PortQueue's processing throughput compares with other Node.js job queues. Each chart
-            compares libraries on the same database driver. See{' '}
-            <Link to="/docs/benchmarks">Benchmarks</Link> for every scenario and how it is measured.
+            How PortQueue compares with other Node.js job queues. Each chart compares libraries on
+            the same database driver. See <Link to="/docs/benchmarks">Benchmarks</Link> for every
+            scenario and how it is measured.
           </p>
           <div className={styles.benchmarkChart}>
             <SummaryCharts summary={benchmarkSummary} />
