@@ -15,7 +15,9 @@ name: production
 #                `chore(release): x.y.z [skip ci]`. The job pushes that commit to main, then
 #                publishes the dist/ from validate. Every push to main is a release — there is no
 #                release PR, and no tag: git history is the only release state. The release commit is
-#                pushed with GITHUB_TOKEN, which never triggers another run.
+#                pushed with GITHUB_TOKEN, which never triggers another run. A run whose commit is
+#                no longer main's tip releases nothing and succeeds: the newer push's run releases
+#                its commits too.
 #   deploy-docs  only when publish actually released, so the site never describes a version npm
 #                doesn't have, and a push that ships no packages deploys no docs.
 #
@@ -89,8 +91,21 @@ jobs:
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+      # A newer push to main supersedes this run: that run releases every commit since the last
+      # release, this one included. Releasing from here would put the release commit on a stale main
+      # (the push is rejected as non-fast-forward) and publish a dist/ built from older code.
+      - id: current
+        run: |
+          git fetch --quiet origin main
+          if [ "$(git rev-parse origin/main)" = "$GITHUB_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::main moved past $GITHUB_SHA; the run for the newer push releases it."
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
       # Bumps, changelogs and commits — or reports released=false when there is nothing to release.
       - id: released
+        if: ${{ steps.current.outputs.current == 'true' }}
         run: npm run release:commit
       # Pushed before publishing: a main that moved on rejects the push, and nothing reaches npm.
       - if: ${{ steps.released.outputs.released == 'true' }}
