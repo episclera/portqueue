@@ -1,0 +1,230 @@
+---
+slug: how-we-made-portqueue-faster
+title: 'How we made PortQueue 7.5× faster at processing jobs'
+authors: [gheorghe]
+tags: [performance, benchmarks, comparison]
+description: We benchmarked PortQueue against pg-boss and lost on processing throughput by 6×. Here is how profiling, batched settles, a partial index and leaner claims turned that around without changing the public API.
+keywords:
+  [
+    portqueue,
+    pg-boss,
+    job queue performance,
+    benchmark,
+    postgresql,
+    pglite,
+    partial index,
+    group commit,
+    node.js,
+  ]
+---
+
+import { BarChart } from '@site/src/components/BenchmarkChart';
+
+The first time we ran PortQueue head to head against [pg-boss](https://github.com/timgit/pg-boss),
+pg-boss processed jobs **6.4× faster**. A day of profiling later, PortQueue leads on every scenario we
+measure. Processing is 7.5× faster than where we started, and nothing changed in the API you write
+against. This post covers what we measured, what we found and what we fixed.
+
+<!-- truncate -->
+
+## Where we started
+
+Our [benchmarks](/docs/benchmarks) run every library on the same machine, against the same
+database driver and version, from the same timing code. Every run starts in a fresh process on a
+clean, empty database. For this comparison both libraries ran on in-memory PGLite (PostgreSQL
+compiled to WASM), so no network sat in the measurement and only the queue's own overhead was left.
+
+The first run was humbling:
+
+| Scenario                   | PortQueue     | pg-boss           |
+| -------------------------- | ------------- | ----------------- |
+| Adding jobs, one at a time | 1,712 jobs/s  | 1,172 jobs/s      |
+| Adding jobs in batches     | 19,018 jobs/s | **43,293 jobs/s** |
+| Processing jobs            | 2,673 jobs/s  | **17,085 jobs/s** |
+| Pickup latency (p50)       | 2.1 ms        | 2.2 ms            |
+
+We won on single adds and tied on latency. pg-boss was 2.3× faster at batch inserts and 6.4× faster
+at processing.
+
+## Measure first
+
+Before touching anything, we wrapped the driver and counted and timed every statement during a
+10,000-job processing run. It took one run to find the problem:
+
+| Statement              |      Calls | Jobs per call |
+| ---------------------- | ---------: | ------------: |
+| Claim                  |        200 |            50 |
+| Settle (`completeJob`) | **10,000** |             1 |
+
+Claiming was fine. Settling was the bottleneck: every finished job got its own `UPDATE`. Each one is
+cheap, but PGLite runs one connection, so ten thousand of them queue up behind each other. Against a
+networked PostgreSQL server, each of those statements is also a round trip and a commit flushed to
+disk.
+
+pg-boss settles a whole fetched batch with one statement. We had to do the same without losing what
+makes PortQueue's model nice: one handler call per job, with its own retries, events and hooks.
+
+## 1. Batch the writes, not the handlers
+
+The fix is a **group commit**. Handlers still run one job at a time, but a completion no longer goes
+straight to the database. It joins a queue that is flushed on the next turn of the event loop. While
+one flush is in flight, the next batch keeps filling, so batch size follows the database's own
+speed: a fast database settles small batches often, a slow one fewer, bigger ones.
+
+The flush is one statement per claim:
+
+```sql
+UPDATE pq_job SET status = 'COMPLETED', completed_at = $2, lock_token = NULL, …
+WHERE id IN (…) AND status = 'ACTIVE' AND lock_token = $token
+RETURNING id
+```
+
+The safety check didn't loosen. Every claim stamps a fresh lock token on its rows, and every settle is
+fenced on that token, so a handler whose lock lapsed while a second worker re-ran the job can't
+overwrite the newer result. Ids missing from `RETURNING` lost their claim, and only those jobs raise
+`LockLostError`. The rest of the batch settles normally.
+
+**Processing: 2,673 → 9,137 jobs/s.**
+
+## 2. An index that stops at `LIMIT`
+
+With settles batched, claims became the cost, and they got slower as the backlog grew. `EXPLAIN
+ANALYZE` showed why:
+
+```text
+Sort  (actual rows=100)
+  ->  Index Scan using pq_job_claim_idx  (actual rows=10000)
+```
+
+Our claim index was `(queue_name, status, priority DESC, start_after)`, and the claim asks for
+`status IN ('PENDING', 'RETRY')`. Two status values means two separate ranges of the index, so
+PostgreSQL could not read them in priority order. It read all 10,000 waiting rows, sorted them, and
+kept 100. Every claim.
+
+The fix is a **partial index**. The status test moves into the index's `WHERE` clause, so the key is
+exactly the claim's sort order:
+
+```sql
+CREATE INDEX pq_job_claim_idx ON pq_job (queue_name, priority DESC, start_after)
+WHERE status IN ('PENDING', 'RETRY');
+```
+
+At the same backlog, one claim went from **10.1 ms to 0.18 ms**, and it reads exactly the rows it
+returns. A job leaves this index the moment it's claimed, so completed jobs stop costing anything
+here. The same idea made the stalled-job and expiry indexes partial too, which also cuts index writes
+on every status change. It ships as schema version 2, applied automatically on PostgreSQL and PGLite.
+
+**Processing: → 15,166 jobs/s.**
+
+## 3. Claims of 1 row, then 99
+
+The next profile looked odd: claims averaged exactly 50 rows with a batch size of 100. Logging each
+claim showed the pattern:
+
+```text
+100→100  1→1  99→99  1→1  99→99  1→1  …
+```
+
+When a batch of short jobs finished, the first handler to return freed its slot and triggered a claim
+right away, for one row. The other 99 freed theirs while that claim was in flight, and got a second
+claim. Two statements where one would do.
+
+Two changes fixed it. A worker slot now frees when the handler returns, not after its result is
+written: `concurrency` limits running handlers, and shutdown still waits for every pending write.
+And a slot-freed claim waits for the end of the current event-loop turn, so every handler that
+finishes together shares one claim. Claims are now full: `100→100` every time.
+
+**Processing: → 18,232 jobs/s**, ahead of pg-boss for the first time.
+
+## 4. Return only what the worker reads
+
+A claim returned all 34 columns of every row it took. The worker reads 14 of them, and three more
+(queue, status, lock token) it already knows from the claim itself. A claim now returns just those 14
+columns. That's less for the engine to serialize and less for us to map, on every claim.
+
+**Processing: → about 20,000 jobs/s.**
+
+## 5. One parameter instead of 34,000
+
+Batch inserts were the last chart we lost. A 1,000-job `addJobs` was a multi-row `VALUES` binding 34
+columns per row: 34,000 parameters. That's past the engine's limit for one statement, so it went out
+as two, and parsing that many parameters cost more than the insert itself.
+
+pg-boss sends a batch as one JSON value and unpacks it in SQL. We do the same now:
+
+```sql
+INSERT INTO pq_job (id, queue_name, status, …)
+SELECT id, queue_name, status, … FROM json_to_recordset($1::json) AS x(id text, …)
+```
+
+Two small details made a big difference. Most columns of a new job are `NULL`, and a missing key
+reads as `NULL`, so we send only the values that are set. And a batch with no idempotency or
+singleton key is a single statement, so it no longer pays for a `BEGIN`/`COMMIT` around it. That
+second change sped up single adds and pickup latency too.
+
+**Batch adds: 19,018 → 76,938 jobs/s. Single adds: 1,712 → 2,294. Latency: 2.1 → 1.2 ms.**
+
+## Where we ended up
+
+<BarChart
+  title="Processing jobs on PGLite"
+  unit="jobs/s"
+  higherIsBetter
+  bars={[
+    { label: 'PortQueue before (PGLite)', value: 2673 },
+    { label: 'pg-boss (PGLite)', sublabel: '12.38.2', value: 17441 },
+    { label: 'PortQueue after (PGLite)', value: 20131, highlight: true },
+  ]}
+/>
+
+<BarChart
+  title="Adding jobs in batches on PGLite"
+  unit="jobs/s"
+  higherIsBetter
+  bars={[
+    { label: 'PortQueue before (PGLite)', value: 19018 },
+    { label: 'pg-boss (PGLite)', sublabel: '12.38.2', value: 41952 },
+    { label: 'PortQueue after (PGLite)', value: 76938, highlight: true },
+  ]}
+/>
+
+| Scenario                   | PortQueue before |     PortQueue now | pg-boss 12.38.2 |
+| -------------------------- | ---------------: | ----------------: | --------------: |
+| Adding jobs, one at a time |     1,712 jobs/s |  **2,294 jobs/s** |    1,141 jobs/s |
+| Adding jobs in batches     |    19,018 jobs/s | **76,938 jobs/s** |   41,952 jobs/s |
+| Processing jobs            |     2,673 jobs/s | **20,131 jobs/s** |   17,441 jobs/s |
+| Pickup latency (p50)       |           2.1 ms |        **1.2 ms** |          2.3 ms |
+
+_Apple M1 Max, Node 24, in-memory PGLite 0.2.17, median of three runs, each in a fresh process on a
+clean database._
+
+## What we didn't trade away
+
+None of this touched the API you write against. `createQueue`, `addJob`, `addJobs` and every option
+behave exactly as before. A handler still gets one job, with its own retries, events and hooks. Every
+settle is still fenced to the claim that ran it. Dedup still holds under concurrent adds, and every
+value is still a bound parameter. The speed came from doing less work per job underneath, not from
+weakening a guarantee.
+
+A few honest caveats:
+
+- **PGLite isn't production.** It's a single connection in one process, so these numbers compare
+  the libraries' own overhead. They don't predict throughput against a networked database, where
+  round trips dominate. Fewer statements per job helps even more there.
+- **The partial index is PostgreSQL and PGLite only.** SQLite can't use a partial index when the
+  statuses are bound parameters (we checked: it falls back to a full scan), and MySQL and Oracle
+  have no partial indexes at all. Every driver gets the batched settles and the leaner claim.
+
+## Run it yourself
+
+Every comparison lives in the repository's
+[`benchmarks/`](https://github.com/episclera/portqueue/tree/main/benchmarks) folder and runs
+PortQueue straight from the working tree:
+
+```bash
+npm run benchmark:portqueue-vs-pgboss
+```
+
+The live, automatically updated results are on the [Benchmarks](/docs/benchmarks) page. From
+now on, every change that can affect speed is benchmarked before it lands, and a slower number needs
+an explicit sign-off before it can be committed.
