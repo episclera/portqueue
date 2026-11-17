@@ -34,7 +34,7 @@ export function BarChart({
       <figcaption className={styles.title}>
         {title}{' '}
         <span className={styles.hint}>
-          ({unit}, {higherIsBetter ? 'higher' : 'lower'} is better)
+          ({unit}, <strong>{higherIsBetter ? 'higher' : 'lower'} is better</strong>)
         </span>
       </figcaption>
       {bars.length === 0 ? (
