@@ -2,7 +2,7 @@
 id: production
 title: Going to Production
 sidebar_label: Going to Production
-description: Ship PortQueue to production — graceful shutdown, pool sizing, idempotency, retries, retention, and a full production checklist.
+description: Ship PortQueue to production — graceful shutdown, pool sizing, idempotency, retries, retention, backpressure, locality, observability, and readiness.
 keywords: [portqueue, production, job queue, scaling, multi-instance, node.js, monitoring, database queue]
 ---
 
@@ -21,6 +21,14 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
   process.on(sig, async () => { await pq.shutdown({ graceful: true, timeoutSeconds: 30 }); process.exit(0); });
 }
 ```
+
+## Split producers from consumers
+
+Run the processes that enqueue apart from the ones that work, so a burst of jobs never slows the
+requests that create them. A producer needs no declaration: `pq.addJob({ queue, data })` addresses a
+queue by name, so a web tier calls `addJob` and declares nothing, and only worker processes call
+`createQueue` with a `handler`. Keep critical and bulk queues on separate instances (or at least
+separate pools), so a backlog of bulk work can never hold up the jobs that matter.
 
 ## Connection pool sizing
 
@@ -127,17 +135,3 @@ accepts any `data`, so keep payloads small yourself (store large blobs elsewhere
 Expose readiness via `pq.isRunning` + a lightweight driver ping; don't accept traffic
 until `init()` resolved.
 
-## Production checklist
-
-- [ ] Producers and consumers split; critical vs bulk on separate instances/pools.
-- [ ] `SIGTERM`/`SIGINT` → `pq.shutdown({ graceful: true })`; long handlers honor `job.signal`.
-- [ ] Pool sized for the sum of every consumed queue's `limiter.concurrency` + headroom.
-- [ ] Handlers idempotent; `idempotencyKey`/`singletonKey` where relevant.
-- [ ] Retries with jitter + cap; `dontAutoretryFor` for non-retryable errors.
-- [ ] Retention on; failed kept longer than completed.
-- [ ] `systemLimiter` set (thresholds read this process, not the host); per-queue rate limiter set for third-party APIs.
-- [ ] `--max-old-space-size` set to fit the machine or container, not left at Node's default.
-- [ ] Stable `instance.instanceKey` on every process (even a single one); jobs that need locality targeted by capability pattern; heartbeat interval tuned.
-- [ ] `PortQueueEvent.ERROR` subscribed; metrics/tracing via hooks.
-- [ ] Dashboard/CLI behind auth; payloads kept small (no built-in size cap).
-- [ ] Readiness gated on `pq.isRunning` + driver ping.
