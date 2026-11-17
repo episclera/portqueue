@@ -12,7 +12,7 @@ Two channels tell you what went wrong, and you'll usually want both:
 
 - **Typed errors** — thrown synchronously at the call site (`init`, `addJob`, …). Catch
   `PortQueueError` and branch on `error.code`.
-- **[Events](./events-hooks/events.md)** — emitted asynchronously as jobs move through the
+- **[Events](./guides/events.md)** — emitted asynchronously as jobs move through the
   system on every instance. This is how you see failures, retries, stalls, and — crucially —
   the **swallowed internal errors** that never reach a `try/catch`.
 
@@ -97,7 +97,7 @@ with the offending fields). Branching on `err.code` is still the most robust che
 
 A `try/catch` only covers failures on *your* call path. Everything that happens inside the
 claim loops — a handler throwing, a job stalling because an instance died, an internal error
-the tool swallows to stay up — surfaces as an [event](./events-hooks/events.md), never an
+the tool swallows to stay up — surfaces as an [event](./guides/events.md), never an
 exception. Subscribe on the client to watch it live and wire it to your logs/metrics:
 
 ```ts
@@ -126,8 +126,8 @@ When a symptom is fuzzy, the fastest diagnosis is to watch the right event:
 | A schedule never fires | `SCHEDULE_FIRED` (absent) | The definition isn't active, or no instance is running the queue. |
 
 Listeners are non-blocking and receive one typed payload object — see the full
-[events reference](./events-hooks/events.md) for every event and its fields. To *block or
-change* an operation rather than observe it, use a [hook](./events-hooks/hooks.md) instead.
+[events reference](./guides/events.md) for every event and its fields. To *block or
+change* an operation rather than observe it, use a [hook](./guides/hooks.md) instead.
 
 ## Common situations
 

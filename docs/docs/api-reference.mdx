@@ -232,7 +232,7 @@ only; no I/O until `init()`.
   <li>
     <span className="api-badge">on(event, listener, filter?)</span>{' '}
     <span className="api-note">
-      → <code>Unsubscribe</code> — see <Link to="/docs/events-hooks/events">Events</Link>
+      → <code>Unsubscribe</code> — see <Link to="/docs/guides/events">Events</Link>
     </span>
   </li>
   <li>
@@ -250,7 +250,7 @@ only; no I/O until `init()`.
   <li>
     <span className="api-badge">useHook(hook)</span>{' '}
     <span className="api-note">
-      → <code>Unsubscribe</code> — see <Link to="/docs/events-hooks/hooks">Hooks</Link>
+      → <code>Unsubscribe</code> — see <Link to="/docs/guides/hooks">Hooks</Link>
     </span>
   </li>
   <li>
@@ -787,7 +787,7 @@ processes its jobs, the `limiter` / `dontAutoretryFor` settings that shape how i
 | `name`              | `TQueues`                               | — **required** | The queue name every job, schedule and read is filed under.                                                                                                                 |
 | `defaultJobOptions` | [`JobOptions`](#joboptions)             | —              | Defaults every job **this process adds** to the queue inherits; a per-job option overrides.                                                                                 |
 | `retention`         | [`RetentionOptions`](#retentionoptions) | keep forever   | Queue default retention; resolved per-job and frozen onto each row.                                                                                                         |
-| `hooks`             | `HookRegistration[]`                    | `[]`           | Queue-scoped [participation hooks](./events-hooks/hooks.md).                                                                                                                |
+| `hooks`             | `HookRegistration[]`                    | `[]`           | Queue-scoped [participation hooks](./guides/hooks.md).                                                                                                                |
 | `handler`           | `JobHandler<TData, TResult>`            | — **required** | The processor for this queue's jobs — declaring a queue is how a process takes on consuming it.                                                                             |
 | `limiter`           | [`LimiterOptions`](#limiteroptions)     | defaults       | Throughput & claim tuning for this queue's processing.                                                                                                                      |
 | `dontAutoretryFor`  | `Array<ErrorClass \| string>`           | `[]`           | Non-retryable errors, matched by `instanceof` or `error.name`.                                                                                                              |
@@ -978,7 +978,7 @@ const stopped = items.filter((i) => i.outcome === BatchItemOutcome.APPLIED).leng
 [`BatchItemOutcome`](#batch-results) (`APPLIED`, `SIGNALLED`, `REFUSED`, `NOT_FOUND`) ·
 `FailureDetail` (`STACK`, `MESSAGE`) ·
 `LogLevel` (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`) ·
-`DatabaseEngine` · [`PortQueueEvent`](./events-hooks/events.md) · [`HookPhase`](./events-hooks/hooks.md) ·
+`DatabaseEngine` · [`PortQueueEvent`](./guides/events.md) · [`HookPhase`](./guides/hooks.md) ·
 [`PortQueueErrorCode`](./troubleshooting.md).
 
 ---

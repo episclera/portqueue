@@ -82,7 +82,7 @@ const FEATURES: {
     icon: SafetyCertificateOutlined,
     title: 'Fault-Tolerant & Observable',
     body: 'Automatic retries with backoff, stalled-job reclaim, liveness-aware fallback, and at-least-once delivery — with rich events and hooks for metrics and tracing.',
-    to: '/docs/events-hooks/events',
+    to: '/docs/guides/events',
     cta: 'Events & hooks',
   },
 ];

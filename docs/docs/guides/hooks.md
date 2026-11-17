@@ -71,5 +71,5 @@ pq.useHook({ phase: HookPhase.AFTER_PROCESS, handler: ({ job, outcome }) => trac
 ```
 
 `BEFORE_ADD` runs **inside** the caller's transaction when a `tx` is used, so a veto
-rolls back with the surrounding write. See the decision rule on
-[Events vs Hooks](./events-vs-hooks.md).
+rolls back with the surrounding write. To observe an operation after the fact rather than
+change it, use an [event](./events.md).

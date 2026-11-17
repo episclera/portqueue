@@ -114,7 +114,7 @@ warm cache / local data / GPU / region is"*.
 
 Structured logging correlated by `job.id` / queue name; **subscribe to
 `PortQueueEvent.ERROR`** so nothing is silent; export metrics/tracing through
-[hooks](./events-hooks/hooks.md).
+[hooks](./guides/hooks.md).
 
 ## Security
 
