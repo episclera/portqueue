@@ -1,38 +1,125 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="PortQueue — the distributed, database-backed job queue">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="PortQueue: background jobs on the database you already run">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0E1B14"/>
-      <stop offset="1" stop-color="#16261C"/>
-    </linearGradient>
-    <linearGradient id="mark" x1="0" y1="0" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+    <!-- Brand gradient, as on the logo tile. -->
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#A9D8B8"/>
       <stop offset="1" stop-color="#6FA184"/>
     </linearGradient>
+    <!-- Soft brand glow behind the jobs panel. -->
+    <radialGradient id="glow" cx="920" cy="315" r="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6FA184" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#6FA184" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Faint dot grid. -->
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.3" fill="#EDEFEC" fill-opacity="0.06"/>
+    </pattern>
   </defs>
 
-  <!-- Background -->
-  <rect width="1200" height="630" fill="url(#bg)"/>
-  <!-- Subtle top accent bar -->
-  <rect x="0" y="0" width="1200" height="8" fill="url(#mark)"/>
+  <!-- Background: dark-mode bg token, dot grid, glow. -->
+  <rect width="1200" height="630" fill="#171A19"/>
+  <rect width="1200" height="630" fill="url(#dots)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <rect width="1200" height="6" fill="url(#brand)"/>
 
-  <!-- Brand mark: rounded tile with a stylized queue of bars -->
-  <g transform="translate(96,150)">
-    <rect x="0" y="0" width="150" height="150" rx="34" fill="url(#mark)"/>
-    <g fill="#0E1B14" opacity="0.92">
-      <rect x="34" y="42" width="82" height="16" rx="8"/>
-      <rect x="34" y="72" width="62" height="16" rx="8"/>
-      <rect x="34" y="102" width="42" height="16" rx="8"/>
+  <!-- Logo: the docs/dashboard mark (cargo ship on the brand tile), scaled from its 40px grid. -->
+  <g transform="translate(72,70) scale(2.2)">
+    <rect x="2" y="2" width="36" height="36" rx="10" fill="url(#brand)"/>
+    <path d="M9 23 L31 23 L27 30 L13 30 Z" fill="#1B1F1D"/>
+    <rect x="11.5" y="13.5" width="5" height="4" rx="1" fill="#F2F3F1"/>
+    <rect x="17.5" y="13.5" width="5" height="4" rx="1" fill="#DDE3DE"/>
+    <rect x="23.5" y="13.5" width="5" height="4" rx="1" fill="#F2F3F1"/>
+    <rect x="11.5" y="18" width="5" height="4" rx="1" fill="#DDE3DE"/>
+    <rect x="17.5" y="18" width="5" height="4" rx="1" fill="#F2F3F1"/>
+    <rect x="23.5" y="18" width="5" height="4" rx="1" fill="#DDE3DE"/>
+  </g>
+  <text x="178" y="136" font-family="'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="56" font-weight="700" fill="#EDEFEC" letter-spacing="-1">PortQueue</text>
+
+  <!-- Headline. -->
+  <g font-family="'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="700" letter-spacing="-1.2">
+    <text x="76" y="262" font-size="50" fill="#EDEFEC">Background jobs on the</text>
+    <text x="76" y="324" font-size="50" fill="#A9D8B8">database you already run.</text>
+  </g>
+  <text x="78" y="380" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="23" font-weight="400" fill="#EDEFEC" fill-opacity="0.68">No Redis, no broker. Scale out by running more copies.</text>
+
+  <!-- Supported databases, as bordered pills (border = text colour, tinted fill). -->
+  <g font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="17" font-weight="500" fill="#A9D8B8" text-anchor="middle">
+    <g>
+      <rect x="77" y="418" width="118" height="36" rx="18" fill="#A9D8B8" fill-opacity="0.1" stroke="#A9D8B8" stroke-width="1.2"/>
+      <text x="136" y="442">PostgreSQL</text>
+    </g>
+    <g>
+      <rect x="205" y="418" width="82" height="36" rx="18" fill="#A9D8B8" fill-opacity="0.1" stroke="#A9D8B8" stroke-width="1.2"/>
+      <text x="246" y="442">Oracle</text>
+    </g>
+    <g>
+      <rect x="297" y="418" width="82" height="36" rx="18" fill="#A9D8B8" fill-opacity="0.1" stroke="#A9D8B8" stroke-width="1.2"/>
+      <text x="338" y="442">MySQL</text>
+    </g>
+    <g>
+      <rect x="389" y="418" width="84" height="36" rx="18" fill="#A9D8B8" fill-opacity="0.1" stroke="#A9D8B8" stroke-width="1.2"/>
+      <text x="431" y="442">PGLite</text>
+    </g>
+    <g>
+      <rect x="483" y="418" width="84" height="36" rx="18" fill="#A9D8B8" fill-opacity="0.1" stroke="#A9D8B8" stroke-width="1.2"/>
+      <text x="525" y="442">SQLite</text>
     </g>
   </g>
 
-  <!-- Wordmark + tagline -->
-  <text x="290" y="228" font-family="Inter, Helvetica, Arial, sans-serif" font-size="104" font-weight="800" fill="#F4FBF6" letter-spacing="-2">PortQueue</text>
-  <text x="294" y="300" font-family="Inter, Helvetica, Arial, sans-serif" font-size="34" font-weight="600" fill="#A9D8B8">The database-backed job queue for Node.js</text>
+  <!-- Footer. -->
+  <text x="78" y="560" font-family="'JetBrains Mono', 'SF Mono', Menlo, monospace" font-size="20" font-weight="500" fill="#A9D8B8">episclera.github.io/portqueue</text>
+  <text x="78" y="590" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="17" fill="#EDEFEC" fill-opacity="0.5">Open source · MIT · TypeScript · Dashboard &amp; CLI</text>
 
-  <!-- Supporting line -->
-  <text x="96" y="430" font-family="Inter, Helvetica, Arial, sans-serif" font-size="30" font-weight="500" fill="#C8D6CD">Distributed · fault-tolerant · broker-less — runs on your database.</text>
-  <text x="96" y="474" font-family="Inter, Helvetica, Arial, sans-serif" font-size="26" font-weight="400" fill="#8FA697">PostgreSQL · PGLite · SQLite · Oracle · MySQL — one type-safe API.</text>
+  <!-- Jobs panel: a dashboard-style card of jobs in their states. -->
+  <g transform="translate(700,92)">
+    <rect width="428" height="446" rx="16" fill="#1F2422" stroke="#2C332F" stroke-width="1.5"/>
+    <!-- Card header -->
+    <text x="28" y="44" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="500" fill="#EDEFEC" fill-opacity="0.5" letter-spacing="1.2">QUEUE</text>
+    <text x="28" y="74" font-family="'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#EDEFEC">emails</text>
+    <g transform="translate(316,50)">
+      <rect width="84" height="28" rx="6" fill="#A9D8B8" fill-opacity="0.12" stroke="#A9D8B8" stroke-width="1.2"/>
+      <circle cx="16" cy="14" r="4" fill="#A9D8B8"/>
+      <text x="50" y="19" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#A9D8B8" text-anchor="middle">LIVE</text>
+    </g>
+    <rect x="0" y="100" width="428" height="1" fill="#2C332F"/>
 
-  <!-- URL footer -->
-  <text x="96" y="566" font-family="Inter, Helvetica, Arial, sans-serif" font-size="24" font-weight="600" fill="#6FA184">episclera.github.io/portqueue</text>
+    <!-- Job rows: mono id, payload bar, status tag. -->
+    <g font-family="'JetBrains Mono', 'SF Mono', Menlo, monospace" font-size="16" fill="#EDEFEC" fill-opacity="0.8">
+      <text x="28" y="146">job_8f3a…c21</text>
+      <text x="28" y="202">job_1b7e…09d</text>
+      <text x="28" y="258">job_c40d…7aa</text>
+      <text x="28" y="314">job_5e92…b13</text>
+      <text x="28" y="370">job_a6f1…e48</text>
+      <text x="28" y="426">job_03cb…5f7</text>
+    </g>
+    <g fill="#EDEFEC" fill-opacity="0.08">
+      <rect x="182" y="134" width="88" height="10" rx="5"/>
+      <rect x="182" y="190" width="64" height="10" rx="5"/>
+      <rect x="182" y="246" width="96" height="10" rx="5"/>
+      <rect x="182" y="302" width="72" height="10" rx="5"/>
+      <rect x="182" y="358" width="84" height="10" rx="5"/>
+      <rect x="182" y="414" width="58" height="10" rx="5"/>
+    </g>
+    <g fill="#2C332F">
+      <rect x="0" y="172" width="428" height="1"/>
+      <rect x="0" y="228" width="428" height="1"/>
+      <rect x="0" y="284" width="428" height="1"/>
+      <rect x="0" y="340" width="428" height="1"/>
+      <rect x="0" y="396" width="428" height="1"/>
+    </g>
+    <g font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" text-anchor="middle" letter-spacing="0.4">
+      <rect x="292" y="126" width="112" height="28" rx="6" fill="#8FB8D8" fill-opacity="0.12" stroke="#8FB8D8" stroke-width="1.2"/>
+      <text x="348" y="145" fill="#8FB8D8">ACTIVE</text>
+      <rect x="292" y="182" width="112" height="28" rx="6" fill="#8FB8D8" fill-opacity="0.12" stroke="#8FB8D8" stroke-width="1.2"/>
+      <text x="348" y="201" fill="#8FB8D8">ACTIVE</text>
+      <rect x="292" y="238" width="112" height="28" rx="6" fill="#A9D8B8" fill-opacity="0.12" stroke="#A9D8B8" stroke-width="1.2"/>
+      <text x="348" y="257" fill="#A9D8B8">COMPLETED</text>
+      <rect x="292" y="294" width="112" height="28" rx="6" fill="#E0AE72" fill-opacity="0.12" stroke="#E0AE72" stroke-width="1.2"/>
+      <text x="348" y="313" fill="#E0AE72">RETRY</text>
+      <rect x="292" y="350" width="112" height="28" rx="6" fill="#A9D8B8" fill-opacity="0.12" stroke="#A9D8B8" stroke-width="1.2"/>
+      <text x="348" y="369" fill="#A9D8B8">COMPLETED</text>
+      <rect x="292" y="406" width="112" height="28" rx="6" fill="#B3B9B5" fill-opacity="0.12" stroke="#B3B9B5" stroke-width="1.2"/>
+      <text x="348" y="425" fill="#B3B9B5">PENDING</text>
+    </g>
+  </g>
 </svg>
