@@ -16,7 +16,7 @@
  * - **One import, one object.** Application code that touches five queues passes five names to one
  *   `pq` instead of threading five handles through its own plumbing.
  *
- * Because of that, holding on to this handle is optional: `pq.addJob({ queue: 'emails', … })` works
+ * Because of that, holding on to this handle is optional: `pq.addJob({ queue: 'reports', … })` works
  * from a name alone, and a process that only enqueues need not declare the queue at all.
  */
 export class Queue<TData = unknown> {

@@ -62,15 +62,15 @@ afterEach(async () => {
 
 it('processes a job', async () => {
   const seen: string[] = [];
-  pq.createQueue<{ to: string }>({
-    name: 'emails',
+  pq.createQueue<{ kind: string }>({
+    name: 'reports',
     handler: async (job) => {
-      seen.push(job.data.to);
+      seen.push(job.data.kind);
     },
   });
-  const { jobId } = await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
+  const { jobId } = await pq.addJob({ queue: 'reports', data: { kind: 'sales' } });
   await waitForStatus(jobId, JobStatus.COMPLETED);
-  expect(seen).toEqual(['a@b.com']);
+  expect(seen).toEqual(['sales']);
 });
 ```
 

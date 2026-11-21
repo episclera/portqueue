@@ -11,10 +11,10 @@ It builds its own short-lived, **headless** client from `--driver`/`--connection
 ```bash
 portqueue stats --watch
 portqueue queues
-portqueue jobs --queue emails --status FAILED
-portqueue add --queue emails --data '{"to":"a@b.com"}'
+portqueue jobs --queue reports --status FAILED
+portqueue add --queue reports --data '{"kind":"sales"}'
 portqueue retry --id <jobId> --from failed
-portqueue pause --queue emails --mode processing
+portqueue pause --queue reports --mode processing
 portqueue listen                       # stream events infinitely
 portqueue dashboard --port 4321 --root-user admin --root-password ****
 ```

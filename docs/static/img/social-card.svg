@@ -64,6 +64,11 @@
       <rect x="483" y="418" width="84" height="36" rx="18" fill="#A9D8B8" fill-opacity="0.1" stroke="#A9D8B8" stroke-width="1.2"/>
       <text x="525" y="442">SQLite</text>
     </g>
+    <!-- Neutral "more" pill: the driver contract takes any engine. -->
+    <g fill="#B3B9B5">
+      <rect x="577" y="418" width="88" height="36" rx="18" fill="#B3B9B5" fill-opacity="0.1" stroke="#B3B9B5" stroke-width="1.2"/>
+      <text x="621" y="442">More…</text>
+    </g>
   </g>
 
   <!-- Footer. -->
@@ -75,7 +80,7 @@
     <rect width="428" height="446" rx="16" fill="#1F2422" stroke="#2C332F" stroke-width="1.5"/>
     <!-- Card header -->
     <text x="28" y="44" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="14" font-weight="500" fill="#EDEFEC" fill-opacity="0.5" letter-spacing="1.2">QUEUE</text>
-    <text x="28" y="74" font-family="'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#EDEFEC">emails</text>
+    <text x="28" y="74" font-family="'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="26" font-weight="700" fill="#EDEFEC">reports</text>
     <g transform="translate(316,50)">
       <rect width="84" height="28" rx="6" fill="#A9D8B8" fill-opacity="0.12" stroke="#A9D8B8" stroke-width="1.2"/>
       <circle cx="16" cy="14" r="4" fill="#A9D8B8"/>

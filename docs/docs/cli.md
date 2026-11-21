@@ -179,7 +179,7 @@ Using the `./pq` wrapper from above so the connection flags stay out of the way:
 ./pq remove-instance --instance-key 10.0.9.9:ram-2gb:cpu-1cor
 
 # remove an unused queue (refused if this process still declares it)
-./pq remove-queue --queue legacy-emails
+./pq remove-queue --queue legacy-reports
 
 # serve the dashboard on all interfaces (see the Dashboard page)
 ./pq dashboard --port 9000 --host 0.0.0.0 --root-user admin --root-password "$DASH_PASSWORD"

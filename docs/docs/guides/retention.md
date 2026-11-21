@@ -24,13 +24,13 @@ nothing to be deleted. There is no mode to choose between the two.
 ```ts
 // per-queue default
 pq.createQueue({
-  name: 'emails',
+  name: 'reports',
   retention: { ttlSeconds: 259_200 }, // delete 3 days after a job finishes
-  handler: async (job) => send(job.data),
+  handler: async (job) => buildReport(job.data),
 });
 
 // per-job override (highest precedence) — keep this one longer
-await pq.addJob({ queue: 'emails', data, retention: { ttlSeconds: 2_592_000 } }); // 30 days
+await pq.addJob({ queue: 'reports', data, retention: { ttlSeconds: 2_592_000 } }); // 30 days
 ```
 
 - **`ttlSeconds`** — how many **seconds** after a job **finishes** before it is deleted. Like every
@@ -43,7 +43,7 @@ await pq.addJob({ queue: 'emails', data, retention: { ttlSeconds: 2_592_000 } })
 
   ```ts
   pq.createQueue({
-    name: 'emails',
+    name: 'reports',
     retention: {
       ttlSeconds: 259_200,
       statuses: [JobStatus.COMPLETED], // sweep the successes; keep the failures
@@ -88,5 +88,5 @@ Manual pruning is always available:
 ```ts
 import { JobStatus } from '@portqueue/core';
 
-await pq.removeJobs({ queue: 'emails', statuses: [JobStatus.COMPLETED] });
+await pq.removeJobs({ queue: 'reports', statuses: [JobStatus.COMPLETED] });
 ```

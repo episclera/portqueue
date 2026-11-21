@@ -23,7 +23,7 @@ const dataDir =
 const HOST = '127.0.0.1';
 const PORT = 4322;
 
-type QueueName = 'emails' | 'reports';
+type QueueName = 'reports';
 
 async function main(): Promise<void> {
   // One driver, shared by the app's client and the dashboard's own. The dashboard builds its own
@@ -38,28 +38,20 @@ async function main(): Promise<void> {
   });
   await pq.init();
 
-  // A handler + seed jobs so the dashboard shows live data.
-  pq.createQueue<{ to: string; template: string }>({
-    name: 'emails',
-    limiter: { concurrency: 5 },
-    handler: async (job) => {
-      console.log(`📧 sending "${job.data.template}" to ${job.data.to}`);
-    },
-  });
-  await pq.addJob({ queue: 'emails', data: { to: 'ada@example.com', template: 'welcome' } });
-  await pq.addJob({
-    queue: 'emails',
-    data: { to: 'alan@example.com', template: 'digest' },
-    schedule: { startAfterSeconds: 30 }, // a delay, in seconds
-  });
-
-  // Every queue with jobs needs a handler, or its jobs just sit there as PENDING — including the
-  // runs a recurring schedule keeps producing.
+  // A handler + seed jobs so the dashboard shows live data. Every queue with jobs needs a handler,
+  // or its jobs just sit there as PENDING — including the runs a recurring schedule keeps producing.
   pq.createQueue<{ kind: string }>({
     name: 'reports',
+    limiter: { concurrency: 5 },
     handler: async (job) => {
       console.log(`📊 building the ${job.data.kind} report`);
     },
+  });
+  await pq.addJob({ queue: 'reports', data: { kind: 'inventory' } });
+  await pq.addJob({
+    queue: 'reports',
+    data: { kind: 'digest' },
+    schedule: { startAfterSeconds: 30 }, // a delay, in seconds
   });
   await pq.addJob({
     queue: 'reports',

@@ -2,8 +2,8 @@
 # Run the local CLI against a PGLite database (file-backed dataDir so state persists between runs):
 #
 #   scripts/cli/pglite.sh queues
-#   scripts/cli/pglite.sh add --queue emails --data '{"to":"a@b.com"}'
-#   scripts/cli/pglite.sh jobs --queue emails
+#   scripts/cli/pglite.sh add --queue reports --data '{"kind":"sales"}'
+#   scripts/cli/pglite.sh jobs --queue reports
 #
 # The connection string is the PGLite dataDir. Defaults to tmp/portqueue-cli-pglite in
 # the repo root (gitignored). Override it with PGLITE_DIR. Rebuilds @portqueue/core and

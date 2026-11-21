@@ -2,8 +2,8 @@
 # Run the local CLI against a PostgreSQL database:
 #
 #   scripts/cli/postgresql.sh queues
-#   scripts/cli/postgresql.sh add --queue emails --data '{"to":"a@b.com"}'
-#   scripts/cli/postgresql.sh jobs --queue emails
+#   scripts/cli/postgresql.sh add --queue reports --data '{"kind":"sales"}'
+#   scripts/cli/postgresql.sh jobs --queue reports
 #
 # Override the connection string with PG_URL. Rebuilds @portqueue/core and @portqueue/cli each run
 # (PORTQUEUE_SKIP_BUILD=1 skips it).

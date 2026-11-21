@@ -90,7 +90,7 @@ const FEATURES: {
 const QUICK_START = `import { PortQueue } from '@portqueue/core';
 import { PostgresqlDriver } from '@portqueue/core/drivers/postgresql';
 
-enum QueueName { Emails = 'emails' }
+enum QueueName { Reports = 'reports' }
 
 const pq = new PortQueue<QueueName>({
   driver: new PostgresqlDriver({ connectionString: process.env.DATABASE_URL }),
@@ -98,14 +98,14 @@ const pq = new PortQueue<QueueName>({
 await pq.init();
 
 // Create the queue and provide a jobs handler.
-pq.createQueue<{ to: string }>({
-  name: QueueName.Emails,
+pq.createQueue<{ kind: string }>({
+  name: QueueName.Reports,
   limiter: { concurrency: 10 },
-  handler: async (job) => { await send(job.data); },
+  handler: async (job) => { await buildReport(job.data); },
 });
 
 // Add a job to the queue.
-await pq.addJob({ queue: QueueName.Emails, data: { to: 'a@b.com' } });`;
+await pq.addJob({ queue: QueueName.Reports, data: { kind: 'sales' } });`;
 
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();

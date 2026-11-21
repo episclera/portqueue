@@ -2,8 +2,8 @@
 # Run the local CLI against a SQLite database (file-backed so state persists between runs):
 #
 #   scripts/cli/sqlite.sh queues
-#   scripts/cli/sqlite.sh add --queue emails --data '{"to":"a@b.com"}'
-#   scripts/cli/sqlite.sh jobs --queue emails
+#   scripts/cli/sqlite.sh add --queue reports --data '{"kind":"sales"}'
+#   scripts/cli/sqlite.sh jobs --queue reports
 #
 # The connection string is the SQLite file path. Defaults to tmp/portqueue-cli.sqlite in
 # the repo root (gitignored). Override it with SQLITE_PATH, or set SQLITE_PATH=:memory: for

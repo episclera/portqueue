@@ -44,13 +44,13 @@ await pq.init();
 
 // Create the queue and provide a jobs handler.
 pq.createQueue({
-  name: 'emails',
+  name: 'reports',
   limiter: { concurrency: 10 },
-  handler: async (job) => { await send(job.data); },
+  handler: async (job) => { await buildReport(job.data); },
 });
 
 // Add a job to the queue.
-await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
+await pq.addJob({ queue: 'reports', data: { kind: 'sales' } });
 ```
 
 Free and open source. Commercial use permitted. No license fee, no obligations.

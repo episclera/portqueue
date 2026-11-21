@@ -50,15 +50,15 @@ With `pq` running, declare the queue — its name, how hard it should pull, and 
 processes its jobs — then add a job to it:
 
 ```ts
-pq.createQueue<{ to: string }>({
-  name: 'emails',
+pq.createQueue<{ kind: string }>({
+  name: 'reports',
   limiter: { concurrency: 10 }, // up to 10 handlers at once in this process
   handler: async (job) => {
-    await sendEmail(job.data); // job.data is typed to the queue's payload
+    await buildReport(job.data); // job.data is typed to the queue's payload
   },
 });
 
-await pq.addJob({ queue: 'emails', data: { to: 'a@b.com' } });
+await pq.addJob({ queue: 'reports', data: { kind: 'sales' } });
 ```
 
 That is the whole loop: processing starts on its own, so there is no worker to wire up and nothing to

@@ -44,8 +44,8 @@ await knex.transaction(async (trx) => {
 
   // 3. Enqueue on the SAME transaction — wrap it in a PortQueue adapter.
   await pq.addJob({
-    queue: 'emails',
-    data: { to: order.customer },
+    queue: 'reports',
+    data: { kind: 'invoice', orderId: order.id },
     tx: fromKnex(trx),
   });
 

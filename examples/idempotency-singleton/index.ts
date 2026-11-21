@@ -18,7 +18,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dataDir =
   process.env.PORTQUEUE_DATA_DIR ?? resolve(here, '../..', 'tmp/portqueue-example-idempotency');
 
-type QueueName = 'emails';
+type QueueName = 'reports';
 
 async function main(): Promise<void> {
   const pq = new PortQueue<QueueName>({ driver: new PgliteDriver({ dataDir }) });
@@ -27,16 +27,16 @@ async function main(): Promise<void> {
   // The queue is declared further down, once the dedup demo is over: `addJob` addresses a queue by
   // name and creates its row on first use, and it is the handler that starts draining.
 
-  // Idempotency: enqueue the "same" welcome email twice with one key.
+  // Idempotency: enqueue the "same" monthly report twice with one key.
   const first = await pq.addJob({
-    queue: 'emails',
-    data: { to: 'ada@example.com' },
-    idempotencyKey: 'welcome:ada@example.com',
+    queue: 'reports',
+    data: { kind: 'sales', month: '2026-11' },
+    idempotencyKey: 'sales:2026-11',
   });
   const second = await pq.addJob({
-    queue: 'emails',
-    data: { to: 'ada@example.com' },
-    idempotencyKey: 'welcome:ada@example.com',
+    queue: 'reports',
+    data: { kind: 'sales', month: '2026-11' },
+    idempotencyKey: 'sales:2026-11',
   });
 
   console.log(`first add  → jobId=${first.jobId} deduplicated=${first.deduplicated}`);
@@ -48,14 +48,14 @@ async function main(): Promise<void> {
 
   // Singleton: at most one in-flight job per key. The second add dedups while the first is pending.
   const a = await pq.addJob({
-    queue: 'emails',
-    data: { to: 'grace@example.com' },
-    singletonKey: 'digest:grace',
+    queue: 'reports',
+    data: { kind: 'inventory', month: '2026-11' },
+    singletonKey: 'inventory',
   });
   const b = await pq.addJob({
-    queue: 'emails',
-    data: { to: 'grace@example.com' },
-    singletonKey: 'digest:grace',
+    queue: 'reports',
+    data: { kind: 'inventory', month: '2026-11' },
+    singletonKey: 'inventory',
   });
   console.log(`singleton first  → jobId=${a.jobId} deduplicated=${a.deduplicated}`);
   console.log(`singleton second → jobId=${b.jobId} deduplicated=${b.deduplicated}`);
@@ -75,10 +75,10 @@ async function main(): Promise<void> {
   });
 
   console.log('\nDeclaring the queue with a handler, to drain the surviving jobs…');
-  pq.createQueue<{ to: string }>({
-    name: 'emails',
+  pq.createQueue<{ kind: string; month: string }>({
+    name: 'reports',
     handler: async (job) => {
-      console.log(`📧 sending to ${job.data.to}`);
+      console.log(`📊 building the ${job.data.kind} report for ${job.data.month}`);
       markProcessed();
     },
   });

@@ -187,7 +187,7 @@ mechanisms let many instances share one database with no double-processing and n
   simultaneously without contention or double-processing. Engines without it use a safe
   locking/polling fallback.
 - **Per-queue claim loops** — each queue has its own `queue_name`-scoped claim loop, so a
-  job never waits on another queue and busy `orders` traffic can't starve `emails`.
+  job never waits on another queue and busy `orders` traffic can't starve `reports`.
 - **Visibility timeout** — a claim is invisible to others for `lockDurationSeconds`, refreshed
   by an automatic heartbeat. If an instance dies, the lock lapses, the row reads as
   `stalled`, and another instance reclaims it.

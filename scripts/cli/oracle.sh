@@ -2,8 +2,8 @@
 # Run the local CLI against an Oracle database:
 #
 #   scripts/cli/oracle.sh queues
-#   scripts/cli/oracle.sh add --queue emails --data '{"to":"a@b.com"}'
-#   scripts/cli/oracle.sh jobs --queue emails
+#   scripts/cli/oracle.sh add --queue reports --data '{"kind":"sales"}'
+#   scripts/cli/oracle.sh jobs --queue reports
 #
 # Override the connect string with ORACLE_URL. Rebuilds @portqueue/core and @portqueue/cli each run
 # (PORTQUEUE_SKIP_BUILD=1 skips it).

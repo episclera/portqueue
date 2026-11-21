@@ -14,7 +14,7 @@ shutdown. There is nothing to start, stop or hold on to.
 
 ```ts
 pq.createQueue({
-  name: 'emails',
+  name: 'reports',
   limiter: {
     concurrency: 10,        // max in-flight handlers in this process (default 1)
     batchSize: 20,          // max jobs claimed per fetch
@@ -27,7 +27,7 @@ pq.createQueue({
 
 Everything about the queue is in that one call — the handler, the claim tuning, and its
 `defaultJobOptions`, `retention` and `hooks`. A process that should only *enqueue* onto this queue
-declares nothing at all: `pq.addJob({ queue: 'emails', data })` works from the name alone.
+declares nothing at all: `pq.addJob({ queue: 'reports', data })` works from the name alone.
 
 Every throughput and claim knob lives under one `limiter` group: `concurrency`, `rateMax` +
 `rateDurationSeconds`, `batchSize`, `pollIntervalSeconds`, and `lockDurationSeconds` — every one of
@@ -65,7 +65,7 @@ methods:
 
 ```ts
 pq.createQueue({
-  name: 'emails',
+  name: 'reports',
   handler: async (job) => {
     job.id;              // string
     job.queue;           // string
@@ -199,8 +199,8 @@ There is no cluster-wide job-rate cap: scale throughput by adding or removing in
 There is nothing per-queue to subscribe to. Subscribe on the client:
 
 ```ts
-pq.on(PortQueueEvent.JOB_COMPLETED, ({ jobId, durationSeconds }) => {}, { queue: 'emails' });
-pq.on(PortQueueEvent.JOB_FAILED, ({ jobId, error }) => {}, { queue: 'emails' });
+pq.on(PortQueueEvent.JOB_COMPLETED, ({ jobId, durationSeconds }) => {}, { queue: 'reports' });
+pq.on(PortQueueEvent.JOB_FAILED, ({ jobId, error }) => {}, { queue: 'reports' });
 ```
 
 `WORKER_STARTED` / `WORKER_STOPPED` name the same thing from the other side: this process began or

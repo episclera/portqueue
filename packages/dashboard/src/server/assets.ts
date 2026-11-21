@@ -107,7 +107,7 @@ const ASSETS_PREFIX = '/assets/';
  *
  * The dashboard routes with real paths (`/portqueue/instances/worker.eu-1`), and the records those
  * paths name — queues, instance keys, schedules — are arbitrary strings that often contain dots
- * (`emails.v2`, `billing.invoice.created`, `10.0.3.7`). Guessing "has an extension, so it's a file"
+ * (`reports.v2`, `billing.invoice.created`, `10.0.3.7`). Guessing "has an extension, so it's a file"
  * sent every such page to a 404 on reload or from a shared link. The bundle's layout is fixed, so
  * there is nothing to guess: under `assets/` is a file, everything else is a page of the app.
  */

@@ -36,19 +36,19 @@ prerequisite.
 `addJob` names the queue, carries the payload under `data`, and hands back a result object:
 
 ```ts
-const emailJob = await pq.addJob({
-  queue: 'emails',
-  data: { to: 'a@b.com', template: 'welcome' },
+const reportJob = await pq.addJob({
+  queue: 'reports',
+  data: { kind: 'sales', format: 'pdf' },
 });
 
-emailJob.jobId; // 'b0f1…' — the row that was inserted
-emailJob.status; // JobStatus.PENDING — waiting to be claimed
-emailJob.startAfter; // Date — when it becomes eligible (now, unless delayed)
-emailJob.deduplicated; // false — no idempotency/singleton key matched
+reportJob.jobId; // 'b0f1…' — the row that was inserted
+reportJob.status; // JobStatus.PENDING — waiting to be claimed
+reportJob.startAfter; // Date — when it becomes eligible (now, unless delayed)
+reportJob.deduplicated; // false — no idempotency/singleton key matched
 ```
 
 The queue's row is created on first use, so the call above works whether or not this process declared
-`emails` — a process that only produces just calls `addJob`.
+`reports` — a process that only produces just calls `addJob`.
 
 Need to enqueue several at once? `pq.addJobs({ queue, jobs })` inserts the whole batch in **one**
 statement and returns a result per entry, in order. Each entry still carries its own options
@@ -56,8 +56,8 @@ explicitly — nothing is silently shared between them:
 
 ```ts
 const results = await pq.addJobs({
-  queue: 'emails',
-  jobs: [{ data: { to: 'a@b.com' } }, { data: { to: 'c@d.com' }, priority: 10 }],
+  queue: 'reports',
+  jobs: [{ data: { kind: 'sales' } }, { data: { kind: 'inventory' }, priority: 10 }],
 });
 ```
 
@@ -75,11 +75,11 @@ the rest are optional and default sensibly.
 All timing lives under the `schedule` group — pass exactly one mode. Durations are **whole seconds**:
 
 ```ts
-await pq.addJob({ queue: 'emails', data, schedule: { startAfterSeconds: 86_400 } }); // 24 h, in seconds
-await pq.addJob({ queue: 'emails', data, schedule: { startEverySeconds: 30 } }); // recurring interval, in seconds
-await pq.addJob({ queue: 'emails', data, schedule: { cron: '0 8 * * 1-5' } }); // recurring cron (UTC)
+await pq.addJob({ queue: 'reports', data, schedule: { startAfterSeconds: 86_400 } }); // 24 h, in seconds
+await pq.addJob({ queue: 'reports', data, schedule: { startEverySeconds: 30 } }); // recurring interval, in seconds
+await pq.addJob({ queue: 'reports', data, schedule: { cron: '0 8 * * 1-5' } }); // recurring cron (UTC)
 await pq.addJob({
-  queue: 'emails',
+  queue: 'reports',
   data,
   schedule: { cron: { pattern: '0 8 * * 1-5', tz: 'America/New_York' } },
 });
@@ -98,7 +98,7 @@ full recurring story (dedup, timezones, unscheduling).
 ## Priority
 
 ```ts
-await pq.addJob({ queue: 'emails', data, priority: 10 }); // higher values are claimed first
+await pq.addJob({ queue: 'reports', data, priority: 10 }); // higher values are claimed first
 ```
 
 `priority` orders ready jobs — higher values run sooner (default `0`). It composes with
@@ -111,7 +111,7 @@ among the ready set.
 
 ```ts
 await pq.addJob({
-  queue: 'emails',
+  queue: 'reports',
   data,
   retry: {
     maxAttempts: 5, // total attempts incl. the first (default 1 = no retry)
@@ -134,7 +134,7 @@ A throwing handler is retried per this policy until attempts are exhausted, then
 ## Expiry
 
 ```ts
-await pq.addJob({ queue: 'emails', data, expireInSeconds: 3600 }); // give up if it hasn't started within an hour
+await pq.addJob({ queue: 'reports', data, expireInSeconds: 3600 }); // give up if it hasn't started within an hour
 ```
 
 `expireInSeconds` drops the job to `EXPIRED` if it hasn't **started** within that many seconds —
@@ -145,7 +145,7 @@ handler's own run time.
 
 ```ts
 await pq.addJob({
-  queue: 'emails',
+  queue: 'reports',
   data,
   retention: { ttlSeconds: 604_800 }, // delete 7 days after it finishes
 });
@@ -159,7 +159,7 @@ the trade-offs.
 
 ```ts
 // Runs only on 8 GB servers that also have 4 cores; '.*' skips whatever sits between the tags.
-await pq.addJob({ queue: 'emails', data, preferredInstanceKeyPattern: 'ram-8gb.*cpu-4cor' });
+await pq.addJob({ queue: 'reports', data, preferredInstanceKeyPattern: 'ram-8gb.*cpu-4cor' });
 ```
 
 `preferredInstanceKeyPattern` is a regular-expression **source string** matched against instance
@@ -245,7 +245,7 @@ Removal **deletes rows** — it is for cleanup, not for stopping work:
 ```ts
 await pq.removeJob({ jobId }); // delete one job row (accepts tx)
 await pq.removeJobs({ jobIds: [a, b] }); // delete several by id, in one statement (any queue)
-await pq.removeJobs({ queue: 'emails', statuses: [JobStatus.COMPLETED] }); // by status, one queue
+await pq.removeJobs({ queue: 'reports', statuses: [JobStatus.COMPLETED] }); // by status, one queue
 ```
 
 `removeJob` / `removeJobs` delete rows from the **jobs** table. The job is gone — its history,
@@ -275,17 +275,17 @@ let PortQueue prune finished jobs for you. Keep manual `remove*` for deliberate 
 Persisted and cluster-wide — every instance honours it:
 
 ```ts
-await pq.pauseQueue({ queue: 'emails', mode: PauseMode.PROCESSING }); // stop claiming; still accepts adds (default)
-await pq.pauseQueue({ queue: 'emails', mode: PauseMode.ALL }); // also refuse new adds (drain)
-await pq.resumeQueue({ queue: 'emails' });
+await pq.pauseQueue({ queue: 'reports', mode: PauseMode.PROCESSING }); // stop claiming; still accepts adds (default)
+await pq.pauseQueue({ queue: 'reports', mode: PauseMode.ALL }); // also refuse new adds (drain)
+await pq.resumeQueue({ queue: 'reports' });
 ```
 
 `pauseQueues` / `resumeQueues` take a list and write every queue in one statement. Where the singular
 throws `QueueNotFoundError` for a name nothing has used, the plural reports it as `NOT_FOUND`:
 
 ```ts
-await pq.pauseQueues({ queues: ['emails', 'sms'], mode: PauseMode.ALL });
-await pq.resumeQueues({ queues: ['emails', 'sms'] });
+await pq.pauseQueues({ queues: ['reports', 'exports'], mode: PauseMode.ALL });
+await pq.resumeQueues({ queues: ['reports', 'exports'] });
 ```
 
 ## Idempotency & singleton
@@ -341,13 +341,13 @@ Read-side views of what you've produced. A per-queue read names its queue; a by-
 one, because an id already identifies exactly one row:
 
 ```ts
-const emailsJob = await pq.getJob({ jobId }); // JobSnapshot | null
-const emailsStats = await pq.getQueueStats({ queue: 'emails' }); // per-status counts
+const job = await pq.getJob({ jobId }); // JobSnapshot | null
+const stats = await pq.getQueueStats({ queue: 'reports' }); // per-status counts
 
 // The two list reads take the same window — `limit` (default 50, max 500) and `offset` — and
 // return `{ items, total }`. `total` counts every row matching the filter, not just this page.
 const failed = await pq.getJobs({
-  queue: 'emails',
+  queue: 'reports',
   statuses: [JobStatus.FAILED],
   limit: 20,
   offset: 0,
@@ -355,7 +355,7 @@ const failed = await pq.getJobs({
 failed.items; // JobSnapshot[] — this page, newest first
 failed.total; // e.g. 143 — every FAILED job on the queue
 
-const schedules = await pq.getSchedules({ queue: 'emails', enabled: true, limit: 20, offset: 0 });
+const schedules = await pq.getSchedules({ queue: 'reports', enabled: true, limit: 20, offset: 0 });
 schedules.items; // ScheduleInfo[] — each with the scheduleId you pass to removeSchedule
 schedules.total; // every armed schedule on the queue
 
@@ -369,7 +369,7 @@ There is no `hasMore` flag on a page: another page follows when
 ```ts
 for (let offset = 0; ; offset += 100) {
   const page = await pq.getJobs({
-    queue: 'emails',
+    queue: 'reports',
     statuses: [JobStatus.FAILED],
     limit: 100,
     offset,

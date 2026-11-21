@@ -27,7 +27,7 @@ The timing props are **mutually exclusive**: a one-off delay never combines with
 `schedule.startAfterSeconds` delays a one-off job by that many seconds from now:
 
 ```ts
-await pq.addJob({ queue: 'emails', data, schedule: { startAfterSeconds: 86_400 } }); // 24 hours, in seconds
+await pq.addJob({ queue: 'reports', data, schedule: { startAfterSeconds: 86_400 } }); // 24 hours, in seconds
 ```
 
 ## Recurring — cron with timezone

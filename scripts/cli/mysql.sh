@@ -2,8 +2,8 @@
 # Run the local CLI against a MySQL database:
 #
 #   scripts/cli/mysql.sh queues
-#   scripts/cli/mysql.sh add --queue emails --data '{"to":"a@b.com"}'
-#   scripts/cli/mysql.sh jobs --queue emails
+#   scripts/cli/mysql.sh add --queue reports --data '{"kind":"sales"}'
+#   scripts/cli/mysql.sh jobs --queue reports
 #
 # Override the connection string with MYSQL_URL. Rebuilds @portqueue/core and @portqueue/cli each run
 # (PORTQUEUE_SKIP_BUILD=1 skips it).

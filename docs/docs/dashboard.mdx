@@ -243,11 +243,11 @@ client bundle, which otherwise serves a placeholder with a 200 and looks like a 
 It tells the dashboard where its own assets and API sit, so it must match where you mount the
 adapter. Only NestJS repeats it — keep `forRoutes(...)` in sync.
 
-Every page has a real URL under it — `/portqueue/queues/emails`, `/portqueue/jobs/<id>` — so a page
+Every page has a real URL under it — `/portqueue/queues/reports`, `/portqueue/jobs/<id>` — so a page
 can be bookmarked, reloaded and shared. That means **every path under `basePath` belongs to the
 dashboard**: a reverse proxy or a route in front of it must forward the whole prefix, not just the
 root. Only `basePath/assets/…` is served as files; any other path gets the app, so a queue or
-instance whose name contains a dot (`emails.v2`, `10.0.3.7`) still opens its page.
+instance whose name contains a dot (`reports.v2`, `10.0.3.7`) still opens its page.
 :::
 
 :::danger The dashboard ships no authentication
