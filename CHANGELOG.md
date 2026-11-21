@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.7 (2026-11-21)
+
+### Documentation
+
+* use a reports queue as the example everywhere ([bd1e2b5](https://github.com/episclera/portqueue/commit/bd1e2b5ef219c3713fad336ba67699362028081c))
+* **brand:** social card subline highlights speed and horizontal scaling ([f314a41](https://github.com/episclera/portqueue/commit/f314a41e32cbcaff7c39ce5bc427a3753d75d326))
+* **brand:** replace placeholder social card with on-brand design ([0a63501](https://github.com/episclera/portqueue/commit/0a635014528f1f7ebe7d7ae8fb01d655588056b0))
+
 ## 1.2.6 (2026-11-17)
 
 ### Documentation
